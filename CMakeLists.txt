@@ -9,7 +9,8 @@ project( CEngine )
 
 set(
     SOURCES
-    main.c
+    
+    src/main.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
