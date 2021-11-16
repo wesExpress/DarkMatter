@@ -17,6 +17,9 @@ set(
     SOURCES
     
     src/main.c
+    src/engine.c
+
+    src/platform/platform_glfw.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
