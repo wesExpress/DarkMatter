@@ -9,6 +9,12 @@ typedef struct internal_data
     GLFWwindow* window;
 } internal_data;
 
+/*
+* Sets up the glfw platform specific data. 
+* - GLFWwindow* interal member
+*
+* @param e_data -> engine_data struct (ptr)
+*/
 bool platform_startup(engine_data* e_data)
 {
     if(!glfwInit())
@@ -60,6 +66,10 @@ void platform_shutdown(engine_data* e_data)
     free(e_data->platform_data);
 }
 
+/*
+* named after windows specific API
+* run every frame to poll OS events and check if window should close
+*/
 bool platform_pump_messages(engine_data* e_data)
 {
     internal_data* data = (internal_data*)e_data->platform_data;
