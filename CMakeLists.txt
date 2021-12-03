@@ -14,6 +14,8 @@ project( CEngine )
 add_subdirectory(lib/glfw)
 add_subdirectory(lib/glad)
 
+add_definitions(-DDM_OPENGL)
+
 set (DMDEBUG on)
 set(BUILD_SHARED_LIBS TRUE)
 

@@ -2,6 +2,7 @@
 
 #ifdef DM_PLATFORM_GLFW
 
+#include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <string.h>
 #include <stdio.h>
@@ -13,6 +14,9 @@ typedef struct dm_internal_data
     GLFWwindow* internal_window;
 } dm_internal_data;
 
+dm_internal_data* glfw_data = NULL;
+
+// forward declaration of glfw callbacks
 void dm_platform_glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
 
@@ -46,7 +50,7 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
     e_data->platform_data->window_title = window_title;
 
     e_data->platform_data->internal_data = (dm_internal_data*)dm_alloc(sizeof(dm_internal_data));
-    dm_internal_data* glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
+    glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
 
     glfw_data->internal_window = glfwCreateWindow(
         e_data->platform_data->window_width, e_data->platform_data->window_height, 
@@ -78,7 +82,7 @@ void dm_platform_shutdown(dm_engine_data* e_data)
 {
     DM_WARN("Platform shutdown called...");
 
-    dm_internal_data* glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
+    //glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
 
     DM_WARN("Destroying GLFW window...");
     glfwDestroyWindow(glfw_data->internal_window);
@@ -90,13 +94,13 @@ void dm_platform_shutdown(dm_engine_data* e_data)
 
 bool dm_platform_pump_messages(dm_engine_data* e_data)
 {
-    dm_internal_data* glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
+    //glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
 
     glfwPollEvents();
 
     if(glfwWindowShouldClose(glfw_data->internal_window))
     {
-        DM_ERROR("GLFW received should close event!");
+        DM_ERROR("GLFW received close event!");
         return false;
     }
 
@@ -144,6 +148,30 @@ void dm_platform_write_error(const char* message, uint8_t color)
 
     fprintf(stderr, "%s", out);
 }
+
+void dm_platform_swap_buffers()
+{
+
+    glfwSwapBuffers(glfw_data->internal_window);
+}
+
+#ifdef DM_OPENGL
+bool dm_platform_init_opengl()
+{
+    if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
+    {
+        DM_FATAL("Failed to initialize GLAD!");
+        return false;
+    }
+
+    return true;
+}
+
+void dm_platform_shutdown_opengl()
+{
+
+}
+#endif
 
 void dm_platform_glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
