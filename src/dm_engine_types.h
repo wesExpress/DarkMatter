@@ -1,16 +1,16 @@
 #ifndef __ENGINE_TYPES_H__
 #define __ENGINE_TYPES_H__
 
-typedef struct platform_data
+typedef struct dm_platform_data
 {
 	void* internal_data;
 	int window_width, window_height;
 	const char* window_title;
-} platform_data;
+} dm_platform_data;
 
-typedef struct engine_data
+typedef struct dm_engine_data
 {
-    platform_data* platform_data;
-} engine_data;
+    dm_platform_data* platform_data;
+} dm_engine_data;
 
 #endif

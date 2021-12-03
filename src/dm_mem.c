@@ -1,6 +1,6 @@
-#include "mem.h"
+#include "dm_mem.h"
 
-void* mem_alloc(size_t size)
+void* dm_alloc(size_t size)
 {
 	void* temp = malloc(size);
 	if (!temp) return NULL;

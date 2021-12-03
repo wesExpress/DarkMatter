@@ -12,18 +12,32 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 project( CEngine )
 
 add_subdirectory(lib/glfw)
+add_subdirectory(lib/glad)
+
+add_definitions(-DDM_OPENGL)
+
+set (DMDEBUG on)
+set(BUILD_SHARED_LIBS TRUE)
 
 set(
     SOURCES
     
     src/main.c
-    src/engine.c
-    src/mem.c
+    src/dm_engine.c
+    src/dm_mem.c
+    src/dm_logger.c
 
-    src/platform/platform_glfw.c
+    src/platform/dm_platform_glfw.c
+
+    src/rendering/dm_renderer.c
+    src/rendering/opengl/dm_opengl_renderer.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include)
-target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES})
+target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include lib/glad/include)
+target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)
+
+if(BUILD_SHARED_LIBS)
+    add_definitions(-DDMEXPORT)
+endif()
