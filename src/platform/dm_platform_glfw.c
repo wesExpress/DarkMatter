@@ -6,6 +6,7 @@
 #include <string.h>
 #include <stdio.h>
 #include "dm_mem.h"
+#include "dm_logger.h"
 
 typedef struct dm_internal_data
 {
@@ -19,6 +20,7 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
 {
     if(!glfwInit())
     {
+        DM_FATAL("GLFW could not be initialized");
         return false;
     }
 
@@ -51,6 +53,7 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
     );
     if(!glfw_data->internal_window)
     {
+        DM_FATAL("GLFW window is NULL!");
         glfwTerminate();
         return false;
     }
@@ -68,9 +71,13 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
 
 void dm_platform_shutdown(dm_engine_data* e_data)
 {
+    DM_WARN("Platform shutdown called...");
+
     dm_internal_data* glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
 
+    DM_WARN("Destroying GLFW window...");
     glfwDestroyWindow(glfw_data->internal_window);
+    DM_WARN("Terminating GLFW...");
     glfwTerminate();
 
     free(e_data->platform_data);
@@ -88,6 +95,7 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
 
     if(glfwWindowShouldClose(glfw_data->internal_window))
     {
+        DM_ERROR("GLFW received should close event!");
         return false;
     }
 
@@ -96,20 +104,20 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
 
 void dm_platform_write(const char* message, uint8_t color)
 {
-    static char* levels[5] = {
-        "\x1B[37m",   // white
-        "\x1B[32m",   // green
-        "\x1B[33m",   // yellow
-        "\x1B[31m",   // red
-        "\x1B[31m",   // red
+    static char* levels[6] = {
+        "1;30",   // white
+        "1;34",   // blue
+        "1;32",   // green
+        "1;33",   // yellow
+        "1;31",   // red
+        "0;41"    // highlighted red
     };
-    static char* RESET = "\x1B[0m";
 
     char out[5000];
     sprintf(
         out,
-        "%s%s%s",
-        levels[color], message, RESET
+        "\033[%sm%s \033[0m",
+        levels[color], message
     );
 
     printf("%s", out);
@@ -117,20 +125,20 @@ void dm_platform_write(const char* message, uint8_t color)
 
 void dm_platform_write_error(const char* message, uint8_t color)
 {
-    static char* levels[5] = {
-        "\x1B[37m",   // white
-        "\x1B[32m",   // green
-        "\x1B[33m",   // yellow
-        "\x1B[31m",   // red
-        "\x1B[31m",   // red
+    static char* levels[6] = {
+        "1;30",   // white
+        "1;34",   // blue
+        "1;32",   // green
+        "1;33",   // yellow
+        "1;31",   // red
+        "0;41"    // highlighted red
     };
-    static char* RESET = "\x1B[0m";
 
     char out[5000];
     sprintf(
         out,
-        "%s%s%s",
-        levels[color], message, RESET
+        "\033[%sm%s \033[0m",
+        levels[color], message
     );
 
     fprintf(stderr, "%s", out);

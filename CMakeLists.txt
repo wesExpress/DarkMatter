@@ -23,6 +23,7 @@ set(
     src/main.c
     src/dm_engine.c
     src/dm_mem.c
+    src/dm_logger.c
 
     src/platform/dm_platform_glfw.c
 
