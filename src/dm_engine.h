@@ -1,7 +1,7 @@
 #ifndef __ENGINE_H__
 #define __ENGINE_H__
 
-#include "dm_defines.h"
+#include <stdbool.h>
 
 /*
 * create engine data ptr

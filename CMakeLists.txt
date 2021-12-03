@@ -14,6 +14,9 @@ project( CEngine )
 add_subdirectory(lib/glfw)
 add_subdirectory(lib/glad)
 
+set (DMDEBUG on)
+set(BUILD_SHARED_LIBS TRUE)
+
 set(
     SOURCES
     
@@ -31,3 +34,7 @@ add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include lib/glad/include)
 target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)
+
+if(BUILD_SHARED_LIBS)
+    add_definitions(-DDMEXPORT)
+endif()

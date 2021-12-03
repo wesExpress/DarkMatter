@@ -3,6 +3,8 @@
 #ifdef DM_PLATFORM_GLFW
 
 #include <GLFW/glfw3.h>
+#include <string.h>
+#include <stdio.h>
 #include "dm_mem.h"
 
 typedef struct dm_internal_data
@@ -90,6 +92,48 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
     }
 
     return true;
+}
+
+void dm_platform_write(const char* message, uint8_t color)
+{
+    static char* levels[5] = {
+        "\x1B[37m",   // white
+        "\x1B[32m",   // green
+        "\x1B[33m",   // yellow
+        "\x1B[31m",   // red
+        "\x1B[31m",   // red
+    };
+    static char* RESET = "\x1B[0m";
+
+    char out[5000];
+    sprintf(
+        out,
+        "%s%s%s",
+        levels[color], message, RESET
+    );
+
+    printf("%s", out);
+}
+
+void dm_platform_write_error(const char* message, uint8_t color)
+{
+    static char* levels[5] = {
+        "\x1B[37m",   // white
+        "\x1B[32m",   // green
+        "\x1B[33m",   // yellow
+        "\x1B[31m",   // red
+        "\x1B[31m",   // red
+    };
+    static char* RESET = "\x1B[0m";
+
+    char out[5000];
+    sprintf(
+        out,
+        "%s%s%s",
+        levels[color], message, RESET
+    );
+
+    fprintf(stderr, "%s", out);
 }
 
 void dm_platform_glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
