@@ -86,6 +86,7 @@ void dm_platform_shutdown(dm_engine_data* e_data)
 
     DM_WARN("Destroying GLFW window...");
     glfwDestroyWindow(glfw_data->internal_window);
+    free(e_data->platform_data->internal_data);
     DM_WARN("Terminating GLFW...");
     glfwTerminate();
 
@@ -151,7 +152,6 @@ void dm_platform_write_error(const char* message, uint8_t color)
 
 void dm_platform_swap_buffers()
 {
-
     glfwSwapBuffers(glfw_data->internal_window);
 }
 
