@@ -14,8 +14,13 @@
 * @param e_data -> dm_engine_data struct (ptr)
 */
 bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title);
+
 void dm_platform_shutdown(dm_engine_data* e_data);
-	 
+
+/*
+* named after windows specific API
+* run every frame to poll OS events and check if window should close
+*/
 bool dm_platform_pump_messages(dm_engine_data* e_data);
 
 void dm_platform_write(const char* message, uint8_t color);

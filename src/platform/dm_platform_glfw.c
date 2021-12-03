@@ -83,10 +83,6 @@ void dm_platform_shutdown(dm_engine_data* e_data)
     free(e_data->platform_data);
 }
 
-/*
-* named after windows specific API
-* run every frame to poll OS events and check if window should close
-*/
 bool dm_platform_pump_messages(dm_engine_data* e_data)
 {
     dm_internal_data* glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
