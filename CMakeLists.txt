@@ -12,6 +12,7 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 project( CEngine )
 
 add_subdirectory(lib/glfw)
+add_subdirectory(lib/glad)
 
 set(
     SOURCES
@@ -21,9 +22,12 @@ set(
     src/mem.c
 
     src/platform/platform_glfw.c
+
+    src/rendering/renderer.c
+    src/rendering/opengl/opengl_renderer.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include)
-target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES})
+target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include lib/glad/include)
+target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)
