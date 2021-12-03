@@ -5,14 +5,14 @@
 #include <stdlib.h>
 
 #ifdef __APPLE__
-#define PLATFORM_GLFW
-#define INLINE
+#define DM_PLATFORM_GLFW
+#define DM_INLINE
 #elif __WIN32__ || _WIN32 || WIN32
-#define PLATFORM_GLFW
-#define INLINE __forceinline
+#define DM_PLATFORM_GLFW
+#define DM_INLINE __forceinline
 #elif __linux__ || __gnu_linux__
-#define PLATFORM_GLFW
-#define INLINE __always_inline
+#define DM_PLATFORM_GLFW
+#define DM_INLINE __always_inline
 #endif
 
 #endif

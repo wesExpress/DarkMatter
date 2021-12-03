@@ -8,6 +8,6 @@
 * 
 * @param size - size in bytes
 */
-void* mem_alloc(size_t size);
+void* dm_alloc(size_t size);
 
 #endif

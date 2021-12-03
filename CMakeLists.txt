@@ -18,13 +18,13 @@ set(
     SOURCES
     
     src/main.c
-    src/engine.c
-    src/mem.c
+    src/dm_engine.c
+    src/dm_mem.c
 
-    src/platform/platform_glfw.c
+    src/platform/dm_platform_glfw.c
 
-    src/rendering/renderer.c
-    src/rendering/opengl/opengl_renderer.c
+    src/rendering/dm_renderer.c
+    src/rendering/opengl/dm_opengl_renderer.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

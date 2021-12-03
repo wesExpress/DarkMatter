@@ -1,24 +1,19 @@
-#include "platform.h"
+#include "dm_platform.h"
 
-#ifdef PLATFORM_GLFW
+#ifdef DM_PLATFORM_GLFW
 
 #include <GLFW/glfw3.h>
-#include "mem.h"
+#include "dm_mem.h"
 
-typedef struct internal_data
+typedef struct dm_internal_data
 {
     GLFWwindow* internal_window;
-} internal_data;
+} dm_internal_data;
 
-void platform_glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
+void dm_platform_glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
-/*
-* Sets up the glfw platform specific data. 
-* - GLFWwindow* interal member
-*
-* @param e_data -> engine_data struct (ptr)
-*/
-bool platform_startup(engine_data* e_data, int window_width, int window_height, const char* window_title)
+
+bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title)
 {
     if(!glfwInit())
     {
@@ -39,13 +34,13 @@ bool platform_startup(engine_data* e_data, int window_width, int window_height, 
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    e_data->platform_data = (platform_data*)mem_alloc(sizeof(platform_data));
+    e_data->platform_data = (dm_platform_data*)dm_alloc(sizeof(dm_platform_data));
     e_data->platform_data->window_width = window_width;
     e_data->platform_data->window_height = window_height;
     e_data->platform_data->window_title = window_title;
 
-    e_data->platform_data->internal_data = (internal_data*)mem_alloc(sizeof(internal_data));
-    internal_data* glfw_data = (internal_data*)e_data->platform_data->internal_data;
+    e_data->platform_data->internal_data = (dm_internal_data*)dm_alloc(sizeof(dm_internal_data));
+    dm_internal_data* glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
 
     glfw_data->internal_window = glfwCreateWindow(
         e_data->platform_data->window_width, e_data->platform_data->window_height, 
@@ -64,14 +59,14 @@ bool platform_startup(engine_data* e_data, int window_width, int window_height, 
     glfwSetInputMode(glfw_data->internal_window, GLFW_STICKY_KEYS, GLFW_TRUE);
     glfwSetInputMode(glfw_data->internal_window, GLFW_STICKY_MOUSE_BUTTONS, GLFW_TRUE);
 
-    glfwSetKeyCallback(glfw_data->internal_window, platform_glfw_key_callback);
+    glfwSetKeyCallback(glfw_data->internal_window, dm_platform_glfw_key_callback);
 
     return true;
 }
 
-void platform_shutdown(engine_data* e_data)
+void dm_platform_shutdown(dm_engine_data* e_data)
 {
-    internal_data* glfw_data = (internal_data*)e_data->platform_data->internal_data;
+    dm_internal_data* glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
 
     glfwDestroyWindow(glfw_data->internal_window);
     glfwTerminate();
@@ -83,9 +78,9 @@ void platform_shutdown(engine_data* e_data)
 * named after windows specific API
 * run every frame to poll OS events and check if window should close
 */
-bool platform_pump_messages(engine_data* e_data)
+bool dm_platform_pump_messages(dm_engine_data* e_data)
 {
-    internal_data* glfw_data = (internal_data*)e_data->platform_data->internal_data;
+    dm_internal_data* glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
 
     glfwPollEvents();
 
@@ -97,7 +92,7 @@ bool platform_pump_messages(engine_data* e_data)
     return true;
 }
 
-void platform_glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
+void dm_platform_glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
 
 }

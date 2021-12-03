@@ -1,18 +1,18 @@
-#include "engine.h"
+#include "dm_engine.h"
 
 int main()
 {
-    if(!engine_create())
+    if(!dm_engine_create())
     {
         return -1;
     }
 
-    if(!engine_run())
+    if(!dm_engine_run())
     {
         return -2;
     }
 
-    engine_shutdown();
+    dm_engine_shutdown();
 
     return 0;
 }
