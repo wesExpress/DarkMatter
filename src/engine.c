@@ -1,7 +1,8 @@
 #include "engine.h"
 #include "platform/platform.h"
+#include "mem.h"
 
-static engine_data* e_data;
+engine_data* e_data = NULL;
 
 /*
 * create engine data ptr
@@ -9,8 +10,9 @@ static engine_data* e_data;
 */
 bool engine_create()
 {
-    e_data = (engine_data*)malloc(sizeof(engine_data));
-    if(!platform_startup(e_data))
+    e_data = (engine_data*)mem_alloc(sizeof(engine_data));
+    
+    if(!platform_startup(e_data, 1280, 720, "CEngine"))
     {
         return false;
     }
