@@ -8,7 +8,7 @@ bool dm_engine_create()
 {
     e_data = (dm_engine_data*)dm_alloc(sizeof(dm_engine_data));
     
-    if(!dm_platform_startup(e_data, 1280, 720, "CEngine"))
+    if(!dm_platform_startup(e_data, 1280, 720, "CEngine", 100, 100))
     {
         return false;
     }

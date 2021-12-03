@@ -16,7 +16,7 @@ typedef struct dm_internal_data
 void dm_platform_glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
 
-bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title)
+bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y)
 {
     if(!glfwInit())
     {
@@ -35,6 +35,8 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
 #endif
 
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
@@ -65,6 +67,9 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
     glfwSetInputMode(glfw_data->internal_window, GLFW_STICKY_MOUSE_BUTTONS, GLFW_TRUE);
 
     glfwSetKeyCallback(glfw_data->internal_window, dm_platform_glfw_key_callback);
+
+    glfwSetWindowPos(glfw_data->internal_window, start_x, start_y);
+    glfwShowWindow(glfw_data->internal_window);
 
     return true;
 }
