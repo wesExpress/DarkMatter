@@ -11,6 +11,7 @@ typedef struct dm_platform_data
 typedef struct dm_engine_data
 {
     dm_platform_data* platform_data;
+	bool is_running, is_suspended;
 } dm_engine_data;
 
 #endif

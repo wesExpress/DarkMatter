@@ -22,24 +22,66 @@ bool dm_engine_create()
         return false;
     }
 
+    e_data->is_running = true;
+    e_data->is_suspended = false;
+
     return true;
 }
 
 void dm_engine_shutdown()
 {
-    dm_renderer_shutdown();
-    dm_platform_shutdown(e_data);
     free(e_data);
 }
 
 bool dm_engine_run()
 {
-    while(dm_platform_pump_messages(e_data))
+    while (e_data->is_running)
     {
-        dm_renderer_begin_scene();
+        if (!dm_platform_pump_messages(e_data))
+        {
+            e_data->is_running = false;
+        }
 
-        dm_renderer_end_scene();
+        if (!e_data->is_suspended)
+        {
+            dm_renderer_begin_scene();
+
+            dm_renderer_end_scene();
+        }
     }
+    
+    e_data->is_running = false;
+
+    dm_renderer_shutdown();
+    dm_platform_shutdown(e_data);
 
     return true;
+}
+
+bool dm_app_on_event(dm_event_type type, void* data)
+{
+    switch (type)
+    {
+    case DM_WINDOW_CLOSE_EVENT:
+    {
+        DM_INFO("Window close event received. Shutting down...");
+        return true;
+    } break;
+    case DM_KEY_UP_EVENT:
+    {} break;
+    case DM_KEY_DOWN_EVENT:
+    {} break;
+    case DM_MOUSEBUTTON_UP_EVENT:
+    {} break;
+    case DM_MOUSEBUTTON_DOWN_EVENT:
+    {} break;
+    case DM_MOUSE_MOVED_EVENT:
+    {} break;
+    case DM_MOUSE_SCROLLED_EVENT:
+    {} break;
+    case DM_WINDOW_RESIZE_EVENT:
+    {} break;
+    }
+
+    return false;
 }
