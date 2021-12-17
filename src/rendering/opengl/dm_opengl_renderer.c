@@ -17,7 +17,7 @@ bool dm_renderer_init_impl(dm_renderer_data* renderer_data)
     DM_LOG_INFO("       Renderer: %s", glGetString(GL_RENDERER));
     DM_LOG_INFO("       Version : %s", glGetString(GL_VERSION));
 
-#ifdef DM_DEBUG
+#if DM_DEBUG
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     
@@ -58,6 +58,8 @@ void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
 
 void dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
 {
+    dm_camera_update_view_proj(&renderer_data->camera);
+
     dm_platform_swap_buffers();
 }
 
