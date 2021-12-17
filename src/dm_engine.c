@@ -3,6 +3,7 @@
 #include "dm_mem.h"
 #include "dm_logger.h"
 #include "rendering/dm_renderer.h"
+#include "input/dm_input.h"
 
 dm_engine_data* e_data = NULL;
 
@@ -10,6 +11,8 @@ bool dm_engine_create()
 {
     e_data = (dm_engine_data*)dm_alloc(sizeof(dm_engine_data));
     
+    dm_event_set_callback(dm_app_on_event);
+
     if(!dm_platform_startup(e_data, 1280, 720, "CEngine", 100, 100))
     {
         DM_FATAL("Platform could not be initialized!");
@@ -65,16 +68,25 @@ bool dm_app_on_event(dm_event_type type, void* data)
     case DM_WINDOW_CLOSE_EVENT:
     {
         DM_INFO("Window close event received. Shutting down...");
+        e_data->is_running = false;
         return true;
     } break;
     case DM_KEY_UP_EVENT:
-    {} break;
+    {
+        DM_DEBUG("Key up event received");
+    } break;
     case DM_KEY_DOWN_EVENT:
-    {} break;
+    {
+        DM_DEBUG("Key down event received");
+    } break;
     case DM_MOUSEBUTTON_UP_EVENT:
-    {} break;
+    {
+        DM_DEBUG("Mousebutton up event received");
+    } break;
     case DM_MOUSEBUTTON_DOWN_EVENT:
-    {} break;
+    {
+        DM_DEBUG("Mousebutton down event received");
+    } break;
     case DM_MOUSE_MOVED_EVENT:
     {} break;
     case DM_MOUSE_SCROLLED_EVENT:

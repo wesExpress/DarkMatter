@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include "dm_keyboard.h"
 #include "dm_mouse.h"
-#include "core/dm_defines.h"
+#include "dm_defines.h"
 
 // keyboard
 DM_API bool dm_input_is_key_pressed(dm_key_code key);
