@@ -83,14 +83,14 @@ bool dm_engine_on_event(dm_event_type type, void* data)
         dm_key_code key = (dm_key_code)data;
         dm_input_set_key_released(key);
 
-        DM_DEBUG("Key up event received");
+        DM_DEBUG("Key up event received: %c", key);
     } break;
     case DM_KEY_DOWN_EVENT:
     {
         dm_key_code key = (dm_key_code)data;
         dm_input_set_key_pressed(key);
 
-        DM_DEBUG("Key down event received");
+        DM_DEBUG("Key down event received: %c", key);
     } break;
     case DM_MOUSEBUTTON_UP_EVENT:
     {
