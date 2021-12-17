@@ -12,7 +12,7 @@ bool dm_engine_create()
 {
     if (initialized)
     {
-        DM_FATAL("Engine create called more than once!");
+        DM_LOG_FATAL("Engine create called more than once!");
         return false;
     }
 
@@ -22,13 +22,13 @@ bool dm_engine_create()
 
     if(!dm_platform_startup(e_data, 1280, 720, "CEngine", 100, 100))
     {
-        DM_FATAL("Platform could not be initialized!");
+        DM_LOG_FATAL("Platform could not be initialized!");
         return false;
     }
 
     if (!dm_renderer_init(e_data->platform_data, (dm_color) { 0.2f, 0.5f, 0.8f, 1.0f }))
     {
-        DM_FATAL("Renderer could not be initialized!");
+        DM_LOG_FATAL("Renderer could not be initialized!");
         return false;
     }
 
@@ -74,7 +74,7 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     {
     case DM_WINDOW_CLOSE_EVENT:
     {
-        DM_INFO("Window close event received. Shutting down...");
+        DM_LOG_INFO("Window close event received. Shutting down...");
         e_data->is_running = false;
         return true;
     } break;
@@ -83,28 +83,28 @@ bool dm_engine_on_event(dm_event_type type, void* data)
         dm_key_code key = (dm_key_code)data;
         dm_input_set_key_released(key);
 
-        DM_DEBUG("Key up event received: %c", key);
+        DM_LOG_DEBUG("Key up event received: %c", key);
     } break;
     case DM_KEY_DOWN_EVENT:
     {
         dm_key_code key = (dm_key_code)data;
         dm_input_set_key_pressed(key);
 
-        DM_DEBUG("Key down event received: %c", key);
+        DM_LOG_DEBUG("Key down event received: %c", key);
     } break;
     case DM_MOUSEBUTTON_UP_EVENT:
     {
         dm_mousebutton_code button = (dm_mousebutton_code)data;
         dm_input_set_mousebutton_released(button);
 
-        DM_DEBUG("Mousebutton up event received");
+        DM_LOG_DEBUG("Mousebutton up event received");
     } break;
     case DM_MOUSEBUTTON_DOWN_EVENT:
     {
         dm_mousebutton_code button = (dm_mousebutton_code)data;
         dm_input_set_mousebutton_pressed(button);
 
-        DM_DEBUG("Mousebutton down event received");
+        DM_LOG_DEBUG("Mousebutton down event received");
     } break;
     case DM_MOUSE_MOVED_EVENT:
     {

@@ -35,7 +35,7 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
 {
     if(!glfwInit())
     {
-        DM_FATAL("GLFW could not be initialized");
+        DM_LOG_FATAL("GLFW could not be initialized");
         return false;
     }
 
@@ -70,7 +70,7 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
     );
     if(!glfw_data->internal_window)
     {
-        DM_FATAL("GLFW window is NULL!");
+        DM_LOG_FATAL("GLFW window is NULL!");
         glfwTerminate();
         return false;
     }
@@ -102,14 +102,14 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
 
 void dm_platform_shutdown(dm_engine_data* e_data)
 {
-    DM_WARN("Platform shutdown called...");
+    DM_LOG_WARN("Platform shutdown called...");
 
     //glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
 
-    DM_WARN("Destroying GLFW window...");
+    DM_LOG_WARN("Destroying GLFW window...");
     glfwDestroyWindow(glfw_data->internal_window);
     free(e_data->platform_data->internal_data);
-    DM_WARN("Terminating GLFW...");
+    DM_LOG_WARN("Terminating GLFW...");
     glfwTerminate();
 
     free(e_data->platform_data);
@@ -123,7 +123,7 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
 
     if(glfwWindowShouldClose(glfw_data->internal_window))
     {
-        DM_ERROR("GLFW received close event!");
+        DM_LOG_ERROR("GLFW received close event!");
         return false;
     }
 
@@ -143,7 +143,7 @@ void* dm_platform_realloc(void* block, size_t size)
     void* temp = realloc(block, size);
     DM_ASSERT_MSG(temp, "Realloc returned null pointer!");
     if (temp) block = temp;
-    else DM_FATAL("Realloc returned NULL ptr!");
+    else DM_LOG_FATAL("Realloc returned NULL ptr!");
     return block;
 }
 
@@ -324,7 +324,7 @@ bool dm_platform_init_opengl()
 {
     if (!gladLoadGLLoader((GLADloadproc)glfwGetProcAddress))
     {
-        DM_FATAL("Failed to initialize GLAD!");
+        DM_LOG_FATAL("Failed to initialize GLAD!");
         return false;
     }
 

@@ -585,7 +585,7 @@ dm_mat2 dm_mat2_inverse(dm_mat2 mat)
 	float det = mat.m[0] * mat.m[3] - mat.m[1] * mat.m[2];
 	if (det == 0)
 	{
-		DM_WARN("Trying to invert non-invertible 2x2 matrix (determinant is zero)! Returning input matrix...");
+		DM_LOG_WARN("Trying to invert non-invertible 2x2 matrix (determinant is zero)! Returning input matrix...");
 		return mat;
 	}
 
@@ -811,7 +811,7 @@ dm_mat3 dm_mat3_inverse(dm_mat3 mat)
 	float det = dm_mat3_det(mat);
 	if (det == 0)
 	{
-		DM_WARN("Trying to invert non-invertible 3x3 matrix! Returning input...");
+		DM_LOG_WARN("Trying to invert non-invertible 3x3 matrix! Returning input...");
 		return mat;
 	}
 	det = 1.0f / det;
@@ -1105,7 +1105,7 @@ dm_mat4 dm_mat4_inverse(dm_mat4 mat)
 	float det = dm_mat4_det(mat);
 	if (det == 0)
 	{
-		DM_WARN("Trying to invert non-invertible 4x4 matrix! Returning input...");
+		DM_LOG_WARN("Trying to invert non-invertible 4x4 matrix! Returning input...");
 		return mat;
 	}
 	det = 1.0f / det;
