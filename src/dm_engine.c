@@ -11,7 +11,7 @@ bool dm_engine_create()
 {
     e_data = (dm_engine_data*)dm_alloc(sizeof(dm_engine_data));
     
-    dm_event_set_callback(dm_app_on_event);
+    dm_event_set_callback(dm_engine_on_event);
 
     if(!dm_platform_startup(e_data, 1280, 720, "CEngine", 100, 100))
     {
@@ -61,7 +61,7 @@ bool dm_engine_run()
     return true;
 }
 
-bool dm_app_on_event(dm_event_type type, void* data)
+bool dm_engine_on_event(dm_event_type type, void* data)
 {
     switch (type)
     {

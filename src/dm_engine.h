@@ -25,6 +25,6 @@ bool dm_engine_run();
 /*
 * event callback function
 */
-bool dm_app_on_event(dm_event_type type, void* data);
+bool dm_engine_on_event(dm_event_type type, void* data);
 
 #endif
