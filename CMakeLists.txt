@@ -27,12 +27,14 @@ set(
     src/dm_mem.c
     src/dm_logger.c
     src/dm_event.c
+    src/dm_camera_controller.c
 
     src/input/dm_input.c
 
     src/platform/dm_platform_glfw.c
 
     src/rendering/dm_renderer.c
+    src/rendering/dm_camera.c
     src/rendering/opengl/dm_opengl_renderer.c
 )
 

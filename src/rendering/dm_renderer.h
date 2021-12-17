@@ -5,9 +5,12 @@
 #include "dm_engine_types.h"
 #include "dm_render_types.h"
 #include "dm_colors.h"
+#include "dm_camera.h"
 
 typedef struct dm_renderer_data
 {
+	dm_camera camera;
+	int width, height;
 	dm_color clear_color;
 } dm_renderer_data;
 

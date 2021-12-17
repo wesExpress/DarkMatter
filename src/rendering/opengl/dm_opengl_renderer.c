@@ -4,9 +4,7 @@
 #include "dm_logger.h"
 #include "platform/dm_platform.h"
 
-dm_renderer_data data = { 0 };
-
-bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_color clear_color)
+bool dm_renderer_init_impl(dm_renderer_data* renderer_data)
 {
     if (!dm_platform_init_opengl())
     {
@@ -22,9 +20,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_color clear_color
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glEnable(GL_DEPTH_TEST);
 
-    glViewport(0, 0, platform_data->window_width, platform_data->window_height);
-    
-    data.clear_color = clear_color;
+    glViewport(0, 0, renderer_data->width, renderer_data->height);
 
     return true;
 }
@@ -39,18 +35,18 @@ bool dm_renderer_resize_impl(int new_width, int new_height)
     return true;
 }
 
-void dm_renderer_begin_scene_impl()
+void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
 {
     glClearColor(
-        data.clear_color.x,
-        data.clear_color.y,
-        data.clear_color.z,
-        data.clear_color.w
+        renderer_data->clear_color.x,
+        renderer_data->clear_color.y,
+        renderer_data->clear_color.z,
+        renderer_data->clear_color.w
     );
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
-void dm_renderer_end_scene_impl()
+void dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
 {
     dm_platform_swap_buffers();
 }

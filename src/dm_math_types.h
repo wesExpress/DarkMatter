@@ -1,6 +1,11 @@
 #ifndef __DM_MATH_TYPES_H__
 #define __DM_MATH_TYPES_H__
 
+#define DM_MATH_PI 3.14159265359826
+#define DM_MATH_INV_PI 0.31830988618
+#define DM_MATH_ANGLE_RAD_TOLERANCE 0.001
+#define DM_CLAMP(X, MIN, MAX) (X < MIN) ? MIN : (X > MAX) ? MAX : X
+
 typedef struct dm_vec2
 {
 	union
