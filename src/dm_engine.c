@@ -6,9 +6,16 @@
 #include "input/dm_input.h"
 
 dm_engine_data* e_data = NULL;
+static bool initialized = false;
 
 bool dm_engine_create()
 {
+    if (initialized)
+    {
+        DM_FATAL("Engine create called more than once!");
+        return false;
+    }
+
     e_data = (dm_engine_data*)dm_alloc(sizeof(dm_engine_data));
     
     dm_event_set_callback(dm_engine_on_event);
@@ -73,26 +80,54 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     } break;
     case DM_KEY_UP_EVENT:
     {
+        dm_key_code key = (dm_key_code)data;
+        dm_input_set_key_released(key);
+
         DM_DEBUG("Key up event received");
     } break;
     case DM_KEY_DOWN_EVENT:
     {
+        dm_key_code key = (dm_key_code)data;
+        dm_input_set_key_pressed(key);
+
         DM_DEBUG("Key down event received");
     } break;
     case DM_MOUSEBUTTON_UP_EVENT:
     {
+        dm_mousebutton_code button = (dm_mousebutton_code)data;
+        dm_input_set_mousebutton_released(button);
+
         DM_DEBUG("Mousebutton up event received");
     } break;
     case DM_MOUSEBUTTON_DOWN_EVENT:
     {
+        dm_mousebutton_code button = (dm_mousebutton_code)data;
+        dm_input_set_mousebutton_pressed(button);
+
         DM_DEBUG("Mousebutton down event received");
     } break;
     case DM_MOUSE_MOVED_EVENT:
-    {} break;
+    {
+        int x = *(int*)data;
+        int y = *((int*)data + 1);
+
+        dm_input_set_mouse_x(x);
+        dm_input_set_mouse_y(y);
+    } break;
     case DM_MOUSE_SCROLLED_EVENT:
-    {} break;
+    {
+        // TODO 
+    } break;
     case DM_WINDOW_RESIZE_EVENT:
-    {} break;
+    {
+        if (initialized)
+        {
+            int width = *(int*)data;
+            int height = *((int*)data + 1);
+
+            dm_renderer_resize(width, height);
+        }
+    } break;
     }
 
     return false;
