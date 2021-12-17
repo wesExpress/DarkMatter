@@ -35,6 +35,17 @@ run every frame to poll OS events and check if window should close
 */
 bool dm_platform_pump_messages(dm_engine_data* e_data);
 
+// various platform memory functions
+void* dm_platform_alloc(size_t size);
+void* dm_platform_realloc(void* block, size_t size);
+void dm_platform_free(void* block);
+void* dm_platform_memzero(void* block, size_t size);
+void* dm_platform_memcpy(void* dest, const void* src, size_t size);
+void* dm_platform_memset(void* dest, int value, size_t size);
+void dm_platform_memmove(void* dest, const void* src, size_t size);
+
+void dm_platform_set_vsync(bool enabled);
+
 /*
 platform specific write functionality
 
