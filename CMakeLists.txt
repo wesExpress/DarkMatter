@@ -26,6 +26,9 @@ set(
     src/dm_engine.c
     src/dm_mem.c
     src/dm_logger.c
+    src/dm_event.c
+
+    src/input/dm_input.c
 
     src/platform/dm_platform_glfw.c
 

@@ -1,0 +1,139 @@
+#ifndef __DM_KEYBOARD_H__
+#define __DM_KEYBOARD_H__
+
+#include <stdbool.h>
+
+#define MAKE_KEYCODE(NAME, CODE) DM_KEY_##NAME = CODE
+
+typedef enum dm_key_code
+{
+	MAKE_KEYCODE(BACKSPACE, 0x08),
+	MAKE_KEYCODE(TAB,       0x09),
+	MAKE_KEYCODE(ENTER,     0x0D),
+	MAKE_KEYCODE(SHIFT,     0x10),
+	MAKE_KEYCODE(CTRL,      0x11),
+	MAKE_KEYCODE(ESCAPE,    0x1B),
+	MAKE_KEYCODE(SPACE,     0x20),
+
+	// keys above arrows
+	MAKE_KEYCODE(END,       0x23),
+	MAKE_KEYCODE(HOME,      0x24),
+	MAKE_KEYCODE(PRINT,     0x2A),
+	MAKE_KEYCODE(INSERT,    0x2D),
+	MAKE_KEYCODE(DELETE,    0x2E),
+	MAKE_KEYCODE(NUMLCK,    0x90),
+	MAKE_KEYCODE(SCRLLCK,   0x91),
+
+	MAKE_KEYCODE(LEFT,      0x25),
+	MAKE_KEYCODE(UP,        0x26),
+	MAKE_KEYCODE(RIGHT,     0x27),
+	MAKE_KEYCODE(DOWN,      0x28),
+
+	// numbers
+	MAKE_KEYCODE(0,         0x30),
+	MAKE_KEYCODE(1,         0x31),
+	MAKE_KEYCODE(2,         0x32),
+	MAKE_KEYCODE(3,         0x33),
+	MAKE_KEYCODE(4,         0x34),
+	MAKE_KEYCODE(5,         0x35),
+	MAKE_KEYCODE(6,         0x36),
+	MAKE_KEYCODE(7,         0x37),
+	MAKE_KEYCODE(8,         0x38),
+	MAKE_KEYCODE(9,         0x39),
+
+	// letters
+	MAKE_KEYCODE(A,         0x41),
+	MAKE_KEYCODE(B,         0x42),
+	MAKE_KEYCODE(C,         0x43),
+	MAKE_KEYCODE(D,         0x44),
+	MAKE_KEYCODE(E,         0x45),
+	MAKE_KEYCODE(F,         0x46),
+	MAKE_KEYCODE(G,         0x47),
+	MAKE_KEYCODE(H,         0x48),
+	MAKE_KEYCODE(I,         0x49),
+	MAKE_KEYCODE(J,         0x4A),
+	MAKE_KEYCODE(K,         0x4B),
+	MAKE_KEYCODE(L,         0x4C),
+	MAKE_KEYCODE(M,         0x4D),
+	MAKE_KEYCODE(N,         0x4E),
+	MAKE_KEYCODE(O,         0x4F),
+	MAKE_KEYCODE(P,         0x50),
+	MAKE_KEYCODE(Q,         0x51),
+	MAKE_KEYCODE(R,         0x52),
+	MAKE_KEYCODE(S,         0x53),
+	MAKE_KEYCODE(T,         0x54),
+	MAKE_KEYCODE(U,         0x55),
+	MAKE_KEYCODE(V,         0x56),
+	MAKE_KEYCODE(W,         0x57),
+	MAKE_KEYCODE(X,         0x58),
+	MAKE_KEYCODE(Y,         0x59),
+	MAKE_KEYCODE(Z,         0x5A),
+
+	// numpad
+	MAKE_KEYCODE(NUMPAD_0,  0x60),
+	MAKE_KEYCODE(NUMPAD_1,  0x61),
+	MAKE_KEYCODE(NUMPAD_2,  0x62),
+	MAKE_KEYCODE(NUMPAD_3,  0x63),
+	MAKE_KEYCODE(NUMPAD_4,  0x64),
+	MAKE_KEYCODE(NUMPAD_5,  0x65),
+	MAKE_KEYCODE(NUMPAD_6,  0x66),
+	MAKE_KEYCODE(NUMPAD_7,  0x67),
+	MAKE_KEYCODE(NUMPAD_8,  0x68),
+	MAKE_KEYCODE(NUMPAD_9,  0x69),
+
+	MAKE_KEYCODE(MPLY,      0x6A),
+	MAKE_KEYCODE(ADD,       0x6B),
+	MAKE_KEYCODE(SUB,       0x6C),
+	MAKE_KEYCODE(DECI,      0x6D),
+	MAKE_KEYCODE(DIVIDE,    0x6E),
+
+	// function
+	MAKE_KEYCODE(F1,        0x70),
+	MAKE_KEYCODE(F2,        0x71),
+	MAKE_KEYCODE(F3,        0x72),
+	MAKE_KEYCODE(F4,        0x73),
+	MAKE_KEYCODE(F5,        0x74),
+	MAKE_KEYCODE(F6,        0x75),
+	MAKE_KEYCODE(F7,        0x76),
+	MAKE_KEYCODE(F8,        0x77),
+	MAKE_KEYCODE(F9,        0x78),
+	MAKE_KEYCODE(F10,       0x79),
+	MAKE_KEYCODE(F11,       0x7A),
+	MAKE_KEYCODE(F12,       0x7B),
+	MAKE_KEYCODE(F13,       0x7C),
+	MAKE_KEYCODE(F14,       0x7D),
+	MAKE_KEYCODE(F15,       0x7E),
+	MAKE_KEYCODE(F16,       0x7F),
+	MAKE_KEYCODE(F17,       0x80),
+	MAKE_KEYCODE(F18,       0x81),
+	MAKE_KEYCODE(F19,       0x82),
+	MAKE_KEYCODE(F20,       0x83),
+	MAKE_KEYCODE(F21,       0x84),
+	MAKE_KEYCODE(F22,       0x85),
+	MAKE_KEYCODE(F23,       0x86),
+	MAKE_KEYCODE(F24,       0x87),
+	
+	// modifiers
+	MAKE_KEYCODE(LSHIFT,    0xA0),
+	MAKE_KEYCODE(RSHIFT,    0xA1),
+	MAKE_KEYCODE(RCTRL,     0xA2),
+	MAKE_KEYCODE(LCTRL,     0xA3),
+
+	// misc
+	MAKE_KEYCODE(COMMA,     0xBC),
+	MAKE_KEYCODE(PERIOD,    0xBE),
+	MAKE_KEYCODE(PLUS,      0xBB),
+	MAKE_KEYCODE(MINUS,     0xBD),
+	MAKE_KEYCODE(COLON,     0xBA),
+	MAKE_KEYCODE(LBRACE,    0xDB),
+	MAKE_KEYCODE(RBRACE,    0xDD),
+	MAKE_KEYCODE(LSLASH,    0xDC),
+	MAKE_KEYCODE(QUOTE,     0xDE)
+} dm_key_code;
+
+typedef struct dm_keyboard_state
+{
+	bool keys[256];
+} dm_keyboard_state;
+
+#endif
