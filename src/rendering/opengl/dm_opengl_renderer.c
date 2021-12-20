@@ -128,6 +128,10 @@ void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
 
     glBindVertexArray(vao);
     glDrawArrays(GL_TRIANGLES, 0, 3);
+   
+    glDeleteVertexArrays(1, &vao);
+    glDeleteBuffers(1, &vbo);
+    glDeleteProgram(shader_program);
 }
 
 void dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
