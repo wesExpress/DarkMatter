@@ -14,22 +14,26 @@ project( CEngine )
 add_subdirectory(lib/glfw)
 add_subdirectory(lib/glad)
 
-add_definitions(-DDM_OPENGL)
+add_definitions(-DDM_OPENGL -DDM_DEBUG)
 
-set (DMDEBUG on)
 set(BUILD_SHARED_LIBS TRUE)
 
 set(
     SOURCES
     
-    src/main.c
+    src/dm_engine_entry.c
     src/dm_engine.c
     src/dm_mem.c
     src/dm_logger.c
+    src/dm_event.c
+    src/dm_camera_controller.c
+
+    src/input/dm_input.c
 
     src/platform/dm_platform_glfw.c
 
     src/rendering/dm_renderer.c
+    src/rendering/dm_camera.c
     src/rendering/opengl/dm_opengl_renderer.c
 )
 

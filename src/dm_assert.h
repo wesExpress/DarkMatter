@@ -29,7 +29,7 @@ DM_API void assertion_failure(const char* expression, const char* message, const
 {\
 	if (expr){\
 	} else {\
-		DM_FATAL(message, ##__VA_ARGS__);\
+		DM_LOG_FATAL(message, ##__VA_ARGS__);\
 		assertion_failure(#expr, "", __FILE__, __LINE__);\
 		debug_break();\
 	}\

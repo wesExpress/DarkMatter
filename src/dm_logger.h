@@ -7,22 +7,22 @@
 
 typedef enum log_level
 {
-	LOG_TRACE,
-	LOG_DEBUG,
-	LOG_INFO,
-	LOG_WARN,
-	LOG_ERROR,
-	LOG_FATAL
+	DM_LOG_TRACE,
+	DM_LOG_DEBUG,
+	DM_LOG_INFO,
+	DM_LOG_WARN,
+	DM_LOG_ERROR,
+	DM_LOG_FATAL
 } log_level;
 
 DM_API void dm_log_output(log_level level, const char* message, ...);
 
-#define DM_TRACE(message, ...) dm_log_output(LOG_TRACE, message, ##__VA_ARGS__)
-#define DM_DEBUG(message, ...) dm_log_output(LOG_DEBUG, message, ##__VA_ARGS__)
-#define DM_INFO(message, ...)  dm_log_output(LOG_INFO,  message, ##__VA_ARGS__)
-#define DM_WARN(message, ...)  dm_log_output(LOG_WARN,  message, ##__VA_ARGS__)
-#define DM_ERROR(message, ...) dm_log_output(LOG_ERROR, message, ##__VA_ARGS__)
-#define DM_FATAL(message, ...) dm_log_output(LOG_FATAL, message, ##__VA_ARGS__)
+#define DM_LOG_TRACE(message, ...) dm_log_output(DM_LOG_TRACE, message, ##__VA_ARGS__)
+#define DM_LOG_DEBUG(message, ...) dm_log_output(DM_LOG_DEBUG, message, ##__VA_ARGS__)
+#define DM_LOG_INFO(message, ...)  dm_log_output(DM_LOG_INFO,  message, ##__VA_ARGS__)
+#define DM_LOG_WARN(message, ...)  dm_log_output(DM_LOG_WARN,  message, ##__VA_ARGS__)
+#define DM_LOG_ERROR(message, ...) dm_log_output(DM_LOG_ERROR, message, ##__VA_ARGS__)
+#define DM_LOG_FATAL(message, ...) dm_log_output(DM_LOG_FATAL, message, ##__VA_ARGS__)
 
 #undef EXTERNC
 

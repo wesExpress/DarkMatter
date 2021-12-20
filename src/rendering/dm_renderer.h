@@ -5,14 +5,18 @@
 #include "dm_engine_types.h"
 #include "dm_render_types.h"
 #include "dm_colors.h"
+#include "dm_camera.h"
 
 typedef struct dm_renderer_data
 {
+	dm_camera camera;
+	int width, height;
 	dm_color clear_color;
 } dm_renderer_data;
 
 /*
-mainly a wrapper for the backend renderer initialization the user is not exposed to
+mainly a wrapper for the backend renderer initialization the user is not exposed to.
+creates and initializes the camera as well.
 
 @param platform_data
 @param clear_color - vec4 to specify the initial clear color
