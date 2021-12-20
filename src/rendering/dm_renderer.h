@@ -15,7 +15,8 @@ typedef struct dm_renderer_data
 } dm_renderer_data;
 
 /*
-mainly a wrapper for the backend renderer initialization the user is not exposed to
+mainly a wrapper for the backend renderer initialization the user is not exposed to.
+creates and initializes the camera as well.
 
 @param platform_data
 @param clear_color - vec4 to specify the initial clear color
