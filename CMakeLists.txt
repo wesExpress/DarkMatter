@@ -21,7 +21,7 @@ set(BUILD_SHARED_LIBS TRUE)
 set(
     SOURCES
     
-    src/main.c
+    src/dm_engine_entry.c
     src/dm_engine.c
     src/dm_mem.c
     src/dm_logger.c

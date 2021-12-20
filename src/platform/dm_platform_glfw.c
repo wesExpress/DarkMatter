@@ -104,8 +104,6 @@ void dm_platform_shutdown(dm_engine_data* e_data)
 {
     DM_LOG_WARN("Platform shutdown called...");
 
-    //glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
-
     DM_LOG_WARN("Destroying GLFW window...");
     glfwDestroyWindow(glfw_data->internal_window);
     free(e_data->platform_data->internal_data);
@@ -117,8 +115,6 @@ void dm_platform_shutdown(dm_engine_data* e_data)
 
 bool dm_platform_pump_messages(dm_engine_data* e_data)
 {
-    //glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
-
     glfwPollEvents();
 
     if(glfwWindowShouldClose(glfw_data->internal_window))
