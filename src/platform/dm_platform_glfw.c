@@ -123,7 +123,7 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
 
     if(glfwWindowShouldClose(glfw_data->internal_window))
     {
-        DM_LOG_ERROR("GLFW received close event!");
+        DM_LOG_WARN("GLFW received close event!");
         return false;
     }
 

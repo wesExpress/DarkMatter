@@ -74,7 +74,7 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     {
     case DM_WINDOW_CLOSE_EVENT:
     {
-        DM_LOG_INFO("Window close event received. Shutting down...");
+        DM_LOG_DEBUG("Window close event received. Shutting down...");
         e_data->is_running = false;
         return true;
     } break;
