@@ -29,12 +29,14 @@ bool dm_renderer_init_impl(dm_renderer_data* renderer_data)
     DM_LOG_INFO("       Vendor  : %s", glGetString(GL_VENDOR));
     DM_LOG_INFO("       Renderer: %s", glGetString(GL_RENDERER));
     DM_LOG_INFO("       Version : %s", glGetString(GL_VERSION));
-
+    
+#ifndef __APPLE__
 #if DM_DEBUG
     glEnable(GL_DEBUG_OUTPUT);
     glEnable(GL_DEBUG_OUTPUT_SYNCHRONOUS);
     
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, NULL, GL_FALSE);
+#endif
 #endif
 
     glEnable(GL_BLEND);
@@ -42,7 +44,7 @@ bool dm_renderer_init_impl(dm_renderer_data* renderer_data)
     glEnable(GL_DEPTH_TEST);
 
     glViewport(0, 0, renderer_data->width, renderer_data->height);
-
+    
     return true;
 }
 
@@ -222,7 +224,7 @@ void dm_renderer_bind_buffer_impl(dm_buffer* buffer)
 {
     dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
 
-    if (internal_buffer->type == GL_VERTEX_ARRAY) glBindVertexArray(internal_buffer->vao);
+    if (internal_buffer->type == GL_ARRAY_BUFFER) glBindVertexArray(internal_buffer->vao);
     //glBindBuffer(internal_buffer->type, internal_buffer->id);
 }
 
@@ -266,7 +268,8 @@ void dm_renderer_bind_shader_impl(dm_shader* shader)
 
 GLuint dm_opengl_compile_shader(dm_shader_desc desc)
 {
-    GLuint shader = glCreateShader(desc.type);
+    GLenum shader_type = dm_shader_to_opengl_shader(desc.type);
+    GLuint shader = glCreateShader(shader_type);
 
     DM_LOG_DEBUG("Compiling shader: %s", desc.path);
 
@@ -279,15 +282,16 @@ GLuint dm_opengl_compile_shader(dm_shader_desc desc)
     fseek(file, 0, SEEK_END);
     length = ftell(file);
     fseek(file, 0, SEEK_SET);
-    b = dm_alloc(length);
+    b = dm_alloc(length+1);
     DM_ASSERT(b);
 
     fread(b, 1, length, file);
     fclose(file);
 
     DM_ASSERT(b);
-
-    glShaderSource(shader, 1, &b, NULL);
+    b[length+1]='\0';
+    const char* source = b;
+    glShaderSource(shader, 1, &source, NULL);
     glCompileShader(shader);
 
     DM_ASSERT(dm_opengl_validate_shader(shader));
@@ -303,12 +307,12 @@ bool dm_opengl_validate_shader(GLuint shader)
     int length;
 
     glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
-    glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
-
-    if (length > 0)
+    
+    if (result==GL_FALSE)
     {
-        char message[512];
-        glGetShaderInfoLog(shader, length, NULL, message);
+        GLchar* message;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
+        glGetShaderInfoLog(shader, length, &length, message);
         DM_LOG_FATAL("%s", message);
 
         glDeleteShader(shader);
@@ -325,11 +329,11 @@ bool dm_opengl_validate_program(GLuint program)
     int length;
 
     glGetProgramiv(program, GL_LINK_STATUS, &result);
-    glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
 
-    if (length > 0)
+    if (result==GL_FALSE)
     {
         char message[512];
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
         glGetProgramInfoLog(program, length, NULL, message);
         DM_LOG_FATAL("%s", message);
 

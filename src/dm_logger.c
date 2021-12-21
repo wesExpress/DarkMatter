@@ -18,7 +18,7 @@ typedef struct logtime
 
 void assertion_failure(const char* expression, const char* message, const char* file, int line)
 {
-	DM_LOG_FATAL("Assertion failure: %s; message: %s\n File: %s\n Line: %d", expression, message, file, line);
+	DM_LOG_FATAL("Assertion failure: %s;\n message: %s\n File: %s\n Line: %d", expression, message, file, line);
 }
 
 static logtime LOGTIME = { 0 };
