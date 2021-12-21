@@ -7,12 +7,20 @@
 #include "dm_colors.h"
 #include "dm_camera.h"
 
+#define MAX_RENDER_RESOURCES 100
+
 typedef struct dm_renderer_data
 {
 	dm_camera camera;
 	int width, height;
 	dm_color clear_color;
 } dm_renderer_data;
+
+typedef struct dm_render_resources
+{
+	dm_buffer* buffers[MAX_RENDER_RESOURCES];
+	dm_shader* shaders[MAX_RENDER_RESOURCES];
+} dm_render_resources;
 
 /*
 mainly a wrapper for the backend renderer initialization the user is not exposed to.
@@ -45,5 +53,18 @@ void dm_renderer_begin_scene();
 mainly a wrapper for the backend renderer end scene the user is not exposed to
 */
 void dm_renderer_end_scene();
+
+/*
+* wrapper for draw functions
+*/
+void dm_renderer_draw_arrays(int first, int count);
+
+// render object functions
+void dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_buffer_handle* handle);
+void dm_renderer_delete_buffer(dm_buffer_handle handle);
+void dm_renderer_bind_buffer(dm_buffer_handle handle);
+void dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc pixel_desc, dm_vertex_layout_type vertex_layout, dm_shader_handle* handle);
+void dm_renderer_delete_shader(dm_shader_handle handle);
+void dm_renderer_bind_shader(dm_shader_handle handle);
 
 #endif

@@ -10,8 +10,8 @@
 
 typedef struct dm_internal_buffer
 {
-	GLuint id;
-	GLenum type, usage, vao;
+	GLuint id, vao;
+	GLenum type, usage, data_type;
 } dm_internal_buffer;
 
 typedef struct dm_internal_shader

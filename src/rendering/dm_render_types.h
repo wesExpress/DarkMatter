@@ -48,4 +48,49 @@ typedef enum dm_buffer_data_type
     DM_BUFFER_DATA_UNKNOWN
 } dm_buffer_data_type;
 
+typedef struct dm_buffer_desc
+{
+    dm_buffer_type type;
+    dm_buffer_usage usage;
+    dm_buffer_data_type data_type;
+    dm_buffer_cpu_access cpu_access;
+    size_t elem_size, data_size;
+    uint32_t num_v_elements;
+} dm_buffer_desc;
+
+typedef enum dm_shader_type
+{
+    DM_SHADER_TYPE_VERTEX,
+    DM_SHADER_TYPE_PIXEL,
+    DM_SHADER_TYPE_UNKNOWN
+} dm_shader_type;
+
+typedef struct dm_shader_desc
+{
+    dm_shader_type type;
+    const char* path;
+} dm_shader_desc;
+
+typedef enum dm_vertex_layout_type
+{
+    DM_VERTEX_LAYOUT_QUAD,
+    DM_VERTEX_LAYOUT_MESH,
+    DM_VERTEX_LAYOUT_MESH_COLOR,
+    DM_VERTEX_LAYOUT_UNKNOWN
+} dm_vertex_layout_type;
+
+typedef struct dm_buffer
+{
+    dm_buffer_desc desc;
+    void* internal_buffer;
+} dm_buffer;
+
+typedef struct dm_shader
+{
+    dm_shader_desc vertex_desc;
+    dm_shader_desc pixel_desc;
+
+    void* internal_shader;
+} dm_shader;
+
 #endif

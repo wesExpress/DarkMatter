@@ -45,3 +45,5 @@ target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)
 if(BUILD_SHARED_LIBS)
     add_definitions(-DDMEXPORT)
 endif()
+
+file( COPY ${CMAKE_CURRENT_SOURCE_DIR}/shaders DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
