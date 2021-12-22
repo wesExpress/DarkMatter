@@ -312,29 +312,27 @@ GLuint dm_opengl_compile_shader(dm_shader_desc desc)
     FILE* file = fopen(desc.path, "r");
     DM_ASSERT_MSG(file, "Could not fopen file: %s", desc.path);
 
-    char* b = NULL;
-    long length = -1;
-
     fseek(file, 0, SEEK_END);
-    length = ftell(file);
+    size_t length = ftell(file);
     fseek(file, 0, SEEK_SET);
-    b = dm_alloc(length+1);
-    DM_ASSERT(b);
+    char* string = dm_alloc(length+1);
+    DM_ASSERT(string);
 
-    fread(b, 1, length, file);
+    //fread(string, length, 1, file);
+    size_t read_count = fread(string, 1, length, file);
+    string[read_count] = '\0';
     fclose(file);
-
-    DM_ASSERT(b);
-    b[length+1]='\0';
-    const char* source = b;
-    glShaderSource(shader, 1, &source, NULL);
+    DM_ASSERT(string);
+    
+    const char* source = string;
+    glShaderSource(shader, 1, &source, &length);
     glCheckError();
     glCompileShader(shader);
     glCheckError();
 
     DM_ASSERT(dm_opengl_validate_shader(shader));
 
-    dm_free(b);
+    dm_free(string);
 
     return shader;
 }
