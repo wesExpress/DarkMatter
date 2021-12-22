@@ -312,8 +312,8 @@ GLuint dm_opengl_compile_shader(dm_shader_desc desc)
     FILE* file = fopen(desc.path, "r");
     DM_ASSERT_MSG(file, "Could not fopen file: %s", desc.path);
 
-    char* b = 0;
-    long length;
+    char* b = NULL;
+    long length = -1;
 
     fseek(file, 0, SEEK_END);
     length = ftell(file);
@@ -341,18 +341,18 @@ GLuint dm_opengl_compile_shader(dm_shader_desc desc)
 
 bool dm_opengl_validate_shader(GLuint shader)
 {
-    GLint result;
-    int length;
+    GLint result = -1;
+    int length = -1;
 
     glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
     glCheckError();
     
-    if (result==GL_FALSE)
+    if (result!=GL_TRUE)
     {
-        GLchar* message;
+        GLchar message[1024];
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
         glCheckError();
-        glGetShaderInfoLog(shader, length, &length, message);
+        glGetShaderInfoLog(shader, sizeof(message), &length, message);
         glCheckError();
         DM_LOG_FATAL("%s", message);
 
@@ -367,8 +367,8 @@ bool dm_opengl_validate_shader(GLuint shader)
 
 bool dm_opengl_validate_program(GLuint program)
 {
-    GLint result;
-    int length;
+    GLint result = -1;
+    int length = -1;
 
     glGetProgramiv(program, GL_LINK_STATUS, &result);
     glCheckError();

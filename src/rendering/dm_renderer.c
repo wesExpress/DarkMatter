@@ -67,7 +67,7 @@ void dm_renderer_begin_scene()
 	};
 
 	dm_buffer_desc b_desc = { 0 };
-	dm_buffer_handle b_handle;
+	dm_buffer_handle b_handle = -1;
 	b_desc.type = DM_BUFFER_TYPE_VERTEX;
 	b_desc.usage = DM_BUFFER_USAGE_STATIC;
 	b_desc.data_type = DM_BUFFER_DATA_FLOAT;
@@ -76,7 +76,7 @@ void dm_renderer_begin_scene()
 	b_desc.data_size = sizeof(vertices);
 	dm_renderer_create_buffer(b_desc, vertices, &b_handle);
 
-	dm_shader_handle s_handle;
+	dm_shader_handle s_handle = -1;
 	dm_shader_desc v_desc = { 0 };
 	v_desc.path = "shaders/glsl/v_basic.glsl";
 	v_desc.type = DM_SHADER_TYPE_VERTEX;
