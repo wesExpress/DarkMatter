@@ -301,6 +301,9 @@ void dm_renderer_bind_shader_impl(dm_shader* shader)
     glCheckError();
 }
 
+/*
+uses dm_shader_desc to compile a glsl shader from file
+*/
 GLuint dm_opengl_compile_shader(dm_shader_desc desc)
 {
     GLenum shader_type = dm_shader_to_opengl_shader(desc.type);
@@ -312,12 +315,17 @@ GLuint dm_opengl_compile_shader(dm_shader_desc desc)
     FILE* file = fopen(desc.path, "r");
     DM_ASSERT_MSG(file, "Could not fopen file: %s", desc.path);
 
+    // determine size of memory to allocate to the buffer
     fseek(file, 0, SEEK_END);
     size_t length = ftell(file);
     fseek(file, 0, SEEK_SET);
     char* string = dm_alloc(length+1);
     DM_ASSERT(string);
-
+    
+    // instead of setting string[length] to nul, we instead
+    // find the last character that isn't garbage and set that
+    // to nul. otherwise there could be garbage in between and
+    // cause a seg fault
     //fread(string, length, 1, file);
     size_t read_count = fread(string, 1, length, file);
     string[read_count] = '\0';
