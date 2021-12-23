@@ -24,11 +24,21 @@ void dm_renderer_draw_arrays_impl(int first, size_t count);
 // renderer resources; buffers, shaders, etc
 static dm_render_resources resources;
 
+// test render objects
+dm_buffer_handle b_handle = -1;
+dm_shader_handle s_handle = -1;
+
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	r_data.clear_color = clear_color;
 	r_data.width = platform_data->window_width;
 	r_data.height = platform_data->window_height;
+
+	if(!dm_renderer_init_impl(&r_data))
+	{
+		DM_LOG_FATAL("Renderer backend could not be initialized!");
+		return false;
+	}
 
 	dm_camera_init(
 		&r_data.camera,(dm_vec3) { 0, 0, 0},
@@ -39,11 +49,43 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		DM_CAMERA_PERSPECTIVE
 	);
 
-	return dm_renderer_init_impl(&r_data);
+	// test rendering
+	float vertices[] =
+	{
+		-0.5f, -0.5f, 0.0f,
+		0.5f, -0.5f, 0.0f,
+		0.0f, 0.5f, 0.0f
+	};
+
+	dm_buffer_desc b_desc = { 0 };
+	b_desc.type = DM_BUFFER_TYPE_VERTEX;
+	b_desc.usage = DM_BUFFER_USAGE_STATIC;
+	b_desc.data_type = DM_BUFFER_DATA_FLOAT;
+	b_desc.num_v_elements = 3;
+	b_desc.elem_size = sizeof(float);
+	b_desc.data_size = sizeof(vertices);
+	dm_renderer_create_buffer(b_desc, vertices, &b_handle);
+
+	// shader
+	dm_shader_desc v_desc = { 0 };
+	v_desc.path = "shaders/glsl/v_basic.glsl";
+	v_desc.type = DM_SHADER_TYPE_VERTEX;
+
+	dm_shader_desc p_desc = { 0 };
+	p_desc.path = "shaders/glsl/f_basic.glsl";
+	p_desc.type = DM_SHADER_TYPE_PIXEL;
+
+	dm_renderer_create_shader(v_desc, p_desc, 0, &s_handle);
+
+	return true;
 }
 
 void dm_renderer_shutdown()
 {
+	// cleanup
+	dm_renderer_delete_buffer(b_handle);
+	dm_renderer_delete_shader(s_handle);
+
 	dm_renderer_shutdown_impl();
 }
 
@@ -59,42 +101,10 @@ void dm_renderer_begin_scene()
 {
 	dm_renderer_begin_scene_impl(&r_data);
 
-	float vertices[] =
-	{
-		-0.5f, -0.5f, 0.0f,
-		0.5f, -0.5f, 0.0f,
-		0.0f, 0.5f, 0.0f
-	};
-
-	dm_buffer_desc b_desc = { 0 };
-	dm_buffer_handle b_handle = -1;
-	b_desc.type = DM_BUFFER_TYPE_VERTEX;
-	b_desc.usage = DM_BUFFER_USAGE_STATIC;
-	b_desc.data_type = DM_BUFFER_DATA_FLOAT;
-	b_desc.num_v_elements = 3;
-	b_desc.elem_size = sizeof(float);
-	b_desc.data_size = sizeof(vertices);
-	dm_renderer_create_buffer(b_desc, vertices, &b_handle);
-
-	dm_shader_handle s_handle = -1;
-	dm_shader_desc v_desc = { 0 };
-	v_desc.path = "shaders/glsl/v_basic.glsl";
-	v_desc.type = DM_SHADER_TYPE_VERTEX;
-
-	dm_shader_desc p_desc = { 0 };
-	p_desc.path = "shaders/glsl/f_basic.glsl";
-	p_desc.type = DM_SHADER_TYPE_PIXEL;
-
-	dm_renderer_create_shader(v_desc, p_desc, 0, &s_handle);
-
 	dm_renderer_bind_shader(s_handle);
 	dm_renderer_bind_buffer(b_handle);
 
 	dm_renderer_draw_arrays(0, 3);
-
-	// cleanup
-	dm_renderer_delete_buffer(b_handle);
-	dm_renderer_delete_shader(s_handle);
 }
 
 void dm_renderer_end_scene()
