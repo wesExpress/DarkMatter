@@ -31,6 +31,7 @@ void dm_renderer_delete_shader_impl(dm_shader* shader);
 void dm_renderer_bind_shader_impl(dm_shader* shader);
 
 void dm_renderer_draw_arrays_impl(int first, size_t count);
+void dm_renderer_draw_indexed_impl();
 
 // renderer resources; buffers, shaders, etc
 static dm_render_resources resources;
@@ -92,7 +93,8 @@ void dm_renderer_begin_scene()
 	dm_renderer_bind_buffer(vb_handle);
 	dm_renderer_bind_buffer(ib_handle);
 
-	dm_renderer_draw_arrays(0, 3);
+	//dm_renderer_draw_arrays(0, 3);
+	dm_renderer_draw_indexed();
 }
 
 void dm_renderer_end_scene()
@@ -103,6 +105,11 @@ void dm_renderer_end_scene()
 void dm_renderer_draw_arrays(int first, int count)
 {
 	dm_renderer_draw_arrays_impl(first, count);
+}
+
+void dm_renderer_draw_indexed()
+{
+	dm_renderer_draw_indexed_impl();
 }
 
 bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_buffer_handle* ib_handle, dm_shader_handle* qs_handle)

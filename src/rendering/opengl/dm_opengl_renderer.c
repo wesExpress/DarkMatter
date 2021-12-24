@@ -95,6 +95,12 @@ void dm_renderer_draw_arrays_impl(int first, size_t count)
     glCheckError();
 }
 
+void dm_renderer_draw_indexed_impl()
+{
+    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    glCheckError();
+}
+
 bool dm_renderer_create_quad_impl(dm_buffer* v_buffer, void* vb_data, int num_v_attribs, dm_vertex_attrib* v_attribs, dm_buffer* i_buffer, void* i_data, dm_shader* shader)
 {
     v_buffer->internal_buffer = (dm_internal_buffer*)dm_alloc(sizeof(dm_internal_buffer));

@@ -58,6 +58,7 @@ void dm_renderer_end_scene();
 * wrapper for draw functions
 */
 void dm_renderer_draw_arrays(int first, int count);
+void dm_renderer_draw_indexed();
 
 /*
 wrapper for creating quads. 
