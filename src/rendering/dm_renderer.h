@@ -59,11 +59,26 @@ void dm_renderer_end_scene();
 */
 void dm_renderer_draw_arrays(int first, int count);
 
+/*
+wrapper for creating quads. 
+calls the backend renderer, returns the handle to the buffer and shader associated with this quad
+
+@param b_desc - buffer description
+@param b_data - buffer data
+@param num_v_attribs - number of vertex attributes
+@param v_attribs - pointer to vertex attribute enums
+@param b_handle - buffer handle
+@param v_desc - vertex shader desc
+@param p_desc - pixel (frag) shader desc
+@param s_handle - shader handle
+*/
+bool dm_renderer_create_quad(dm_buffer_handle* b_handle, dm_shader_handle* s_handle);
+
 // render object functions
 void dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_buffer_handle* handle);
 void dm_renderer_delete_buffer(dm_buffer_handle handle);
 void dm_renderer_bind_buffer(dm_buffer_handle handle);
-void dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc pixel_desc, dm_vertex_layout_type vertex_layout, dm_shader_handle* handle);
+void dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc pixel_desc, dm_shader_handle* handle);
 void dm_renderer_delete_shader(dm_shader_handle handle);
 void dm_renderer_bind_shader(dm_shader_handle handle);
 

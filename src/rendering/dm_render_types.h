@@ -93,4 +93,14 @@ typedef struct dm_shader
     void* internal_shader;
 } dm_shader;
 
+// vertex attribs
+typedef enum dm_vertex_attrib
+{
+    DM_VERTEX_ATTRIB_POS,
+    DM_VERTEX_ATTRIB_NORM,
+    DM_VERTEX_ATTRIB_COLOR,
+    DM_VERTEX_ATTRIB_TEX_COORD,
+    DM_VERTEX_ATTRIB_UNKNOWN
+} dm_vertex_attrib;
+
 #endif

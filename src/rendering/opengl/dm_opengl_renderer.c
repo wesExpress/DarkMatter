@@ -16,6 +16,9 @@ GLenum glCheckError_(const char *file, int line);
 #define glCheckError()
 #endif
 
+bool dm_renderer_create_vertex_buffer_impl(dm_buffer* buffer, void* data, int num_v_attribs, dm_vertex_attrib* v_attribs);
+void dm_renderer_create_shader_impl(dm_shader* shader);
+
 GLenum dm_buffer_to_opengl_buffer(dm_buffer_type dm_type);
 GLenum dm_usage_to_opengl_draw(dm_buffer_usage dm_usage);
 GLenum dm_data_to_opengl_data(dm_buffer_data_type dm_data);
@@ -76,84 +79,6 @@ void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
         renderer_data->clear_color.w
     );
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-    // testing TODO: remove
-
-    //float vertices[] =
-    //{
-    //    -0.5f, -0.5f, 0.0f,
-    //    0.5f, -0.5f, 0.0f,
-    //    0.0f, 0.5f, 0.0f
-    //};
-    //
-    //GLuint vbo, vao;
-    //glGenBuffers(1, &vbo);
-    //glGenVertexArrays(1, &vao);
-    //glBindVertexArray(vao);
-    //glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    //glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-    //glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float), (void*)0);
-    //glEnableVertexAttribArray(0);
-    //
-    //const char* vertexShaderSource = "#version 330 core\n"
-    //    "layout (location = 0) in vec3 aPos;\n"
-    //    "void main()\n"
-    //    "{\n"
-    //    "   gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);\n"
-    //    "}\0";
-    //const char* fragmentShaderSource = "#version 330 core\n"
-    //    "out vec4 FragColor;"
-    //
-    //    "void main()"
-    //    "{"
-    //        "FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);"
-    //    "} \0";
-    //
-    //GLuint vertex_shader;
-    //vertex_shader = glCreateShader(GL_VERTEX_SHADER);
-    //glShaderSource(vertex_shader, 1, &vertexShaderSource, NULL);
-    //glCompileShader(vertex_shader);
-    //
-    //int  success;
-    //char infoLog[512];
-    //glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
-    //
-    //if (!success)
-    //{
-    //    glGetShaderInfoLog(vertex_shader, 512, NULL, infoLog);
-    //    DM_LOG_ERROR("ERROR::SHADER::VERTEX::COMPILATION_FAILED\n %s", infoLog);
-    //}
-    //
-    //unsigned int fragmentShader;
-    //fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    //glShaderSource(fragmentShader, 1, &fragmentShaderSource, NULL);
-    //glCompileShader(fragmentShader);
-    //
-    //glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
-    //
-    //if (!success)
-    //{
-    //    glGetShaderInfoLog(fragmentShader, 512, NULL, infoLog);
-    //    DM_LOG_ERROR("ERROR::SHADER::FRAGMENT::COMPILATION_FAILED\n %s", infoLog);
-    //}
-    //
-    //GLuint shader_program;
-    //shader_program = glCreateProgram();
-    //
-    //glAttachShader(shader_program, vertex_shader);
-    //glAttachShader(shader_program, fragmentShader);
-    //glLinkProgram(shader_program);
-    //
-    //glUseProgram(shader_program);
-    //glDeleteShader(vertex_shader);
-    //glDeleteShader(fragmentShader);
-    //
-    //glBindVertexArray(vao);
-    //glDrawArrays(GL_TRIANGLES, 0, 3);
-    //
-    //glDeleteVertexArrays(1, &vao);
-    //glDeleteBuffers(1, &vbo);
-    //glDeleteProgram(shader_program);
 }
 
 void dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
@@ -167,6 +92,109 @@ void dm_renderer_draw_arrays_impl(int first, size_t count)
 {
     glDrawArrays(GL_TRIANGLES, (GLint)first, (GLsizei)count);
     glCheckError();
+}
+
+bool dm_renderer_create_quad_impl(dm_buffer* buffer, void* b_data, int num_v_attribs, dm_vertex_attrib* v_attribs, dm_shader* shader)
+{
+    buffer->internal_buffer = (dm_internal_buffer*)dm_alloc(sizeof(dm_internal_buffer));
+    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
+
+    // create the vertex buffer and vertex array
+    if(!dm_renderer_create_vertex_buffer_impl(buffer, b_data, num_v_attribs, v_attribs)) return false;
+
+    dm_renderer_create_shader_impl(shader);
+
+   return true;
+}
+
+bool dm_renderer_create_vertex_buffer_impl(dm_buffer* buffer, void* data, int num_v_attribs, dm_vertex_attrib* v_attribs)
+{
+    DM_ASSERT_MSG(buffer->internal_buffer, "Internal buffer is NULL");
+
+    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
+    internal_buffer->type = dm_buffer_to_opengl_buffer(buffer->desc.type);
+    DM_ASSERT(internal_buffer->type != DM_BUFFER_TYPE_UNKNOWN);
+    internal_buffer->usage = dm_usage_to_opengl_draw(buffer->desc.usage);
+    DM_ASSERT(internal_buffer->usage != DM_BUFFER_USAGE_UNKNOWN);
+
+    // fill in buffer data
+    glGenBuffers(1, &internal_buffer->id);
+    glCheckError();
+
+    glGenVertexArrays(1, &internal_buffer->vao);
+    glCheckError();
+    glBindVertexArray(internal_buffer->vao);
+    glCheckError();
+    glBindBuffer(
+        internal_buffer->type,
+        internal_buffer->id);
+    glCheckError();
+    glBufferData(
+        internal_buffer->type, 
+        buffer->desc.data_size, 
+        data, 
+        internal_buffer->usage);
+    glCheckError();
+
+    // fill in the vertex attribs
+    for(int i=0;i<num_v_attribs;i++)
+    {
+        GLuint index = i;
+        GLint size;
+        GLenum type;
+        GLboolean normalized;
+        GLsizei stride;
+
+        switch(v_attribs[i])
+        {
+        case DM_VERTEX_ATTRIB_POS:
+        {
+            size = 3;
+            type = GL_FLOAT;
+            normalized = GL_FALSE;
+            stride = size * sizeof(float);
+        } break;
+        case DM_VERTEX_ATTRIB_NORM:
+        {
+            size = 3;
+            type = GL_INT;
+            normalized = GL_TRUE;
+            stride = size * sizeof(int);
+        } break;
+        case DM_VERTEX_ATTRIB_COLOR:
+        {
+            size = 4;
+            type = GL_UNSIGNED_BYTE;
+            normalized = GL_TRUE;
+            stride = size;
+        } break;
+        case DM_VERTEX_ATTRIB_TEX_COORD:
+        {
+            size = 2;
+            type = GL_SHORT;
+            normalized = GL_TRUE;
+            stride = size * sizeof(short);
+        } break;
+        case DM_VERTEX_ATTRIB_UNKNOWN:
+        {
+            DM_LOG_FATAL("Unknwon vertex attribute!");
+            return false;
+        }
+        }
+
+        glVertexAttribPointer(
+            index, 
+            size, 
+            type, 
+            normalized,
+            stride, 
+            (void*)index);
+        glCheckError();
+        glEnableVertexAttribArray(index);
+        glCheckError();
+    }
+
+    return true;
 }
 
 void dm_renderer_create_buffer_impl(dm_buffer* buffer, void* data)
@@ -251,10 +279,14 @@ void dm_renderer_bind_buffer_impl(dm_buffer* buffer)
         glBindVertexArray(internal_buffer->vao);
         glCheckError();
     }
-    //glBindBuffer(internal_buffer->type, internal_buffer->id);
+    else
+    {
+        glBindBuffer(internal_buffer->type, internal_buffer->id);
+        glCheckError();
+    }
 }
 
-void dm_renderer_create_shader_impl(dm_shader* shader, dm_vertex_layout_type vertex_layout)
+void dm_renderer_create_shader_impl(dm_shader* shader)
 {
     shader->internal_shader = (dm_internal_shader*)dm_alloc(sizeof(dm_internal_shader));
     dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
@@ -355,7 +387,7 @@ bool dm_opengl_validate_shader(GLuint shader)
     
     if (result!=GL_TRUE)
     {
-        GLchar message[1024];
+        GLchar message[512];
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
         glCheckError();
         glGetShaderInfoLog(shader, sizeof(message), &length, message);

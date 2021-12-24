@@ -4,8 +4,14 @@
 
 static dm_renderer_data r_data = { 0 };
 
+// 'private' functions
+void dm_renderer_add_vertex_attrib(int num_attribs, dm_vertex_attrib* attribs);
+
 // forward declaration of the implementation, or backend, functionality
 // if not defined, compiler will be angry
+
+bool dm_renderer_create_quad_impl(dm_buffer* buffer, void* b_data, int num_v_attribs, dm_vertex_attrib* v_attribs, dm_shader* shader);
+
 bool dm_renderer_init_impl(dm_renderer_data* renderer_data);
 void dm_renderer_shutdown_impl();
 bool dm_renderer_resize_impl(int new_width, int new_height);
@@ -15,7 +21,7 @@ void dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
 void dm_renderer_create_buffer_impl(dm_buffer* buffer, void* data);
 void dm_renderer_delete_buffer_impl(dm_buffer* buffer);
 void dm_renderer_bind_buffer_impl(dm_buffer* buffer);
-void dm_renderer_create_shader_impl(dm_shader* shader, dm_vertex_layout_type vertex_layout);
+void dm_renderer_create_shader_impl(dm_shader* shader);
 void dm_renderer_delete_shader_impl(dm_shader* shader);
 void dm_renderer_bind_shader_impl(dm_shader* shader);
 
@@ -50,32 +56,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	);
 
 	// test rendering
-	float vertices[] =
-	{
-		-0.5f, -0.5f, 0.0f,
-		0.5f, -0.5f, 0.0f,
-		0.0f, 0.5f, 0.0f
-	};
-
-	dm_buffer_desc b_desc = { 0 };
-	b_desc.type = DM_BUFFER_TYPE_VERTEX;
-	b_desc.usage = DM_BUFFER_USAGE_STATIC;
-	b_desc.data_type = DM_BUFFER_DATA_FLOAT;
-	b_desc.num_v_elements = 3;
-	b_desc.elem_size = sizeof(float);
-	b_desc.data_size = sizeof(vertices);
-	dm_renderer_create_buffer(b_desc, vertices, &b_handle);
-
-	// shader
-	dm_shader_desc v_desc = { 0 };
-	v_desc.path = "shaders/glsl/v_basic.glsl";
-	v_desc.type = DM_SHADER_TYPE_VERTEX;
-
-	dm_shader_desc p_desc = { 0 };
-	p_desc.path = "shaders/glsl/f_basic.glsl";
-	p_desc.type = DM_SHADER_TYPE_PIXEL;
-
-	dm_renderer_create_shader(v_desc, p_desc, 0, &s_handle);
+	if(!dm_renderer_create_quad(&b_handle, &s_handle)) return false;
 
 	return true;
 }
@@ -115,6 +96,76 @@ void dm_renderer_end_scene()
 void dm_renderer_draw_arrays(int first, int count)
 {
 	dm_renderer_draw_arrays_impl(first, count);
+}
+
+bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_shader_handle* qs_handle)
+{
+	for (dm_buffer_handle h=0; h<MAX_RENDER_RESOURCES; h++)
+	{
+		if(!resources.buffers[h]) 
+		{
+			resources.buffers[h] = (dm_buffer*)dm_alloc(sizeof(dm_buffer));
+			*vb_handle = h;
+			break;
+		}
+		if(h==MAX_RENDER_RESOURCES-1)
+		{
+			DM_LOG_FATAL("Can't find valid buffer handle!");
+			return false;
+		}
+	}
+
+	for(dm_shader_handle h=0; h<MAX_RENDER_RESOURCES; h++)
+	{
+		if(!resources.shaders[h]) 
+		{
+			resources.shaders[h] = (dm_shader*)dm_alloc(sizeof(dm_shader));
+			*qs_handle =h;
+			break;
+		}
+
+		if(h==MAX_RENDER_RESOURCES-1)
+		{
+			DM_LOG_FATAL("Can't find valid shader handle!");
+			return false;
+		}
+	}
+
+	// buffer data
+	float vertices[] =
+	{
+		-0.5f, -0.5f, 0.0f,
+		0.5f, -0.5f, 0.0f,
+		0.0f, 0.5f, 0.0f
+	};
+
+	dm_vertex_attrib v_attribs[] = {
+		DM_VERTEX_ATTRIB_POS
+	};
+
+	dm_buffer* v_buffer = resources.buffers[*vb_handle];
+	dm_buffer_desc vb_desc = {0};
+	vb_desc.type = DM_BUFFER_TYPE_VERTEX;
+	vb_desc.usage = DM_BUFFER_USAGE_STATIC;
+	vb_desc.data_size = sizeof(vertices);
+
+	// shader
+	dm_shader* shader = resources.shaders[*qs_handle];
+	dm_shader_desc v_desc = { 0 };
+	v_desc.path = "shaders/glsl/v_basic.glsl";
+	v_desc.type = DM_SHADER_TYPE_VERTEX;
+
+	dm_shader_desc p_desc = { 0 };
+	p_desc.path = "shaders/glsl/f_basic.glsl";
+	p_desc.type = DM_SHADER_TYPE_PIXEL;
+
+	v_buffer->desc = vb_desc;
+	shader->vertex_desc = v_desc;
+	shader->pixel_desc = p_desc;
+
+	if(!dm_renderer_create_quad_impl(v_buffer, vertices, 1, v_attribs, shader)) return false;
+
+	return true;
 }
 
 void dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_buffer_handle* handle)
@@ -162,7 +213,7 @@ void dm_renderer_bind_buffer(dm_buffer_handle handle)
 	}
 }
 
-void dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_vertex_layout_type vertex_layout, dm_shader_handle* handle)
+void dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_shader_handle* handle)
 {
 	for (dm_shader_handle h = 0; h < MAX_RENDER_RESOURCES; h++)
 	{
@@ -175,7 +226,7 @@ void dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_
 			shader->vertex_desc = v_desc;
 			shader->pixel_desc = p_desc;
 
-			dm_renderer_create_shader_impl(shader, vertex_layout);
+			dm_renderer_create_shader_impl(shader);
 
 			resources.shaders[h] = shader;
 			break;
