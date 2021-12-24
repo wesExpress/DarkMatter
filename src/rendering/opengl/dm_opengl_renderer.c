@@ -16,8 +16,9 @@ GLenum glCheckError_(const char *file, int line);
 #define glCheckError()
 #endif
 
-bool dm_renderer_create_vertex_buffer_impl(dm_buffer* buffer, void* data, int num_v_attribs, dm_vertex_attrib* v_attribs);
-void dm_renderer_create_shader_impl(dm_shader* shader);
+bool dm_opengl_create_vertex_buffer(dm_buffer* buffer, void* data, int num_v_attribs, dm_vertex_attrib* v_attribs);
+bool dm_opengl_create_elem_buffer(dm_buffer* buffer, void* data);
+bool dm_opengl_create_shader(dm_shader* shader);
 
 GLenum dm_buffer_to_opengl_buffer(dm_buffer_type dm_type);
 GLenum dm_usage_to_opengl_draw(dm_buffer_usage dm_usage);
@@ -94,20 +95,34 @@ void dm_renderer_draw_arrays_impl(int first, size_t count)
     glCheckError();
 }
 
-bool dm_renderer_create_quad_impl(dm_buffer* buffer, void* b_data, int num_v_attribs, dm_vertex_attrib* v_attribs, dm_shader* shader)
+bool dm_renderer_create_quad_impl(dm_buffer* v_buffer, void* vb_data, int num_v_attribs, dm_vertex_attrib* v_attribs, dm_buffer* i_buffer, void* i_data, dm_shader* shader)
 {
-    buffer->internal_buffer = (dm_internal_buffer*)dm_alloc(sizeof(dm_internal_buffer));
-    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
+    v_buffer->internal_buffer = (dm_internal_buffer*)dm_alloc(sizeof(dm_internal_buffer));
+    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)v_buffer->internal_buffer;
 
     // create the vertex buffer and vertex array
-    if(!dm_renderer_create_vertex_buffer_impl(buffer, b_data, num_v_attribs, v_attribs)) return false;
+    if(!dm_opengl_create_vertex_buffer(v_buffer, vb_data, num_v_attribs, v_attribs)) 
+    {
+        DM_LOG_FATAL("Failed to create OpenGL vertex buffer!");
+        return false;
+    }
 
-    dm_renderer_create_shader_impl(shader);
+    if(!dm_opengl_create_elem_buffer(i_buffer, i_data))
+    {
+        DM_LOG_FATAL("Failed to create OpenGL element buffer!");
+        return false;
+    }
+
+    if(!dm_opengl_create_shader(shader))
+    {
+        DM_LOG_FATAL("Failed to create OpenGL shader!");
+        return false;
+    }
 
    return true;
 }
 
-bool dm_renderer_create_vertex_buffer_impl(dm_buffer* buffer, void* data, int num_v_attribs, dm_vertex_attrib* v_attribs)
+bool dm_opengl_create_vertex_buffer(dm_buffer* buffer, void* data, int num_v_attribs, dm_vertex_attrib* v_attribs)
 {
     DM_ASSERT_MSG(buffer->internal_buffer, "Internal buffer is NULL");
 
@@ -197,11 +212,11 @@ bool dm_renderer_create_vertex_buffer_impl(dm_buffer* buffer, void* data, int nu
     return true;
 }
 
-void dm_renderer_create_buffer_impl(dm_buffer* buffer, void* data)
+bool dm_opengl_create_elem_buffer(dm_buffer* buffer, void* data)
 {
     buffer->internal_buffer = (dm_internal_buffer*)dm_alloc(sizeof(dm_internal_buffer));
     dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
-
+    
     glGenBuffers(1, &internal_buffer->id);
     glCheckError();
 
@@ -209,51 +224,17 @@ void dm_renderer_create_buffer_impl(dm_buffer* buffer, void* data)
     DM_ASSERT(internal_buffer->type != DM_BUFFER_TYPE_UNKNOWN);
     internal_buffer->usage = dm_usage_to_opengl_draw(buffer->desc.usage);
     DM_ASSERT(internal_buffer->usage != DM_BUFFER_USAGE_UNKNOWN);
-    internal_buffer->data_type = dm_data_to_opengl_data(buffer->desc.data_type);
-    DM_ASSERT(internal_buffer->data_type != DM_BUFFER_DATA_UNKNOWN);
-    
-    switch (internal_buffer->type)
-    {
-    case GL_ARRAY_BUFFER:
-    {
-        glGenVertexArrays(1, &internal_buffer->vao);
-        glCheckError();
-        glBindVertexArray(internal_buffer->vao);
-        glCheckError();
-        glBindBuffer(
-            internal_buffer->type,
-            internal_buffer->id);
-        glCheckError();
-        glBufferData(
-            internal_buffer->type, 
-            buffer->desc.data_size, 
-            data, 
-            internal_buffer->usage);
-        glCheckError();
-        glVertexAttribPointer(
-            0, 
-            buffer->desc.num_v_elements, 
-            internal_buffer->data_type, 
-            GL_FALSE,
-            buffer->desc.num_v_elements * buffer->desc.elem_size, 
-            (void*)0);
-        glCheckError();
-        glEnableVertexAttribArray(0);
-        glCheckError();
-    }   break;
-    case GL_ELEMENT_ARRAY_BUFFER:
-        glBindBuffer(
-            internal_buffer->data_type, 
-            internal_buffer->id);
-        glCheckError();
-        glBufferData(
-            internal_buffer->data_type, 
-            buffer->desc.data_size, 
-            data, 
-            internal_buffer->usage);
-        glCheckError();
-        break;
-    }
+
+    glBindBuffer(
+        internal_buffer->type, 
+        internal_buffer->id);
+    glCheckError();
+    glBufferData(
+        internal_buffer->type, 
+        buffer->desc.data_size, 
+        data, 
+        internal_buffer->usage);
+    glCheckError();
 }
 
 void dm_renderer_delete_buffer_impl(dm_buffer* buffer)
@@ -286,7 +267,7 @@ void dm_renderer_bind_buffer_impl(dm_buffer* buffer)
     }
 }
 
-void dm_renderer_create_shader_impl(dm_shader* shader)
+bool dm_opengl_create_shader(dm_shader* shader)
 {
     shader->internal_shader = (dm_internal_shader*)dm_alloc(sizeof(dm_internal_shader));
     dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
@@ -303,7 +284,11 @@ void dm_renderer_create_shader_impl(dm_shader* shader)
     glLinkProgram(internal_shader->id);
     glCheckError();
 
-    DM_ASSERT(dm_opengl_validate_program(internal_shader->id));
+    if(!dm_opengl_validate_program(internal_shader->id))
+    {
+        DM_LOG_FATAL("Failed to validate OpenGL shader!");
+        return false;
+    }
 
     glDetachShader(internal_shader->id, vertex_shader);
     glCheckError();
@@ -314,6 +299,8 @@ void dm_renderer_create_shader_impl(dm_shader* shader)
     glCheckError();
     glDeleteShader(frag_shader);
     glCheckError();
+
+    return true;
 }
 
 void dm_renderer_delete_shader_impl(dm_shader* shader)

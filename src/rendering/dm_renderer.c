@@ -10,7 +10,14 @@ void dm_renderer_add_vertex_attrib(int num_attribs, dm_vertex_attrib* attribs);
 // forward declaration of the implementation, or backend, functionality
 // if not defined, compiler will be angry
 
-bool dm_renderer_create_quad_impl(dm_buffer* buffer, void* b_data, int num_v_attribs, dm_vertex_attrib* v_attribs, dm_shader* shader);
+typedef struct dm_vertex
+{
+	int num_attribs;
+	dm_vertex_attrib* attribs;
+	void* data;
+} dm_vertex;
+
+bool dm_renderer_create_quad_impl(dm_buffer* buffer, void* b_data, int num_v_attribs, dm_vertex_attrib* v_attribs, dm_buffer* i_buffer, void* ib_data, dm_shader* shader);
 
 bool dm_renderer_init_impl(dm_renderer_data* renderer_data);
 void dm_renderer_shutdown_impl();
@@ -18,10 +25,8 @@ bool dm_renderer_resize_impl(int new_width, int new_height);
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data);
 void dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
 
-void dm_renderer_create_buffer_impl(dm_buffer* buffer, void* data);
 void dm_renderer_delete_buffer_impl(dm_buffer* buffer);
 void dm_renderer_bind_buffer_impl(dm_buffer* buffer);
-void dm_renderer_create_shader_impl(dm_shader* shader);
 void dm_renderer_delete_shader_impl(dm_shader* shader);
 void dm_renderer_bind_shader_impl(dm_shader* shader);
 
@@ -31,7 +36,8 @@ void dm_renderer_draw_arrays_impl(int first, size_t count);
 static dm_render_resources resources;
 
 // test render objects
-dm_buffer_handle b_handle = -1;
+dm_buffer_handle vb_handle = -1;
+dm_buffer_handle ib_handle = -1;
 dm_shader_handle s_handle = -1;
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
@@ -56,7 +62,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	);
 
 	// test rendering
-	if(!dm_renderer_create_quad(&b_handle, &s_handle)) return false;
+	if(!dm_renderer_create_quad(&vb_handle, &ib_handle, &s_handle)) return false;
 
 	return true;
 }
@@ -64,7 +70,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 void dm_renderer_shutdown()
 {
 	// cleanup
-	dm_renderer_delete_buffer(b_handle);
+	dm_renderer_delete_buffer(vb_handle);
 	dm_renderer_delete_shader(s_handle);
 
 	dm_renderer_shutdown_impl();
@@ -83,7 +89,8 @@ void dm_renderer_begin_scene()
 	dm_renderer_begin_scene_impl(&r_data);
 
 	dm_renderer_bind_shader(s_handle);
-	dm_renderer_bind_buffer(b_handle);
+	dm_renderer_bind_buffer(vb_handle);
+	dm_renderer_bind_buffer(ib_handle);
 
 	dm_renderer_draw_arrays(0, 3);
 }
@@ -98,7 +105,7 @@ void dm_renderer_draw_arrays(int first, int count)
 	dm_renderer_draw_arrays_impl(first, count);
 }
 
-bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_shader_handle* qs_handle)
+bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_buffer_handle* ib_handle, dm_shader_handle* qs_handle)
 {
 	for (dm_buffer_handle h=0; h<MAX_RENDER_RESOURCES; h++)
 	{
@@ -110,7 +117,21 @@ bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_shader_handle* qs_h
 		}
 		if(h==MAX_RENDER_RESOURCES-1)
 		{
-			DM_LOG_FATAL("Can't find valid buffer handle!");
+			DM_LOG_FATAL("Can't find valid vertex buffer handle!");
+			return false;
+		}
+	}
+	for (dm_buffer_handle h=0; h<MAX_RENDER_RESOURCES; h++)
+	{
+		if(!resources.buffers[h]) 
+		{
+			resources.buffers[h] = (dm_buffer*)dm_alloc(sizeof(dm_buffer));
+			*ib_handle = h;
+			break;
+		}
+		if(h==MAX_RENDER_RESOURCES-1)
+		{
+			DM_LOG_FATAL("Can't find valid index buffer handle!");
 			return false;
 		}
 	}
@@ -134,9 +155,15 @@ bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_shader_handle* qs_h
 	// buffer data
 	float vertices[] =
 	{
-		-0.5f, -0.5f, 0.0f,
-		0.5f, -0.5f, 0.0f,
-		0.0f, 0.5f, 0.0f
+		0.5f,  0.5f, 0.0f,  // top right
+		0.5f, -0.5f, 0.0f,  // bottom right
+	   -0.5f, -0.5f, 0.0f,  // bottom left
+	   -0.5f,  0.5f, 0.0f   // top left 
+	};
+	unsigned int indices[] =
+	{
+		0, 1, 3,
+		1, 2, 3
 	};
 
 	dm_vertex_attrib v_attribs[] = {
@@ -149,6 +176,17 @@ bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_shader_handle* qs_h
 	vb_desc.usage = DM_BUFFER_USAGE_STATIC;
 	vb_desc.data_size = sizeof(vertices);
 
+	dm_vertex vertex = {0};
+	vertex.num_attribs = 1;
+	vertex.attribs = v_attribs;
+	vertex.data = vertices;
+
+	dm_buffer* i_buffer = resources.buffers[*ib_handle];
+	dm_buffer_desc ib_desc = {0};
+	ib_desc.type = DM_BUFFER_TYPE_INDEX;
+	ib_desc.usage = DM_BUFFER_USAGE_STATIC;
+	ib_desc.data_size = sizeof(indices);
+
 	// shader
 	dm_shader* shader = resources.shaders[*qs_handle];
 	dm_shader_desc v_desc = { 0 };
@@ -160,31 +198,13 @@ bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_shader_handle* qs_h
 	p_desc.type = DM_SHADER_TYPE_PIXEL;
 
 	v_buffer->desc = vb_desc;
+	i_buffer->desc = ib_desc;
 	shader->vertex_desc = v_desc;
 	shader->pixel_desc = p_desc;
 
-	if(!dm_renderer_create_quad_impl(v_buffer, vertices, 1, v_attribs, shader)) return false;
+	if(!dm_renderer_create_quad_impl(v_buffer, vertices, 1, v_attribs, i_buffer, indices, shader)) return false;
 
 	return true;
-}
-
-void dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_buffer_handle* handle)
-{
-	for (dm_buffer_handle h=0; h < MAX_RENDER_RESOURCES; h++)
-	{
-		if (!resources.buffers[h])
-		{
-			*handle = h;
-
-			dm_buffer* buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer));
-			buffer->desc = desc;
-
-			dm_renderer_create_buffer_impl(buffer, data);
-
-			resources.buffers[h] = buffer;
-			break;
-		}
-	}
 }
 
 void dm_renderer_delete_buffer(dm_buffer_handle handle)
@@ -210,27 +230,6 @@ void dm_renderer_bind_buffer(dm_buffer_handle handle)
 	else
 	{
 		DM_LOG_ERROR("Trying to bind invalid buffer!");
-	}
-}
-
-void dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_shader_handle* handle)
-{
-	for (dm_shader_handle h = 0; h < MAX_RENDER_RESOURCES; h++)
-	{
-		if (!resources.shaders[h])
-		{
-			*handle = h;
-
-			dm_shader* shader = (dm_shader*)dm_alloc(sizeof(dm_shader));
-
-			shader->vertex_desc = v_desc;
-			shader->pixel_desc = p_desc;
-
-			dm_renderer_create_shader_impl(shader);
-
-			resources.shaders[h] = shader;
-			break;
-		}
 	}
 }
 

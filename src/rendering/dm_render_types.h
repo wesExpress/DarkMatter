@@ -54,8 +54,7 @@ typedef struct dm_buffer_desc
     dm_buffer_usage usage;
     dm_buffer_data_type data_type;
     dm_buffer_cpu_access cpu_access;
-    size_t elem_size, data_size;
-    uint32_t num_v_elements;
+    size_t data_size;
 } dm_buffer_desc;
 
 typedef enum dm_shader_type

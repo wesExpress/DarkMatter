@@ -72,13 +72,11 @@ calls the backend renderer, returns the handle to the buffer and shader associat
 @param p_desc - pixel (frag) shader desc
 @param s_handle - shader handle
 */
-bool dm_renderer_create_quad(dm_buffer_handle* b_handle, dm_shader_handle* s_handle);
+bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_buffer_handle* ib_handle, dm_shader_handle* s_handle);
 
 // render object functions
-void dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_buffer_handle* handle);
 void dm_renderer_delete_buffer(dm_buffer_handle handle);
 void dm_renderer_bind_buffer(dm_buffer_handle handle);
-void dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc pixel_desc, dm_shader_handle* handle);
 void dm_renderer_delete_shader(dm_shader_handle handle);
 void dm_renderer_bind_shader(dm_shader_handle handle);
 
