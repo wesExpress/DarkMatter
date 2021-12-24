@@ -97,7 +97,7 @@ void dm_renderer_draw_arrays_impl(int first, size_t count)
 
 void dm_renderer_draw_indexed_impl(int num, int offset)
 {
-    glDrawElements(GL_TRIANGLES, num, GL_UNSIGNED_INT, offset);
+    glDrawElements(GL_TRIANGLES, num, GL_UNSIGNED_INT, (void*)offset);
     glCheckError();
 }
 
@@ -227,9 +227,9 @@ bool dm_opengl_create_elem_buffer(dm_buffer* buffer, void* data)
     glCheckError();
 
     internal_buffer->type = dm_buffer_to_opengl_buffer(buffer->desc.type);
-    DM_ASSERT(internal_buffer->type != DM_BUFFER_TYPE_UNKNOWN);
+    if(internal_buffer->type == DM_BUFFER_TYPE_UNKNOWN) return false;
     internal_buffer->usage = dm_usage_to_opengl_draw(buffer->desc.usage);
-    DM_ASSERT(internal_buffer->usage != DM_BUFFER_USAGE_UNKNOWN);
+    if(internal_buffer->usage == DM_BUFFER_USAGE_UNKNOWN) return false;
 
     glBindBuffer(
         internal_buffer->type, 
@@ -241,6 +241,8 @@ bool dm_opengl_create_elem_buffer(dm_buffer* buffer, void* data)
         data, 
         internal_buffer->usage);
     glCheckError();
+
+    return true;
 }
 
 void dm_renderer_delete_buffer_impl(dm_buffer* buffer)
@@ -358,7 +360,8 @@ GLuint dm_opengl_compile_shader(dm_shader_desc desc)
     DM_ASSERT(string);
     
     const char* source = string;
-    glShaderSource(shader, 1, &source, &length);
+    GLint l = (GLint)length;
+    glShaderSource(shader, 1, &source, &l);
     glCheckError();
     glCompileShader(shader);
     glCheckError();
