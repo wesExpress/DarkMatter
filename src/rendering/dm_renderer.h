@@ -58,19 +58,14 @@ void dm_renderer_end_scene();
 * wrapper for draw functions
 */
 void dm_renderer_draw_arrays(int first, int count);
-void dm_renderer_draw_indexed();
+void dm_renderer_draw_indexed(int num, int offset);
 
 /*
 wrapper for creating quads. 
-calls the backend renderer, returns the handle to the buffer and shader associated with this quad
+calls the backend renderer, fills the handles to the buffers and shader associated with quad
 
-@param b_desc - buffer description
-@param b_data - buffer data
-@param num_v_attribs - number of vertex attributes
-@param v_attribs - pointer to vertex attribute enums
-@param b_handle - buffer handle
-@param v_desc - vertex shader desc
-@param p_desc - pixel (frag) shader desc
+@param vb_handle - vertex buffer handle
+@param ib_handle - index buffer handle
 @param s_handle - shader handle
 */
 bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_buffer_handle* ib_handle, dm_shader_handle* s_handle);

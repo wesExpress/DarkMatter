@@ -95,9 +95,9 @@ void dm_renderer_draw_arrays_impl(int first, size_t count)
     glCheckError();
 }
 
-void dm_renderer_draw_indexed_impl()
+void dm_renderer_draw_indexed_impl(int num, int offset)
 {
-    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
+    glDrawElements(GL_TRIANGLES, num, GL_UNSIGNED_INT, offset);
     glCheckError();
 }
 

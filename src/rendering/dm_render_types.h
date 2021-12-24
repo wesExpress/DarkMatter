@@ -52,7 +52,6 @@ typedef struct dm_buffer_desc
 {
     dm_buffer_type type;
     dm_buffer_usage usage;
-    dm_buffer_data_type data_type;
     dm_buffer_cpu_access cpu_access;
     size_t data_size;
 } dm_buffer_desc;
@@ -69,14 +68,6 @@ typedef struct dm_shader_desc
     dm_shader_type type;
     const char* path;
 } dm_shader_desc;
-
-typedef enum dm_vertex_layout_type
-{
-    DM_VERTEX_LAYOUT_QUAD,
-    DM_VERTEX_LAYOUT_MESH,
-    DM_VERTEX_LAYOUT_MESH_COLOR,
-    DM_VERTEX_LAYOUT_UNKNOWN
-} dm_vertex_layout_type;
 
 typedef struct dm_buffer
 {

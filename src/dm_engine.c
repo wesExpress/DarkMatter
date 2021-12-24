@@ -92,6 +92,10 @@ bool dm_engine_on_event(dm_event_type type, void* data)
 
         DM_LOG_DEBUG("Key down event received: %c", key);
     } break;
+    case DM_KEY_TYPE_EVENT:
+    {
+        // TODO: figure out what to put here
+    } break;
     case DM_MOUSEBUTTON_UP_EVENT:
     {
         dm_mousebutton_code button = (dm_mousebutton_code)data;

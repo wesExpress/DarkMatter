@@ -4,18 +4,8 @@
 
 static dm_renderer_data r_data = { 0 };
 
-// 'private' functions
-void dm_renderer_add_vertex_attrib(int num_attribs, dm_vertex_attrib* attribs);
-
 // forward declaration of the implementation, or backend, functionality
 // if not defined, compiler will be angry
-
-typedef struct dm_vertex
-{
-	int num_attribs;
-	dm_vertex_attrib* attribs;
-	void* data;
-} dm_vertex;
 
 bool dm_renderer_create_quad_impl(dm_buffer* buffer, void* b_data, int num_v_attribs, dm_vertex_attrib* v_attribs, dm_buffer* i_buffer, void* ib_data, dm_shader* shader);
 
@@ -31,7 +21,7 @@ void dm_renderer_delete_shader_impl(dm_shader* shader);
 void dm_renderer_bind_shader_impl(dm_shader* shader);
 
 void dm_renderer_draw_arrays_impl(int first, size_t count);
-void dm_renderer_draw_indexed_impl();
+void dm_renderer_draw_indexed_impl(int num, int offset);
 
 // renderer resources; buffers, shaders, etc
 static dm_render_resources resources;
@@ -94,7 +84,7 @@ void dm_renderer_begin_scene()
 	dm_renderer_bind_buffer(ib_handle);
 
 	//dm_renderer_draw_arrays(0, 3);
-	dm_renderer_draw_indexed();
+	dm_renderer_draw_indexed(6, 0);
 }
 
 void dm_renderer_end_scene()
@@ -107,9 +97,9 @@ void dm_renderer_draw_arrays(int first, int count)
 	dm_renderer_draw_arrays_impl(first, count);
 }
 
-void dm_renderer_draw_indexed()
+void dm_renderer_draw_indexed(int num, int offset)
 {
-	dm_renderer_draw_indexed_impl();
+	dm_renderer_draw_indexed_impl(num, offset);
 }
 
 bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_buffer_handle* ib_handle, dm_shader_handle* qs_handle)
@@ -182,11 +172,6 @@ bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_buffer_handle* ib_h
 	vb_desc.type = DM_BUFFER_TYPE_VERTEX;
 	vb_desc.usage = DM_BUFFER_USAGE_STATIC;
 	vb_desc.data_size = sizeof(vertices);
-
-	dm_vertex vertex = {0};
-	vertex.num_attribs = 1;
-	vertex.attribs = v_attribs;
-	vertex.data = vertices;
 
 	dm_buffer* i_buffer = resources.buffers[*ib_handle];
 	dm_buffer_desc ib_desc = {0};
