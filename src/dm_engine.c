@@ -5,6 +5,9 @@
 #include "rendering/dm_renderer.h"
 #include "input/dm_input.h"
 
+// TODO: remove
+#include "structures/dm_list.h"
+
 dm_engine_data* e_data = NULL;
 static bool initialized = false;
 
@@ -34,6 +37,38 @@ bool dm_engine_create()
 
     e_data->is_running = true;
     e_data->is_suspended = false;
+
+    dm_list(int) list;
+    dm_list_init(&list, int);
+
+    for(int i=1; i<4; i++)
+    {
+        dm_list_append(&list, i);
+    }
+    for(int i=0; i<list.size;i++)
+    {
+        DM_LOG_TRACE("Value at [%d]: %d", i, list.array[i]);
+    }
+
+    dm_list_insert(&list, 4, 0);
+    for(int i=0; i<list.size;i++)
+    {
+        DM_LOG_TRACE("Value at [%d]: %d", i, list.array[i]);
+    }
+
+    dm_list_pop_back(&list);
+    for(int i=0; i<list.size;i++)
+    {
+        DM_LOG_TRACE("Value at [%d]: %d", i, list.array[i]);
+    }
+
+    dm_list_pop_at(&list, 0);
+    for(int i=0; i<list.size;i++)
+    {
+        DM_LOG_TRACE("Value at [%d]: %d", i, list.array[i]);
+    }
+
+    dm_list_destroy(&list);
 
     return true;
 }
