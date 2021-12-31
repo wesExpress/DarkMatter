@@ -1,3 +1,6 @@
+#ifndef __DM_LIST_H__
+#define __DM_LIST_H__
+
 #include "stdint.h"
 #include "stdlib.h"
 #include "dm_mem.h"
@@ -90,3 +93,5 @@ do{\
         dm_list_shrink(LIST);\
     }\
 } while(0)
+
+#endif
