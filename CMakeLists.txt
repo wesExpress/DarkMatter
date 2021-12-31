@@ -36,6 +36,8 @@ set(
     src/rendering/dm_camera.c
     src/rendering/opengl/dm_opengl_renderer.c
     src/rendering/opengl/dm_opengl_shader.c
+
+    src/structures/dm_map.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
