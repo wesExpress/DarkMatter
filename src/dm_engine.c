@@ -39,12 +39,16 @@ bool dm_engine_create()
     e_data->is_running = true;
     e_data->is_suspended = false;
 
-    dm_map* map = dm_create_map(50000);
+    dm_map* map = dm_map_create(50000);
     dm_map_insert(map, "1", "First");
     dm_map_insert(map, "2", "Second");
+    dm_map_insert(map, "Hel", "Third");
+    dm_map_insert(map, "Cau", "Fourth");
     dm_map_search_print(map, "1");
     dm_map_search_print(map, "2");
     dm_map_search_print(map, "3");
+    dm_map_search_print(map, "Hel");
+    dm_map_search_print(map, "Cau");
     dm_map_print(map);
     dm_map_delete(map);
 
