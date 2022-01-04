@@ -9,13 +9,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-GLenum glCheckError_(const char *file, int line);
-#if DM_DEBUG
-#define glCheckError() glCheckError_(__FILE__, __LINE__) 
-#else
-#define glCheckError()
-#endif
-
 bool dm_opengl_create_vertex_buffer(dm_buffer* buffer, void* data, int num_v_attribs, dm_vertex_attrib* v_attribs);
 bool dm_opengl_create_elem_buffer(dm_buffer* buffer, void* data);
 bool dm_opengl_create_shader(dm_shader* shader);
