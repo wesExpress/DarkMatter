@@ -2,6 +2,10 @@
 
 #if DM_OPENGL
 
+#include "dm_logger.h"
+#include "dm_mem.h"
+#include "platform/dm_filesystem.h"
+
 bool dm_opengl_find_uniform_location(GLint shader, const char* name, int* location)
 {
     *location = glGetUniformLocation(shader, name);
@@ -16,7 +20,7 @@ bool dm_opengl_update_uniform(int location, dm_opengl_uniform uniform_t, void* d
     {
         case DM_OPENGL_UNI_INT:
         {
-            int d = (int)data;
+            int d = *(int*)data;
             glUniform1i(location, (GLint)d);
             glCheckError();
         } break;
@@ -65,24 +69,53 @@ bool dm_opengl_update_uniform(int location, dm_opengl_uniform uniform_t, void* d
         case DM_OPENGL_UNI_MAT2:
         {
             dm_mat2* d = (dm_mat2*)data;
-            glUniformMatrix2fv(location, 1, GL_FALSE, d);
+            glUniformMatrix2fv(location, 1, GL_FALSE, &d->m[0]);
             glCheckError();
         } break;
         case DM_OPENGL_UNI_MAT3:
         {
             dm_mat3* d = (dm_mat3*)data;
-            glUniformMatrix3fv(location, 1, GL_FALSE, d);
+            glUniformMatrix3fv(location, 1, GL_FALSE, &d->m[0]);
             glCheckError();
         } break;
         case DM_OPENGL_UNI_MAT4:
         {
             dm_mat4* d = (dm_mat4*)data;
-            glUniformMatrix4fv(location, 1, GL_FALSE, d);
+            glUniformMatrix4fv(location, 1, GL_FALSE, &d->m[0]);
             glCheckError();
         } break;
     }
 
     return true;
 }  
+
+bool dm_opengl_create_shader_module(const char* name, const char* type, GLenum type_enum, int index, dm_opengl_shader_stage* stages)
+{
+    char* file_name = (char*)dm_alloc(512 * sizeof(char));
+
+    sprintf(file_name, "assets/shaders/%s.%s.spv", name, type);
+
+    dm_file_handle handle;
+    if (!dm_filesystem_open(file_name, DM_FILE_MODE_READ, true, &handle))
+    {
+        DM_LOG_ERROR("Unable to read shader module: %s", file_name);
+        return false;
+    }
+
+    size_t size = 0;
+    uint8_t* buffer = 0;
+    if (!dm_filesystem_read_all(&handle, &buffer, &size))
+    {
+        DM_LOG_ERROR("Unable to read shader module: %s", file_name);
+        return false;
+    }
+
+    stages[index].size = size;
+    stages[index].pcode = (uint32_t*)buffer; 
+
+    dm_filesystem_close(&handle);
+
+    dm_free(file_name);
+}
 
 #endif

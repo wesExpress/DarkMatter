@@ -14,6 +14,12 @@ typedef struct dm_renderer_data
 	dm_camera camera;
 	int width, height;
 	dm_color clear_color;
+
+	dm_buffer* object_vertex_buffer;
+	dm_buffer* object_index_buffer;
+	dm_shader* object_shader;
+
+	size_t vertex_offset, index_offset;
 } dm_renderer_data;
 
 typedef struct dm_render_resources
@@ -71,6 +77,8 @@ calls the backend renderer, fills the handles to the buffers and shader associat
 bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_buffer_handle* ib_handle, dm_shader_handle* s_handle);
 
 // render object functions
+bool dm_renderer_create_buffers();
+void dm_renderer_delete_buffers();
 void dm_renderer_delete_buffer(dm_buffer_handle handle);
 void dm_renderer_bind_buffer(dm_buffer_handle handle);
 void dm_renderer_delete_shader(dm_shader_handle handle);

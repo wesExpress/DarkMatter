@@ -10,11 +10,13 @@ static dm_renderer_data r_data = { 0 };
 bool dm_renderer_create_quad_impl(dm_buffer* buffer, void* b_data, int num_v_attribs, dm_vertex_attrib* v_attribs, dm_buffer* i_buffer, void* ib_data, dm_shader* shader);
 
 bool dm_renderer_init_impl(dm_renderer_data* renderer_data);
-void dm_renderer_shutdown_impl();
+void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data);
 bool dm_renderer_resize_impl(int new_width, int new_height);
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data);
 void dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
 
+bool dm_renderer_create_buffers_impl(dm_renderer_data* renderer_data, dm_buffer_desc v_desc, dm_buffer_desc i_desc);
+void dm_renderer_delete_buffers_impl(dm_renderer_data* renderer_data);
 void dm_renderer_delete_buffer_impl(dm_buffer* buffer);
 void dm_renderer_bind_buffer_impl(dm_buffer* buffer);
 void dm_renderer_delete_shader_impl(dm_shader* shader);
@@ -30,6 +32,8 @@ static dm_render_resources resources;
 dm_buffer_handle vb_handle = -1;
 dm_buffer_handle ib_handle = -1;
 dm_shader_handle s_handle = -1;
+
+dm_shader_handle object_shader_handle = -1;
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -53,7 +57,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	);
 
 	// test rendering
-	if(!dm_renderer_create_quad(&vb_handle, &ib_handle, &s_handle)) return false;
+	//if(!dm_renderer_create_quad(&vb_handle, &ib_handle, &s_handle)) return false;
 
 	return true;
 }
@@ -61,10 +65,10 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 void dm_renderer_shutdown()
 {
 	// cleanup
-	dm_renderer_delete_buffer(vb_handle);
-	dm_renderer_delete_shader(s_handle);
+	//dm_renderer_delete_buffer(vb_handle);
+	//dm_renderer_delete_shader(s_handle);
 
-	dm_renderer_shutdown_impl();
+	dm_renderer_shutdown_impl(&r_data);
 }
 
 bool dm_renderer_resize(int new_width, int new_height)
@@ -79,12 +83,12 @@ void dm_renderer_begin_scene()
 {
 	dm_renderer_begin_scene_impl(&r_data);
 
-	dm_renderer_bind_shader(s_handle);
-	dm_renderer_bind_buffer(vb_handle);
-	dm_renderer_bind_buffer(ib_handle);
+	//dm_renderer_bind_shader(s_handle);
+	//dm_renderer_bind_buffer(vb_handle);
+	//dm_renderer_bind_buffer(ib_handle);
 
 	//dm_renderer_draw_arrays(0, 3);
-	dm_renderer_draw_indexed(6, 0);
+	//dm_renderer_draw_indexed(6, 0);
 }
 
 void dm_renderer_end_scene()
@@ -249,4 +253,29 @@ void dm_renderer_bind_shader(dm_shader_handle handle)
 	{
 		DM_LOG_ERROR("Trying to bind invalid shader!");
 	}
+}
+
+bool dm_renderer_create_buffers()
+{
+	dm_buffer_desc v_desc = { 0 };
+	v_desc.usage = DM_BUFFER_USAGE_DEFAULT;
+	v_desc.type = DM_BUFFER_TYPE_VERTEX;
+	v_desc.data_size = sizeof(dm_vertex_3d) * 1024 * 1024;
+
+	dm_buffer_desc i_desc = { 0 };
+	i_desc.usage = DM_BUFFER_USAGE_DEFAULT;
+	i_desc.type = DM_BUFFER_TYPE_INDEX;
+	i_desc.data_size = sizeof(uint32_t) * 1024 * 1024;
+
+	if (!dm_renderer_create_buffers_impl(&r_data, v_desc, i_desc))
+	{
+		DM_LOG_ERROR("Creating buffers failed!");
+		return false;
+	}
+	return false;
+}
+
+void dm_renderer_delete_buffers()
+{
+	dm_renderer_delete_buffers_impl(&r_data);
 }

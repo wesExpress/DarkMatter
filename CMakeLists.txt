@@ -31,11 +31,13 @@ set(
     src/input/dm_input.c
 
     src/platform/dm_platform_glfw.c
+    src/platform/dm_filesystem.c
 
     src/rendering/dm_renderer.c
     src/rendering/dm_camera.c
     src/rendering/opengl/dm_opengl_renderer.c
     src/rendering/opengl/dm_opengl_shader.c
+    src/rendering/opengl/shaders/dm_opengl_object_shader.c
 
     src/structures/dm_map.c
 )
@@ -49,4 +51,10 @@ if(BUILD_SHARED_LIBS)
     add_definitions(-DDMEXPORT)
 endif()
 
-file( COPY ${CMAKE_CURRENT_SOURCE_DIR}/shaders DESTINATION ${CMAKE_CURRENT_BINARY_DIR})
+# move shaders to binary dir for now
+add_custom_command(
+    TARGET CEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy
+            ${CMAKE_SOURCE_DIR}/shaders
+            ${CMAKE_CURRENT_BINARY_DIR}/shaders
+)
