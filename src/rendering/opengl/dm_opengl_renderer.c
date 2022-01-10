@@ -6,7 +6,6 @@
 #include "platform/dm_platform.h"
 #include "dm_assert.h"
 #include "dm_mem.h"
-#include "shaders/dm_opengl_object_shader.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -20,89 +19,6 @@ bool dm_opengl_validate_shader(GLuint shader);
 bool dm_opengl_validate_program(GLuint program);
 
 void dm_renderer_bind_buffer_impl(dm_buffer* buffer);
-
-// TODO remove this shit
-void upload_data_range(dm_renderer_data* renderer_data, dm_buffer* buffer, size_t offset, size_t size, void* data)
-{
-    dm_renderer_bind_buffer_impl(buffer);
-    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer;
-    glBufferData(
-        internal_buffer->type,
-        size,
-        data,
-        internal_buffer->usage);
-    glCheckError();
-}
-
-void create_vertex_array(dm_buffer* buffer, dm_vertex_attrib* attribs, int num_attribs)
-{
-    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
-
-    glGenVertexArrays(1, &internal_buffer->vao);
-    glCheckError();
-    glBindVertexArray(internal_buffer->vao);
-    glCheckError();
-    glBindBuffer(
-        internal_buffer->type,
-        internal_buffer->id);
-    glCheckError();
-
-    for (int i = 0; i < num_attribs; i++)
-    {
-        GLuint index = i;
-        GLint size;
-        GLenum type;
-        GLboolean normalized;
-        GLsizei stride;
-
-        switch (attribs[i])
-        {
-        case DM_VERTEX_ATTRIB_POS:
-        {
-            size = 3;
-            type = GL_FLOAT;
-            normalized = GL_FALSE;
-            stride = size * sizeof(float);
-        } break;
-        case DM_VERTEX_ATTRIB_NORM:
-        {
-            size = 3;
-            type = GL_INT;
-            normalized = GL_TRUE;
-            stride = size * sizeof(int);
-        } break;
-        case DM_VERTEX_ATTRIB_COLOR:
-        {
-            size = 4;
-            type = GL_UNSIGNED_BYTE;
-            normalized = GL_TRUE;
-            stride = size;
-        } break;
-        case DM_VERTEX_ATTRIB_TEX_COORD:
-        {
-            size = 2;
-            type = GL_SHORT;
-            normalized = GL_TRUE;
-            stride = size * sizeof(short);
-        } break;
-        case DM_VERTEX_ATTRIB_UNKNOWN:
-        {
-            DM_LOG_FATAL("Unknown vertex attribute!");
-        }
-        }
-
-        glVertexAttribPointer(
-            index,
-            size,
-            type,
-            normalized,
-            stride,
-            (void*)index);
-        glCheckError();
-        glEnableVertexAttribArray(index);
-        glCheckError();
-    }
-}
 
 bool dm_renderer_init_impl(dm_renderer_data* renderer_data)
 {
@@ -132,42 +48,13 @@ bool dm_renderer_init_impl(dm_renderer_data* renderer_data)
     glViewport(0, 0, renderer_data->width, renderer_data->height);
     
     // built-in shaders
-    if (!dm_opengl_object_shader_create(renderer_data))
-    {
-        DM_LOG_ERROR("Error creating built-in object shader");
-        return false;
-    }
-
-    dm_renderer_create_buffers();
-
-    // garbage test code
-    const uint32_t vert_count = 3;
-    dm_vertex_3d verts[3] = { 0 };
-
-    verts[0].position.x = 0.0f;
-    verts[0].position.y = -0.5f;
-
-    verts[1].position.x = 0.5f;
-    verts[1].position.y = 0.5f;
-
-    verts[2].position.x = 0.0f;
-    verts[2].position.y = 0.5f;
-
-    uint32_t indices[3] = { 0,1,2 };
-
-    dm_vertex_attrib attribs[] = { DM_VERTEX_ATTRIB_POS };
-
-    upload_data_range(renderer_data, renderer_data->object_vertex_buffer, 0, sizeof(dm_vertex_3d) * 3, verts);
-    create_vertex_array(renderer_data->object_vertex_buffer, attribs, 1);
-    upload_data_range(renderer_data, renderer_data->object_index_buffer, 0, sizeof(uint32_t) * 3, indices);
+    
 
     return true;
 }
 
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
 {
-    dm_opengl_object_shader_destroy(renderer_data->object_shader);
-    dm_renderer_delete_buffers();
     dm_platform_shutdown_opengl();
 }
 
@@ -206,33 +93,6 @@ void dm_renderer_draw_indexed_impl(int num, int offset)
 {
     glDrawElements(GL_TRIANGLES, num, GL_UNSIGNED_INT, 0);
     glCheckError();
-}
-
-bool dm_renderer_create_quad_impl(dm_buffer* v_buffer, void* vb_data, int num_v_attribs, dm_vertex_attrib* v_attribs, dm_buffer* i_buffer, void* i_data, dm_shader* shader)
-{
-    v_buffer->internal_buffer = (dm_internal_buffer*)dm_alloc(sizeof(dm_internal_buffer));
-    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)v_buffer->internal_buffer;
-
-    // create the vertex buffer and vertex array
-    if(!dm_opengl_create_vertex_buffer(v_buffer, vb_data, num_v_attribs, v_attribs)) 
-    {
-        DM_LOG_FATAL("Failed to create OpenGL vertex buffer!");
-        return false;
-    }
-
-    if(!dm_opengl_create_elem_buffer(i_buffer, i_data))
-    {
-        DM_LOG_FATAL("Failed to create OpenGL element buffer!");
-        return false;
-    }
-
-    if(!dm_opengl_create_shader(shader))
-    {
-        DM_LOG_FATAL("Failed to create OpenGL shader!");
-        return false;
-    }
-
-   return true;
 }
 
 bool dm_opengl_create_vertex_buffer(dm_buffer* buffer, void* data, int num_v_attribs, dm_vertex_attrib* v_attribs)
@@ -434,37 +294,6 @@ void dm_renderer_bind_shader_impl(dm_shader* shader)
 
     glUseProgram(internal_shader->id);
     glCheckError();
-}
-
-bool dm_renderer_create_buffers_impl(dm_renderer_data* renderer_data, dm_buffer_desc v_desc, dm_buffer_desc i_desc)
-{
-    renderer_data->object_vertex_buffer->desc = v_desc;
-    renderer_data->object_vertex_buffer->internal_buffer = (dm_internal_buffer*)dm_alloc(sizeof(dm_internal_buffer));
-    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)renderer_data->object_vertex_buffer->internal_buffer;
-    internal_buffer->type = dm_buffer_to_opengl_buffer(renderer_data->object_vertex_buffer->desc.type);
-    DM_ASSERT(internal_buffer->type != DM_BUFFER_TYPE_UNKNOWN);
-    internal_buffer->usage = dm_usage_to_opengl_draw(renderer_data->object_vertex_buffer->desc.usage);
-    DM_ASSERT(internal_buffer->usage != DM_BUFFER_USAGE_UNKNOWN);
-
-    glGenBuffers(1, &internal_buffer->id);
-    glCheckError();
-
-    renderer_data->vertex_offset = 0;
-
-    renderer_data->object_index_buffer->desc = i_desc;
-    renderer_data->object_index_buffer->internal_buffer = (dm_internal_buffer*)dm_alloc(sizeof(dm_internal_buffer));
-    internal_buffer = (dm_internal_buffer*)renderer_data->object_index_buffer->internal_buffer;
-    internal_buffer->type = dm_buffer_to_opengl_buffer(renderer_data->object_index_buffer->desc.type);
-    DM_ASSERT(internal_buffer->type != DM_BUFFER_TYPE_UNKNOWN);
-    internal_buffer->usage = dm_usage_to_opengl_draw(renderer_data->object_index_buffer->desc.usage);
-    DM_ASSERT(internal_buffer->usage != DM_BUFFER_USAGE_UNKNOWN);
-
-    glGenBuffers(1, &internal_buffer->id);
-    glCheckError();
-
-    renderer_data->index_offset = 0;
-
-    return true;
 }
 
 void dm_renderer_delete_buffers_impl(dm_renderer_data* renderer_data)

@@ -66,19 +66,7 @@ void dm_renderer_end_scene();
 void dm_renderer_draw_arrays(int first, int count);
 void dm_renderer_draw_indexed(int num, int offset);
 
-/*
-wrapper for creating quads. 
-calls the backend renderer, fills the handles to the buffers and shader associated with quad
-
-@param vb_handle - vertex buffer handle
-@param ib_handle - index buffer handle
-@param s_handle - shader handle
-*/
-bool dm_renderer_create_quad(dm_buffer_handle* vb_handle, dm_buffer_handle* ib_handle, dm_shader_handle* s_handle);
-
 // render object functions
-bool dm_renderer_create_buffers();
-void dm_renderer_delete_buffers();
 void dm_renderer_delete_buffer(dm_buffer_handle handle);
 void dm_renderer_bind_buffer(dm_buffer_handle handle);
 void dm_renderer_delete_shader(dm_shader_handle handle);
