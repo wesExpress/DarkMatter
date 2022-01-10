@@ -222,7 +222,7 @@ void dm_map_delete_list(dm_map_link_list* list)
 
 dm_map_link_list** dm_map_create_overflow(dm_map* map)
 {
-    dm_map_link_list** buckets = (dm_map_link_list**)calloc(map->size, sizeof(dm_map_link_list));
+    dm_map_link_list** buckets = (dm_map_link_list**)calloc(map->size, sizeof(dm_map_link_list*));
     for(int i=0; i<map->size;i++) buckets[i] = NULL;
     return buckets;
 }
