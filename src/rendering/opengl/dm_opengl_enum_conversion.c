@@ -1,5 +1,7 @@
 #include "dm_opengl_enum_conversion.h"
 
+#if DM_OPENGL
+
 GLenum dm_buffer_to_opengl_buffer(dm_buffer_type dm_type)
 {
     switch (dm_type)
@@ -148,3 +150,5 @@ GLenum dm_wind_top_opengl_wind(dm_winding_order winding)
         return DM_WINDING_UNKNOWN;
     }
 }
+
+#endif
