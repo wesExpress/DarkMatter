@@ -158,12 +158,6 @@ bool dm_renderer_create_buffer_impl(dm_buffer* buffer, void* data, dm_render_pip
 void dm_renderer_delete_buffer_impl(dm_buffer* buffer)
 {
     dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
-
-    if (internal_buffer->type == DM_BUFFER_TYPE_VERTEX) 
-    {
-        glDeleteVertexArrays(1, &internal_buffer->vao);
-        glCheckError();
-    }
     glDeleteBuffers(1, &internal_buffer->id);
     glCheckError();
     dm_free(buffer->internal_buffer);
