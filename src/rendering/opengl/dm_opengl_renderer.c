@@ -274,7 +274,9 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
         glEnable(GL_BLEND);
         glBlendEquation(func);
+        glCheckError();
         glBlendFunc(src, dest);
+        glCheckError();
     }
     else
     {
@@ -289,6 +291,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(func);
+        glCheckError();
     }
     else
     {
@@ -318,12 +321,14 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     GLenum winding = dm_wind_top_opengl_wind(pipeline->raster_desc.winding_order);
     if (winding == DM_WINDING_UNKNOWN) return false;
     glFrontFace(winding);
+    glCheckError();
 
     // shader
     dm_shader* shader = dm_renderer_get_shader(pipeline->raster_desc.shader);
     dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
     if (!internal_shader) return false;
     glUseProgram(internal_shader->id);
+    glCheckError();
 
     // vao
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
@@ -333,6 +338,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
         return false;
     }
     glBindVertexArray(internal_pipe->vao);
+    glCheckError();
 
     return false;
 }
@@ -341,17 +347,20 @@ void dm_renderer_bind_vertex_buffer_impl(dm_buffer* buffer)
 {
     dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
     glBindBuffer(GL_ARRAY_BUFFER, internal_buffer->id);
+    glCheckError();
 }
 
 void dm_renderer_bind_index_buffer_impl(dm_buffer* buffer)
 {
     dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_buffer->id);
+    glCheckError();
 }
 
 void dm_renderer_set_viewport_impl(dm_viewport* viewport)
 {
     glViewport(viewport->x, viewport->y, viewport->width, viewport->height);
+    glCheckError();
 }
 
 void dm_renderer_clear_impl(dm_color* clear_color)
@@ -362,6 +371,7 @@ void dm_renderer_clear_impl(dm_color* clear_color)
         clear_color->z,
         clear_color->w
     );
+    glCheckError();
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 }
 
