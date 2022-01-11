@@ -9,8 +9,6 @@
 
 #define DM_LIST_RESIZE_FACTOR 2
 
-void dm_list_init_impl(void* list, size_t elem_size);
-
 #define dm_list(TYPE) struct { size_t capacity, size, elem_size; TYPE* array; }
 
 #define dm_list_init(LIST, TYPE)\
@@ -93,5 +91,21 @@ do{\
         dm_list_shrink(LIST);\
     }\
 } while(0)
+
+#define dm_list_clear(LIST)\
+do{\
+    if((LIST)->size>0)\
+    {\
+        (LIST)->size = 0;\
+        (LIST)->capacity = 1;\
+        (LIST)->array = dm_realloc((LIST)->array, (LIST)->elem_size);\
+    }\
+    else\
+    {\
+        DM_LOG_WARN("Trying to clear empty list...");\
+    }\
+}while(0)
+
+#define dm_list_for_range(LIST) for(int i=0; i<LIST.size; i++)
 
 #endif

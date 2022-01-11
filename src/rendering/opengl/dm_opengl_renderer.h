@@ -19,17 +19,11 @@ typedef struct dm_internal_shader
 	GLuint id;
 } dm_internal_shader;
 
-typedef struct dm_opengl_shader_stage
+typedef struct dm_internal_pipeline
 {
-	size_t size;
-	uint32_t* pcode;
-} dm_opengl_shader_stage;
-
-#define DM_OBJECT_SHADER_STAGE_COUNT 2
-typedef struct dm_opengl_object_shader
-{
-	dm_opengl_shader_stage stages[DM_OBJECT_SHADER_STAGE_COUNT];
-} dm_opengl_object_shader;
+	GLuint vao;
+	bool vao_init;
+} dm_internal_pipeline;
 
 typedef enum dm_opengl_uniform
 {
@@ -48,8 +42,6 @@ typedef enum dm_opengl_uniform
 
 bool dm_opengl_create_vertex_buffer(dm_buffer* buffer, void* data, int num_v_attribs, dm_vertex_attrib* v_attribs);
 bool dm_opengl_create_elem_buffer(dm_buffer* buffer, void* data);
-bool dm_opengl_create_shader(dm_shader* shader);
-void dm_opengl_delete_shader(dm_shader* shader);
 
 GLenum glCheckError_(const char *file, int line);
 #if DM_DEBUG

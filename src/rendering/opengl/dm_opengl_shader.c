@@ -87,35 +87,6 @@ bool dm_opengl_update_uniform(int location, dm_opengl_uniform uniform_t, void* d
     }
 
     return true;
-}  
-
-bool dm_opengl_create_shader_module(const char* name, const char* type, GLenum type_enum, int index, dm_opengl_shader_stage* stages)
-{
-    char* file_name = (char*)dm_alloc(512 * sizeof(char));
-
-    sprintf(file_name, "assets/shaders/%s.%s.spv", name, type);
-
-    dm_file_handle handle;
-    if (!dm_filesystem_open(file_name, DM_FILE_MODE_READ, true, &handle))
-    {
-        DM_LOG_ERROR("Unable to read shader module: %s", file_name);
-        return false;
-    }
-
-    size_t size = 0;
-    uint8_t* buffer = 0;
-    if (!dm_filesystem_read_all(&handle, &buffer, &size))
-    {
-        DM_LOG_ERROR("Unable to read shader module: %s", file_name);
-        return false;
-    }
-
-    stages[index].size = size;
-    stages[index].pcode = (uint32_t*)buffer; 
-
-    dm_filesystem_close(&handle);
-
-    dm_free(file_name);
 }
 
 #endif

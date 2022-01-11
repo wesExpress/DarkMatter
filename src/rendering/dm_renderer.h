@@ -15,11 +15,7 @@ typedef struct dm_renderer_data
 	int width, height;
 	dm_color clear_color;
 
-	dm_buffer* object_vertex_buffer;
-	dm_buffer* object_index_buffer;
-	dm_shader* object_shader;
-
-	size_t vertex_offset, index_offset;
+	dm_render_pipeline* object_pipeline;
 } dm_renderer_data;
 
 typedef struct dm_render_resources
@@ -58,7 +54,7 @@ void dm_renderer_begin_scene();
 /*
 mainly a wrapper for the backend renderer end scene the user is not exposed to
 */
-void dm_renderer_end_scene();
+bool dm_renderer_end_scene();
 
 /*
 * wrapper for draw functions
@@ -67,9 +63,20 @@ void dm_renderer_draw_arrays(int first, int count);
 void dm_renderer_draw_indexed(int num, int offset);
 
 // render object functions
+bool dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_buffer_handle* handle);
 void dm_renderer_delete_buffer(dm_buffer_handle handle);
 void dm_renderer_bind_buffer(dm_buffer_handle handle);
+bool dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_shader_handle* handle);
 void dm_renderer_delete_shader(dm_shader_handle handle);
 void dm_renderer_bind_shader(dm_shader_handle handle);
+
+dm_buffer* dm_renderer_get_buffer(dm_buffer_handle handle);
+dm_shader* dm_renderer_get_shader(dm_shader_handle handle);
+
+// render commands
+void dm_renderer_submit_command(dm_render_command_type command, void* data, dm_command_buffer* command_buffer);
+void dm_renderer_clear_command_buffer(dm_command_buffer* command_buffer);
+void dm_renderer_destroy_command_buffer(dm_command_buffer* command_buffer);
+bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer);
 
 #endif
