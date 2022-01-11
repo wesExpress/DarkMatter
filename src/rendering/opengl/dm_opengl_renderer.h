@@ -40,11 +40,8 @@ typedef enum dm_opengl_uniform
 	DM_OPENGL_UNI_MAT4
 } dm_opengl_uniform;
 
-bool dm_opengl_create_vertex_buffer(dm_buffer* buffer, void* data, int num_v_attribs, dm_vertex_attrib* v_attribs);
-bool dm_opengl_create_elem_buffer(dm_buffer* buffer, void* data);
-
-GLenum glCheckError_(const char *file, int line);
 #if DM_DEBUG
+GLenum glCheckError_(const char* file, int line);
 #define glCheckError() glCheckError_(__FILE__, __LINE__) 
 #else
 #define glCheckError()

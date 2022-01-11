@@ -36,7 +36,9 @@ set(
     src/rendering/dm_renderer.c
     src/rendering/dm_camera.c
     src/rendering/opengl/dm_opengl_renderer.c
+    src/rendering/opengl/dm_opengl_buffer.c
     src/rendering/opengl/dm_opengl_shader.c
+    src/rendering/opengl/dm_opengl_enum_conversion.c
 
     src/structures/dm_map.c
 )
