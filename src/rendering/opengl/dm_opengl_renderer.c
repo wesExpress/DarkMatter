@@ -114,23 +114,21 @@ bool dm_renderer_create_buffer_impl(dm_buffer* buffer, void* data, dm_render_pip
     glGenBuffers(1, &internal_buffer->id);
     glCheckError();
 
+    glBindBuffer(internal_buffer->type, internal_buffer->id);
+    glCheckError();
+
+    glBufferData(internal_buffer->type, buffer->desc.data_size, data, internal_buffer->usage);
+    glCheckError();
+
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
-    switch (buffer->desc.type)
+    if (buffer->desc.type == DM_BUFFER_TYPE_VERTEX)
     {
-    case DM_BUFFER_TYPE_VERTEX:
-    {
-        glBindVertexArray(internal_pipe->vao);
-        glCheckError();
-
-        glBindBuffer(internal_buffer->type, internal_buffer->id);
-        glCheckError();
-
-        glBufferData(internal_buffer->type, buffer->desc.data_size, data, internal_buffer->usage);
-        glCheckError();
-
         if (!internal_pipe->vao_init)
         {
+            glBindVertexArray(internal_pipe->vao);
+            glCheckError();
+
             for (int i = 0; i < pipeline->vertex_layout.num; i++)
             {
                 dm_vertex_attrib_desc attrib_desc = pipeline->vertex_layout.attributes[i];
@@ -152,17 +150,8 @@ bool dm_renderer_create_buffer_impl(dm_buffer* buffer, void* data, dm_render_pip
 
             internal_pipe->vao_init = true;
         }
-    } break;
-    case DM_BUFFER_TYPE_INDEX:
-    {
-        glBindBuffer(internal_buffer->type, internal_buffer->id);
-        glCheckError();
-
-        glBufferData(internal_buffer->type, buffer->desc.data_size, data, internal_buffer->usage);
-        glCheckError();
-    } break;
-    default: return false;
     }
+
     return true;
 }
 
