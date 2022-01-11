@@ -172,18 +172,8 @@ void dm_renderer_delete_buffer_impl(dm_buffer* buffer)
 void dm_renderer_bind_buffer_impl(dm_buffer* buffer)
 {
     dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
-
-    if (internal_buffer->type == GL_ARRAY_BUFFER) 
-    {
-        //glBindVertexArray(internal_buffer->vao);
-        glBindBuffer(internal_buffer->type, internal_buffer->id);
-        glCheckError();
-    }
-    else
-    {
-        glBindBuffer(internal_buffer->type, internal_buffer->id);
-        glCheckError();
-    }
+    glBindBuffer(internal_buffer->type, internal_buffer->id);
+    glCheckError();
 }
 
 bool dm_renderer_create_shader_impl(dm_shader* shader)
