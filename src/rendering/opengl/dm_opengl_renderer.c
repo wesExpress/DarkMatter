@@ -10,12 +10,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-GLuint dm_opengl_compile_shader(dm_shader_desc desc);
-bool dm_opengl_validate_shader(GLuint shader);
-bool dm_opengl_validate_program(GLuint program);
-
-void dm_renderer_bind_buffer_impl(dm_buffer* buffer);
-
 bool dm_renderer_init_impl(dm_renderer_data* renderer_data)
 {
     if (!dm_platform_init_opengl())
@@ -208,7 +202,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     glBindVertexArray(internal_pipe->vao);
     glCheckError();
 
-    return false;
+    return true;
 }
 
 void dm_renderer_bind_vertex_buffer_impl(dm_buffer* buffer)

@@ -2,6 +2,7 @@
 
 #if DM_OPENGL
 
+#include "dm_opengl_enum_conversion.h"
 #include "dm_logger.h"
 #include "dm_assert.h"
 #include "dm_mem.h"

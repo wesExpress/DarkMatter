@@ -2,6 +2,8 @@
 
 #if DM_OPENGL
 
+#include "dm_opengl_enum_conversion.h"
+
 bool dm_renderer_create_buffer_impl(dm_buffer* buffer, void* data, dm_render_pipeline* pipeline)
 {
     buffer->internal_buffer = (dm_internal_buffer*)dm_alloc(sizeof(dm_internal_buffer));
