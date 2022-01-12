@@ -44,11 +44,6 @@ void dm_renderer_draw_indexed_impl(dm_draw_indexed_params* params, dm_render_pip
 // renderer resources; buffers, shaders, etc
 static dm_render_resources resources;
 
-// test render objects
-dm_buffer_handle vb_handle = -1;
-dm_buffer_handle ib_handle = -1;
-dm_shader_handle s_handle = -1;
-
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	r_data.clear_color = clear_color;
@@ -186,13 +181,13 @@ bool dm_renderer_create_object_pipeline()
 
 	// blend
 	dm_blend_state_desc blend = { 0 };
-	blend.is_enabled = true;
+	blend.is_enabled = false;
 	blend.src = DM_BLEND_FUNC_SRC_ALPHA;
 	blend.dest = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
 
 	// depth
 	dm_depth_state_desc depth = { 0 };
-	depth.is_enabled = true;
+	depth.is_enabled = false;
 	depth.equation = DM_DEPTH_EQUATION_LESS;
 
 	// stencil
@@ -237,15 +232,15 @@ bool dm_renderer_init_object_data()
 	// likely need to reed in files here in the future
 
 	dm_vertex_t vertices[] = {
-		0.5f, 0.5f, 0.0f,
-		0.0f, -0.5f, 0.0f,
-		-0.5f, -0.5f, 0.0f,
-		-0.5f, 0.5f, 0.0f
+		{0.5f,   0.5f, 0.0f},
+		{0.0f,  -0.5f, 0.0f},
+		{-0.5f, -0.5f, 0.0f},
+		{-0.5f,  0.5f, 0.0f}
 	};
 	
 	dm_index_t indices[] = {
-		0, 1, 2,
-		2, 3, 0
+		0, 1, 3,
+		1, 2, 3
 	};
 
 	// buffers
@@ -265,6 +260,7 @@ bool dm_renderer_init_object_data()
 		.offset = offsetof(dm_vertex, position),
 		.normalized = false},
 	};
+
 	dm_vertex_layout v_layout = {
 		.attributes = v_attribs,
 		.num = 1

@@ -16,8 +16,13 @@ typedef dm_handle dm_quad_handle;
 typedef dm_handle dm_mesh_handle;
 typedef dm_handle dm_model_handle;
 
-typedef uint32_t dm_index_t;
-typedef float    dm_vertex_t;
+typedef struct dm_vertex
+{
+    dm_vec3 position;
+} dm_vertex;
+
+typedef uint32_t  dm_index_t;
+typedef dm_vertex dm_vertex_t;
 
 typedef enum dm_buffer_type
 {
@@ -241,11 +246,6 @@ typedef struct dm_vertex_layout
     dm_vertex_attrib_desc* attributes;
     int num;
 } dm_vertex_layout;
-
-typedef struct dm_vertex
-{
-    dm_vec3 position;
-} dm_vertex;
 
 typedef struct dm_render_packet
 {

@@ -33,14 +33,7 @@ bool dm_renderer_init_impl(dm_renderer_data* renderer_data)
 #endif
 #endif
 
-    glEnable(GL_BLEND);
-    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-    glEnable(GL_DEPTH_TEST);
-
     glViewport(0, 0, renderer_data->width, renderer_data->height);
-    
-    // built-in shaders
-    
 
     return true;
 }
@@ -72,7 +65,7 @@ void dm_renderer_draw_indexed_impl(dm_draw_indexed_params* params, dm_render_pip
 {
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
-    glDrawElements(internal_pipe->primitive, params->count, GL_UNSIGNED_INT, params->offset);
+    glDrawElements(internal_pipe->primitive, 6, GL_UNSIGNED_INT, params->offset);
     glCheckError();
 }
 
@@ -160,9 +153,6 @@ bool dm_renderer_init_object_data_impl(void* vertex_data, void* index_data, dm_r
         glEnableVertexAttribArray(i);
         glCheckError();
     }
-
-    // index array
-    dm_renderer_bind_buffer_impl(index_buffer);
 
     glBindVertexArray(0);
 
