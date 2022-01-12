@@ -65,7 +65,7 @@ void dm_renderer_draw_indexed_impl(dm_draw_indexed_params* params, dm_render_pip
 {
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
-    glDrawElements(internal_pipe->primitive, 6, GL_UNSIGNED_INT, params->offset);
+    glDrawElements(internal_pipe->primitive, 6, GL_UNSIGNED_INT, (void*)(uintptr_t)params->offset);
     glCheckError();
 }
 
@@ -124,7 +124,7 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_init_object_data_impl(void* vertex_data, void* index_data, dm_render_pipeline* pipeline)
+bool dm_renderer_init_pipeline_data_impl(void* vertex_data, void* index_data, dm_render_pipeline* pipeline)
 {
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
@@ -145,7 +145,7 @@ bool dm_renderer_init_object_data_impl(void* vertex_data, void* index_data, dm_r
         GLenum data_t = dm_vertex_data_t_to_opengl(attrib_desc.data_t);
         if (data_t == DM_VERTEX_DATA_T_UNKNOWN) return false;
 
-        glVertexAttribPointer(i, attrib_desc.size, data_t, attrib_desc.normalized, attrib_desc.stride, attrib_desc.offset);
+        glVertexAttribPointer(i, attrib_desc.size, data_t, attrib_desc.normalized, attrib_desc.stride, (void*)(uintptr_t)attrib_desc.offset);
         glCheckError();
         glEnableVertexAttribArray(i);
         glCheckError();
@@ -250,20 +250,6 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     return true;
 }
 
-void dm_renderer_bind_vertex_buffer_impl(dm_buffer* buffer)
-{
-    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
-    glBindBuffer(GL_ARRAY_BUFFER, internal_buffer->id);
-    glCheckError();
-}
-
-void dm_renderer_bind_index_buffer_impl(dm_buffer* buffer)
-{
-    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, internal_buffer->id);
-    glCheckError();
-}
-
 void dm_renderer_set_viewport_impl(dm_viewport* viewport)
 {
     glViewport(viewport->x, viewport->y, viewport->width, viewport->height);
@@ -279,7 +265,8 @@ void dm_renderer_clear_impl(dm_color* clear_color)
         clear_color->w
     );
     glCheckError();
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    glClear(GL_COLOR_BUFFER_BIT);
 }
 
 GLenum glCheckError_(const char *file, int line)

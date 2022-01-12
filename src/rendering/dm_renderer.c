@@ -11,7 +11,7 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
 
 bool dm_renderer_init_object_data();
-bool dm_renderer_init_object_data_impl(void* vertex_data, void* index_data, dm_render_pipeline* pipeline);
+bool dm_renderer_init_pipeline_data_impl(void* vertex_data, void* index_data, dm_render_pipeline* pipeline);
 
 // forward declaration of the implementation, or backend, functionality
 // if not defined, compiler will be angry
@@ -145,29 +145,11 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 
 bool dm_renderer_create_object_pipeline()
 {
-	// built-in shader
-	dm_shader_desc v_desc = { 0 };
-	v_desc.path = "shaders/glsl/object_vertex.glsl";
-	v_desc.type = DM_SHADER_TYPE_VERTEX;
-
-	dm_shader_desc p_desc = { 0 };
-	p_desc.path = "shaders/glsl/object_pixel.glsl";
-	p_desc.type = DM_SHADER_TYPE_PIXEL;
-
-	dm_shader_handle object_shader_handle = -1;
-
-	if (!dm_renderer_create_shader(v_desc, p_desc, &object_shader_handle))
-	{
-		DM_LOG_FATAL("Failed to create object shader!");
-		return false;
-	}
-
 	// raster
 	dm_raster_state_desc raster = { 0 };
 	raster.cull_mode = DM_CULL_BACK;
 	raster.winding_order = DM_WINDING_COUNTER_CLOCK;
 	raster.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
-	raster.shader = object_shader_handle;
 
 	// blend
 	dm_blend_state_desc blend = { 0 };
@@ -217,6 +199,25 @@ void dm_renderer_destroy_object_pipeline()
 
 bool dm_renderer_init_object_data()
 {
+	// built-in shader
+	dm_shader_desc v_shader_desc = { 0 };
+	v_shader_desc.path = "shaders/glsl/object_vertex.glsl";
+	v_shader_desc.type = DM_SHADER_TYPE_VERTEX;
+
+	dm_shader_desc p_shader_desc = { 0 };
+	p_shader_desc.path = "shaders/glsl/object_pixel.glsl";
+	p_shader_desc.type = DM_SHADER_TYPE_PIXEL;
+
+	dm_shader_handle object_shader_handle = -1;
+
+	if (!dm_renderer_create_shader(v_shader_desc, p_shader_desc, &object_shader_handle))
+	{
+		DM_LOG_FATAL("Failed to create object shader!");
+		return false;
+	}
+
+	r_data.object_pipeline->raster_desc.shader = object_shader_handle;
+
 	// TODO should just be a palceholder for now!
 	// likely need to reed in files here in the future
 
@@ -257,7 +258,7 @@ bool dm_renderer_init_object_data()
 
 	r_data.object_pipeline->vertex_layout = v_layout;
 
-	return dm_renderer_init_object_data_impl(vertices, indices, r_data.object_pipeline);
+	return dm_renderer_init_pipeline_data_impl(vertices, indices, r_data.object_pipeline);
 }
 
 bool dm_renderer_create_buffer(dm_buffer_desc desc, dm_buffer_handle* handle)
