@@ -17,7 +17,6 @@ bool dm_renderer_init_object_data_impl(void* vertex_data, void* index_data, dm_r
 
 bool dm_renderer_init_impl(dm_renderer_data* renderer_data);
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data);
-bool dm_renderer_resize_impl(int new_width, int new_height);
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data);
 void dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
 
@@ -101,7 +100,17 @@ bool dm_renderer_resize(int new_width, int new_height)
 	r_data.width = new_width;
 	r_data.height = new_height;
 
-	return dm_renderer_resize_impl(new_width, new_height);
+	dm_viewport viewport = {
+		.x = 0,
+		.y = new_height,
+		.width = new_width,
+		.height = new_height,
+		.max_depth = 1.0f
+	};
+	r_data.object_pipeline->viewport = viewport;
+	dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, NULL, &r_data.object_pipeline->command_buffer);
+
+	return true;
 }
 
 void dm_renderer_begin_scene()
@@ -413,7 +422,7 @@ bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer)
 		} break;
 		case DM_RENDER_COMMAND_SET_VIEWPORT:
 		{
-			dm_renderer_set_viewport_impl((dm_viewport*)command.data);
+			dm_renderer_set_viewport_impl(&r_data.object_pipeline->viewport);
 		} break;
 		case DM_RENDER_COMMAND_CLEAR:
 		{

@@ -50,13 +50,6 @@ void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
     dm_platform_shutdown_opengl();
 }
 
-bool dm_renderer_resize_impl(int new_width, int new_height)
-{
-    glViewport(0, 0, new_width, new_height);
-
-    return true;
-}
-
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
 {
 
