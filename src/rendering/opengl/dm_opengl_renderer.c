@@ -137,9 +137,6 @@ bool dm_renderer_init_object_data_impl(void* vertex_data, void* index_data, dm_r
     if (!dm_opengl_create_buffer(vertex_buffer, vertex_data)) return false;
     if (!dm_opengl_create_buffer(index_buffer, index_data)) return false;
 
-    // set up vertex array
-    dm_renderer_bind_buffer_impl(vertex_buffer);
-
     dm_vertex_layout* layout = &pipeline->vertex_layout;
     for (int i = 0; i < pipeline->vertex_layout.num; i++)
     {
@@ -169,11 +166,12 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 void dm_renderer_end_rederpass_impl()
 {
     //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_STENCIL_TEST);
-    glDisable(GL_BLEND);
+    //glDisable(GL_DEPTH_TEST);
+    //glDisable(GL_STENCIL_TEST);
+    //glDisable(GL_BLEND);
 }
 
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
@@ -218,12 +216,12 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     }
 
     // face culling
-    glEnable(GL_CULL_FACE);
-    glCullFace(internal_pipe->cull);
-    glCheckError();
+    //glEnable(GL_CULL_FACE);
+    //glCullFace(internal_pipe->cull);
+    //glCheckError();
 
-    glFrontFace(internal_pipe->winding);
-    glCheckError();
+    //glFrontFace(internal_pipe->winding);
+   // glCheckError();
 
     // wireframe
     if (pipeline->wireframe)
