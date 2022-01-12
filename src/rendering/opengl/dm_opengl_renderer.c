@@ -137,7 +137,6 @@ bool dm_renderer_init_pipeline_data_impl(void* vertex_data, void* index_data, dm
     if (!dm_opengl_create_buffer(vertex_buffer, vertex_data)) return false;
     if (!dm_opengl_create_buffer(index_buffer, index_data)) return false;
 
-    dm_vertex_layout* layout = &pipeline->vertex_layout;
     for (int i = 0; i < pipeline->vertex_layout.num; i++)
     {
         dm_vertex_attrib_desc attrib_desc = pipeline->vertex_layout.attributes[i];
