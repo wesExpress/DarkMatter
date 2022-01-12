@@ -35,8 +35,6 @@ bool dm_opengl_create_buffer(dm_buffer* buffer, void* data)
     internal_buffer->usage = dm_usage_to_opengl_draw(buffer->desc.usage);
     if (internal_buffer->usage == DM_BUFFER_USAGE_UNKNOWN) return false;
 
-    dm_vertex* test = (dm_vertex*)data;
-
     glGenBuffers(1, &internal_buffer->id);
     glCheckError();
 

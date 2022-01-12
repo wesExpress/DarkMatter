@@ -33,7 +33,9 @@ set(
     src/platform/dm_platform_glfw.c
 
     src/rendering/dm_renderer.c
+    src/rendering/dm_command_buffer.c
     src/rendering/dm_camera.c
+
     src/rendering/opengl/dm_opengl_renderer.c
     src/rendering/opengl/dm_opengl_buffer.c
     src/rendering/opengl/dm_opengl_shader.c

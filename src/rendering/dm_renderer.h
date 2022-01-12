@@ -68,10 +68,4 @@ void dm_renderer_bind_shader(dm_shader_handle handle);
 dm_buffer* dm_renderer_get_buffer(dm_buffer_handle handle);
 dm_shader* dm_renderer_get_shader(dm_shader_handle handle);
 
-// render commands
-void dm_renderer_submit_command(dm_render_command_type command, void* data, dm_command_buffer* command_buffer);
-void dm_renderer_clear_command_buffer(dm_command_buffer* command_buffer);
-void dm_renderer_destroy_command_buffer(dm_command_buffer* command_buffer);
-bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer);
-
 #endif
