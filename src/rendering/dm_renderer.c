@@ -192,7 +192,6 @@ bool dm_renderer_create_object_pipeline()
 
 	// make pipeline
 	r_data.object_pipeline = (dm_render_pipeline*)dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
-	dm_memzero(r_data.object_pipeline, sizeof(dm_render_pipeline));
 
 	r_data.object_pipeline->raster_desc = raster;
 	r_data.object_pipeline->blend_desc = blend;
@@ -269,7 +268,6 @@ bool dm_renderer_create_buffer(dm_buffer_desc desc, dm_buffer_handle* handle)
 		{
 			*handle = h;
 			resources.buffers[h] = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-			dm_memzero(resources.buffers[h], sizeof(dm_buffer));
 			resources.buffers[h]->desc = desc;
 			return true;
 			//return dm_renderer_create_buffer_impl(resources.buffers[h], data, r_data.object_pipeline);
@@ -324,7 +322,6 @@ bool dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_
 		{
 			*handle = h;
 			resources.shaders[h] = (dm_shader*)dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
-			dm_memzero(resources.shaders[h], sizeof(dm_shader));
 			resources.shaders[h]->vertex_desc = v_desc;
 			resources.shaders[h]->pixel_desc = p_desc;
 			return dm_renderer_create_shader_impl(resources.shaders[h]);
