@@ -17,9 +17,6 @@ typedef struct dm_renderer_data
 	dm_color clear_color;
 
 	dm_render_pipeline* object_pipeline;
-
-	dm_list(float) object_vertices;
-	dm_list(int) object_indices;
 } dm_renderer_data;
 
 typedef struct dm_render_resources
@@ -60,14 +57,8 @@ mainly a wrapper for the backend renderer end scene the user is not exposed to
 */
 bool dm_renderer_end_scene();
 
-/*
-* wrapper for draw functions
-*/
-void dm_renderer_draw_arrays(int first, int count);
-void dm_renderer_draw_indexed(int num, int offset);
-
 // render object functions
-bool dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_buffer_handle* handle);
+bool dm_renderer_create_buffer(dm_buffer_desc desc, dm_buffer_handle* handle);
 void dm_renderer_delete_buffer(dm_buffer_handle handle);
 void dm_renderer_bind_buffer(dm_buffer_handle handle);
 bool dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_shader_handle* handle);

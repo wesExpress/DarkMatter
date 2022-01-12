@@ -4,13 +4,14 @@
 #include "dm_defines.h"
 
 #if DM_OPENGL
-#include "rendering/dm_renderer.h"
 
 #include <glad/glad.h>
 
+#include "rendering/dm_renderer.h"
+
 typedef struct dm_internal_buffer
 {
-	GLuint id, vao;
+	GLuint id;
 	GLenum type, usage, data_type;
 } dm_internal_buffer;
 
@@ -22,7 +23,10 @@ typedef struct dm_internal_shader
 typedef struct dm_internal_pipeline
 {
 	GLuint vao;
-	bool vao_init;
+	GLenum blend_src, blend_dest;
+	GLenum blend_func, depth_func, stencil_func;
+	GLenum cull, winding;
+	GLenum primitive;
 } dm_internal_pipeline;
 
 typedef enum dm_opengl_uniform

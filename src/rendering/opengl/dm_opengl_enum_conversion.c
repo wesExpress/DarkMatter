@@ -51,6 +51,39 @@ GLenum dm_shader_to_opengl_shader(dm_shader_type dm_type)
     }
 }
 
+GLenum dm_vertex_data_t_to_opengl(dm_vertex_data_t dm_type)
+{
+    switch (dm_type)
+    {
+    case DM_VERTEX_DATA_T_BYTE: return GL_BYTE;
+    case DM_VERTEX_DATA_T_UBYTE: return GL_UNSIGNED_BYTE;
+    case DM_VERTEX_DATA_T_SHORT: return GL_SHORT;
+    case DM_VERTEX_DATA_T_USHORT: return GL_UNSIGNED_SHORT;
+    case DM_VERTEX_DATA_T_INT: return GL_INT;
+    case DM_VERTEX_DATA_T_UINT: return GL_UNSIGNED_INT;
+    case DM_VERTEX_DATA_T_FLOAT: return GL_FLOAT;
+    case DM_VERTEX_DATA_T_DOUBLE: return GL_DOUBLE;
+    default:
+        DM_LOG_FATAL("Unknown vertex data type!");
+        return DM_VERTEX_DATA_T_UNKNOWN;
+    }
+}
+
+GLenum dm_topology_to_opengl_primitive(dm_primitive_topology topology)
+{
+    switch (topology)
+    {
+    case DM_TOPOLOGY_POINT_LIST: return GL_POINT;
+    case DM_TOPOLOGY_LINE_LIST: return GL_LINE;
+    case DM_TOPOLOGY_LINE_STRIP: return GL_LINE_STRIP;
+    case DM_TOPOLOGY_TRIANGLE_LIST: return GL_TRIANGLES;
+    case DM_TOPOLOGY_TRIANGLE_STRIP: return GL_TRIANGLE_STRIP;
+    default:
+        DM_LOG_FATAL("Unknown primitive type!");
+        return DM_TOPOLOGY_UNKNOWN;
+    }
+}
+
 GLenum dm_blend_eq_to_opengl_func(dm_blend_equation eq)
 {
     switch (eq)

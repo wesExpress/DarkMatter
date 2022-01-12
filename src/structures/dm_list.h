@@ -109,6 +109,15 @@ do{\
     }\
 }while(0)
 
+// helpful functions
 #define dm_list_for_range(LIST) for(int i=0; i<LIST.size; i++)
+
+#define dm_list_push_array(LIST, ARRAY, SIZE)\
+do{\
+    for(int i=0; i<SIZE; i++)\
+    {\
+        dm_list_append(LIST, ARRAY[i]);\
+    }\
+}while(0)
 
 #endif

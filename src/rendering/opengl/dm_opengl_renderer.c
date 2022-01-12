@@ -7,6 +7,8 @@
 #include "dm_assert.h"
 #include "dm_mem.h"
 #include "dm_opengl_enum_conversion.h"
+#include "dm_opengl_shader.h"
+#include "dm_opengl_buffer.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -57,13 +59,7 @@ bool dm_renderer_resize_impl(int new_width, int new_height)
 
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
 {
-    glClearColor(
-        renderer_data->clear_color.x,
-        renderer_data->clear_color.y,
-        renderer_data->clear_color.z,
-        renderer_data->clear_color.w
-    );
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 }
 
 void dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
@@ -79,9 +75,11 @@ void dm_renderer_draw_arrays_impl(int first, size_t count)
     glCheckError();
 }
 
-void dm_renderer_draw_indexed_impl(int num, int offset)
+void dm_renderer_draw_indexed_impl(dm_draw_indexed_params* params, dm_render_pipeline* pipeline)
 {
-    glDrawElements(GL_TRIANGLES, num, GL_UNSIGNED_INT, 0);
+    dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+
+    glDrawElements(internal_pipe->primitive, params->count, GL_UNSIGNED_INT, params->offset);
     glCheckError();
 }
 
@@ -92,7 +90,41 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 
     glGenVertexArrays(1, &internal_pipe->vao);
     glCheckError();
-    internal_pipe->vao_init = false;
+
+    if (pipeline->blend_desc.is_enabled)
+    {
+        internal_pipe->blend_func = dm_blend_eq_to_opengl_func(pipeline->blend_desc.equation);
+        if (internal_pipe->blend_func == DM_BLEND_EQUATION_UNKNOWN) return false;
+
+        internal_pipe->blend_src = dm_blend_func_to_opengl_func(pipeline->blend_desc.src);
+        if (internal_pipe->blend_src == DM_BLEND_FUNC_UNKNOWN) return false;
+        internal_pipe->blend_dest = dm_blend_func_to_opengl_func(pipeline->blend_desc.dest);
+        if (internal_pipe->blend_dest == DM_BLEND_FUNC_UNKNOWN) return false;
+    }
+
+    if (pipeline->depth_desc.is_enabled)
+    {
+        internal_pipe->depth_func = dm_depth_eq_to_opengl_func(pipeline->depth_desc.equation);
+        if (internal_pipe->depth_func == DM_DEPTH_EQUATION_UNKNOWN) return false;
+    }
+
+    // TODO needs to be fleshed out correctly
+    if (pipeline->stencil_desc.is_enabled)
+    {
+        internal_pipe->stencil_func = dm_stencil_eq_to_opengl_func(pipeline->stencil_desc.equation);
+        if (internal_pipe->stencil_func == DM_STENCIL_EQUATION_UNKNOWN) return false;
+    }
+
+    // face culling
+    internal_pipe->cull = dm_cull_to_opengl_cull(pipeline->raster_desc.cull_mode);
+    if (internal_pipe->cull == DM_CULL_UNKNOWN) return false;
+
+    internal_pipe->winding = dm_wind_top_opengl_wind(pipeline->raster_desc.winding_order);
+    if (internal_pipe->winding == DM_WINDING_UNKNOWN) return false;
+
+    // primitive
+    internal_pipe->primitive = dm_topology_to_opengl_primitive(pipeline->raster_desc.primitive_topology);
+    if (internal_pipe->primitive == DM_TOPOLOGY_UNKNOWN) return false;
 
     return true;
 }
@@ -101,16 +133,50 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
     dm_internal_pipeline* interanl_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
     glDeleteVertexArrays(1, &interanl_pipe->vao);
-    interanl_pipe->vao_init = false;
 
     dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
+bool dm_renderer_init_object_data_impl(void* vertex_data, void* index_data, dm_render_pipeline* pipeline)
+{
+    dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+
+    glBindVertexArray(internal_pipe->vao);
+
+    // buffers
+    dm_buffer* vertex_buffer = dm_renderer_get_buffer(pipeline->render_packet.vertex_buffer);
+    dm_buffer* index_buffer = dm_renderer_get_buffer(pipeline->render_packet.index_buffer);
+    if (!dm_opengl_create_buffer(vertex_buffer, vertex_data)) return false;
+    if (!dm_opengl_create_buffer(index_buffer, index_data)) return false;
+
+    // set up vertex array
+    dm_renderer_bind_buffer_impl(vertex_buffer);
+
+    dm_vertex_layout* layout = &pipeline->vertex_layout;
+    for (int i = 0; i < pipeline->vertex_layout.num; i++)
+    {
+        dm_vertex_attrib_desc attrib_desc = pipeline->vertex_layout.attributes[i];
+
+        GLenum data_t = dm_vertex_data_t_to_opengl(attrib_desc.data_t);
+        if (data_t == DM_VERTEX_DATA_T_UNKNOWN) return false;
+
+        glVertexAttribPointer(i, attrib_desc.size, data_t, attrib_desc.normalized, attrib_desc.stride, attrib_desc.offset);
+        glEnableVertexAttribArray(i);
+    }
+
+    // index array
+    dm_renderer_bind_buffer_impl(index_buffer);
+
+    glBindVertexArray(0);
+
+    return true;
+}
+
 // render pass stuff
 
-void dm_renderer_begin_renderpass_impl()
+void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 {
-
+    
 }
 
 void dm_renderer_end_rederpass_impl()
@@ -125,21 +191,15 @@ void dm_renderer_end_rederpass_impl()
 
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 {
+    dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+
     // blending
     if (pipeline->blend_desc.is_enabled)
     {
-        GLenum func = dm_blend_eq_to_opengl_func(pipeline->blend_desc.equation);
-        if (func == DM_BLEND_EQUATION_UNKNOWN) return false;
-
-        GLenum src = dm_blend_func_to_opengl_func(pipeline->blend_desc.src);
-        if (src == DM_BLEND_FUNC_UNKNOWN) return false;
-        GLenum dest = dm_blend_func_to_opengl_func(pipeline->blend_desc.dest);
-        if (dest == DM_BLEND_FUNC_UNKNOWN) return false;
-
         glEnable(GL_BLEND);
-        glBlendEquation(func);
+        glBlendEquation(internal_pipe->blend_func);
         glCheckError();
-        glBlendFunc(src, dest);
+        glBlendFunc(internal_pipe->blend_src, internal_pipe->blend_dest);
         glCheckError();
     }
     else
@@ -150,11 +210,8 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     // depth testing
     if (pipeline->depth_desc.is_enabled)
     {
-        GLenum func = dm_depth_eq_to_opengl_func(pipeline->depth_desc.equation);
-        if (func == DM_DEPTH_EQUATION_UNKNOWN) return false;
-
         glEnable(GL_DEPTH_TEST);
-        glDepthFunc(func);
+        glDepthFunc(internal_pipe->depth_func);
         glCheckError();
     }
     else
@@ -166,9 +223,6 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     // TODO needs to be fleshed out correctly
     if (pipeline->stencil_desc.is_enabled)
     {
-        GLenum func = dm_stencil_eq_to_opengl_func(pipeline->stencil_desc.equation);
-        if (func == DM_STENCIL_EQUATION_UNKNOWN) return false;
-
         glEnable(GL_STENCIL_TEST);
     }
     else
@@ -177,14 +231,11 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     }
 
     // face culling
-    GLenum cull = dm_cull_to_opengl_cull(pipeline->raster_desc.cull_mode);
-    if (cull == DM_CULL_UNKNOWN) return false;
     glEnable(GL_CULL_FACE);
-    glCullFace(cull);
+    glCullFace(internal_pipe->cull);
+    glCheckError();
 
-    GLenum winding = dm_wind_top_opengl_wind(pipeline->raster_desc.winding_order);
-    if (winding == DM_WINDING_UNKNOWN) return false;
-    glFrontFace(winding);
+    glFrontFace(internal_pipe->winding);
     glCheckError();
 
     // shader
@@ -195,14 +246,13 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     glCheckError();
 
     // vao
-    dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
-    if (!internal_pipe->vao)
-    {
-        DM_LOG_FATAL("Vertex Array Object for pipeline is invalid!");
-        return false;
-    }
     glBindVertexArray(internal_pipe->vao);
-    glCheckError();
+
+    dm_buffer* vertex_buffer = dm_renderer_get_buffer(pipeline->render_packet.vertex_buffer);
+    dm_buffer* index_buffer = dm_renderer_get_buffer(pipeline->render_packet.index_buffer);
+
+    dm_renderer_bind_buffer_impl(vertex_buffer);
+    dm_renderer_bind_buffer_impl(index_buffer);
 
     return true;
 }

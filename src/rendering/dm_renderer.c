@@ -9,6 +9,9 @@ void dm_renderer_destroy_object_pipeline();
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
 
+bool dm_renderer_init_object_data();
+bool dm_renderer_init_object_data_impl(void* vertex_data, void* index_data, dm_render_pipeline* pipeline);
+
 // forward declaration of the implementation, or backend, functionality
 // if not defined, compiler will be angry
 
@@ -28,7 +31,7 @@ void dm_renderer_bind_shader_impl(dm_shader* shader);
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
-void dm_renderer_begin_renderpass_impl();
+void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline);
 void dm_renderer_end_rederpass_impl();
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_bind_vertex_buffer_impl(dm_buffer* buffer);
@@ -37,7 +40,7 @@ void dm_renderer_set_viewport_impl(dm_viewport* viewport);
 void dm_renderer_clear_impl(dm_color* clear_color);
 
 void dm_renderer_draw_arrays_impl(int first, size_t count);
-void dm_renderer_draw_indexed_impl(int num, int offset);
+void dm_renderer_draw_indexed_impl(dm_draw_indexed_params* params, dm_render_pipeline* pipeline);
 
 // renderer resources; buffers, shaders, etc
 static dm_render_resources resources;
@@ -62,6 +65,12 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	if (!dm_renderer_create_object_pipeline())
 	{
 		DM_LOG_FATAL("Failed to create object render pipelien!");
+		return false;
+	}
+
+	if (!dm_renderer_init_object_data())
+	{
+		DM_LOG_FATAL("Could not initialize object data!");
 		return false;
 	}
 		
@@ -106,6 +115,11 @@ void dm_renderer_begin_scene()
 	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, &r_data.object_pipeline->command_buffer);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, &r_data.object_pipeline->command_buffer);
 	
+	// TODO REMOVE
+	// test rendering
+	dm_draw_indexed_params params = { .count = 6, .offset = 0 };
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, &params, &r_data.object_pipeline->command_buffer);
+
 	dm_renderer_begin_scene_impl(&r_data);
 }
 
@@ -120,24 +134,10 @@ bool dm_renderer_end_scene()
 	return true;
 }
 
-void dm_renderer_draw_arrays(int first, int count)
-{
-	dm_renderer_draw_arrays_impl(first, count);
-}
-
-void dm_renderer_draw_indexed(int num, int offset)
-{
-	dm_renderer_draw_indexed_impl(num, offset);
-}
-
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 {
 	// command buffer
 	dm_list_init(&pipeline->command_buffer.commands, dm_render_command);
-
-	// render packet inititalization
-	dm_list_init(&pipeline->render_packet.vertices, vertex_t);
-	dm_list_init(&pipeline->render_packet.indices, index_t);
 
 	return dm_renderer_create_render_pipeline_impl(pipeline);
 }
@@ -145,8 +145,6 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 {
 	dm_list_destroy(&pipeline->command_buffer.commands);
-	dm_list_destroy(&pipeline->render_packet.vertices);
-	dm_list_destroy(&pipeline->render_packet.indices);
 
 	dm_renderer_destroy_render_pipeline_impl(pipeline);
 }
@@ -191,12 +189,6 @@ bool dm_renderer_create_object_pipeline()
 	// stencil
 	dm_stencil_state_desc stencil = { 0 };
 
-	// vertex layout
-	dm_vertex_attrib_desc v_attribs[] = {
-		(dm_vertex_attrib_desc) {"aPos", DM_VERTEX_ATTRIB_POS, 3 * sizeof(float), 0},
-	};
-	dm_vertex_layout v_layout = { v_attribs, sizeof(v_attribs), 1 };
-
 	// viewport
 	dm_viewport viewport = { 0 };
 	viewport.y = r_data.height;
@@ -212,7 +204,6 @@ bool dm_renderer_create_object_pipeline()
 	r_data.object_pipeline->blend_desc = blend;
 	r_data.object_pipeline->depth_desc = depth;
 	r_data.object_pipeline->stencil_desc = stencil;
-	r_data.object_pipeline->vertex_layout = v_layout;
 	r_data.object_pipeline->viewport = viewport;
 
 	// internal pipeline
@@ -224,11 +215,58 @@ bool dm_renderer_create_object_pipeline()
 void dm_renderer_destroy_object_pipeline()
 {
 	dm_renderer_delete_shader(r_data.object_pipeline->raster_desc.shader);
+	dm_renderer_delete_buffer(r_data.object_pipeline->render_packet.vertex_buffer);
+	dm_renderer_delete_buffer(r_data.object_pipeline->render_packet.index_buffer);
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
+
 	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_buffer_handle* handle)
+bool dm_renderer_init_object_data()
+{
+	// TODO should just be a palceholder for now!
+	// likely need to reed in files here in the future
+
+	dm_vertex_t vertices[] = {
+		-0.5f, -0.5f, 0.0f,
+		 0.5f, -0.5f, 0.0f,
+		 0.0f,  0.5f, 0.0f
+	};
+	
+	dm_index_t indices[] = {
+		0, 1, 2,
+		2, 3, 0
+	};
+
+	// buffers
+	dm_buffer_desc v_desc = { .type = DM_BUFFER_TYPE_VERTEX, .size = sizeof(vertices) };
+	dm_buffer_desc i_desc = { .type = DM_BUFFER_TYPE_INDEX, .size = sizeof(indices) };
+
+	if (!dm_renderer_create_buffer(v_desc, &r_data.object_pipeline->render_packet.vertex_buffer)) return false;
+	if (!dm_renderer_create_buffer(i_desc, &r_data.object_pipeline->render_packet.index_buffer)) return false;
+
+	// vertex layout
+	dm_vertex_attrib_desc v_attribs[] = {
+		(dm_vertex_attrib_desc) {
+		.name = "aPos",
+		.data_t = DM_VERTEX_DATA_T_FLOAT,
+		.size = 3,
+		.stride = sizeof(dm_vertex),
+		.offset = offsetof(dm_vertex, position),
+		.normalized = false
+},
+	};
+	dm_vertex_layout v_layout = {
+		.attributes = v_attribs,
+		.num = 1
+	};
+
+	r_data.object_pipeline->vertex_layout = v_layout;
+
+	return dm_renderer_init_object_data_impl(vertices, indices, r_data.object_pipeline);
+}
+
+bool dm_renderer_create_buffer(dm_buffer_desc desc, dm_buffer_handle* handle)
 {
 	for (dm_buffer_handle h=0; h < MAX_RENDER_RESOURCES; h++)
 	{
@@ -238,7 +276,8 @@ bool dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_buffer_handle
 			resources.buffers[h] = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 			dm_memzero(resources.buffers[h], sizeof(dm_buffer));
 			resources.buffers[h]->desc = desc;
-			return dm_renderer_create_buffer_impl(resources.buffers[h], data, r_data.object_pipeline);
+			return true;
+			//return dm_renderer_create_buffer_impl(resources.buffers[h], data, r_data.object_pipeline);
 		}
 	}
 	DM_LOG_ERROR("Failed to find valid buffer handle!");
@@ -366,7 +405,7 @@ bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer)
 		// TODO flesh out
 		case DM_RENDER_COMMAND_BEGIN_RENDER_PASS:
 		{
-			continue;
+			dm_renderer_begin_renderpass_impl(r_data.object_pipeline);
 		} break;
 		case DM_RENDER_COMMAND_END_RENDER_PASS:
 		{
@@ -384,14 +423,10 @@ bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer)
 		{
 			if (!dm_renderer_bind_pipeline_impl((dm_render_pipeline*)command.data)) return false;
 		} break;
-		case DM_RENDER_COMMAND_SUBMIT_VERTEX_BUFFER:
-		{} break;
-		case DM_RENDER_COMMAND_SUBMIT_INDEX_BUFFER:
-		{} break;
-		case DM_RENDER_COMMAND_BIND_SHADER:
-		{} break;
 		case DM_RENDER_COMMAND_DRAW_INDEXED:
-		{} break;
+		{
+			dm_renderer_draw_indexed_impl((dm_draw_indexed_params*)command.data, r_data.object_pipeline);
+		} break;
 		case DM_RENDER_COMMAND_DRAW_INSTANCED:
 		{} break;
 		}

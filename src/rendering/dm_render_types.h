@@ -16,8 +16,8 @@ typedef dm_handle dm_quad_handle;
 typedef dm_handle dm_mesh_handle;
 typedef dm_handle dm_model_handle;
 
-typedef uint32_t index_t;
-typedef float    vertex_t;
+typedef uint32_t dm_index_t;
+typedef float    dm_vertex_t;
 
 typedef enum dm_buffer_type
 {
@@ -57,7 +57,7 @@ typedef struct dm_buffer_desc
     dm_buffer_type type;
     dm_buffer_usage usage;
     dm_buffer_cpu_access cpu_access;
-    size_t data_size;
+    size_t size;
 } dm_buffer_desc;
 
 typedef enum dm_shader_type
@@ -96,6 +96,20 @@ typedef enum dm_vertex_attrib
     DM_VERTEX_ATTRIB_TEX_COORD,
     DM_VERTEX_ATTRIB_UNKNOWN
 } dm_vertex_attrib;
+
+typedef enum dm_vertex_data_t
+{
+    DM_VERTEX_DATA_T_BYTE,
+    DM_VERTEX_DATA_T_UBYTE,
+    DM_VERTEX_DATA_T_SHORT,
+    DM_VERTEX_DATA_T_USHORT,
+    DM_VERTEX_DATA_T_INT,
+    DM_VERTEX_DATA_T_UINT,
+    DM_VERTEX_DATA_T_FLOAT,
+    DM_VERTEX_DATA_T_DOUBLE,
+    DM_VERTEX_DATA_T_CHAR,
+    DM_VERTEX_DATA_T_UNKNOWN 
+} dm_vertex_data_t;
 
 // pipeline stuff
 typedef enum dm_cull_mode
@@ -215,24 +229,35 @@ typedef struct dm_stencil_state_desc
 typedef struct dm_vertex_attrib_desc
 {
     char name[512];
-    dm_vertex_attrib attrib;
+    dm_vertex_data_t data_t;
     size_t stride;
     size_t offset;
+    size_t size;
+    bool normalized;
 } dm_vertex_attrib_desc;
 
 typedef struct dm_vertex_layout
 {
     dm_vertex_attrib_desc* attributes;
-    size_t size;
     int num;
 } dm_vertex_layout;
 
+typedef struct dm_vertex
+{
+    dm_vec3 position;
+} dm_vertex;
+
 typedef struct dm_render_packet
 {
-    // TODO needs to be a vertex structure for this list eventually
-    dm_list(vertex_t) vertices;
-    dm_list(index_t) indices;
+    dm_buffer_handle vertex_buffer;
+    dm_buffer_handle index_buffer;
 } dm_render_packet;
+
+typedef struct dm_draw_indexed_params
+{
+    uint32_t count;
+    uint32_t offset;
+} dm_draw_indexed_params;
 
 // command buffer
 typedef enum dm_render_command_type
@@ -242,8 +267,6 @@ typedef enum dm_render_command_type
     DM_RENDER_COMMAND_SET_VIEWPORT,
     DM_RENDER_COMMAND_CLEAR,
     DM_RENDER_COMMAND_BIND_PIPELINE,
-    DM_RENDER_COMMAND_SUBMIT_VERTEX_BUFFER,
-    DM_RENDER_COMMAND_SUBMIT_INDEX_BUFFER,
     DM_RENDER_COMMAND_BIND_SHADER,
     DM_RENDER_COMMAND_DRAW_INDEXED,
     DM_RENDER_COMMAND_DRAW_INSTANCED,
