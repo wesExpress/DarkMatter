@@ -1,6 +1,6 @@
 #include "dm_opengl_renderer.h"
 
-#if DM_OPENGL
+#ifdef DM_OPENGL
 
 #include "dm_logger.h"
 #include "platform/dm_platform.h"

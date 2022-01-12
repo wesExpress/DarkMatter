@@ -1,6 +1,6 @@
 #include "dm_opengl_shader.h"
 
-#if DM_OPENGL
+#ifdef DM_OPENGL
 
 #include "dm_opengl_enum_conversion.h"
 #include "dm_logger.h"

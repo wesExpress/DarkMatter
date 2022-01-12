@@ -3,7 +3,7 @@
 
 #include "dm_defines.h"
 
-#if DM_OPENGL
+#ifdef DM_OPENGL
 
 #include <glad/glad.h>
 

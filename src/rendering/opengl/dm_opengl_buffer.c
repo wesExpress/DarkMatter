@@ -1,6 +1,6 @@
 #include "dm_opengl_renderer.h"
 
-#if DM_OPENGL
+#ifdef DM_OPENGL
 
 #include "dm_opengl_buffer.h"
 #include "dm_opengl_enum_conversion.h"

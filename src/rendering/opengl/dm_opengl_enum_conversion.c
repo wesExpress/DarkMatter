@@ -1,6 +1,6 @@
 #include "dm_opengl_enum_conversion.h"
 
-#if DM_OPENGL
+#ifdef DM_OPENGL
 
 GLenum dm_buffer_to_opengl_buffer(dm_buffer_type dm_type)
 {

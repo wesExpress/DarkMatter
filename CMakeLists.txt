@@ -14,7 +14,7 @@ project( CEngine )
 add_subdirectory(lib/glfw)
 add_subdirectory(lib/glad)
 
-add_definitions(-DDM_OPENGL -DDM_DEBUG)
+add_definitions(-DDM_DEBUG)
 
 set(BUILD_SHARED_LIBS TRUE)
 
@@ -31,6 +31,7 @@ set(
     src/input/dm_input.c
 
     src/platform/dm_platform_glfw.c
+    src/platform/dm_platform_win32.c
 
     src/rendering/dm_renderer.c
     src/rendering/dm_command_buffer.c
