@@ -228,9 +228,10 @@ bool dm_renderer_init_object_data()
 	// likely need to reed in files here in the future
 
 	dm_vertex_t vertices[] = {
+		0.5f, 0.5f, 0.0f,
+		0.0f, -0.5f, 0.0f,
 		-0.5f, -0.5f, 0.0f,
-		 0.5f, -0.5f, 0.0f,
-		 0.0f,  0.5f, 0.0f
+		-0.5f, 0.5f, 0.0f
 	};
 	
 	dm_index_t indices[] = {
@@ -253,8 +254,7 @@ bool dm_renderer_init_object_data()
 		.size = 3,
 		.stride = sizeof(dm_vertex),
 		.offset = offsetof(dm_vertex, position),
-		.normalized = false
-},
+		.normalized = false},
 	};
 	dm_vertex_layout v_layout = {
 		.attributes = v_attribs,

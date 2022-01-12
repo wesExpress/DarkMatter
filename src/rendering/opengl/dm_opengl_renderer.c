@@ -133,6 +133,7 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
     dm_internal_pipeline* interanl_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
     glDeleteVertexArrays(1, &interanl_pipe->vao);
+    glCheckError();
 
     dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
@@ -142,6 +143,7 @@ bool dm_renderer_init_object_data_impl(void* vertex_data, void* index_data, dm_r
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
     glBindVertexArray(internal_pipe->vao);
+    glCheckError();
 
     // buffers
     dm_buffer* vertex_buffer = dm_renderer_get_buffer(pipeline->render_packet.vertex_buffer);
@@ -161,7 +163,9 @@ bool dm_renderer_init_object_data_impl(void* vertex_data, void* index_data, dm_r
         if (data_t == DM_VERTEX_DATA_T_UNKNOWN) return false;
 
         glVertexAttribPointer(i, attrib_desc.size, data_t, attrib_desc.normalized, attrib_desc.stride, attrib_desc.offset);
+        glCheckError();
         glEnableVertexAttribArray(i);
+        glCheckError();
     }
 
     // index array
@@ -238,6 +242,16 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     glFrontFace(internal_pipe->winding);
     glCheckError();
 
+    // wireframe
+    if (pipeline->wireframe)
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+    else
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+
     // shader
     dm_shader* shader = dm_renderer_get_shader(pipeline->raster_desc.shader);
     dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
@@ -247,11 +261,9 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
     // vao
     glBindVertexArray(internal_pipe->vao);
+    glCheckError();
 
-    dm_buffer* vertex_buffer = dm_renderer_get_buffer(pipeline->render_packet.vertex_buffer);
     dm_buffer* index_buffer = dm_renderer_get_buffer(pipeline->render_packet.index_buffer);
-
-    dm_renderer_bind_buffer_impl(vertex_buffer);
     dm_renderer_bind_buffer_impl(index_buffer);
 
     return true;
