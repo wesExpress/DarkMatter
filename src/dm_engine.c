@@ -39,16 +39,16 @@ bool dm_engine_create()
     e_data->is_running = true;
     e_data->is_suspended = false;
 
-    DM_LOG_WARN("%s", dm_mem_track());
+    DM_LOG_INFO("%s", dm_mem_track());
 
     return true;
 }
 
 void dm_engine_shutdown()
 {
-    DM_LOG_WARN("%s", dm_mem_track());
+    dm_free(e_data, sizeof(dm_engine_data), DM_MEM_ENGINE);
 
-    free(e_data);
+    DM_LOG_INFO("%s", dm_mem_track());
 }
 
 bool dm_engine_run()
