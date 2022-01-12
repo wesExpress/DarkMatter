@@ -20,7 +20,7 @@ bool dm_engine_create()
         return false;
     }
 
-    e_data = (dm_engine_data*)dm_alloc(sizeof(dm_engine_data));
+    e_data = (dm_engine_data*)dm_alloc(sizeof(dm_engine_data), DM_MEM_ENGINE);
     
     dm_event_set_callback(dm_engine_on_event);
 
@@ -39,11 +39,15 @@ bool dm_engine_create()
     e_data->is_running = true;
     e_data->is_suspended = false;
 
+    DM_LOG_WARN("%s", dm_mem_track());
+
     return true;
 }
 
 void dm_engine_shutdown()
 {
+    DM_LOG_WARN("%s", dm_mem_track());
+
     free(e_data);
 }
 

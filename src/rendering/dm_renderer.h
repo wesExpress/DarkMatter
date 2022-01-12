@@ -6,6 +6,7 @@
 #include "dm_render_types.h"
 #include "dm_colors.h"
 #include "dm_camera.h"
+#include "structures/dm_list.h"
 
 #define MAX_RENDER_RESOURCES 100
 
@@ -16,6 +17,9 @@ typedef struct dm_renderer_data
 	dm_color clear_color;
 
 	dm_render_pipeline* object_pipeline;
+
+	dm_list(float) object_vertices;
+	dm_list(int) object_indices;
 } dm_renderer_data;
 
 typedef struct dm_render_resources

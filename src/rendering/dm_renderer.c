@@ -5,6 +5,9 @@
 static dm_renderer_data r_data = { 0 };
 
 bool dm_renderer_create_object_pipeline();
+void dm_renderer_destroy_object_pipeline();
+bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);
+void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
 
 // forward declaration of the implementation, or backend, functionality
 // if not defined, compiler will be angry
@@ -22,7 +25,7 @@ bool dm_renderer_create_shader_impl(dm_shader* shader);
 void dm_renderer_delete_shader_impl(dm_shader* shader);
 void dm_renderer_bind_shader_impl(dm_shader* shader);
 
-void dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
+bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
 void dm_renderer_begin_renderpass_impl();
@@ -43,8 +46,6 @@ static dm_render_resources resources;
 dm_buffer_handle vb_handle = -1;
 dm_buffer_handle ib_handle = -1;
 dm_shader_handle s_handle = -1;
-
-dm_command_buffer cb = { 0 };
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -74,19 +75,13 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		DM_CAMERA_PERSPECTIVE
 	);
 
-	// test rendering
-	dm_list_init(&cb.commands, dm_render_command);
-
 	return true;
 }
 
 void dm_renderer_shutdown()
 {
 	// cleanup
-	dm_renderer_destroy_render_pipeline_impl(r_data.object_pipeline);
-	dm_free(r_data.object_pipeline);
-
-	dm_list_destroy(&cb.commands);
+	dm_renderer_destroy_object_pipeline();
 
 	// backend shutdown
 	dm_renderer_shutdown_impl(&r_data);
@@ -102,22 +97,23 @@ bool dm_renderer_resize(int new_width, int new_height)
 
 void dm_renderer_begin_scene()
 {
-	if (cb.commands.size > 0)
+	if (r_data.object_pipeline->command_buffer.commands.size > 0)
 	{
-		dm_renderer_clear_command_buffer(&cb);
+		dm_renderer_clear_command_buffer(&r_data.object_pipeline->command_buffer);
 	}
 	
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, &cb);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, &cb);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, &cb);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, &cb);
-
+	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, &r_data.object_pipeline->command_buffer);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, &r_data.object_pipeline->command_buffer);
+	
 	dm_renderer_begin_scene_impl(&r_data);
 }
 
 bool dm_renderer_end_scene()
 {
-	if (!dm_renderer_submit_command_buffer(&cb)) return false;
+	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
+
+	if (!dm_renderer_submit_command_buffer(&r_data.object_pipeline->command_buffer)) return false;
 
 	dm_renderer_end_scene_impl(&r_data);
 
@@ -132,6 +128,27 @@ void dm_renderer_draw_arrays(int first, int count)
 void dm_renderer_draw_indexed(int num, int offset)
 {
 	dm_renderer_draw_indexed_impl(num, offset);
+}
+
+bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
+{
+	// command buffer
+	dm_list_init(&pipeline->command_buffer.commands, dm_render_command);
+
+	// render packet inititalization
+	dm_list_init(&pipeline->render_packet.vertices, vertex_t);
+	dm_list_init(&pipeline->render_packet.indices, index_t);
+
+	return dm_renderer_create_render_pipeline_impl(pipeline);
+}
+
+void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
+{
+	dm_list_destroy(&pipeline->command_buffer.commands);
+	dm_list_destroy(&pipeline->render_packet.vertices);
+	dm_list_destroy(&pipeline->render_packet.indices);
+
+	dm_renderer_destroy_render_pipeline_impl(pipeline);
 }
 
 bool dm_renderer_create_object_pipeline()
@@ -188,7 +205,7 @@ bool dm_renderer_create_object_pipeline()
 	viewport.max_depth = 1.0f;
 
 	// make pipeline
-	r_data.object_pipeline = (dm_render_pipeline*)dm_alloc(sizeof(dm_render_pipeline));
+	r_data.object_pipeline = (dm_render_pipeline*)dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 	dm_memzero(r_data.object_pipeline, sizeof(dm_render_pipeline));
 
 	r_data.object_pipeline->raster_desc = raster;
@@ -199,9 +216,16 @@ bool dm_renderer_create_object_pipeline()
 	r_data.object_pipeline->viewport = viewport;
 
 	// internal pipeline
-	dm_renderer_create_render_pipeline_impl(r_data.object_pipeline);
+	dm_renderer_init_render_pipeline(r_data.object_pipeline);
 
 	return true;
+}
+
+void dm_renderer_destroy_object_pipeline()
+{
+	dm_renderer_delete_shader(r_data.object_pipeline->raster_desc.shader);
+	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
+	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
 bool dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_buffer_handle* handle)
@@ -211,7 +235,7 @@ bool dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_buffer_handle
 		if (!resources.buffers[h])
 		{
 			*handle = h;
-			resources.buffers[h] = (dm_buffer*)dm_alloc(sizeof(dm_buffer));
+			resources.buffers[h] = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 			dm_memzero(resources.buffers[h], sizeof(dm_buffer));
 			resources.buffers[h]->desc = desc;
 			return dm_renderer_create_buffer_impl(resources.buffers[h], data, r_data.object_pipeline);
@@ -226,7 +250,7 @@ void dm_renderer_delete_buffer(dm_buffer_handle handle)
 	if (handle >= 0 && handle < MAX_RENDER_RESOURCES && resources.buffers[handle])
 	{
 		dm_renderer_delete_buffer_impl(resources.buffers[handle]);
-		dm_free(resources.buffers[handle]);
+		dm_free(resources.buffers[handle], sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 		resources.buffers[handle] = NULL;
 	}
 	else
@@ -265,7 +289,7 @@ bool dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_
 		if (!resources.shaders[h])
 		{
 			*handle = h;
-			resources.shaders[h] = (dm_shader*)dm_alloc(sizeof(dm_shader));
+			resources.shaders[h] = (dm_shader*)dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 			dm_memzero(resources.shaders[h], sizeof(dm_shader));
 			resources.shaders[h]->vertex_desc = v_desc;
 			resources.shaders[h]->pixel_desc = p_desc;
@@ -281,7 +305,7 @@ void dm_renderer_delete_shader(dm_shader_handle handle)
 	if (handle >= 0 && handle < MAX_RENDER_RESOURCES && resources.shaders[handle])
 	{
 		dm_renderer_delete_shader_impl(resources.shaders[handle]);
-		dm_free(resources.shaders[handle]);
+		dm_free(resources.shaders[handle], sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 		resources.shaders[handle] = NULL;
 	}
 	else

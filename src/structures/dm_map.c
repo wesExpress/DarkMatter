@@ -24,7 +24,7 @@ unsigned long simple_hash_function(const char* str)
 
 dm_map* dm_map_create(int size)
 {
-    dm_map* map = (dm_map*)dm_alloc(sizeof(dm_map));
+    dm_map* map = (dm_map*)dm_alloc(sizeof(dm_map), DM_MEM_MAP);
     map->size = size;
     map->count = 0;
     map->items = (dm_map_item**)calloc(map->size, sizeof(dm_map_item*));

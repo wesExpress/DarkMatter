@@ -16,16 +16,17 @@ do{\
     (LIST)->capacity = 1;\
     (LIST)->size = 0;\
     (LIST)->elem_size = sizeof(TYPE);\
-    (LIST)->array = (TYPE*)dm_alloc(sizeof(TYPE));\
+    (LIST)->array = (TYPE*)dm_alloc(sizeof(TYPE), DM_MEM_LIST);\
 }while(0)
 
-#define dm_list_destroy(LIST) dm_free((LIST)->array)
+#define dm_list_destroy(LIST) dm_free((LIST)->array, (LIST)->capacity * (LIST)->elem_size, DM_MEM_LIST)
 
 #define dm_list_grow(LIST)\
 do{\
     if((LIST)->size>=(LIST)->capacity/DM_LIST_RESIZE_FACTOR)\
     {\
         size_t new_capacity = (LIST)->capacity * DM_LIST_RESIZE_FACTOR;\
+        dm_mem_db_adjust((new_capacity - (LIST)->capacity) * (LIST)->elem_size, DM_MEM_LIST);\
         (LIST)->array = dm_realloc((LIST)->array, (LIST)->elem_size * new_capacity);\
         (LIST)->capacity = new_capacity;\
     }\
@@ -36,6 +37,7 @@ do{\
     if((LIST)->size<(LIST)->capacity/DM_LIST_RESIZE_FACTOR)\
     {\
         size_t new_capacity = (LIST)->capacity / DM_LIST_RESIZE_FACTOR;\
+        dm_mem_db_adjust((new_capacity - (LIST)->capacity) * (LIST)->elem_size, DM_MEM_LIST);\
         (LIST)->array = dm_realloc((LIST)->array, (LIST)->elem_size * new_capacity);\
         (LIST)->capacity = new_capacity;\
     }\
@@ -96,6 +98,7 @@ do{\
 do{\
     if((LIST)->size>0)\
     {\
+        dm_mem_db_adjust((1 - (LIST)->capacity) * (LIST)->elem_size, DM_MEM_LIST);\
         (LIST)->size = 0;\
         (LIST)->capacity = 1;\
         (LIST)->array = dm_realloc((LIST)->array, (LIST)->elem_size);\

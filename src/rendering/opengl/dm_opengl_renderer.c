@@ -85,14 +85,16 @@ void dm_renderer_draw_indexed_impl(int num, int offset)
     glCheckError();
 }
 
-void dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
+bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-    pipeline->interal_pipeline = (dm_internal_pipeline*)dm_alloc(sizeof(dm_internal_pipeline));
+    pipeline->interal_pipeline = (dm_internal_pipeline*)dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
     glGenVertexArrays(1, &internal_pipe->vao);
     glCheckError();
     internal_pipe->vao_init = false;
+
+    return true;
 }
 
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
@@ -101,7 +103,7 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     glDeleteVertexArrays(1, &interanl_pipe->vao);
     interanl_pipe->vao_init = false;
 
-    dm_free(pipeline->interal_pipeline);
+    dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
 // render pass stuff

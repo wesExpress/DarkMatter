@@ -55,12 +55,12 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    e_data->platform_data = (dm_platform_data*)dm_alloc(sizeof(dm_platform_data));
+    e_data->platform_data = (dm_platform_data*)dm_alloc(sizeof(dm_platform_data), DM_MEM_PLATFORM);
     e_data->platform_data->window_width = window_width;
     e_data->platform_data->window_height = window_height;
     e_data->platform_data->window_title = window_title;
 
-    e_data->platform_data->internal_data = (dm_internal_data*)dm_alloc(sizeof(dm_internal_data));
+    e_data->platform_data->internal_data = (dm_internal_data*)dm_alloc(sizeof(dm_internal_data), DM_MEM_PLATFORM);
     glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
 
     glfw_data->internal_window = glfwCreateWindow(
@@ -106,11 +106,11 @@ void dm_platform_shutdown(dm_engine_data* e_data)
 
     DM_LOG_WARN("Destroying GLFW window...");
     glfwDestroyWindow(glfw_data->internal_window);
-    free(e_data->platform_data->internal_data);
+    dm_free(e_data->platform_data->internal_data, sizeof(dm_internal_data), DM_MEM_PLATFORM);
     DM_LOG_WARN("Terminating GLFW...");
     glfwTerminate();
 
-    free(e_data->platform_data);
+    dm_free(e_data->platform_data, sizeof(dm_platform_data), DM_MEM_PLATFORM);
 }
 
 bool dm_platform_pump_messages(dm_engine_data* e_data)

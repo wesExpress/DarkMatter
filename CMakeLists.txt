@@ -31,7 +31,6 @@ set(
     src/input/dm_input.c
 
     src/platform/dm_platform_glfw.c
-    src/platform/dm_filesystem.c
 
     src/rendering/dm_renderer.c
     src/rendering/dm_camera.c
@@ -40,7 +39,7 @@ set(
     src/rendering/opengl/dm_opengl_shader.c
     src/rendering/opengl/dm_opengl_enum_conversion.c
 
-    src/structures/dm_map.c
+    #src/structures/dm_map.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

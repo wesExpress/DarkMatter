@@ -16,6 +16,9 @@ typedef dm_handle dm_quad_handle;
 typedef dm_handle dm_mesh_handle;
 typedef dm_handle dm_model_handle;
 
+typedef uint32_t index_t;
+typedef float    vertex_t;
+
 typedef enum dm_buffer_type
 {
 	DM_BUFFER_TYPE_VERTEX,
@@ -224,17 +227,12 @@ typedef struct dm_vertex_layout
     int num;
 } dm_vertex_layout;
 
-typedef struct dm_render_pipeline
+typedef struct dm_render_packet
 {
-    dm_raster_state_desc raster_desc;
-    dm_blend_state_desc blend_desc;
-    dm_depth_state_desc depth_desc;
-    dm_stencil_state_desc stencil_desc;
-    dm_vertex_layout vertex_layout;
-    dm_viewport viewport;
-    bool wireframe;
-    void* interal_pipeline;
-} dm_render_pipeline;
+    // TODO needs to be a vertex structure for this list eventually
+    dm_list(vertex_t) vertices;
+    dm_list(index_t) indices;
+} dm_render_packet;
 
 // command buffer
 typedef enum dm_render_command_type
@@ -262,5 +260,19 @@ typedef struct dm_command_buffer
 {
     dm_list(dm_render_command) commands;
 } dm_command_buffer;
+
+typedef struct dm_render_pipeline
+{
+    dm_raster_state_desc raster_desc;
+    dm_blend_state_desc blend_desc;
+    dm_depth_state_desc depth_desc;
+    dm_stencil_state_desc stencil_desc;
+    dm_vertex_layout vertex_layout;
+    dm_render_packet render_packet;
+    dm_command_buffer command_buffer;
+    dm_viewport viewport;
+    bool wireframe;
+    void* interal_pipeline;
+} dm_render_pipeline;
 
 #endif

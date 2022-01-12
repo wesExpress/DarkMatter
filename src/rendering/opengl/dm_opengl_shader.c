@@ -6,11 +6,10 @@
 #include "dm_logger.h"
 #include "dm_assert.h"
 #include "dm_mem.h"
-#include "platform/dm_filesystem.h"
 
 bool dm_renderer_create_shader_impl(dm_shader* shader)
 {
-    shader->internal_shader = (dm_internal_shader*)dm_alloc(sizeof(dm_internal_shader));
+    shader->internal_shader = (dm_internal_shader*)dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
     dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
 
     GLuint vertex_shader = dm_opengl_compile_shader(shader->vertex_desc);
@@ -50,7 +49,7 @@ void dm_renderer_delete_shader_impl(dm_shader* shader)
 
     glDeleteProgram(internal_shader->id);
     glCheckError();
-    dm_free(shader->internal_shader);
+    dm_free(shader->internal_shader, sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
 }
 
 void dm_renderer_bind_shader_impl(dm_shader* shader)
@@ -79,7 +78,7 @@ GLuint dm_opengl_compile_shader(dm_shader_desc desc)
     fseek(file, 0, SEEK_END);
     size_t length = ftell(file);
     fseek(file, 0, SEEK_SET);
-    char* string = dm_alloc(length + 1);
+    char* string = dm_alloc(length + 1, DM_MEM_STRING);
     DM_ASSERT(string);
 
     // instead of setting string[length] to nul, we instead
@@ -101,7 +100,7 @@ GLuint dm_opengl_compile_shader(dm_shader_desc desc)
 
     DM_ASSERT(dm_opengl_validate_shader(shader));
 
-    dm_free(string);
+    dm_free(string, length+1, DM_MEM_STRING);
 
     return shader;
 }
