@@ -56,7 +56,7 @@ endif()
 # move shaders to binary dir for now
 add_custom_command(
     TARGET CEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/shaders
             ${CMAKE_CURRENT_BINARY_DIR}/shaders
 )

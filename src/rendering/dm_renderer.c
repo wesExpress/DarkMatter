@@ -2,6 +2,7 @@
 #include "dm_command_buffer.h"
 #include "dm_mem.h"
 #include "dm_logger.h"
+#include <stddef.h>
 
 static dm_renderer_data r_data = { 0 };
 
