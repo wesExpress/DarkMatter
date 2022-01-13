@@ -20,12 +20,12 @@ bool dm_renderer_init_pipeline_data_impl(void* vertex_data, void* index_data, dm
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data);
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data);
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data);
-void dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
+bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
 
 bool dm_renderer_create_buffer_impl(dm_buffer* buffer, void* data, dm_render_pipeline* pipeline);
 void dm_renderer_delete_buffer_impl(dm_buffer* buffer);
 void dm_renderer_bind_buffer_impl(dm_buffer* buffer);
-bool dm_renderer_create_shader_impl(dm_shader* shader);
+bool dm_renderer_create_shader_impl(dm_shader* shader, dm_render_pipeline* pipeline);
 void dm_renderer_delete_shader_impl(dm_shader* shader);
 void dm_renderer_bind_shader_impl(dm_shader* shader);
 
@@ -125,9 +125,7 @@ bool dm_renderer_end_scene()
 
 	if (!dm_renderer_submit_command_buffer(&r_data.object_pipeline->command_buffer, r_data.object_pipeline)) return false;
 
-	dm_renderer_end_scene_impl(&r_data);
-
-	return true;
+	return dm_renderer_end_scene_impl(&r_data);
 }
 
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
@@ -325,7 +323,7 @@ bool dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_
 			resources.shaders[h] = (dm_shader*)dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 			resources.shaders[h]->vertex_desc = v_desc;
 			resources.shaders[h]->pixel_desc = p_desc;
-			return dm_renderer_create_shader_impl(resources.shaders[h]);
+			return dm_renderer_create_shader_impl(resources.shaders[h], r_data.object_pipeline);
 		}
 	}
 	DM_LOG_ERROR("Failed to find valid shader handle!");

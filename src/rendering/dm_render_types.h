@@ -112,7 +112,6 @@ typedef enum dm_vertex_data_t
     DM_VERTEX_DATA_T_UINT,
     DM_VERTEX_DATA_T_FLOAT,
     DM_VERTEX_DATA_T_DOUBLE,
-    DM_VERTEX_DATA_T_CHAR,
     DM_VERTEX_DATA_T_UNKNOWN 
 } dm_vertex_data_t;
 

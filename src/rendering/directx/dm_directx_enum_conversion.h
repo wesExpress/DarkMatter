@@ -10,6 +10,10 @@
 
 D3D11_CULL_MODE dm_cull_to_directx_cull(dm_cull_mode dm_mode);
 D3D11_PRIMITIVE_TOPOLOGY dm_toplogy_to_directx_topology(dm_primitive_topology dm_top);
+D3D11_USAGE dm_buffer_usage_to_directx(dm_buffer_usage usage);
+D3D11_BIND_FLAG dm_buffer_type_to_directx(dm_buffer_type type);
+D3D11_CPU_ACCESS_FLAG dm_buffer_cpu_access_to_directx(dm_buffer_cpu_access access);
+DXGI_FORMAT dm_vertex_t_to_directx_format(dm_vertex_attrib_desc desc);
 
 #endif
 

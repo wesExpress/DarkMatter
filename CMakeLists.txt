@@ -52,7 +52,25 @@ set(
     src/rendering/directx/dm_directx_enum_conversion.c
 )
 
-add_executable(${PROJECT_NAME} ${SOURCES})
+if(WIN32)
+    set(VERTEX_SHADERS
+        shaders/hlsl/object_vertex.hlsl
+    )
+    set(PIXEL_SHADERS
+        shaders/hlsl/object_pixel.hlsl
+    )
+else()
+    set(VERTEX_SHADERS
+        shaders/glsl/object_vertex.glsl
+    )
+    set(PIXEL_SHADERS
+        shaders/glsl/object_pixel.glsl
+    )
+endif()
+
+set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
+
+add_executable(${PROJECT_NAME} ${SOURCES} ${SHADERS})
 
 target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include lib/glad/include)
 if(UNIX OR APPLE)
@@ -67,6 +85,41 @@ endif()
 
 if(BUILD_SHARED_LIBS)
     add_definitions(-DDMEXPORT)
+endif()
+
+# compile shaders for directx
+if(WIN32)
+    find_program(FXC fxc DOC "fx shader compiler")
+    if(NOT FXC)
+        message(FATAL_ERROR "FXC not found!")
+    endif()
+    set(FXC_FLAGS "/Fc" "/Od" "/Zi")
+    
+    set(current_output_path ${CMAKE_BINARY_DIR}/shaders/hlsl/)
+    get_filename_component(current_output_dir ${current_output_path}/compiled_shaders DIRECTORY)
+    file(MAKE_DIRECTORY ${current_output_dir})
+
+    function(compile_hlsl shaders shader_entry shader_version)
+        foreach(shader ${shaders})
+            get_filename_component(file_we ${shader} NAME_WE)
+            set(shader_out ${current_output_dir}/${file_we}.cod)
+        
+            add_custom_command(
+                OUTPUT ${shader_out}
+                COMMAND ${FXC} ${FXC_FLAGS} /E ${shader_entry} /T ${shader_version} ${CMAKE_CURRENT_SOURCE_DIR}/${shader} /Fo ${shader_out} 
+                MAIN_DEPENDENCY ${shader}
+                COMMENT "Compiling ${shader}..."
+                VERBATIM
+            )
+            add_custom_target(fx_${file_we} ALL DEPENDS ${SHADER_OUT})
+        endforeach()
+    endfunction()
+
+    # vertex shaders
+    compile_hlsl(${VERTEX_SHADERS} "v_main" vs_5_0)
+
+    # pixel shaders
+    compile_hlsl(${PIXEL_SHADERS} "p_main" ps_5_0)
 endif()
 
 # move shaders to binary dir for now
