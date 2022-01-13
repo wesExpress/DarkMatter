@@ -41,12 +41,14 @@ set(
     src/rendering/opengl/dm_opengl_shader.c
     src/rendering/opengl/dm_opengl_enum_conversion.c
 
+    src/rendering/metal/dm_metal_renderer.c
+
     #src/structures/dm_map.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
-target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include lib/glad/include)
+target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include lib/glad/include lib/metal/include)
 target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)
 
 if(BUILD_SHARED_LIBS)
