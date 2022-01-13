@@ -34,41 +34,16 @@ bool dm_directx_create_swapchain(dm_internal_pipeline* pipeline)
 
 	// obtain factory
 	IDXGIDevice* dxgi_device = NULL;
-	DX_ERROR_CHECK(
-		device->lpVtbl->QueryInterface(
-			device,
-			&IID_IDXGIDevice,
-			&dxgi_device),
-		"D3D11Device::QueryInterface failed!"
-	);
+	DX_ERROR_CHECK(device->lpVtbl->QueryInterface(device, &IID_IDXGIDevice, &dxgi_device), "D3D11Device::QueryInterface failed!");
 
 	IDXGIAdapter* dxgi_adapter = NULL;
-	DX_ERROR_CHECK(
-		dxgi_device->lpVtbl->GetParent(
-			dxgi_device,
-			&IID_IDXGIAdapter,
-			(void**)&dxgi_adapter),
-		"IDXGIDevice::GetParent failed!"
-	);
+	DX_ERROR_CHECK(dxgi_device->lpVtbl->GetParent(dxgi_device, &IID_IDXGIAdapter, (void**)&dxgi_adapter), "IDXGIDevice::GetParent failed!");
 
 	IDXGIFactory* dxgi_factory = NULL;
-	DX_ERROR_CHECK(
-		dxgi_adapter->lpVtbl->GetParent(
-			dxgi_adapter,
-			&IID_IDXGIFactory,
-			(void**)&dxgi_factory),
-		"IDXGIAdapter::GetParent failed!"
-	);
+	DX_ERROR_CHECK(dxgi_adapter->lpVtbl->GetParent(dxgi_adapter, &IID_IDXGIFactory, (void**)&dxgi_factory), "IDXGIAdapter::GetParent failed!");
 
 	// create the swap chain
-	DX_ERROR_CHECK(
-		dxgi_factory->lpVtbl->CreateSwapChain(
-			dxgi_factory,
-			(IUnknown*)device,
-			&desc,
-			&swap_chain),
-		"IDXGIFactory::CreateSwapChain failed!"
-	);
+	DX_ERROR_CHECK(dxgi_factory->lpVtbl->CreateSwapChain(dxgi_factory, (IUnknown*)device, &desc, &swap_chain), "IDXGIFactory::CreateSwapChain failed!");
 
 	// release pack animal directx objects
 	DX_RELEASE(dxgi_device);

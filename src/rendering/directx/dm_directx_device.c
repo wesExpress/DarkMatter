@@ -35,26 +35,14 @@ bool dm_directx_create_device(dm_internal_pipeline* pipeline)
 	DM_ASSERT_MSG((feature_level == D3D_FEATURE_LEVEL_11_0), "Direct3D Feature Level 11 unsupported!");
 
 	UINT msaa_quality;
-	DX_ERROR_CHECK(
-		device->lpVtbl->CheckMultisampleQualityLevels(
-			device,
-			DXGI_FORMAT_R8G8B8A8_UNORM,
-			4,
-			&msaa_quality),
-		"D3D11Device::CheckMultisampleQualityLevels failed!"
-	);
+	DX_ERROR_CHECK(device->lpVtbl->CheckMultisampleQualityLevels(device, DXGI_FORMAT_R8G8B8A8_UNORM, 4, &msaa_quality), "D3D11Device::CheckMultisampleQualityLevels failed!");
 
 	pipeline->context = context;
 	pipeline->device = device;
 
 	// if in debug, create the debugger to query live objects
 #if DM_DEBUG
-	DX_ERROR_CHECK(device->lpVtbl->QueryInterface(
-		device,
-		&IID_ID3D11Debug,
-		(void**)&(debugger)),
-		"D3D11Device::QueryInterface failed!"
-	);
+	DX_ERROR_CHECK(device->lpVtbl->QueryInterface(device, &IID_ID3D11Debug, (void**)&(debugger)), "D3D11Device::QueryInterface failed!");
 	pipeline->debugger = debugger;
 #endif
 
@@ -82,14 +70,8 @@ void dm_directx_device_report_live_objects(dm_internal_pipeline* pipeline)
 	HRESULT hr;
 	ID3D11Debug* debugger = pipeline->debugger;
 
-	hr = debugger->lpVtbl->ReportLiveDeviceObjects(
-		debugger,
-		D3D11_RLDO_DETAIL
-	);
-	if (hr != S_OK)
-	{
-		DM_LOG_ERROR("ID3D11Debug::ReportLiveDeviceObjects failed!");
-	}
+	hr = debugger->lpVtbl->ReportLiveDeviceObjects(debugger, D3D11_RLDO_DETAIL);
+	if (hr != S_OK) DM_LOG_ERROR("ID3D11Debug::ReportLiveDeviceObjects failed!");
 }
 #endif
 

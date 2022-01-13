@@ -17,19 +17,8 @@ bool dm_directx_create_rendertarget(dm_internal_pipeline* pipeline)
 	ID3D11Device* device = pipeline->device;
 	IDXGISwapChain* swap_chain = pipeline->swap_chain;
 
-	DX_ERROR_CHECK(swap_chain->lpVtbl->GetBuffer(
-		swap_chain,
-		0,
-		&IID_ID3D11Texture2D,
-		(void**)&back_buffer),
-		"IDXGISwapChain::GetBuffer failed!"
-	);
-	device->lpVtbl->CreateRenderTargetView(
-		device,
-		(ID3D11Resource*)back_buffer,
-		0,
-		&view
-	);
+	DX_ERROR_CHECK(swap_chain->lpVtbl->GetBuffer(swap_chain, 0, &IID_ID3D11Texture2D, (void**)&back_buffer), "IDXGISwapChain::GetBuffer failed!");
+	device->lpVtbl->CreateRenderTargetView(device, (ID3D11Resource*)back_buffer, 0, &view);
 
 	//dm_directx_device_report_live_objects(renderer);
 
