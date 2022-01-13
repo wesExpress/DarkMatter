@@ -33,7 +33,7 @@ bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer, dm_ren
 
 		switch (command.command)
 		{
-			// TODO flesh out
+		// TODO flesh out
 		case DM_RENDER_COMMAND_BEGIN_RENDER_PASS:
 		{
 			dm_renderer_begin_renderpass_impl(pipeline);

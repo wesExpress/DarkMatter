@@ -49,6 +49,8 @@ set(
     src/rendering/directx/dm_directx_swapchain.c
     src/rendering/directx/dm_directx_rendertarget.c
     src/rendering/directx/dm_directx_depth_stencil.c
+    src/rendering/directx/dm_directx_buffer.c
+    src/rendering/directx/dm_directx_shader.c
     src/rendering/directx/dm_directx_enum_conversion.c
 )
 
@@ -96,13 +98,11 @@ if(WIN32)
     set(FXC_FLAGS "/Fc" "/Od" "/Zi")
     
     set(current_output_path ${CMAKE_BINARY_DIR}/shaders/hlsl/)
-    get_filename_component(current_output_dir ${current_output_path}/compiled_shaders DIRECTORY)
-    file(MAKE_DIRECTORY ${current_output_dir})
 
     function(compile_hlsl shaders shader_entry shader_version)
         foreach(shader ${shaders})
             get_filename_component(file_we ${shader} NAME_WE)
-            set(shader_out ${current_output_dir}/${file_we}.cod)
+            set(shader_out ${current_output_path}/${file_we}.fxc)
         
             add_custom_command(
                 OUTPUT ${shader_out}
@@ -116,10 +116,10 @@ if(WIN32)
     endfunction()
 
     # vertex shaders
-    compile_hlsl(${VERTEX_SHADERS} "v_main" vs_5_0)
+    compile_hlsl(${VERTEX_SHADERS} v_main vs_5_0)
 
     # pixel shaders
-    compile_hlsl(${PIXEL_SHADERS} "p_main" ps_5_0)
+    compile_hlsl(${PIXEL_SHADERS} p_main ps_5_0)
 endif()
 
 # move shaders to binary dir for now

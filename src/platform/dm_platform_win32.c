@@ -322,4 +322,17 @@ const char* dm_get_win32_error_msg(HRESULT hr)
 	return message;
 }
 
+const char* dm_get_win32_last_error()
+{
+	DWORD error_message_id = GetLastError();
+
+	LPSTR message = NULL;
+
+	size_t size = FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL, error_message_id, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)(&message), 0, NULL);
+
+	return message;
+
+}
+
 #endif

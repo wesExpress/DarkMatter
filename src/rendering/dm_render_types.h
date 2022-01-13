@@ -62,7 +62,8 @@ typedef struct dm_buffer_desc
     dm_buffer_type type;
     dm_buffer_usage usage;
     dm_buffer_cpu_access cpu_access;
-    size_t size;
+    size_t buffer_size;
+    size_t elem_size;
 } dm_buffer_desc;
 
 typedef enum dm_shader_type
@@ -208,7 +209,8 @@ typedef struct dm_raster_state_desc
     dm_cull_mode cull_mode;
     dm_winding_order winding_order;
     dm_primitive_topology primitive_topology;
-    dm_shader_handle shader;
+    //dm_shader_handle shader;
+    dm_shader* shader;
 } dm_raster_state_desc;
 
 typedef struct dm_blend_state_desc
@@ -248,8 +250,10 @@ typedef struct dm_vertex_layout
 
 typedef struct dm_render_packet
 {
-    dm_buffer_handle vertex_buffer;
-    dm_buffer_handle index_buffer;
+    //dm_buffer_handle vertex_buffer;
+    //dm_buffer_handle index_buffer;
+    dm_buffer* vertex_buffer;
+    dm_buffer* index_buffer;
 } dm_render_packet;
 
 typedef struct dm_draw_indexed_params
@@ -289,7 +293,6 @@ typedef struct dm_render_pipeline
     dm_blend_state_desc blend_desc;
     dm_depth_state_desc depth_desc;
     dm_stencil_state_desc stencil_desc;
-    dm_vertex_layout vertex_layout;
     dm_render_packet render_packet;
     dm_command_buffer command_buffer;
     dm_viewport viewport;

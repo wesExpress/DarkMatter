@@ -13,6 +13,7 @@
 #include <dxgi.h>
 
 const char* dm_get_win32_error_msg(HRESULT hr);
+const char* dm_get_win32_last_error();
 
 #endif
 

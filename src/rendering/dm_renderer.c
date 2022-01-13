@@ -10,9 +10,7 @@ bool dm_renderer_create_object_pipeline();
 void dm_renderer_destroy_object_pipeline();
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
-
 bool dm_renderer_init_object_data();
-bool dm_renderer_init_pipeline_data_impl(void* vertex_data, void* index_data, dm_render_pipeline* pipeline);
 
 // forward declaration of the implementation, or backend, functionality
 // if not defined, compiler will be angry
@@ -22,18 +20,10 @@ void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data);
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data);
 bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
 
-bool dm_renderer_create_buffer_impl(dm_buffer* buffer, void* data, dm_render_pipeline* pipeline);
-void dm_renderer_delete_buffer_impl(dm_buffer* buffer);
-void dm_renderer_bind_buffer_impl(dm_buffer* buffer);
-bool dm_renderer_create_shader_impl(dm_shader* shader, dm_render_pipeline* pipeline);
-void dm_renderer_delete_shader_impl(dm_shader* shader);
-void dm_renderer_bind_shader_impl(dm_shader* shader);
-
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
-// renderer resources; buffers, shaders, etc
-static dm_render_resources resources;
+bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, dm_buffer_desc ib_desc, void* ib_data, dm_shader_desc vs_desc, dm_shader_desc ps_desc, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -187,9 +177,6 @@ bool dm_renderer_create_object_pipeline()
 
 void dm_renderer_destroy_object_pipeline()
 {
-	dm_renderer_delete_shader(r_data.object_pipeline->raster_desc.shader);
-	dm_renderer_delete_buffer(r_data.object_pipeline->render_packet.vertex_buffer);
-	dm_renderer_delete_buffer(r_data.object_pipeline->render_packet.index_buffer);
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
 
 	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
@@ -198,23 +185,21 @@ void dm_renderer_destroy_object_pipeline()
 bool dm_renderer_init_object_data()
 {
 	// built-in shader
-	dm_shader_desc v_shader_desc = { 0 };
-	v_shader_desc.path = "shaders/glsl/object_vertex.glsl";
-	v_shader_desc.type = DM_SHADER_TYPE_VERTEX;
+	dm_shader_desc vs_desc = { 0 };
+#if DM_OPENGL
+	vs_desc.path = "shaders/glsl/object_vertex.glsl";
+#elif defined DM_DIRECTX
+	vs_desc.path = "shaders/hlsl/object_vertex.fxc";
+#endif
+	vs_desc.type = DM_SHADER_TYPE_VERTEX;
 
-	dm_shader_desc p_shader_desc = { 0 };
-	p_shader_desc.path = "shaders/glsl/object_pixel.glsl";
-	p_shader_desc.type = DM_SHADER_TYPE_PIXEL;
-
-	dm_shader_handle object_shader_handle = -1;
-
-	if (!dm_renderer_create_shader(v_shader_desc, p_shader_desc, &object_shader_handle))
-	{
-		DM_LOG_FATAL("Failed to create object shader!");
-		return false;
-	}
-
-	r_data.object_pipeline->raster_desc.shader = object_shader_handle;
+	dm_shader_desc ps_desc = { 0 };
+#ifdef DM_OPENGL
+	ps.path = "shaders/glsl/object_pixel.glsl";
+#elif defined DM_DIRECTX
+	ps_desc.path = "shaders/hlsl/object_pixel.fxc";
+#endif
+	ps_desc.type = DM_SHADER_TYPE_PIXEL;
 
 	// TODO should just be a palceholder for now!
 	// likely need to reed in files here in the future
@@ -232,16 +217,17 @@ bool dm_renderer_init_object_data()
 	};
 
 	// buffers
-	dm_buffer_desc v_desc = { .type = DM_BUFFER_TYPE_VERTEX, .size = sizeof(vertices), .usage=DM_BUFFER_USAGE_STATIC };
-	dm_buffer_desc i_desc = { .type = DM_BUFFER_TYPE_INDEX, .size = sizeof(indices), .usage=DM_BUFFER_USAGE_STATIC };
-
-	if (!dm_renderer_create_buffer(v_desc, &r_data.object_pipeline->render_packet.vertex_buffer)) return false;
-	if (!dm_renderer_create_buffer(i_desc, &r_data.object_pipeline->render_packet.index_buffer)) return false;
+	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_STATIC };
+	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_STATIC };
 
 	// vertex layout
 	dm_vertex_attrib_desc v_attribs[] = {
 		(dm_vertex_attrib_desc) {
+#ifdef DM_OPENGL
 		.name = "aPos",
+#elif defined DM_DIRECTX
+		.name = "POSITION",
+#endif
 		.data_t = DM_VERTEX_DATA_T_FLOAT,
 		.size = 3,
 		.stride = sizeof(dm_vertex),
@@ -254,117 +240,5 @@ bool dm_renderer_init_object_data()
 		.num = 1
 	};
 
-	r_data.object_pipeline->vertex_layout = v_layout;
-
-	return dm_renderer_init_pipeline_data_impl(vertices, indices, r_data.object_pipeline);
-}
-
-bool dm_renderer_create_buffer(dm_buffer_desc desc, dm_buffer_handle* handle)
-{
-	for (dm_buffer_handle h=0; h < MAX_RENDER_RESOURCES; h++)
-	{
-		if (!resources.buffers[h])
-		{
-			*handle = h;
-			resources.buffers[h] = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-			resources.buffers[h]->desc = desc;
-			return true;
-			//return dm_renderer_create_buffer_impl(resources.buffers[h], data, r_data.object_pipeline);
-		}
-	}
-	DM_LOG_ERROR("Failed to find valid buffer handle!");
-	return false;
-}
-
-void dm_renderer_delete_buffer(dm_buffer_handle handle)
-{
-	if (handle >= 0 && handle < MAX_RENDER_RESOURCES && resources.buffers[handle])
-	{
-		dm_renderer_delete_buffer_impl(resources.buffers[handle]);
-		dm_free(resources.buffers[handle], sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-		resources.buffers[handle] = NULL;
-	}
-	else
-	{
-		DM_LOG_ERROR("Trying to delete invalid buffer!");
-	}
-}
-
-void dm_renderer_bind_buffer(dm_buffer_handle handle)
-{
-	if (handle >= 0 && handle < MAX_RENDER_RESOURCES && resources.buffers[handle])
-	{
-		dm_renderer_bind_buffer_impl(resources.buffers[handle]);
-	}
-	else
-	{
-		DM_LOG_ERROR("Trying to bind invalid buffer!");
-	}
-}
-
-dm_buffer* dm_renderer_get_buffer(dm_buffer_handle handle)
-{
-	if (handle >= 0 && handle < MAX_RENDER_RESOURCES && resources.buffers[handle])
-	{
-		return resources.buffers[handle];
-	}
-
-	DM_LOG_ERROR("Trying to retreive invalid buffer!");
-	return NULL;
-}
-
-bool dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_shader_handle* handle)
-{
-	for (dm_shader_handle h=0; h < MAX_RENDER_RESOURCES; h++)
-	{
-		if (!resources.shaders[h])
-		{
-			*handle = h;
-			resources.shaders[h] = (dm_shader*)dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
-			resources.shaders[h]->vertex_desc = v_desc;
-			resources.shaders[h]->pixel_desc = p_desc;
-			return dm_renderer_create_shader_impl(resources.shaders[h], r_data.object_pipeline);
-		}
-	}
-	DM_LOG_ERROR("Failed to find valid shader handle!");
-	return false;
-}
-
-void dm_renderer_delete_shader(dm_shader_handle handle)
-{
-	if (handle >= 0 && handle < MAX_RENDER_RESOURCES && resources.shaders[handle])
-	{
-		dm_renderer_delete_shader_impl(resources.shaders[handle]);
-		dm_free(resources.shaders[handle], sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
-		resources.shaders[handle] = NULL;
-	}
-	else
-	{
-		DM_LOG_ERROR("Trying to delete invalid shader!");
-	}
-}
-
-void dm_renderer_bind_shader(dm_shader_handle handle)
-{
-	if (handle >= 0 && handle < MAX_RENDER_RESOURCES && resources.shaders[handle])
-	{
-		dm_renderer_bind_shader_impl(resources.shaders[handle]);
-	}
-	else
-	{
-		DM_LOG_ERROR("Trying to bind invalid shader!");
-	}
-}
-
-dm_shader* dm_renderer_get_shader(dm_shader_handle handle)
-{
-	if (handle >= 0 && handle < MAX_RENDER_RESOURCES && resources.shaders[handle])
-	{
-		return resources.shaders[handle];
-	}
-	else
-	{
-		DM_LOG_ERROR("Trying to access invalid shader!");
-		return NULL;
-	}
+	return dm_renderer_init_pipeline_data_impl(vb_desc, vertices, ib_desc, indices, vs_desc, ps_desc, v_layout, r_data.object_pipeline);
 }
