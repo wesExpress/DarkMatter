@@ -123,25 +123,55 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     glDeleteVertexArrays(1, &interanl_pipe->vao);
     glCheckError();
 
+    dm_opengl_delete_buffer(pipeline->render_packet.vertex_buffer);
+    dm_opengl_delete_buffer(pipeline->render_packet.index_buffer);
+    dm_opengl_delete_shader(pipeline->raster_desc.shader);
+
+    dm_free(pipeline->render_packet.vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+    dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+    dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+
     dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_init_pipeline_data_impl(void* vertex_data, void* index_data, dm_render_pipeline* pipeline)
+bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, dm_buffer_desc ib_desc, void* ib_data, dm_shader_desc vs_desc, dm_shader_desc ps_desc, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
 {
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
     glBindVertexArray(internal_pipe->vao);
     glCheckError();
 
-    // buffers
-    dm_buffer* vertex_buffer = dm_renderer_get_buffer(pipeline->render_packet.vertex_buffer);
-    dm_buffer* index_buffer = dm_renderer_get_buffer(pipeline->render_packet.index_buffer);
-    if (!dm_opengl_create_buffer(vertex_buffer, vertex_data)) return false;
-    if (!dm_opengl_create_buffer(index_buffer, index_data)) return false;
+    /*
+    // shader
+    */
+    dm_shader* shader = (dm_shader*)dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+    shader->vertex_desc = vs_desc;
+    shader->pixel_desc = ps_desc;
 
-    for (int i = 0; i < pipeline->vertex_layout.num; i++)
+    if (!dm_opengl_create_shader(shader)) return false;
+    pipeline->raster_desc.shader = shader;
+
+    /*
+    // buffers
+    */
+    dm_buffer* vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+    dm_buffer* index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+
+    vertex_buffer->desc = vb_desc;
+    index_buffer->desc = ib_desc;
+
+    if (!dm_opengl_create_buffer(vertex_buffer, vb_data)) return false;
+    if (!dm_opengl_create_buffer(index_buffer, ib_data)) return false;
+
+    /*
+    // vertex attributes/layout
+    */
+    dm_opengl_bind_buffer(vertex_buffer);
+    dm_opengl_bind_buffer(index_buffer);
+
+    for (int i = 0; i < v_layout.num; i++)
     {
-        dm_vertex_attrib_desc attrib_desc = pipeline->vertex_layout.attributes[i];
+        dm_vertex_attrib_desc attrib_desc = v_layout.attributes[i];
 
         GLenum data_t = dm_vertex_data_t_to_opengl(attrib_desc.data_t);
         if (data_t == DM_VERTEX_DATA_T_UNKNOWN) return false;
@@ -153,6 +183,9 @@ bool dm_renderer_init_pipeline_data_impl(void* vertex_data, void* index_data, dm
     }
 
     glBindVertexArray(0);
+
+    pipeline->render_packet.vertex_buffer = vertex_buffer;
+    pipeline->render_packet.index_buffer = index_buffer;
 
     return true;
 }
@@ -235,18 +268,14 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     }
 
     // shader
-    dm_shader* shader = dm_renderer_get_shader(pipeline->raster_desc.shader);
-    dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
-    if (!internal_shader) return false;
-    glUseProgram(internal_shader->id);
-    glCheckError();
+    dm_opengl_bind_shader(pipeline->raster_desc.shader);
 
     // vao
     glBindVertexArray(internal_pipe->vao);
     glCheckError();
 
-    dm_buffer* index_buffer = dm_renderer_get_buffer(pipeline->render_packet.index_buffer);
-    dm_renderer_bind_buffer_impl(index_buffer);
+    dm_opengl_bind_buffer(pipeline->render_packet.vertex_buffer);
+    dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
 
     return true;
 }
@@ -259,12 +288,7 @@ void dm_renderer_set_viewport_impl(dm_viewport* viewport)
 
 void dm_renderer_clear_impl(dm_render_pipeline* pipeline, dm_color* clear_color)
 {
-    glClearColor(
-        clear_color->x,
-        clear_color->y,
-        clear_color->z,
-        clear_color->w
-    );
+    glClearColor(clear_color->x, clear_color->y, clear_color->z, clear_color->w);
     glCheckError();
     //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
     glClear(GL_COLOR_BUFFER_BIT);

@@ -7,7 +7,7 @@
 #include "dm_assert.h"
 #include "dm_mem.h"
 
-bool dm_renderer_create_shader_impl(dm_shader* shader)
+bool dm_opengl_create_shader(dm_shader* shader)
 {
     shader->internal_shader = (dm_internal_shader*)dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
     dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
@@ -43,7 +43,7 @@ bool dm_renderer_create_shader_impl(dm_shader* shader)
     return true;
 }
 
-void dm_renderer_delete_shader_impl(dm_shader* shader)
+void dm_opengl_delete_shader(dm_shader* shader)
 {
     dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
 
@@ -52,7 +52,7 @@ void dm_renderer_delete_shader_impl(dm_shader* shader)
     dm_free(shader->internal_shader, sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
 }
 
-void dm_renderer_bind_shader_impl(dm_shader* shader)
+void dm_opengl_bind_shader(dm_shader* shader)
 {
     dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
 

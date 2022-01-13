@@ -5,11 +5,17 @@
 #define DM_PLATFORM_GLFW
 #define DM_OPENGL
 #define DM_INLINE
+
 #elif __WIN32__ || _WIN32 || WIN32
-//#define DM_PLATFORM_GLFW
+#ifdef DM_WIN_OPENGL
+#define DM_PLATFORM_GLFW
+#define DM_OPENGL
+#else
 #define DM_PLATFORM_WIN32
 #define DM_DIRECTX
+#endif
 #define DM_INLINE __forceinline
+
 #elif __linux__ || __gnu_linux__
 #define DM_PLATFORM_GLFW
 #define DM_OPENGL

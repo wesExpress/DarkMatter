@@ -186,7 +186,7 @@ bool dm_renderer_init_object_data()
 {
 	// built-in shader
 	dm_shader_desc vs_desc = { 0 };
-#if DM_OPENGL
+#ifdef DM_OPENGL
 	vs_desc.path = "shaders/glsl/object_vertex.glsl";
 #elif defined DM_DIRECTX
 	vs_desc.path = "shaders/hlsl/object_vertex.fxc";
@@ -195,7 +195,7 @@ bool dm_renderer_init_object_data()
 
 	dm_shader_desc ps_desc = { 0 };
 #ifdef DM_OPENGL
-	ps.path = "shaders/glsl/object_pixel.glsl";
+	ps_desc.path = "shaders/glsl/object_pixel.glsl";
 #elif defined DM_DIRECTX
 	ps_desc.path = "shaders/hlsl/object_pixel.fxc";
 #endif
