@@ -209,7 +209,6 @@ typedef struct dm_raster_state_desc
     dm_cull_mode cull_mode;
     dm_winding_order winding_order;
     dm_primitive_topology primitive_topology;
-    //dm_shader_handle shader;
     dm_shader* shader;
 } dm_raster_state_desc;
 
@@ -250,8 +249,6 @@ typedef struct dm_vertex_layout
 
 typedef struct dm_render_packet
 {
-    //dm_buffer_handle vertex_buffer;
-    //dm_buffer_handle index_buffer;
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
 } dm_render_packet;

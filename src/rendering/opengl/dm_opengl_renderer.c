@@ -63,11 +63,11 @@ void dm_renderer_draw_arrays_impl(int first, size_t count)
     glCheckError();
 }
 
-void dm_renderer_draw_indexed_impl(dm_draw_indexed_params* params, dm_render_pipeline* pipeline)
+void dm_renderer_draw_indexed_impl(uint32_t count, uint32_t offset, dm_render_pipeline* pipeline)
 {
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
-    glDrawElements(internal_pipe->primitive, 6, GL_UNSIGNED_INT, (void*)(uintptr_t)params->offset);
+    glDrawElements(internal_pipe->primitive, count, GL_UNSIGNED_INT, (void*)(uintptr_t)offset);
     glCheckError();
 }
 
