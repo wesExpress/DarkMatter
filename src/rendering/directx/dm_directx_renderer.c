@@ -198,6 +198,10 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_directx_delete_buffer(pipeline->render_packet.index_buffer, pipeline->interal_pipeline);
 	dm_directx_delete_shader(pipeline->raster_desc.shader, pipeline->interal_pipeline);
 
+	dm_free(pipeline->render_packet.vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+
 	dm_directx_destroy_depth_stencil(interanl_pipe);
 	dm_directx_destroy_rendertarget(interanl_pipe);
 	dm_directx_destroy_swapchain(interanl_pipe);
