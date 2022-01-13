@@ -206,7 +206,7 @@ bool dm_renderer_init_object_data()
 
 	dm_vertex_t vertices[] = {
 		{0.5f,   0.5f, 0.0f},
-		{0.5f,  -0.5f, 0.0f},
+		{0.5f,  -0.75f, 0.0f},
 		{-0.5f, -0.5f, 0.0f},
 		{-0.5f,  0.5f, 0.0f}
 	};
