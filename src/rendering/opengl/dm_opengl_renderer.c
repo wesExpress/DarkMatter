@@ -12,7 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-bool dm_renderer_init_impl(dm_renderer_data* renderer_data)
+bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
     if (!dm_platform_init_opengl())
     {
@@ -255,7 +255,7 @@ void dm_renderer_set_viewport_impl(dm_viewport* viewport)
     glCheckError();
 }
 
-void dm_renderer_clear_impl(dm_color* clear_color)
+void dm_renderer_clear_impl(dm_render_pipeline* pipeline, dm_color* clear_color)
 {
     glClearColor(
         clear_color->x,

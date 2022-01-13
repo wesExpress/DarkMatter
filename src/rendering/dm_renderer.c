@@ -17,7 +17,7 @@ bool dm_renderer_init_pipeline_data_impl(void* vertex_data, void* index_data, dm
 // forward declaration of the implementation, or backend, functionality
 // if not defined, compiler will be angry
 
-bool dm_renderer_init_impl(dm_renderer_data* renderer_data);
+bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data);
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data);
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data);
 void dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
@@ -40,8 +40,9 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	r_data.clear_color = clear_color;
 	r_data.width = platform_data->window_width;
 	r_data.height = platform_data->window_height;
+	r_data.object_pipeline = (dm_render_pipeline*)dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 
-	if(!dm_renderer_init_impl(&r_data))
+	if(!dm_renderer_init_impl(platform_data, &r_data))
 	{
 		DM_LOG_FATAL("Renderer backend could not be initialized!");
 		return false;
@@ -49,7 +50,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 
 	if (!dm_renderer_create_object_pipeline())
 	{
-		DM_LOG_FATAL("Failed to create object render pipelien!");
+		DM_LOG_FATAL("Failed to create object render pipeline!");
 		return false;
 	}
 
@@ -173,9 +174,7 @@ bool dm_renderer_create_object_pipeline()
 	viewport.height = r_data.height;
 	viewport.max_depth = 1.0f;
 
-	// make pipeline
-	r_data.object_pipeline = (dm_render_pipeline*)dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
-
+	// fill-in pipeline
 	r_data.object_pipeline->raster_desc = raster;
 	r_data.object_pipeline->blend_desc = blend;
 	r_data.object_pipeline->depth_desc = depth;

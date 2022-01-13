@@ -11,8 +11,10 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 
 project( CEngine )
 
-add_subdirectory(lib/glfw)
-add_subdirectory(lib/glad)
+if(UNIX OR APPLE)
+    add_subdirectory(lib/glfw)
+    add_subdirectory(lib/glad)
+endif()
 
 add_definitions(-DDM_DEBUG)
 
@@ -42,13 +44,26 @@ set(
     src/rendering/opengl/dm_opengl_shader.c
     src/rendering/opengl/dm_opengl_enum_conversion.c
 
-    #src/structures/dm_map.c
+    src/rendering/directx/dm_directx_renderer.c
+    src/rendering/directx/dm_directx_device.c
+    src/rendering/directx/dm_directx_swapchain.c
+    src/rendering/directx/dm_directx_rendertarget.c
+    src/rendering/directx/dm_directx_depth_stencil.c
+    src/rendering/directx/dm_directx_enum_conversion.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include lib/glad/include)
-target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)
+if(UNIX OR APPLE)
+    target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)
+elseif(WIN32)
+    target_link_libraries(${PROJECT_NAME} 
+    d3d11.lib
+	dxgi.lib
+	dxguid.lib
+	d3dcompiler.lib)
+endif()
 
 if(BUILD_SHARED_LIBS)
     add_definitions(-DDMEXPORT)
