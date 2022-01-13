@@ -56,8 +56,8 @@ bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer, dm_ren
 		} break;
 		case DM_RENDER_COMMAND_DRAW_INDEXED:
 		{
-			dm_draw_indexed_params* params = (dm_draw_indexed_params*)command.data;
-			dm_renderer_draw_indexed_impl(params->count, params->offset, pipeline);
+			uint32_t* params = (uint32_t*)(uintptr_t)command.data;
+			dm_renderer_draw_indexed_impl(params[0], params[1], pipeline);
 		} break;
 		case DM_RENDER_COMMAND_DRAW_INSTANCED:
 		{} break;

@@ -103,8 +103,8 @@ void dm_renderer_begin_scene()
 	
 	// TODO REMOVE
 	// test rendering
-	dm_draw_indexed_params params = { .count = 6, .offset = 0 };
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, &params, &r_data.object_pipeline->command_buffer);
+	uint32_t params[] = { 6, 0 };
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, (void*)&params, & r_data.object_pipeline->command_buffer);
 
 	dm_renderer_begin_scene_impl(&r_data);
 }
