@@ -47,7 +47,8 @@ void dm_directx_delete_buffer(dm_buffer* buffer, dm_internal_pipeline* pipeline)
 
 	DX_RELEASE(internal_buffer->buffer);
 
-	dm_free(internal_buffer->buffer, sizeof(ID3D11Buffer), DM_MEM_RENDERER_BUFFER);
+	dm_mem_db_adjust(-sizeof(ID3D11Buffer), DM_MEM_RENDERER_BUFFER);
+	
 	dm_free(buffer->internal_buffer, sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
 }
 

@@ -76,8 +76,9 @@ void dm_directx_delete_shader(dm_shader* shader, dm_internal_pipeline* pipeline)
 	DX_RELEASE(internal_shader->vertex_shader);
 	DX_RELEASE(internal_shader->pixel_shader);
 
-	dm_free(internal_shader->vertex_shader, sizeof(ID3D11VertexShader), DM_MEM_RENDERER_SHADER);
-	dm_free(internal_shader->pixel_shader, sizeof(ID3D11PixelShader), DM_MEM_RENDERER_SHADER);
+	dm_mem_db_adjust(-sizeof(ID3D11VertexShader), DM_MEM_RENDERER_SHADER);
+	dm_mem_db_adjust(-sizeof(ID3D11PixelShader), DM_MEM_RENDERER_SHADER);
+
 	dm_free(shader->internal_shader, sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
 }
 
