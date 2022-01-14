@@ -163,8 +163,8 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	}
 
 	// culling
-	D3D11_CULL_MODE cull = dm_cull_to_directx_cull(pipeline->raster_desc.cull_mode);
-	if (cull == D3D11_CULL_NONE) return false;
+	rd.CullMode = dm_cull_to_directx_cull(pipeline->raster_desc.cull_mode);
+	if (rd.CullMode == D3D11_CULL_NONE) return false;
 	
 	// winding
 	switch (pipeline->raster_desc.winding_order)
@@ -192,9 +192,8 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// topology
 	*/
-	D3D11_PRIMITIVE_TOPOLOGY topology = dm_toplogy_to_directx_topology(pipeline->raster_desc.primitive_topology);
-	if (topology == D3D11_PRIMITIVE_UNDEFINED) return false;
-	internal_pipe->topology = topology;
+	internal_pipe->topology = dm_toplogy_to_directx_topology(pipeline->raster_desc.primitive_topology);
+	if (internal_pipe->topology == D3D11_PRIMITIVE_UNDEFINED) return false;
 
 	return true;
 }
@@ -208,8 +207,8 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_directx_delete_shader(pipeline->raster_desc.shader, pipeline->interal_pipeline);
 
 	DX_RELEASE(internal_pipe->rasterizer_state);
-	dm_mem_db_adjust(-sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
 	DX_RELEASE(internal_pipe->depth_stencil_state);
+	dm_mem_db_adjust(-sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
 	dm_mem_db_adjust(-sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE);
 
 	dm_directx_destroy_depth_stencil(internal_pipe);
@@ -273,7 +272,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	// raster state
 	*/
 	context->lpVtbl->RSSetState(context, raster_state);
-	context->lpVtbl->IASetPrimitiveTopology(context, internal_pipe->topology);
+	
 
 	/*
 	// depth stencil state
@@ -286,17 +285,19 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	context->lpVtbl->OMSetRenderTargets(context, 1u, &render_target, depth_stencil);
 
 	/*
+	// buffers
+	*/
+	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, pipeline->interal_pipeline);
+	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, pipeline->interal_pipeline);
+
+	/*
 	// shader
 	*/
 	context->lpVtbl->VSSetShader(context, internal_shader->vertex_shader, NULL, 0);
 	context->lpVtbl->PSSetShader(context, internal_shader->pixel_shader, NULL, 0);
 	context->lpVtbl->IASetInputLayout(context, internal_shader->input_layout);
 
-	/*
-	// buffers
-	*/
-	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, pipeline->interal_pipeline);
-	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, pipeline->interal_pipeline);
+	context->lpVtbl->IASetPrimitiveTopology(context, internal_pipe->topology);
 
 	return true;
 }

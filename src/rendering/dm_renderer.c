@@ -32,6 +32,13 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	r_data.height = platform_data->window_height;
 	r_data.object_pipeline = (dm_render_pipeline*)dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 
+#ifdef DM_OPENGL
+	char* backend = "OpenGL";
+#else defined DM_DIRECTX
+	char* backend = "DirectX 11";
+#endif
+	DM_LOG_INFO("Initializing %s renderer backed", backend);
+
 	if(!dm_renderer_init_impl(platform_data, &r_data))
 	{
 		DM_LOG_FATAL("Renderer backend could not be initialized!");

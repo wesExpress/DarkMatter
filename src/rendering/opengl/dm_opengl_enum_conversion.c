@@ -27,18 +27,6 @@ GLenum dm_usage_to_opengl_draw(dm_buffer_usage dm_usage)
     }
 }
 
-GLenum dm_data_to_opengl_data(dm_buffer_data_type dm_data)
-{
-    switch (dm_data)
-    {
-    case DM_BUFFER_DATA_FLOAT: return GL_FLOAT;
-    case DM_BUFFER_DATA_INT: return GL_INT;
-    default:
-        DM_LOG_FATAL("Unknown buffer data type!");
-        return DM_BUFFER_DATA_UNKNOWN;
-    }
-}
-
 GLenum dm_shader_to_opengl_shader(dm_shader_type dm_type)
 {
     switch (dm_type)
