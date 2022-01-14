@@ -67,7 +67,7 @@ void dm_renderer_draw_indexed_impl(uint32_t count, uint32_t offset, dm_render_pi
 {
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
-    glDrawElements(internal_pipe->primitive, count, GL_UNSIGNED_INT, (void*)(uintptr_t)offset);
+    glDrawElements(internal_pipe->primitive, pipeline->render_packet.count, GL_UNSIGNED_INT, (void*)(uintptr_t)pipeline->render_packet.offset);
     glCheckError();
 }
 
@@ -127,10 +127,6 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_delete_buffer(pipeline->render_packet.index_buffer);
     dm_opengl_delete_shader(pipeline->raster_desc.shader);
 
-    dm_free(pipeline->render_packet.vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-    dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-    dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
-
     dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
@@ -144,7 +140,7 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
     /*
     // shader
     */
-    dm_shader* shader = (dm_shader*)dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+    dm_shader* shader = pipeline->raster_desc.shader;
     shader->vertex_desc = vs_desc;
     shader->pixel_desc = ps_desc;
 
@@ -154,8 +150,8 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
     /*
     // buffers
     */
-    dm_buffer* vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-    dm_buffer* index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+    dm_buffer* vertex_buffer = pipeline->render_packet.vertex_buffer;
+    dm_buffer* index_buffer = pipeline->render_packet.index_buffer;
 
     vertex_buffer->desc = vb_desc;
     index_buffer->desc = ib_desc;

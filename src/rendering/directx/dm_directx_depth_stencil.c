@@ -30,6 +30,9 @@ bool dm_directx_create_depth_stencil(dm_internal_pipeline* pipeline)
 
 	DX_ERROR_CHECK(device->lpVtbl->CreateDepthStencilView(device, (ID3D11Resource*)back_buffer, 0, &view), "ID3D11Device::CreateDepthStencilView failed!");
 
+	pipeline->depth_stencil_back_buffer = (ID3D11Texture2D*)dm_alloc(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
+	pipeline->depth_stencil_view = (ID3D11DepthStencilView*)dm_alloc(sizeof(ID3D11DepthStencilView), DM_MEM_RENDER_PIPELINE);
+
 	// assign the new pointers to locations in directx renderer
 	pipeline->depth_stencil_back_buffer = back_buffer;
 	pipeline->depth_stencil_view = view;
@@ -45,6 +48,9 @@ void dm_directx_destroy_depth_stencil(dm_internal_pipeline* pipeline)
 	// release the directx objects
 	DX_RELEASE(back_buffer);
 	DX_RELEASE(view);
+
+	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(sizeof(ID3D11DepthStencilView), DM_MEM_RENDER_PIPELINE);
 }
 
 #endif

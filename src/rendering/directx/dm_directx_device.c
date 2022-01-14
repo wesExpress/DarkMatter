@@ -37,6 +37,9 @@ bool dm_directx_create_device(dm_internal_pipeline* pipeline)
 	UINT msaa_quality;
 	DX_ERROR_CHECK(device->lpVtbl->CheckMultisampleQualityLevels(device, DXGI_FORMAT_R8G8B8A8_UNORM, 4, &msaa_quality), "D3D11Device::CheckMultisampleQualityLevels failed!");
 
+	pipeline->context = (ID3D11DeviceContext*)dm_alloc(sizeof(ID3D11DeviceContext), DM_MEM_RENDER_PIPELINE);
+	pipeline->device = (ID3D11Device*)dm_alloc(sizeof(ID3D11Device), DM_MEM_RENDER_PIPELINE);
+
 	pipeline->context = context;
 	pipeline->device = device;
 
@@ -62,6 +65,9 @@ void dm_directx_destroy_device(dm_internal_pipeline* pipeline)
 #endif
 
 	DX_RELEASE(device);
+
+	dm_mem_db_adjust(-sizeof(ID3D11Device), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(-sizeof(ID3D11DeviceContext), DM_MEM_RENDER_PIPELINE);
 }
 
 #if DM_DEBUG

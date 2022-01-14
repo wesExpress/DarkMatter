@@ -15,6 +15,7 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_ren
 	dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
 	internal_shader->vertex_shader = (ID3D11VertexShader*)dm_alloc(sizeof(ID3D11VertexShader), DM_MEM_RENDERER_SHADER);
 	internal_shader->pixel_shader = (ID3D11PixelShader*)dm_alloc(sizeof(ID3D11PixelShader), DM_MEM_RENDERER_SHADER);
+	internal_shader->input_layout = (ID3D11InputLayout*)dm_alloc(sizeof(ID3D11InputLayout), DM_MEM_RENDERER_SHADER);
 
 	ID3D11Device* device = internal_pipe->device;
 	ID3D11DeviceContext* context = internal_pipe->context;
@@ -75,9 +76,11 @@ void dm_directx_delete_shader(dm_shader* shader, dm_internal_pipeline* pipeline)
 
 	DX_RELEASE(internal_shader->vertex_shader);
 	DX_RELEASE(internal_shader->pixel_shader);
+	DX_RELEASE(internal_shader->input_layout);
 
 	dm_mem_db_adjust(-sizeof(ID3D11VertexShader), DM_MEM_RENDERER_SHADER);
 	dm_mem_db_adjust(-sizeof(ID3D11PixelShader), DM_MEM_RENDERER_SHADER);
+	dm_mem_db_adjust(-sizeof(ID3D11InputLayout), DM_MEM_RENDERER_SHADER);
 
 	dm_free(shader->internal_shader, sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
 }

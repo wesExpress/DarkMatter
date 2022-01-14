@@ -123,6 +123,16 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	// command buffer
 	dm_list_init(&pipeline->command_buffer.commands, dm_render_command);
 
+	// rasterizer
+	pipeline->raster_desc.shader = (dm_shader*)dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+
+	// render packet
+	pipeline->render_packet.vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->render_packet.index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+
+	pipeline->render_packet.count = 0;
+	pipeline->render_packet.offset = 0;
+
 	return dm_renderer_create_render_pipeline_impl(pipeline);
 }
 
@@ -131,6 +141,11 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 	dm_list_destroy(&pipeline->command_buffer.commands);
 
 	dm_renderer_destroy_render_pipeline_impl(pipeline);
+
+	dm_free(pipeline->render_packet.vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+
+	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 }
 
 bool dm_renderer_create_object_pipeline()

@@ -50,6 +50,8 @@ bool dm_directx_create_swapchain(dm_internal_pipeline* pipeline)
 	DX_RELEASE(dxgi_factory);
 	DX_RELEASE(dxgi_adapter);
 
+	pipeline->swap_chain = (IDXGISwapChain*)dm_alloc(sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE);
+
 	// point our swap chain instance to our newly created swap chain
 	pipeline->swap_chain = swap_chain;
 
@@ -61,6 +63,8 @@ void dm_directx_destroy_swapchain(dm_internal_pipeline* pipeline)
 	// release the directx object
 	IDXGISwapChain* swap_chain = pipeline->swap_chain;
 	DX_RELEASE(swap_chain);
+
+	dm_mem_db_adjust(-sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE);
 }
 
 #endif // directx check

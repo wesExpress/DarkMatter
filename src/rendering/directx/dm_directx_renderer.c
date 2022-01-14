@@ -185,6 +185,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	* // finally fill in all the members
 	*/
 	
+	internal_pipe->rasterizer_state = (ID3D11RasterizerState*)dm_alloc(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
 	DX_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pipe->rasterizer_state), "ID3D11Device::CreateRasterizerState failed!");
 
 	return true;
@@ -192,20 +193,19 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* interanl_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
 	dm_directx_delete_buffer(pipeline->render_packet.vertex_buffer, pipeline->interal_pipeline);
 	dm_directx_delete_buffer(pipeline->render_packet.index_buffer, pipeline->interal_pipeline);
 	dm_directx_delete_shader(pipeline->raster_desc.shader, pipeline->interal_pipeline);
 
-	dm_free(pipeline->render_packet.vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+	DX_RELEASE(internal_pipe->rasterizer_state);
+	dm_mem_db_adjust(-sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
 
-	dm_directx_destroy_depth_stencil(interanl_pipe);
-	dm_directx_destroy_rendertarget(interanl_pipe);
-	dm_directx_destroy_swapchain(interanl_pipe);
-	dm_directx_destroy_device(interanl_pipe);
+	dm_directx_destroy_depth_stencil(internal_pipe);
+	dm_directx_destroy_rendertarget(internal_pipe);
+	dm_directx_destroy_swapchain(internal_pipe);
+	dm_directx_destroy_device(internal_pipe);
 
 	dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
@@ -217,7 +217,7 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
 	/*
 	// shader
 	*/
-	dm_shader* shader = (dm_shader*)dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+	dm_shader* shader = pipeline->raster_desc.shader;
 	shader->vertex_desc = vs_desc;
 	shader->pixel_desc = ps_desc;
 
@@ -227,8 +227,8 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
 	/*
 	// buffers
 	*/
-	dm_buffer* vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_buffer* index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_buffer* vertex_buffer = pipeline->render_packet.vertex_buffer;
+	dm_buffer* index_buffer = pipeline->render_packet.index_buffer;
 
 	vertex_buffer->desc = vb_desc;
 	index_buffer->desc = ib_desc;

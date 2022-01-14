@@ -251,13 +251,9 @@ typedef struct dm_render_packet
 {
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
+    size_t count;
+    size_t offset;
 } dm_render_packet;
-
-typedef struct dm_draw_indexed_params
-{
-    uint32_t count;
-    uint32_t offset;
-} dm_draw_indexed_params;
 
 // command buffer
 typedef enum dm_render_command_type

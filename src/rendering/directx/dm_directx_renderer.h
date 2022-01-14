@@ -14,8 +14,7 @@
 #include <stdbool.h>
 
 #define DX_ERROR_CHECK(HRCALL, ERROR_MSG) hr = HRCALL; if(hr!=S_OK){ DM_LOG_FATAL(ERROR_MSG); DM_LOG_FATAL(dm_get_win32_error_msg(hr)); return false; }
-#define DX_RELEASE(OBJ) if(OBJ) { OBJ->lpVtbl->Release(OBJ); } 
-#define DX_RELEASE_DYN(OBJ, SIZE, MEM_TAG) DX_RELEASE(OBJ) dm_mem_adjust(SIZE, MEM_TAG)
+#define DX_RELEASE(OBJ) if(OBJ) { OBJ->lpVtbl->Release(OBJ); }
 
 typedef struct dm_internal_buffer
 {
