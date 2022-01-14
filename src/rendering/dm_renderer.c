@@ -170,7 +170,7 @@ bool dm_renderer_create_object_pipeline()
 
 	// depth
 	dm_depth_state_desc depth = { 0 };
-	depth.is_enabled = true;
+	depth.is_enabled = false;
 	depth.comparison = DM_COMPARISON_LESS;
 
 	// stencil

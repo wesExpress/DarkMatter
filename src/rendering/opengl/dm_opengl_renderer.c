@@ -50,8 +50,6 @@ void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
 
 bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
 {
-    dm_camera_update_view_proj(&renderer_data->camera);
-
     dm_platform_swap_buffers();
 
     return true;
