@@ -261,7 +261,10 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	ID3D11DepthStencilView* depth_stencil = internal_pipe->depth_stencil_view;
 	ID3D11RasterizerState* raster_state = internal_pipe->rasterizer_state;
 	dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
-	
+
+	/*
+	// viewport
+	*/
 	D3D11_VIEWPORT viewport = { 0 };
 	viewport.Width = pipeline->viewport.width;
 	viewport.Height = pipeline->viewport.height;
@@ -273,6 +276,11 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	*/
 	context->lpVtbl->RSSetState(context, raster_state);
 	context->lpVtbl->IASetPrimitiveTopology(context, internal_pipe->topology);
+
+	/*
+	// render target
+	*/
+	context->lpVtbl->OMSetRenderTargets(context, 1u, &render_target, depth_stencil);
 
 	/*
 	// shader
