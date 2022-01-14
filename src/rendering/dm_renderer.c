@@ -164,7 +164,7 @@ bool dm_renderer_create_object_pipeline()
 	// depth
 	dm_depth_state_desc depth = { 0 };
 	depth.is_enabled = false;
-	depth.equation = DM_DEPTH_EQUATION_LESS;
+	depth.comparison = DM_COMPARISON_LESS;
 
 	// stencil
 	dm_stencil_state_desc stencil = { 0 };
@@ -218,16 +218,17 @@ bool dm_renderer_init_object_data()
 	// TODO should just be a palceholder for now!
 	// likely need to reed in files here in the future
 
+	// quad render
 	dm_vertex_t vertices[] = {
-		{0.5f,   0.5f, 0.0f},
-		{0.5f,  -0.75f, 0.0f},
-		{-0.5f, -0.5f, 0.0f},
-		{-0.5f,  0.5f, 0.0f}
+		{-0.5f, -0.5f,  0.0f},
+		{ 0.5f, -0.75f, 0.0f},
+		{ 0.5f,  0.5f,  0.0f},
+		{-0.5f,  0.5f,  0.0f}
 	};
 	
 	dm_index_t indices[] = {
 		0, 1, 3,
-		1, 2, 3
+		3, 1, 2
 	};
 
 	// buffers
@@ -245,7 +246,7 @@ bool dm_renderer_init_object_data()
 		.name = "POSITION",
 #endif
 		.data_t = DM_VERTEX_DATA_T_FLOAT,
-		.size = 3,
+		.count = 3,
 		.stride = sizeof(dm_vertex),
 		.offset = offsetof(dm_vertex, position),
 		.normalized = false},

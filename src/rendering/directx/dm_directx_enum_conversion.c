@@ -76,7 +76,7 @@ DXGI_FORMAT dm_vertex_t_to_directx_format(dm_vertex_attrib_desc desc)
 	{
 	case DM_VERTEX_DATA_T_BYTE:
 	{
-		switch (desc.size)
+		switch (desc.count)
 		{
 		case 1: return DXGI_FORMAT_R8_SINT;
 		case 2: return DXGI_FORMAT_R8G8_SINT;
@@ -87,7 +87,7 @@ DXGI_FORMAT dm_vertex_t_to_directx_format(dm_vertex_attrib_desc desc)
 	}
 	case DM_VERTEX_DATA_T_UBYTE:
 	{
-		switch (desc.size)
+		switch (desc.count)
 		{
 		case 1: return DXGI_FORMAT_R8_UINT;
 		case 2: return DXGI_FORMAT_R8G8_UINT;
@@ -98,7 +98,7 @@ DXGI_FORMAT dm_vertex_t_to_directx_format(dm_vertex_attrib_desc desc)
 	}
 	case DM_VERTEX_DATA_T_SHORT:
 	{
-		switch (desc.size)
+		switch (desc.count)
 		{
 		case 1: return DXGI_FORMAT_R16_SINT;
 		case 2: return DXGI_FORMAT_R16G16_SINT;
@@ -109,7 +109,7 @@ DXGI_FORMAT dm_vertex_t_to_directx_format(dm_vertex_attrib_desc desc)
 	}
 	case DM_VERTEX_DATA_T_USHORT:
 	{
-		switch (desc.size)
+		switch (desc.count)
 		{
 		case 1: return DXGI_FORMAT_R16_UINT;
 		case 2: return DXGI_FORMAT_R16G16_UINT;
@@ -120,7 +120,7 @@ DXGI_FORMAT dm_vertex_t_to_directx_format(dm_vertex_attrib_desc desc)
 	}
 	case DM_VERTEX_DATA_T_INT:
 	{
-		switch (desc.size)
+		switch (desc.count)
 		{
 		case 1: return DXGI_FORMAT_R32_SINT;
 		case 2: return DXGI_FORMAT_R32G32_SINT;
@@ -132,7 +132,7 @@ DXGI_FORMAT dm_vertex_t_to_directx_format(dm_vertex_attrib_desc desc)
 	}
 	case DM_VERTEX_DATA_T_UINT:
 	{
-		switch (desc.size)
+		switch (desc.count)
 		{
 		case 1: return DXGI_FORMAT_R32_UINT;
 		case 2: return DXGI_FORMAT_R32G32_UINT;
@@ -145,7 +145,7 @@ DXGI_FORMAT dm_vertex_t_to_directx_format(dm_vertex_attrib_desc desc)
 	case DM_VERTEX_DATA_T_DOUBLE:
 	case DM_VERTEX_DATA_T_FLOAT:
 	{
-		switch (desc.size)
+		switch (desc.count)
 		{
 		case 1: return DXGI_FORMAT_R32_FLOAT;
 		case 2: return DXGI_FORMAT_R32G32_FLOAT;
@@ -161,6 +161,24 @@ DXGI_FORMAT dm_vertex_t_to_directx_format(dm_vertex_attrib_desc desc)
 
 	DM_LOG_FATAL("Unknown vertex format type!");
 	return DXGI_FORMAT_UNKNOWN;
+}
+
+dm_comp_to_directx_comp(dm_comparison dm_comp)
+{
+	switch (dm_comp)
+	{
+	case DM_COMPARISON_ALWAYS: return D3D11_COMPARISON_ALWAYS;
+	case DM_COMPARISON_NEVER: return D3D11_COMPARISON_NEVER;
+	case DM_COMPARISON_EQUAL: return D3D11_COMPARISON_EQUAL;
+	case DM_COMPARISON_NOTEQUAL: return D3D11_COMPARISON_NOT_EQUAL;
+	case DM_COMPARISON_LESS: return D3D11_COMPARISON_LESS;
+	case DM_COMPARISON_LEQUAL: return D3D11_COMPARISON_LESS_EQUAL;
+	case DM_COMPARISON_GREATER: return D3D11_COMPARISON_GREATER;
+	case DM_COMPARISON_GEQUAL: return D3D11_COMPARISON_GREATER_EQUAL;
+	default:
+		DM_LOG_FATAL("Unknown comparison function!");
+		return D3D11_COMPARISON_ALWAYS + 1;
+	}
 }
 
 #endif

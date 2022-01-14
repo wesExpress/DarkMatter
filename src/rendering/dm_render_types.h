@@ -132,19 +132,6 @@ typedef enum dm_winding_order
     DM_WINDING_UNKNOWN
 } dm_winding_order;
 
-typedef enum dm_depth_equation
-{
-    DM_DEPTH_EQUATION_ALWAYS,
-    DM_DEPTH_EQUATION_NEVER,
-    DM_DEPTH_EQUATION_EQUAL,
-    DM_DEPTH_EQUATION_NOTEQUAL,
-    DM_DEPTH_EQUATION_LESS,
-    DM_DEPTH_EQUATION_LEQUAL,
-    DM_DEPTH_EQUATION_GREATER,
-    DM_DEPTH_EQUATION_GEQUAL,
-    DM_DEPTH_EQUATION_UNKNOWN
-} dm_depth_equation;
-
 typedef enum dm_blend_equation
 {
     DM_BLEND_EQUATION_ADD,
@@ -174,18 +161,18 @@ typedef enum dm_blend_func
     DM_BLEND_FUNC_UNKNOWN
 } dm_blend_func;
 
-typedef enum dm_stencil_equation
+typedef enum dm_comparison
 {
-    DM_STENCIL_EQUATION_ALWAYS,
-    DM_STENCIL_EQUATION_NEVER,
-    DM_STENCIL_EQUATION_EQUAL,
-    DM_STENCIL_EQUATION_NOTEQUAL,
-    DM_STENCIL_EQUATION_LESS,
-    DM_STENCIL_EQUATION_LEQUAL,
-    DM_STENCIL_EQUATION_GREATER,
-    DM_STENCIL_EQUATION_GEQUAL,
-    DM_STENCIL_EQUATION_UNKNOWN
-} dm_stencil_equation;
+    DM_COMPARISON_ALWAYS,
+    DM_COMPARISON_NEVER,
+    DM_COMPARISON_EQUAL,
+    DM_COMPARISON_NOTEQUAL,
+    DM_COMPARISON_LESS,
+    DM_COMPARISON_LEQUAL,
+    DM_COMPARISON_GREATER,
+    DM_COMPARISON_GEQUAL,
+    DM_COMPARISON_UNKNOWN
+} dm_comparison;
 
 typedef enum dm_primitive_topology
 {
@@ -222,13 +209,13 @@ typedef struct dm_blend_state_desc
 typedef struct dm_depth_state_desc
 {
     bool is_enabled;
-    dm_depth_equation equation;
+    dm_comparison comparison;
 } dm_depth_state_desc;
 
 typedef struct dm_stencil_state_desc
 {
     bool is_enabled;
-    dm_stencil_equation equation;
+    dm_comparison comparison;
 } dm_stencil_state_desc;
 
 typedef struct dm_vertex_attrib_desc
@@ -237,7 +224,7 @@ typedef struct dm_vertex_attrib_desc
     dm_vertex_data_t data_t;
     size_t stride;
     size_t offset;
-    size_t size;
+    size_t count;
     bool normalized;
 } dm_vertex_attrib_desc;
 

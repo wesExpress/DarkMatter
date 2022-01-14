@@ -130,21 +130,29 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// depth testing
 	*/
+	D3D11_DEPTH_STENCIL_DESC depth_desc = { 0 };
 	if (pipeline->depth_desc.is_enabled)
 	{
-
+		depth_desc.DepthEnable = true;
+		depth_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		D3D11_COMPARISON_FUNC comp = dm_comp_to_directx_comp(pipeline->depth_desc.comparison);
+		if (comp == D3D11_COMPARISON_ALWAYS + 1) return false;
+		depth_desc.DepthFunc = comp;
 	}
 	else
 	{
-
+		depth_desc.DepthEnable = false;
 	}
+
+	internal_pipe->depth_stencil_state = (ID3D11DepthStencilState*)dm_alloc(sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE);
+	device->lpVtbl->CreateDepthStencilState(device, &depth_desc, &internal_pipe->depth_stencil_state);
 
 	/*
 	// stencil testing
 	*/
 	if (pipeline->stencil_desc.is_enabled)
 	{
-
+		
 	}
 	else
 	{
@@ -169,8 +177,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	// culling
 	D3D11_CULL_MODE cull = dm_cull_to_directx_cull(pipeline->raster_desc.cull_mode);
 	if (cull == D3D11_CULL_NONE) return false;
-	rd.CullMode = cull;
-	rd.DepthClipEnable = pipeline->depth_desc.is_enabled;
+	
 	// winding
 	switch (pipeline->raster_desc.winding_order)
 	{
@@ -187,19 +194,19 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 		return false;
 	}
 
+	rd.CullMode = D3D11_CULL_NONE;
+	rd.FrontCounterClockwise = false;
+	rd.DepthClipEnable = true;
+
+	internal_pipe->rasterizer_state = (ID3D11RasterizerState*)dm_alloc(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
+	DX_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pipe->rasterizer_state), "ID3D11Device::CreateRasterizerState failed!");
+
 	/*
 	// topology
 	*/
 	D3D11_PRIMITIVE_TOPOLOGY topology = dm_toplogy_to_directx_topology(pipeline->raster_desc.primitive_topology);
 	if (topology == D3D11_PRIMITIVE_UNDEFINED) return false;
 	internal_pipe->topology = topology;
-
-	/*
-	* // finally fill in all the members
-	*/
-	
-	internal_pipe->rasterizer_state = (ID3D11RasterizerState*)dm_alloc(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
-	DX_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pipe->rasterizer_state), "ID3D11Device::CreateRasterizerState failed!");
 
 	return true;
 }
@@ -214,6 +221,8 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 	DX_RELEASE(internal_pipe->rasterizer_state);
 	dm_mem_db_adjust(-sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
+	DX_RELEASE(internal_pipe->depth_stencil_state);
+	dm_mem_db_adjust(-sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE);
 
 	dm_directx_destroy_depth_stencil(internal_pipe);
 	dm_directx_destroy_rendertarget(internal_pipe);
@@ -285,6 +294,11 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	*/
 	context->lpVtbl->RSSetState(context, raster_state);
 	context->lpVtbl->IASetPrimitiveTopology(context, internal_pipe->topology);
+
+	/*
+	// depth stencil state
+	*/
+	context->lpVtbl->OMSetDepthStencilState(context, internal_pipe->depth_stencil_state, 1);
 
 	/*
 	// render target

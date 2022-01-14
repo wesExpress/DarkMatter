@@ -123,39 +123,21 @@ GLenum dm_blend_func_to_opengl_func(dm_blend_func func)
     }
 }
 
-GLenum dm_depth_eq_to_opengl_func(dm_depth_equation eq)
+GLenum dm_comp_to_opengl_comp(dm_comparison dm_comp)
 {
-    switch (eq)
+    switch (dm_comp)
     {
-    case DM_DEPTH_EQUATION_ALWAYS: return GL_ALWAYS;
-    case DM_DEPTH_EQUATION_NEVER: return GL_NEVER;
-    case DM_DEPTH_EQUATION_EQUAL: return GL_EQUAL;
-    case DM_DEPTH_EQUATION_NOTEQUAL: return GL_NOTEQUAL;
-    case DM_DEPTH_EQUATION_LESS: return GL_LESS;
-    case DM_DEPTH_EQUATION_LEQUAL: return GL_LEQUAL;
-    case DM_DEPTH_EQUATION_GREATER: return GL_GREATER;
-    case DM_DEPTH_EQUATION_GEQUAL: return GL_GEQUAL;
+    case DM_COMPARISON_ALWAYS: return GL_ALWAYS;
+    case DM_COMPARISON_NEVER: return GL_NEVER;
+    case DM_COMPARISON_EQUAL: return GL_EQUAL;
+    case DM_COMPARISON_NOTEQUAL: return GL_NOTEQUAL;
+    case DM_COMPARISON_LESS: return GL_LESS;
+    case DM_COMPARISON_LEQUAL: return GL_LEQUAL;
+    case DM_COMPARISON_GREATER: return GL_GREATER;
+    case DM_COMPARISON_GEQUAL: return GL_GEQUAL;
     default:
         DM_LOG_FATAL("Unknown depth function!");
-        return DM_DEPTH_EQUATION_UNKNOWN;
-    }
-}
-
-GLenum dm_stencil_eq_to_opengl_func(dm_stencil_equation eq)
-{
-    switch (eq)
-    {
-    case DM_STENCIL_EQUATION_ALWAYS: return GL_ALWAYS;
-    case DM_STENCIL_EQUATION_NEVER: return GL_NEVER;
-    case DM_STENCIL_EQUATION_EQUAL: return GL_EQUAL;
-    case DM_STENCIL_EQUATION_NOTEQUAL: return GL_NOTEQUAL;
-    case DM_STENCIL_EQUATION_LESS: return GL_LESS;
-    case DM_STENCIL_EQUATION_LEQUAL: return GL_LEQUAL;
-    case DM_STENCIL_EQUATION_GREATER: return GL_GREATER;
-    case DM_STENCIL_EQUATION_GEQUAL: return GL_GEQUAL;
-    default:
-        DM_LOG_FATAL("Unknown stencil function!");
-        return DM_DEPTH_EQUATION_UNKNOWN;
+        return DM_COMPARISON_UNKNOWN;
     }
 }
 

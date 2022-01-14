@@ -92,15 +92,15 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 
     if (pipeline->depth_desc.is_enabled)
     {
-        internal_pipe->depth_func = dm_depth_eq_to_opengl_func(pipeline->depth_desc.equation);
-        if (internal_pipe->depth_func == DM_DEPTH_EQUATION_UNKNOWN) return false;
+        internal_pipe->depth_func = dm_comp_to_opengl_comp(pipeline->depth_desc.comparison);
+        if (internal_pipe->depth_func == DM_COMPARISON_UNKNOWN) return false;
     }
 
     // TODO needs to be fleshed out correctly
     if (pipeline->stencil_desc.is_enabled)
     {
-        internal_pipe->stencil_func = dm_stencil_eq_to_opengl_func(pipeline->stencil_desc.equation);
-        if (internal_pipe->stencil_func == DM_STENCIL_EQUATION_UNKNOWN) return false;
+        internal_pipe->stencil_func = dm_comp_to_opengl_comp(pipeline->stencil_desc.comparison);
+        if (internal_pipe->stencil_func == DM_COMPARISON_UNKNOWN) return false;
     }
 
     // face culling
@@ -172,7 +172,7 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
         GLenum data_t = dm_vertex_data_t_to_opengl(attrib_desc.data_t);
         if (data_t == DM_VERTEX_DATA_T_UNKNOWN) return false;
 
-        glVertexAttribPointer(i, attrib_desc.size, data_t, attrib_desc.normalized, attrib_desc.stride, (void*)(uintptr_t)attrib_desc.offset);
+        glVertexAttribPointer(i, attrib_desc.count, data_t, attrib_desc.normalized, attrib_desc.stride, (void*)(uintptr_t)attrib_desc.offset);
         glCheckError();
         glEnableVertexAttribArray(i);
         glCheckError();
