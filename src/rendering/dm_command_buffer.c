@@ -60,6 +60,9 @@ bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer, dm_ren
 		} break;
 		case DM_RENDER_COMMAND_DRAW_INSTANCED:
 		{} break;
+		default:
+			DM_LOG_ERROR("Uknown render command. Shouldn't be here...");
+			break;
 		}
 	}
 

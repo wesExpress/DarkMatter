@@ -7,6 +7,8 @@
 
 #include "dm_opengl_renderer.h"
 
+GLenum dm_buffer_to_opengl_buffer(dm_buffer_type dm_type);
+GLenum dm_usage_to_opengl_draw(dm_buffer_usage dm_usage);
 GLenum dm_shader_to_opengl_shader(dm_shader_type dm_type);
 GLenum dm_vertex_data_t_to_opengl(dm_vertex_data_t dm_type);
 GLenum dm_topology_to_opengl_primitive(dm_primitive_topology topology);
