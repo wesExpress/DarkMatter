@@ -8,13 +8,6 @@
 #include <stdint.h>
 
 typedef dm_vec4 dm_color;
-typedef uint16_t dm_handle;
-
-typedef dm_handle dm_buffer_handle;
-typedef dm_handle dm_shader_handle;
-typedef dm_handle dm_quad_handle;
-typedef dm_handle dm_mesh_handle;
-typedef dm_handle dm_model_handle;
 
 typedef struct dm_vertex
 {
@@ -45,17 +38,6 @@ typedef enum dm_buffer_cpu_access
     DM_BUFFER_CPU_WRITE,
     DM_BUFFER_CPU_READ
 } dm_buffer_cpu_access;
-
-typedef enum dm_buffer_data_type
-{
-    DM_BUFFER_DATA_SHORT,
-    DM_BUFFER_DATA_USHORT,
-    DM_BUFFER_DATA_INT,
-    DM_BUFFER_DATA_UINT,
-    DM_BUFFER_DATA_FLOAT,
-    DM_BUFFER_DATA_DOUBLE,
-    DM_BUFFER_DATA_UNKNOWN
-} dm_buffer_data_type;
 
 typedef struct dm_buffer_desc
 {
@@ -92,16 +74,6 @@ typedef struct dm_shader
 
     void* internal_shader;
 } dm_shader;
-
-// vertex attribs
-typedef enum dm_vertex_attrib
-{
-    DM_VERTEX_ATTRIB_POS,
-    DM_VERTEX_ATTRIB_NORM,
-    DM_VERTEX_ATTRIB_COLOR,
-    DM_VERTEX_ATTRIB_TEX_COORD,
-    DM_VERTEX_ATTRIB_UNKNOWN
-} dm_vertex_attrib;
 
 typedef enum dm_vertex_data_t
 {
@@ -250,7 +222,6 @@ typedef enum dm_render_command_type
     DM_RENDER_COMMAND_SET_VIEWPORT,
     DM_RENDER_COMMAND_CLEAR,
     DM_RENDER_COMMAND_BIND_PIPELINE,
-    DM_RENDER_COMMAND_BIND_SHADER,
     DM_RENDER_COMMAND_DRAW_INDEXED,
     DM_RENDER_COMMAND_DRAW_INSTANCED,
     DM_RENDER_COMMAND_UNKNOWN
