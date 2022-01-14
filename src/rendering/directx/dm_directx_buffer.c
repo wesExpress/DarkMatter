@@ -28,10 +28,7 @@ bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_pipelin
 	vbd.BindFlags = type;
 	vbd.ByteWidth = buffer->desc.buffer_size;
 	vbd.StructureByteStride = buffer->desc.elem_size;
-	if (type == D3D11_BIND_CONSTANT_BUFFER)
-	{
-		vbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-	}
+	if (type == D3D11_BIND_CONSTANT_BUFFER) vbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
 	D3D11_SUBRESOURCE_DATA sd = { 0 };
 	sd.pSysMem = data;

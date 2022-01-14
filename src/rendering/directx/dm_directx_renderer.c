@@ -26,8 +26,6 @@ typedef struct windows_internal_data
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
-	HRESULT hr;
-
 	renderer_data->object_pipeline->interal_pipeline = (dm_internal_pipeline*)dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 	windows_internal_data* internal_data = (windows_internal_data*)platform_data->internal_data;
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)renderer_data->object_pipeline->interal_pipeline;
@@ -128,36 +126,26 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	}
 
 	/*
-	// depth testing
+	// depth and stencil testing
 	*/
-	D3D11_DEPTH_STENCIL_DESC depth_desc = { 0 };
+	D3D11_DEPTH_STENCIL_DESC depth_stencil_desc = { 0 };
+	depth_stencil_desc.DepthEnable = pipeline->depth_desc.is_enabled;
 	if (pipeline->depth_desc.is_enabled)
 	{
-		depth_desc.DepthEnable = true;
-		depth_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		depth_stencil_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 		D3D11_COMPARISON_FUNC comp = dm_comp_to_directx_comp(pipeline->depth_desc.comparison);
 		if (comp == D3D11_COMPARISON_ALWAYS + 1) return false;
-		depth_desc.DepthFunc = comp;
-	}
-	else
-	{
-		depth_desc.DepthEnable = false;
+		depth_stencil_desc.DepthFunc = comp;
 	}
 
-	internal_pipe->depth_stencil_state = (ID3D11DepthStencilState*)dm_alloc(sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE);
-	device->lpVtbl->CreateDepthStencilState(device, &depth_desc, &internal_pipe->depth_stencil_state);
-
-	/*
-	// stencil testing
-	*/
+	depth_stencil_desc.StencilEnable = pipeline->stencil_desc.is_enabled;
 	if (pipeline->stencil_desc.is_enabled)
 	{
 		
 	}
-	else
-	{
 
-	}
+	internal_pipe->depth_stencil_state = (ID3D11DepthStencilState*)dm_alloc(sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE);
+	DX_ERROR_CHECK(device->lpVtbl->CreateDepthStencilState(device, &depth_stencil_desc, &internal_pipe->depth_stencil_state), "ID3D11Device::CreateDepthStencilState failed!");
 
 	/*
 	// rasterizer
@@ -239,27 +227,19 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
 	/*
 	// shader
 	*/
-	dm_shader* shader = pipeline->raster_desc.shader;
-	shader->vertex_desc = vs_desc;
-	shader->pixel_desc = ps_desc;
+	pipeline->raster_desc.shader->vertex_desc = vs_desc;
+	pipeline->raster_desc.shader->pixel_desc = ps_desc;
 
-	if (!dm_directx_create_shader(shader, v_layout, pipeline)) return false;
-	pipeline->raster_desc.shader = shader;
+	if (!dm_directx_create_shader(pipeline->raster_desc.shader, v_layout, pipeline)) return false;
 
 	/*
 	// buffers
 	*/
-	dm_buffer* vertex_buffer = pipeline->render_packet.vertex_buffer;
-	dm_buffer* index_buffer = pipeline->render_packet.index_buffer;
+	pipeline->render_packet.vertex_buffer->desc = vb_desc;
+	pipeline->render_packet.index_buffer->desc = ib_desc;
 
-	vertex_buffer->desc = vb_desc;
-	index_buffer->desc = ib_desc;
-
-	if (!dm_directx_create_buffer(vertex_buffer, vb_data, internal_pipe)) return false;
-	if (!dm_directx_create_buffer(index_buffer, ib_data, internal_pipe)) return false;
-
-	pipeline->render_packet.vertex_buffer = vertex_buffer;
-	pipeline->render_packet.index_buffer = index_buffer;
+	if (!dm_directx_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, internal_pipe)) return false;
+	if (!dm_directx_create_buffer(pipeline->render_packet.index_buffer, ib_data, internal_pipe)) return false;
 
 	return true;
 }

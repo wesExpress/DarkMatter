@@ -8,7 +8,6 @@ bool dm_directx_create_device(dm_internal_pipeline* pipeline)
 {
 	ID3D11Device* device = NULL;
 	ID3D11DeviceContext* context = NULL;
-	ID3D11Debug* debugger = NULL;
 
 	UINT flags = 0;
 #if DM_DEBUG
@@ -45,8 +44,8 @@ bool dm_directx_create_device(dm_internal_pipeline* pipeline)
 
 	// if in debug, create the debugger to query live objects
 #if DM_DEBUG
-	DX_ERROR_CHECK(device->lpVtbl->QueryInterface(device, &IID_ID3D11Debug, (void**)&(debugger)), "D3D11Device::QueryInterface failed!");
-	pipeline->debugger = debugger;
+	pipeline->debugger = (ID3D11Debug*)dm_alloc(sizeof(ID3D11Debug), DM_MEM_RENDER_PIPELINE);
+	DX_ERROR_CHECK(device->lpVtbl->QueryInterface(device, &IID_ID3D11Debug, (void**)&(pipeline->debugger)), "D3D11Device::QueryInterface failed!");
 #endif
 
 	return true;
@@ -60,8 +59,8 @@ void dm_directx_destroy_device(dm_internal_pipeline* pipeline)
 	DX_RELEASE(context);
 #if DM_DEBUG
 	dm_directx_device_report_live_objects(pipeline);
-	ID3D11Debug* debugger = pipeline->debugger;
-	DX_RELEASE(debugger);
+	DX_RELEASE(pipeline->debugger);
+	dm_mem_db_adjust(-sizeof(ID3D11Debug), DM_MEM_RENDER_PIPELINE);
 #endif
 
 	DX_RELEASE(device);

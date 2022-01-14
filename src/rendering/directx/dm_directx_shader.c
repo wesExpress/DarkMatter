@@ -32,6 +32,7 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_ren
 
 	DX_ERROR_CHECK(device->lpVtbl->CreateVertexShader(device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &internal_shader->vertex_shader), "ID3D11Device::CreateVertexShader failed!");
 
+	// input layout
 	dm_list(D3D11_INPUT_ELEMENT_DESC) desc;
 	dm_list_init(&desc, D3D11_INPUT_ELEMENT_DESC);
 

@@ -11,9 +11,7 @@ bool dm_directx_create_depth_stencil(dm_internal_pipeline* pipeline)
 	HRESULT hr;
 	RECT client_rect;
 	GetClientRect(pipeline->hwnd, &client_rect);
-
-	ID3D11DepthStencilView* view = NULL;
-	ID3D11Texture2D* back_buffer = NULL;
+	
 	ID3D11Device* device = pipeline->device;
 
 	D3D11_TEXTURE2D_DESC desc = { 0 };
@@ -26,15 +24,11 @@ bool dm_directx_create_depth_stencil(dm_internal_pipeline* pipeline)
 	desc.Usage = D3D11_USAGE_DEFAULT;
 	desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 
-	DX_ERROR_CHECK(device->lpVtbl->CreateTexture2D(device, &desc, 0, &back_buffer), "ID3D11Device::CreateTexture2D failed!");
-	DX_ERROR_CHECK(device->lpVtbl->CreateDepthStencilView(device, (ID3D11Resource*)back_buffer, 0, &view), "ID3D11Device::CreateDepthStencilView failed!");
-
 	pipeline->depth_stencil_back_buffer = (ID3D11Texture2D*)dm_alloc(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
 	pipeline->depth_stencil_view = (ID3D11DepthStencilView*)dm_alloc(sizeof(ID3D11DepthStencilView), DM_MEM_RENDER_PIPELINE);
 
-	// assign the new pointers to locations in directx renderer
-	pipeline->depth_stencil_back_buffer = back_buffer;
-	pipeline->depth_stencil_view = view;
+	DX_ERROR_CHECK(device->lpVtbl->CreateTexture2D(device, &desc, 0, &pipeline->depth_stencil_back_buffer), "ID3D11Device::CreateTexture2D failed!");
+	DX_ERROR_CHECK(device->lpVtbl->CreateDepthStencilView(device, (ID3D11Resource*)pipeline->depth_stencil_back_buffer, 0, &pipeline->depth_stencil_view), "ID3D11Device::CreateDepthStencilView failed!");
 
 	return true;
 }

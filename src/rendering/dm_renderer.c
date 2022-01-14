@@ -163,7 +163,7 @@ bool dm_renderer_create_object_pipeline()
 
 	// depth
 	dm_depth_state_desc depth = { 0 };
-	depth.is_enabled = false;
+	depth.is_enabled = true;
 	depth.comparison = DM_COMPARISON_LESS;
 
 	// stencil
@@ -227,8 +227,8 @@ bool dm_renderer_init_object_data()
 	};
 	
 	dm_index_t indices[] = {
-		0, 1, 3,
-		3, 1, 2
+		0, 1, 2,
+		2, 3, 0
 	};
 
 	// buffers
