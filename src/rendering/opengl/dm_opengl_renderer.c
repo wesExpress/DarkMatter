@@ -63,7 +63,7 @@ void dm_renderer_draw_arrays_impl(int first, size_t count)
     glCheckError();
 }
 
-void dm_renderer_draw_indexed_impl(uint32_t count, uint32_t offset, dm_render_pipeline* pipeline)
+void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
 {
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 

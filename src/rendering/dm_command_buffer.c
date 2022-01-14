@@ -7,7 +7,7 @@ void dm_renderer_set_viewport_impl(dm_viewport* viewport);
 void dm_renderer_clear_impl(dm_render_pipeline* pipeline, dm_color* clear_color);
 
 void dm_renderer_draw_arrays_impl(int first, size_t count);
-void dm_renderer_draw_indexed_impl(uint32_t count, uint32_t offset, dm_render_pipeline* pipeline);
+void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline);
 
 void dm_renderer_submit_command(dm_render_command_type command_type, void* data, dm_command_buffer* command_buffer)
 {
@@ -56,8 +56,7 @@ bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer, dm_ren
 		} break;
 		case DM_RENDER_COMMAND_DRAW_INDEXED:
 		{
-			uint32_t* params = (uint32_t*)(uintptr_t)command.data;
-			dm_renderer_draw_indexed_impl(params[0], params[1], pipeline);
+			dm_renderer_draw_indexed_impl(pipeline);
 		} break;
 		case DM_RENDER_COMMAND_DRAW_INSTANCED:
 		{} break;

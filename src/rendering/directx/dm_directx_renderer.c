@@ -83,13 +83,14 @@ void dm_renderer_draw_arrays_impl(int first, size_t count)
 	
 }
 
-void dm_renderer_draw_indexed_impl(uint32_t count, uint32_t offset, dm_render_pipeline* pipeline)
+void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
 {
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+	dm_render_packet render_packet = pipeline->render_packet;
 
 	ID3D11DeviceContext* context = internal_pipe->context;
 
-	context->lpVtbl->DrawIndexed(context, count, 0, offset);
+	context->lpVtbl->DrawIndexed(context, render_packet.count, 0, render_packet.offset);
 }
 
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
