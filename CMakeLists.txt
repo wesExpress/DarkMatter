@@ -12,7 +12,7 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 project( CEngine )
 
 if(WIN32)
-    set(DM_WIN_OPENGL on)
+    set(DM_WIN_OPENGL off)
     if(DM_WIN_OPENGL)
        add_definitions(-DDM_WIN_OPENGL) 
     endif()

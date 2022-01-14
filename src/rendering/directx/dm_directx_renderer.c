@@ -40,6 +40,18 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 	if (!dm_directx_create_rendertarget(internal_pipe)) return false;
 	if (!dm_directx_create_depth_stencil(internal_pipe)) return false;
 
+	ID3D11DeviceContext* context = internal_pipe->context;
+
+	context->lpVtbl->OMSetRenderTargets(context, 1, &internal_pipe->render_view, internal_pipe->depth_stencil_view);
+	
+	D3D11_VIEWPORT viewport = { 0 };
+	viewport.Width = renderer_data->object_pipeline->viewport.width;
+	viewport.Height = renderer_data->object_pipeline->viewport.height;
+	viewport.MaxDepth = 1.0f;
+	context->lpVtbl->RSSetViewports(context, 1, &viewport);
+
+	internal_pipe->viewport = viewport;
+
 	return true;
 }
 
@@ -266,11 +278,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// viewport
 	*/
-	D3D11_VIEWPORT viewport = { 0 };
-	viewport.Width = pipeline->viewport.width;
-	viewport.Height = pipeline->viewport.height;
-	viewport.MaxDepth = 1.0f;
-	context->lpVtbl->RSSetViewports(context, 1, &viewport);
+	context->lpVtbl->RSSetViewports(context, 1, &internal_pipe->viewport);
 
 	/*
 	// raster state
@@ -299,12 +307,18 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	return true;
 }
 
-void dm_renderer_set_viewport_impl(dm_viewport* viewport)
+void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline)
 {
+	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
+	D3D11_VIEWPORT new_viewport = { 0 };
+	new_viewport.Width = viewport.width;
+	new_viewport.Height = viewport.height;
+	new_viewport.MaxDepth = 1.0f;
+	internal_pipe->viewport = new_viewport;
 }
 
-void dm_renderer_clear_impl(dm_render_pipeline* pipeline, dm_color* clear_color)
+void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 {
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
@@ -314,7 +328,7 @@ void dm_renderer_clear_impl(dm_render_pipeline* pipeline, dm_color* clear_color)
 	
 	// clear framebuffer
 	context->lpVtbl->ClearRenderTargetView(context, render_target, &(clear_color->v[0]));
-	//context->lpVtbl->ClearDepthStencilView(context, depth_stencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+	context->lpVtbl->ClearDepthStencilView(context, depth_stencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 }
 
 #endif

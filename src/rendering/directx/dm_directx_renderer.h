@@ -42,6 +42,8 @@ typedef struct dm_internal_pipeline
 	ID3D11Texture2D* depth_stencil_back_buffer;
 	ID3D11RasterizerState* rasterizer_state;
 
+	D3D11_VIEWPORT viewport;
+
 	D3D11_PRIMITIVE_TOPOLOGY topology;
 
 #if DM_DEBUG

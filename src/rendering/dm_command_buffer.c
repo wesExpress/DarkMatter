@@ -3,8 +3,8 @@
 void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline);
 void dm_renderer_end_rederpass_impl();
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline);
-void dm_renderer_set_viewport_impl(dm_viewport* viewport);
-void dm_renderer_clear_impl(dm_render_pipeline* pipeline, dm_color* clear_color);
+void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline);
+void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline);
 
 void dm_renderer_draw_arrays_impl(int first, size_t count);
 void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline);
@@ -44,11 +44,11 @@ bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer, dm_ren
 		} break;
 		case DM_RENDER_COMMAND_SET_VIEWPORT:
 		{
-			dm_renderer_set_viewport_impl(&pipeline->viewport);
+			dm_renderer_set_viewport_impl(pipeline->viewport, pipeline);
 		} break;
 		case DM_RENDER_COMMAND_CLEAR:
 		{
-			dm_renderer_clear_impl(pipeline, (dm_color*)command.data);
+			dm_renderer_clear_impl((dm_color*)command.data, pipeline);
 		} break;
 		case DM_RENDER_COMMAND_BIND_PIPELINE:
 		{

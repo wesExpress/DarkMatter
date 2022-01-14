@@ -276,13 +276,13 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     return true;
 }
 
-void dm_renderer_set_viewport_impl(dm_viewport* viewport)
+void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline)
 {
-    glViewport(viewport->x, viewport->y, viewport->width, viewport->height);
+    glViewport(viewport.x, viewport.y, viewport.width, viewport.height);
     glCheckError();
 }
 
-void dm_renderer_clear_impl(dm_render_pipeline* pipeline, dm_color* clear_color)
+void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 {
     glClearColor(clear_color->x, clear_color->y, clear_color->z, clear_color->w);
     glCheckError();
