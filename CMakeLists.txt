@@ -11,14 +11,21 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 
 project( CEngine )
 
+set(DM_RENDER_OPENGL off)
+
 if(WIN32)
-    set(DM_WIN_OPENGL on)
-    if(DM_WIN_OPENGL)
+    if(DM_RENDER_OPENGL)
        add_definitions(-DDM_WIN_OPENGL) 
     endif()
 endif()
 
-if(UNIX OR APPLE OR DM_WIN_OPENGL)
+if(APPLE)
+    if(DM_RENDER_OPENGL)
+        add_definitions(-DDM_APPLE_OPENGL)
+    endif()
+endif()
+
+if(DM_RENDER_OPENGL)
     add_subdirectory(lib/glfw)
     add_subdirectory(lib/glad)
 endif()
@@ -41,6 +48,7 @@ set(
 
     src/platform/dm_platform_glfw.c
     src/platform/dm_platform_win32.c
+    src/platform/dm_platform_apple.m
 
     src/rendering/dm_renderer.c
     src/rendering/dm_command_buffer.c
@@ -61,7 +69,7 @@ set(
     src/rendering/directx/dm_directx_enum_conversion.c
 )
 
-if(WIN32 AND NOT DM_WIN_OPENGL)
+if(WIN32 AND NOT DM_RENDER_OPENGL)
     set(VERTEX_SHADERS
         shaders/hlsl/object_vertex.hlsl
     )
@@ -81,15 +89,19 @@ set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${SHADERS})
 
-target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include lib/glad/include)
-if(UNIX OR APPLE OR DM_WIN_OPENGL)
+if(DM_RENDER_OPENGL)
+    target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include lib/glad/include)
+else()
+    target_include_directories(${PROJECT_NAME} PUBLIC src)
+endif()
+
+if(DM_RENDER_OPENGL)
     target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)
-elseif(WIN32 AND NOT DM_WIN_OPENGL)
-    target_link_libraries(${PROJECT_NAME} 
-    d3d11.lib
-	dxgi.lib
-	dxguid.lib
-	d3dcompiler.lib)
+elseif(WIN32 AND NOT DM_RENDER_OPENGL)
+    target_link_libraries(${PROJECT_NAME} d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib)
+elseif(APPLE AND NOT DM_RENDER_OPENGL)
+    find_library(COCOA_LIBRARY Cocoa)
+    target_link_libraries(${PROJECT_NAME} ${COCOA_LIBRARY})
 endif()
 
 if(BUILD_SHARED_LIBS)
@@ -97,7 +109,7 @@ if(BUILD_SHARED_LIBS)
 endif()
 
 # compile shaders for directx
-if(WIN32 AND NOT DM_WIN_OPENGL)
+if(WIN32 AND NOT DM_RENDER_OPENGL)
     find_program(FXC fxc DOC "fx shader compiler")
     if(NOT FXC)
         message(FATAL_ERROR "FXC not found!")

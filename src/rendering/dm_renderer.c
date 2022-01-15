@@ -34,8 +34,10 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 
 #ifdef DM_OPENGL
 	char* backend = "OpenGL";
-#else defined DM_DIRECTX
+#elif defined DM_DIRECTX
 	char* backend = "DirectX 11";
+#elif defined DM_METAL
+	char* backend = "Metal";
 #endif
 	DM_LOG_INFO("Initializing %s renderer backed", backend);
 

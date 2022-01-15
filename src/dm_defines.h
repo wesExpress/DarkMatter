@@ -2,8 +2,13 @@
 #define __DEFINES_H__
 
 #ifdef __APPLE__
+#ifdef DM_APPLE_OPENGL
 #define DM_PLATFORM_GLFW
 #define DM_OPENGL
+#else
+#define DM_PLATFORM_APPLE
+#define DM_METAL
+#endif
 #define DM_INLINE
 
 #elif __WIN32__ || _WIN32 || WIN32
