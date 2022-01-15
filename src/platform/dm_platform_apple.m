@@ -4,18 +4,40 @@
 
 #include "dm_assert.h"
 #include "dm_logger.h"
+#include "dm_mem.h"
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <Cocoa/Cocoa.h>
+
+typedef struct dm_internal_data
+{
+    NSAutoreleasePool* pool;
+    NSWindow* window;
+} dm_internal_data;
 
 bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y)
 {
+    e_data->platform_data = (dm_platform_data*)dm_alloc(sizeof(dm_platform_data), DM_MEM_PLATFORM);
+    e_data->platform_data->window_width = window_width;
+    e_data->platform_data->window_height = window_height;
+    e_data->platform_data->window_title = window_title;
+    
+    e_data->platform_data->internal_data = (dm_internal_data*)dm_alloc(sizeof(dm_internal_data), DM_MEM_PLATFORM);
+    dm_internal_data* internal_data = (dm_internal_data*)e_data->platform_data->internal_data;
+
     return true;
 }
 
 void dm_platform_shutdown(dm_engine_data* e_data)
 {
+    DM_LOG_WARN("Platform shutdown called...");
 
+    dm_internal_data* internal_data = (dm_internal_data*)e_data->platform_data->internal_data;
+
+    dm_free(e_data->platform_data->internal_data, sizeof(dm_internal_data), DM_MEM_PLATFORM);
+    dm_free(e_data->platform_data, sizeof(dm_platform_data), DM_MEM_PLATFORM);
 }
 
 bool dm_platform_pump_messages(dm_engine_data* e_data)

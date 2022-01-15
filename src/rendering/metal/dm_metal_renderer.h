@@ -5,7 +5,7 @@
 
 #ifdef DM_METAL
 
-#include "Metal/Metal.hpp"
+#include "../dm_renderer.h"
 
 #endif
 

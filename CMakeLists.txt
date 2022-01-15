@@ -67,6 +67,8 @@ set(
     src/rendering/directx/dm_directx_buffer.c
     src/rendering/directx/dm_directx_shader.c
     src/rendering/directx/dm_directx_enum_conversion.c
+
+    src/rendering/metal/dm_metal_renderer.m
 )
 
 if(WIN32 AND NOT DM_RENDER_OPENGL)
