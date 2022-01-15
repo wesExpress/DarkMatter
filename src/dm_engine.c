@@ -92,14 +92,14 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     } break;
     case DM_KEY_UP_EVENT:
     {
-        dm_key_code key = (dm_key_code)data;
+        dm_key_code key = (dm_key_code)(intptr_t)data;
         dm_input_set_key_released(key);
 
         DM_LOG_DEBUG("Key up event received: %c", key);
     } break;
     case DM_KEY_DOWN_EVENT:
     {
-        dm_key_code key = (dm_key_code)data;
+        dm_key_code key = (dm_key_code)(intptr_t)data;
         dm_input_set_key_pressed(key);
 
         DM_LOG_DEBUG("Key down event received: %c", key);
@@ -110,14 +110,14 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     } break;
     case DM_MOUSEBUTTON_UP_EVENT:
     {
-        dm_mousebutton_code button = (dm_mousebutton_code)data;
+        dm_mousebutton_code button = (dm_mousebutton_code)(intptr_t)data;
         dm_input_set_mousebutton_released(button);
 
         DM_LOG_DEBUG("Mousebutton up event received");
     } break;
     case DM_MOUSEBUTTON_DOWN_EVENT:
     {
-        dm_mousebutton_code button = (dm_mousebutton_code)data;
+        dm_mousebutton_code button = (dm_mousebutton_code)(intptr_t)data;
         dm_input_set_mousebutton_pressed(button);
 
         DM_LOG_DEBUG("Mousebutton down event received");
