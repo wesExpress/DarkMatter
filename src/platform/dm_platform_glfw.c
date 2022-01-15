@@ -131,7 +131,7 @@ void* dm_platform_alloc(size_t size)
     void* temp = malloc(size);
     DM_ASSERT_MSG(temp, "Malloc returned null pointer!");
     if (!temp) return NULL;
-    dm_memzero(temp, size);
+    dm_platform_memzero(temp, size);
     return temp;
 }
 
