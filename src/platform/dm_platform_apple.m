@@ -133,11 +133,37 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key);
 
 @end
 
+@interface dm_app_delegate : NSObject<NSApplicationDelegate>
+@end
+
+@implementation dm_app_delegate
+
+- (void) applicationDidFinishLaunching: (NSNotification*)notification
+{
+    @autoreleasepool
+    {
+        NSEvent* event = [NSEvent otherEventWithType:NSEventTypeApplicationDefined
+                            location:NSMakePoint(0, 0)
+                            modifierFlags:0
+                            timestamp:0
+                            windowNumber:0
+                            context:nil
+                            subtype:0
+                            data1:0
+                            data2:0];
+        [NSApp postEvent:event atStart:YES];
+    }
+
+    [NSApp stop: nil];
+}
+
+@end
+
 typedef struct dm_internal_data
 {
     NSWindow* window;
+    dm_app_delegate* app_delegate;
     dm_window_delegate* window_delegate;
-    NSView* view;
     dm_input_view* input_view;
 } dm_internal_data;
 
@@ -156,6 +182,10 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
         // main app
         [NSApplication sharedApplication];
 
+        // app delegate
+        internal_data->app_delegate = [[dm_app_delegate alloc] init];
+        [NSApp setDelegate: internal_data->app_delegate];
+
         // window delegate
         internal_data->window_delegate = [[dm_window_delegate alloc] init];
 
@@ -171,10 +201,15 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
         internal_data->input_view = [[dm_input_view alloc] initWithWindow: internal_data->window];
 
         // window memebers
-        [internal_data->window setTitle: @(window_title)];
         [internal_data->window setAcceptsMouseMovedEvents: YES];
         [internal_data->window setDelegate: internal_data->window_delegate];
         [internal_data->window setContentView: internal_data->input_view];
+        [internal_data->window makeFirstResponder: internal_data->input_view];
+        [internal_data->window setAcceptsMouseMovedEvents:YES];
+        [internal_data->window setLevel:NSNormalWindowLevel];
+        [internal_data->window setTitle: @(window_title)];
+
+        if (![[NSRunningApplication currentApplication] isFinishedLaunching]) [NSApp run];
 
         // last housekeeping
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
@@ -309,51 +344,47 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key)
     switch(cocoa_key)
     {
     case 0:  return DM_KEY_A;
-    case 1:  return DM_KEY_S;
-    case 2:  return DM_KEY_D;
-    case 3:  return DM_KEY_F;
-    case 4:  return DM_KEY_H;
-    case 5:  return DM_KEY_G;
-    case 6:  return DM_KEY_Z;
-    case 7:  return DM_KEY_X;
-    case 8:  return DM_KEY_C;
-    case 9:  return DM_KEY_V;
     case 11: return DM_KEY_B;
-    case 12: return DM_KEY_Q;
-    case 13: return DM_KEY_W;
+    case 8:  return DM_KEY_C;
+    case 2:  return DM_KEY_D;
     case 14: return DM_KEY_E;
+    case 3:  return DM_KEY_F;
+    case 5:  return DM_KEY_G;
+    case 4:  return DM_KEY_H;
+    case 34: return DM_KEY_I;
+    case 38: return DM_KEY_J;
+    case 40: return DM_KEY_K;
+    case 37: return DM_KEY_L;
+    case 46: return DM_KEY_M;
+    case 45: return DM_KEY_N;
+    case 31: return DM_KEY_O;
+    case 35: return DM_KEY_P;
+    case 12: return DM_KEY_Q;
     case 15: return DM_KEY_R;
-    case 16: return DM_KEY_Y;
+    case 1:  return DM_KEY_S;
     case 17: return DM_KEY_T;
+    case 32: return DM_KEY_U;
+    case 9:  return DM_KEY_V;
+    case 13: return DM_KEY_W;
+    case 7:  return DM_KEY_X;
+    case 16: return DM_KEY_Y;
+    case 6:  return DM_KEY_Z;
+    
     case 18: return DM_KEY_1;
     case 19: return DM_KEY_2;
     case 20: return DM_KEY_3;
     case 21: return DM_KEY_4;
     case 23: return DM_KEY_5;
     case 22: return DM_KEY_6;
-    
     case 25: return DM_KEY_9;
     case 26: return DM_KEY_7;
-    
     case 28: return DM_KEY_8;
     case 29: return DM_KEY_0;
-    
-    case 31: return DM_KEY_O;
-    case 32: return DM_KEY_U;
-    
-    case 34: return DM_KEY_I;
-    case 35: return DM_KEY_P;
-    
-    case 37: return DM_KEY_L;
-    case 38: return DM_KEY_J;
+
     case 39: return DM_KEY_QUOTE;
-    case 40: return DM_KEY_K;
-    case 42: return DM_KEY_RSLASH;
-    
-    case 45: return DM_KEY_N;
-    case 46: return DM_KEY_M;
     case 47: return DM_KEY_PERIOD;
     case 43: return DM_KEY_COMMA;
+    case 42: return DM_KEY_RSLASH;
     case 44: return DM_KEY_LSLASH;
     case 36: return DM_KEY_ENTER;
     case 30: return DM_KEY_RBRACE;
