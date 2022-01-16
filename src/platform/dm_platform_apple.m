@@ -114,6 +114,11 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key);
     dm_event_dispatch((dm_event){ DM_KEY_DOWN_EVENT, NULL, (void*)(intptr_t)key });
 }
 
+- (void) scrollWheel: (NSEvent*) event
+{
+    dm_event_dispatch((dm_event){ DM_MOUSE_SCROLLED_EVENT, NULL, (void*)(intptr_t)(int8_t)[event scrollingDeltaY]});
+}
+
 // must be implemented for the protocol to shut up in the compiler
 - (NSRange) markedRange { return (NSRange) { NSNotFound, 0 }; }
 - (NSRange) selectedRange { return (NSRange) { NSNotFound, 0 }; }

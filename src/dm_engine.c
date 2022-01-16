@@ -140,6 +140,8 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     } break;
     case DM_MOUSE_SCROLLED_EVENT:
     {
+        int8_t scroll = (intptr_t)data;
+        DM_LOG_DEBUG("Scroll: %d", scroll);
         // TODO 
     } break;
     case DM_WINDOW_RESIZE_EVENT:
