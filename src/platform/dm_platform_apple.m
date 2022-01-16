@@ -5,16 +5,39 @@
 #include "dm_assert.h"
 #include "dm_logger.h"
 #include "dm_mem.h"
+#include "dm_event.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <Cocoa/Cocoa.h>
 
+@interface dm_window_delegate : NSObject <NSWindowDelegate>
+@end
+
+// handles window events and management
+// bound to window with setDelegate message
+@implementation dm_window_delegate
+
+- (bool)windowShouldClose:(NSNotification*)notification
+{
+    dm_event_dispatch((dm_event) { DM_WINDOW_CLOSE_EVENT, NULL });
+    return YES;
+}
+
+- (void)windowDidResize: (NSNotification*)notification
+{
+
+}
+
+@end
+
 typedef struct dm_internal_data
 {
-    NSAutoreleasePool* pool;
     NSWindow* window;
+    dm_window_delegate* window_delegate;
+    NSView* view;
+    bool should_close;
 } dm_internal_data;
 
 bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y)
@@ -27,6 +50,31 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
     e_data->platform_data->internal_data = (dm_internal_data*)dm_alloc(sizeof(dm_internal_data), DM_MEM_PLATFORM);
     dm_internal_data* internal_data = (dm_internal_data*)e_data->platform_data->internal_data;
 
+    @autoreleasepool
+    {
+        // main app
+        [NSApplication sharedApplication];
+
+        // window delegate
+        internal_data->window_delegate = [[dm_window_delegate alloc] init];
+
+        // window creation
+        internal_data->window = [[NSWindow alloc] 
+            initWithContentRect: NSMakeRect(start_x, start_y, window_width, window_height)
+            styleMask: NSWindowStyleMaskTitled | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable
+            backing: NSBackingStoreBuffered
+            defer: NO
+        ];
+        [internal_data->window setTitle: @(window_title)];
+        [internal_data->window setAcceptsMouseMovedEvents: YES];
+        [internal_data->window setDelegate: internal_data->window_delegate];
+
+        // last housekeeping
+        [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
+
+        [NSApp activateIgnoringOtherApps:YES];
+        [internal_data->window makeKeyAndOrderFront:nil];
+    }
     return true;
 }
 
@@ -42,6 +90,20 @@ void dm_platform_shutdown(dm_engine_data* e_data)
 
 bool dm_platform_pump_messages(dm_engine_data* e_data)
 {
+    @autoreleasepool
+    {
+        NSEvent* event;
+
+        while((event = [NSApp 
+            nextEventMatchingMask: NSEventMaskAny
+            untilDate: [NSDate distantPast]
+            inMode: NSDefaultRunLoopMode
+            dequeue: YES
+        ]))
+        {
+            [NSApp sendEvent: event];
+        }
+    }
     return true;
 }
 
