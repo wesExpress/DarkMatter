@@ -24,6 +24,11 @@ bool dm_engine_create()
     
     dm_event_set_callback(dm_engine_on_event);
 
+#ifdef DM_PLATFORM_UNSUPPORTED
+    DM_LOG_FATAL("Trying to compile on unsupprted platform!");
+    return false;
+#endif
+
     if(!dm_platform_startup(e_data, 1280, 720, "CEngine", 100, 100))
     {
         DM_LOG_FATAL("Platform could not be initialized!");

@@ -25,6 +25,9 @@
 #define DM_PLATFORM_GLFW
 #define DM_OPENGL
 #define DM_INLINE __always_inline
+
+#else
+#define DM_PLATFORM_UNSUPPORTED
 #endif
 
 #ifdef DMEXPORT
