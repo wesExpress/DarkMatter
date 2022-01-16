@@ -102,6 +102,9 @@ bool dm_engine_on_event(dm_event_type type, void* data)
         dm_key_code key = (dm_key_code)(intptr_t)data;
         dm_input_set_key_pressed(key);
 
+        // TODO: need to remove this eventaully
+        if(key == DM_KEY_ESCAPE) dm_event_dispatch((dm_event){ DM_WINDOW_CLOSE_EVENT, NULL, NULL });
+
         DM_LOG_DEBUG("Key down event received: %c", key);
     } break;
     case DM_KEY_TYPE_EVENT:

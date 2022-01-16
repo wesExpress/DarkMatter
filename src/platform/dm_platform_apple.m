@@ -6,11 +6,14 @@
 #include "dm_logger.h"
 #include "dm_mem.h"
 #include "dm_event.h"
+#include "input/dm_input.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <Cocoa/Cocoa.h>
+
+dm_key_code dm_translate_key_code(uint32_t cocoa_key);
 
 @interface dm_window_delegate : NSObject <NSWindowDelegate>
 @end
@@ -21,14 +24,107 @@
 
 - (bool)windowShouldClose:(NSNotification*)notification
 {
-    dm_event_dispatch((dm_event) { DM_WINDOW_CLOSE_EVENT, NULL });
+    dm_event_dispatch((dm_event) { DM_WINDOW_CLOSE_EVENT, NULL, NULL });
     return YES;
 }
 
-- (void)windowDidResize: (NSNotification*)notification
+- (NSSize)windowWillResize: (NSWindow*)window : (NSSize)frameSize
 {
+    uint32_t rect[2] = { frameSize.width, frameSize.height };
+    dm_event_dispatch((dm_event){DM_WINDOW_RESIZE_EVENT, NULL, (void*)rect});
 
+    return frameSize;
 }
+
+@end
+
+// for mouse and keyboard input
+@interface dm_input_view : NSView <NSTextInputClient>
+{
+    NSWindow* window;
+}
+
+- (instancetype)initWithWindow: (NSWindow*)window_in;
+@end
+
+@implementation dm_input_view
+
+- (instancetype)initWithWindow: (NSWindow*)window_in
+{
+    self = [super init];
+
+    window = window_in;
+
+    return self;
+}
+
+// needed but not sure why
+- (BOOL)canBecomeKeyView { return YES; }
+- (BOOL)acceptsFirstResponder { return YES; }
+- (BOOL)wantsUpdateLayer { return YES; }
+- (BOOL)acceptsFirstMouse:(NSEvent *)event { return YES; }
+
+// input events
+- (void) mouseDown: (NSEvent*) event
+{
+    dm_mousebutton_code button = DM_MOUSEBUTTON_L;
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+}
+
+- (void) mouseUp: (NSEvent*) event
+{
+    dm_mousebutton_code button = DM_MOUSEBUTTON_L;
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+}
+
+- (void) rightMouseDown: (NSEvent*) event
+{
+    dm_mousebutton_code button = DM_MOUSEBUTTON_R;
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+}
+
+- (void) rightMouseUp: (NSEvent*) event
+{
+    dm_mousebutton_code button = DM_MOUSEBUTTON_R;
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+}
+
+- (void) otherMouseDown: (NSEvent*) event
+{
+    dm_mousebutton_code button = DM_MOUSEBUTTON_M;
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+}
+
+- (void) otherMouseUp: (NSEvent*) event
+{
+    dm_mousebutton_code button = DM_MOUSEBUTTON_M;
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+}
+
+- (void) mouseMoved: (NSEvent*) event
+{
+    const NSPoint point = [event locationInWindow];
+    uint32_t pos[2] = { point.x, point.y };
+    dm_event_dispatch((dm_event){ DM_MOUSE_MOVED_EVENT, NULL, (void*)(intptr_t)pos });
+}
+
+- (void) keyDown: (NSEvent*) event
+{
+    dm_key_code key = dm_translate_key_code((uint32_t)[event keyCode]);
+    dm_event_dispatch((dm_event){ DM_KEY_DOWN_EVENT, NULL, (void*)(intptr_t)key });
+}
+
+// must be implemented for the protocol to shut up in the compiler
+- (NSRange) markedRange { return (NSRange) { NSNotFound, 0 }; }
+- (NSRange) selectedRange { return (NSRange) { NSNotFound, 0 }; }
+- (BOOL) hasMarkedText { return FALSE; }
+- (nullable NSAttributedString *)attributedSubstringForProposedRange:(NSRange)range actualRange:(nullable NSRangePointer)actualRange {return nil;}
+- (NSArray<NSAttributedStringKey> *)validAttributesForMarkedText {return [NSArray array];}
+- (NSRect)firstRectForCharacterRange:(NSRange)range actualRange:(nullable NSRangePointer)actualRange {return NSMakeRect(0, 0, 0, 0);}
+- (NSUInteger)characterIndexForPoint:(NSPoint)point {return 0;}
+- (void)insertText:(id)string replacementRange:(NSRange)replacementRange {}
+- (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {}
+- (void)unmarkText {}
 
 @end
 
@@ -37,7 +133,7 @@ typedef struct dm_internal_data
     NSWindow* window;
     dm_window_delegate* window_delegate;
     NSView* view;
-    bool should_close;
+    dm_input_view* input_view;
 } dm_internal_data;
 
 bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y)
@@ -65,9 +161,15 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
             backing: NSBackingStoreBuffered
             defer: NO
         ];
+
+        // input view
+        internal_data->input_view = [[dm_input_view alloc] initWithWindow: internal_data->window];
+
+        // window memebers
         [internal_data->window setTitle: @(window_title)];
         [internal_data->window setAcceptsMouseMovedEvents: YES];
         [internal_data->window setDelegate: internal_data->window_delegate];
+        [internal_data->window setContentView: internal_data->input_view];
 
         // last housekeeping
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
@@ -195,6 +297,129 @@ void dm_platform_write_error(const char* message, uint8_t color)
 void dm_platform_swap_buffers()
 {
 
+}
+
+dm_key_code dm_translate_key_code(uint32_t cocoa_key)
+{
+    switch(cocoa_key)
+    {
+    case 0:  return DM_KEY_A;
+    case 1:  return DM_KEY_S;
+    case 2:  return DM_KEY_D;
+    case 3:  return DM_KEY_F;
+    case 4:  return DM_KEY_H;
+    case 5:  return DM_KEY_G;
+    case 6:  return DM_KEY_Z;
+    case 7:  return DM_KEY_X;
+    case 8:  return DM_KEY_C;
+    case 9:  return DM_KEY_V;
+    case 11: return DM_KEY_B;
+    case 12: return DM_KEY_Q;
+    case 13: return DM_KEY_W;
+    case 14: return DM_KEY_E;
+    case 15: return DM_KEY_R;
+    case 16: return DM_KEY_Y;
+    case 17: return DM_KEY_T;
+    case 18: return DM_KEY_1;
+    case 19: return DM_KEY_2;
+    case 20: return DM_KEY_3;
+    case 21: return DM_KEY_4;
+    case 23: return DM_KEY_5;
+    case 22: return DM_KEY_6;
+    
+    case 25: return DM_KEY_9;
+    case 26: return DM_KEY_7;
+    
+    case 28: return DM_KEY_8;
+    case 29: return DM_KEY_0;
+    
+    case 31: return DM_KEY_O;
+    case 32: return DM_KEY_U;
+    
+    case 34: return DM_KEY_I;
+    case 35: return DM_KEY_P;
+    
+    case 37: return DM_KEY_L;
+    case 38: return DM_KEY_J;
+    case 39: return DM_KEY_QUOTE;
+    case 40: return DM_KEY_K;
+    case 42: return DM_KEY_RSLASH;
+    
+    case 45: return DM_KEY_N;
+    case 46: return DM_KEY_M;
+    case 47: return DM_KEY_PERIOD;
+    case 43: return DM_KEY_COMMA;
+    case 44: return DM_KEY_LSLASH;
+    case 36: return DM_KEY_ENTER;
+    case 30: return DM_KEY_RBRACE;
+    case 33: return DM_KEY_LBRACE;
+    case 27: return DM_KEY_MINUS;
+    case 24: return DM_KEY_EQUAL;
+   
+    case 49: return DM_KEY_SPACE;
+    case 51: return DM_KEY_DELETE;
+    case 53: return DM_KEY_ESCAPE;
+    case 57: return DM_KEY_CAPSLOCK;
+    case 48: return DM_KEY_TAB;
+    case 56: return DM_KEY_LSHIFT;
+    case 60: return DM_KEY_RSHIFT;
+    case 59: return DM_KEY_LCTRL;
+    case 62: return DM_KEY_RCTRL;
+    
+    case 65: return DM_KEY_DECIMAL;
+    case 67: return DM_KEY_MULTIPLY;
+    case 69: return DM_KEY_PLUS;
+    case 75: return DM_KEY_DIVIDE;
+    case 76: return DM_KEY_ENTER;
+    case 78: return DM_KEY_MINUS;
+    case 81: return DM_KEY_EQUAL;
+
+    case 82: return DM_KEY_NUMPAD_0;
+    case 83: return DM_KEY_NUMPAD_1;
+    case 84: return DM_KEY_NUMPAD_2;
+    case 85: return DM_KEY_NUMPAD_3;
+    case 86: return DM_KEY_NUMPAD_4;
+    case 87: return DM_KEY_NUMPAD_5;
+    case 88: return DM_KEY_NUMPAD_6;
+    case 89: return DM_KEY_NUMPAD_7;
+    case 91: return DM_KEY_NUMPAD_8;
+    case 92: return DM_KEY_NUMPAD_9;
+    
+    case 115: return DM_KEY_HOME;
+    case 116: return DM_KEY_PAGEUP;
+    case 121: return DM_KEY_PAGEDOWN;
+    case 117: return DM_KEY_DELETE;
+    case 119: return DM_KEY_END;
+    
+    case 122: return DM_KEY_F1;
+    case 120: return DM_KEY_F2;
+    case 99:  return DM_KEY_F3;
+    case 118: return DM_KEY_F4;
+    case 96:  return DM_KEY_F5;
+    case 97:  return DM_KEY_F6;
+    case 98:  return DM_KEY_F7;
+    case 100: return DM_KEY_F8;
+    case 101: return DM_KEY_F9;
+    case 109: return DM_KEY_F10;
+    case 103: return DM_KEY_F11;
+    case 111: return DM_KEY_F12;
+    case 105: return DM_KEY_F13;
+    case 107: return DM_KEY_F14;
+    case 113: return DM_KEY_F15;
+    case 106: return DM_KEY_F16;
+    case 64:  return DM_KEY_F17;
+    case 79:  return DM_KEY_F18;
+    case 80:  return DM_KEY_F19;
+    case 90:  return DM_KEY_F20;
+
+    case 123: return DM_KEY_LEFT;
+    case 124: return DM_KEY_RIGHT;
+    case 125: return DM_KEY_DOWN;
+    case 126: return DM_KEY_UP;
+    default:
+        DM_LOG_ERROR("Unknown key code! Reeturning 'A'...");
+        return DM_KEY_A;
+    }
 }
 
 #endif
