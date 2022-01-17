@@ -11,6 +11,7 @@
 #include "dm_opengl_buffer.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
@@ -263,6 +264,12 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
     // shader
     dm_opengl_bind_shader(pipeline->raster_desc.shader);
+
+    float time_val = dm_platform_get_time();
+    float green = (sin(time_val) / 2.0f) + 0.5f;
+    GLint program = ((dm_internal_shader*)pipeline->raster_desc.shader->internal_shader)->id;
+    int loc = glGetUniformLocation(program, "uColor");
+    glUniform4f(loc, 0.0f, green, 0.0f, 1.0f);
 
     // vao
     glBindVertexArray(internal_pipe->vao);

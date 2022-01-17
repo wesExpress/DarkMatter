@@ -304,6 +304,11 @@ void dm_platform_glfw_mouse_scroll_callback(GLFWwindow* window, double xOffset, 
     // ???
 }
 
+float dm_platform_get_time()
+{
+    return glfwGetTime();
+}
+
 void dm_platform_set_vsync(bool enabled)
 {
     if (enabled)
