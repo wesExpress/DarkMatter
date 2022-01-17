@@ -231,9 +231,15 @@ bool dm_renderer_init_object_data()
 		{ 0.0f,  0.5f, 0.0f},
 	};
 
+#ifdef DM_OPENGL
+	dm_index_t tri_indices[] = {
+		0, 1, 2
+	};
+#elif defined DM_DIRECTX
 	dm_index_t tri_indices[] = {
 		0, 2, 1
 	};
+#endif
 
 	// quad data
 	dm_vertex_t quad_vertices[] = {
@@ -243,10 +249,17 @@ bool dm_renderer_init_object_data()
 		{-0.5f,  0.5f, 0.0f}
 	};
 	
+#ifdef DM_OPENGL
+	dm_index_t quad_indices[] = {
+		0, 1, 2,
+		2, 3, 0
+	};
+#elif defined DM_DIRECTX
 	dm_index_t quad_indices[] = {
 		0, 2, 1,
 		2, 0, 3
 	};
+#endif
 
 	//dm_vertex_t* vertices = tri_vertices;
 	//dm_index_t* indices = tri_indices;
