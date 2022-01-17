@@ -27,11 +27,11 @@ bool dm_directx_create_swapchain(dm_internal_renderer* renderer)
 	desc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
 	desc.SampleDesc.Count = 1;
 	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	desc.BufferCount = 2;
+	desc.BufferCount = 1;
 	desc.OutputWindow = renderer->hwnd;
 	desc.Windowed = TRUE;
-	//desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-	desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+	desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+	//desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 
 	// obtain factory
 	IDXGIDevice* dxgi_device = NULL;

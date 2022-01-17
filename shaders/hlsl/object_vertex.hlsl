@@ -10,7 +10,7 @@ struct VS_OUTPUT
 
 VS_OUTPUT v_main(VS_INPUT input)
 {
-    VS_OUTPUT output;
+    VS_OUTPUT output = (VS_OUTPUT)0;
     
     output.pos = float4(input.pos, 1.0f);
     

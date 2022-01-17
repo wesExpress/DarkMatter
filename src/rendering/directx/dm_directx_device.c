@@ -17,11 +17,11 @@ bool dm_directx_create_device(dm_internal_renderer* renderer)
 	// create the device and immediate context
 	DX_ERROR_CHECK(
 		D3D11CreateDevice(
-			0,
+			NULL,
 			D3D_DRIVER_TYPE_HARDWARE,
-			0,
+			NULL,
 			flags,
-			0, 0,
+			NULL, 0,
 			D3D11_SDK_VERSION,
 			&renderer->device,
 			&feature_level,

@@ -46,8 +46,8 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 	//context->lpVtbl->OMSetRenderTargets(context, 1, &internal_pipe->render_view, NULL);
 	
 	D3D11_VIEWPORT viewport = { 0 };
-	viewport.Width = renderer_data->object_pipeline->viewport.width;
-	viewport.Height = renderer_data->object_pipeline->viewport.height;
+	viewport.Width = renderer_data->width;
+	viewport.Height = renderer_data->height;
 	viewport.MaxDepth = 1.0f;
 	internal_pipe->viewport = viewport;
 
@@ -262,14 +262,14 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
 
 	/*
-	// render target
-	*/
-	context->lpVtbl->OMSetRenderTargets(context, 1u, &render_target, NULL);
-
-	/*
 	// viewport
 	*/
 	context->lpVtbl->RSSetViewports(context, 1, &internal_pipe->viewport);
+
+	/*
+	// render target
+	*/
+	context->lpVtbl->OMSetRenderTargets(context, 1u, &render_target, NULL);
 
 	/*
 	// raster state
