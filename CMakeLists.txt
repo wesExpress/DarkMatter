@@ -48,7 +48,6 @@ set(
 
     src/platform/dm_platform_glfw.c
     src/platform/dm_platform_win32.c
-    src/platform/dm_platform_apple.m
 
     src/rendering/dm_renderer.c
     src/rendering/dm_command_buffer.c
@@ -67,9 +66,16 @@ set(
     src/rendering/directx/dm_directx_buffer.c
     src/rendering/directx/dm_directx_shader.c
     src/rendering/directx/dm_directx_enum_conversion.c
-
-    src/rendering/metal/dm_metal_renderer.m
 )
+
+# objective c files if using metal
+if(APPLE AND NOT DM_RENDER_OPENGL)
+    set(SOURCES ${SOURCES} 
+        src/platform/dm_platform_apple.m
+
+        src/rendering/metal/dm_metal_renderer.m
+    )
+endif()
 
 if(WIN32 AND NOT DM_RENDER_OPENGL)
     set(VERTEX_SHADERS
