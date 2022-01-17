@@ -35,7 +35,7 @@ bool dm_engine_create()
         return false;
     }
 
-    if (!dm_renderer_init(e_data->platform_data, (dm_color) { 0.8f, 0.5f, 0.8f, 1.0f }))
+    if (!dm_renderer_init(e_data->platform_data, (dm_color) { 0.2f, 0.5f, 0.8f, 1.0f }))
     {
         DM_LOG_FATAL("Renderer could not be initialized!");
         return false;
