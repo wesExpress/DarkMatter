@@ -169,25 +169,22 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	rd.CullMode = dm_cull_to_directx_cull(pipeline->raster_desc.cull_mode);
 	if (rd.CullMode == D3D11_CULL_NONE) return false;
 	
+	rd.DepthClipEnable = pipeline->depth_desc.is_enabled;
 	// winding
 	switch (pipeline->raster_desc.winding_order)
 	{
 	case DM_WINDING_CLOCK:
 	{
-		rd.FrontCounterClockwise = false;
+		rd.FrontCounterClockwise = true;
 	} break;
 	case DM_WINDING_COUNTER_CLOCK:
 	{
-		rd.FrontCounterClockwise = true;
+		rd.FrontCounterClockwise = false;
 	} break;
 	default:
 		DM_LOG_FATAL("Unknown winding order!");
 		return false;
 	}
-
-	rd.CullMode = D3D11_CULL_NONE;
-	rd.FrontCounterClockwise = false;
-	rd.DepthClipEnable = true;
 
 	DX_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pipe->rasterizer_state), "ID3D11Device::CreateRasterizerState failed!");
 	dm_mem_db_adjust(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
@@ -246,15 +243,7 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
 
 void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
-	ID3D11DeviceContext* context = directx_renderer->context;
-	ID3D11RasterizerState* raster_state = internal_pipe->rasterizer_state;
-
-	/*
-	// raster state
-	*/
-	context->lpVtbl->RSSetState(context, raster_state);
 }
 
 void dm_renderer_end_rederpass_impl()
@@ -273,25 +262,25 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
 
 	/*
-	// viewport
-	*/
-	context->lpVtbl->RSSetViewports(context, 1, &internal_pipe->viewport);
-
-	/*
-	// depth stencil state
-	*/
-	context->lpVtbl->OMSetDepthStencilState(context, internal_pipe->depth_stencil_state, 1);
-
-	/*
 	// render target
 	*/
 	context->lpVtbl->OMSetRenderTargets(context, 1u, &render_target, depth_stencil);
 
 	/*
-	// buffers
+	// viewport
 	*/
-	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, directx_renderer, pipeline->interal_pipeline);
-	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, directx_renderer, pipeline->interal_pipeline);
+	context->lpVtbl->RSSetViewports(context, 1, &internal_pipe->viewport);
+
+	/*
+	// raster state
+	*/
+	context->lpVtbl->RSSetState(context, raster_state);
+	context->lpVtbl->IASetPrimitiveTopology(context, internal_pipe->topology);
+
+	/*
+	// depth stencil state
+	*/
+	context->lpVtbl->OMSetDepthStencilState(context, internal_pipe->depth_stencil_state, 1);
 
 	/*
 	// shader
@@ -300,7 +289,11 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	context->lpVtbl->PSSetShader(context, internal_shader->pixel_shader, NULL, 0);
 	context->lpVtbl->IASetInputLayout(context, internal_shader->input_layout);
 
-	context->lpVtbl->IASetPrimitiveTopology(context, internal_pipe->topology);
+	/*
+	// buffers
+	*/
+	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, directx_renderer, pipeline->interal_pipeline);
+	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, directx_renderer, pipeline->interal_pipeline);
 
 	return true;
 }

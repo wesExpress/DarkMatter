@@ -39,14 +39,11 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_int
 		DXGI_FORMAT format = dm_vertex_t_to_directx_format(attrib_desc);
 		if (format == DXGI_FORMAT_UNKNOWN) return false;
 
-		D3D11_INPUT_ELEMENT_DESC element_desc = {
-			.SemanticName = attrib_desc.name,
-			.SemanticIndex = 0,
-			.Format = format,
-			.AlignedByteOffset = attrib_desc.offset,
-			.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA,
-			.InstanceDataStepRate = 0
-		};
+		D3D11_INPUT_ELEMENT_DESC element_desc = { 0 };
+		element_desc.SemanticName = attrib_desc.name;
+		element_desc.Format = format;
+		element_desc.AlignedByteOffset = attrib_desc.offset;
+		element_desc.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
 
 		// append the element_desc to the array
 		dm_list_append(&desc, element_desc);
