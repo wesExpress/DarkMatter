@@ -244,18 +244,18 @@ bool dm_renderer_init_object_data()
 	};
 	
 	dm_index_t quad_indices[] = {
-		0, 1, 2,
-		2, 3, 0
+		0, 2, 1,
+		2, 0, 3
 	};
 
-	dm_vertex_t* vertices = tri_vertices;
-	dm_index_t* indices = tri_indices;
-	//dm_vertex_t* vertices = quad_vertices;
-	//dm_index_t* indices = quad_indices;
+	//dm_vertex_t* vertices = tri_vertices;
+	//dm_index_t* indices = tri_indices;
+	dm_vertex_t* vertices = quad_vertices;
+	dm_index_t* indices = quad_indices;
 
 	// buffers
-	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(tri_vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_DEFAULT };
-	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(tri_indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(quad_vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(quad_indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_DEFAULT };
 
 	r_data.object_pipeline->render_packet.count = ib_desc.buffer_size / ib_desc.elem_size;
 
