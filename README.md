@@ -9,5 +9,5 @@ The general design philosophy is as follows:
 
 Current status:
 - Rendering quad and clearing screen with OpenGL
-- Clearing screen with DirectX but rendering isn't working yet
+- Clearing screen with DirectX but **rendering isn't working yet**
 - Just starting to get a window and metal context working with Cocoa and Metal on OSX
