@@ -28,7 +28,7 @@ typedef struct dm_internal_shader
 	ID3D11InputLayout* input_layout;
 } dm_internal_shader;
 
-typedef struct dm_internal_pipeline
+typedef struct dm_internal_renderer
 {
 	HWND hwnd;
 	HINSTANCE h_instance;
@@ -36,20 +36,22 @@ typedef struct dm_internal_pipeline
 	ID3D11Device* device;
 	ID3D11DeviceContext* context;
 	IDXGISwapChain* swap_chain;
+
+#if DM_DEBUG
+	ID3D11Debug* debugger;
+#endif
+} dm_internal_renderer;
+
+typedef struct dm_internal_pipeline
+{
 	ID3D11RenderTargetView* render_view;
 	ID3D11Texture2D* render_back_buffer;
 	ID3D11DepthStencilView* depth_stencil_view;
 	ID3D11Texture2D* depth_stencil_back_buffer;
 	ID3D11DepthStencilState* depth_stencil_state;
 	ID3D11RasterizerState* rasterizer_state;
-
-	D3D11_VIEWPORT viewport;
-
 	D3D11_PRIMITIVE_TOPOLOGY topology;
-
-#if DM_DEBUG
-	ID3D11Debug* debugger;
-#endif
+	D3D11_VIEWPORT viewport;
 } dm_internal_pipeline;
 
 #endif

@@ -24,21 +24,24 @@ typedef struct windows_internal_data
 	HWND hwnd;
 } windows_internal_data;
 
+static dm_internal_renderer* directx_renderer = NULL;
+
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
 	renderer_data->object_pipeline->interal_pipeline = (dm_internal_pipeline*)dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 	windows_internal_data* internal_data = (windows_internal_data*)platform_data->internal_data;
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)renderer_data->object_pipeline->interal_pipeline;
+	directx_renderer = (dm_internal_renderer*)dm_alloc(sizeof(dm_internal_renderer), DM_MEM_RENDERER);
 
-	internal_pipe->hwnd = internal_data->hwnd;
-	internal_pipe->h_instance = internal_data->h_instance;
+	directx_renderer->hwnd = internal_data->hwnd;
+	directx_renderer->h_instance = internal_data->h_instance;
 
-	if (!dm_directx_create_device(internal_pipe)) return false;
-	if (!dm_directx_create_swapchain(internal_pipe)) return false;
-	if (!dm_directx_create_rendertarget(internal_pipe)) return false;
-	if (!dm_directx_create_depth_stencil(internal_pipe)) return false;
+	if (!dm_directx_create_device(directx_renderer)) return false;
+	if (!dm_directx_create_swapchain(directx_renderer)) return false;
+	if (!dm_directx_create_rendertarget(directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_depth_stencil(directx_renderer, internal_pipe)) return false;
 
-	ID3D11DeviceContext* context = internal_pipe->context;
+	ID3D11DeviceContext* context = directx_renderer->context;
 
 	context->lpVtbl->OMSetRenderTargets(context, 1, &internal_pipe->render_view, internal_pipe->depth_stencil_view);
 	
@@ -55,22 +58,23 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
 {
-	
+	dm_directx_destroy_swapchain(directx_renderer);
+	dm_directx_destroy_device(directx_renderer);
+
+	dm_free(directx_renderer, sizeof(dm_internal_renderer), DM_MEM_RENDERER);
 }
 
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
 {
-
+	
 }
 
 bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
 {
 	HRESULT hr;
 
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)renderer_data->object_pipeline->interal_pipeline;
-	
-	IDXGISwapChain* swap_chain = internal_pipe->swap_chain;
-	ID3D11DeviceContext* context = internal_pipe->context;
+	IDXGISwapChain* swap_chain = directx_renderer->swap_chain;
+	ID3D11DeviceContext* context = directx_renderer->context;
 
 	if (FAILED(hr = swap_chain->lpVtbl->Present(swap_chain, 1, 0)))
 	{
@@ -95,21 +99,20 @@ void dm_renderer_draw_arrays_impl(int first, size_t count)
 
 void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 	dm_render_packet render_packet = pipeline->render_packet;
 
-	ID3D11DeviceContext* context = internal_pipe->context;
-
-	context->lpVtbl->DrawIndexed(context, render_packet.count, 0, render_packet.offset);
+	// index count, start index, base index
+	// base index is the value added to each index before reading a vertex from the buffer
+	directx_renderer->context->lpVtbl->DrawIndexed(directx_renderer->context, render_packet.count, 0, render_packet.offset);
 }
 
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
 	HRESULT hr;
 
+	ID3D11Device* device = directx_renderer->device;
+	ID3D11DeviceContext* context = directx_renderer->context;
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
-	ID3D11Device* device = internal_pipe->device;
-	ID3D11DeviceContext* context = internal_pipe->context;
 	ID3D11RenderTargetView* render_view = internal_pipe->render_view;
 	ID3D11DepthStencilView* depth_view = internal_pipe->depth_stencil_view;
 
@@ -213,8 +216,6 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 	dm_directx_destroy_depth_stencil(internal_pipe);
 	dm_directx_destroy_rendertarget(internal_pipe);
-	dm_directx_destroy_swapchain(internal_pipe);
-	dm_directx_destroy_device(internal_pipe);
 
 	dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
@@ -229,7 +230,7 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
 	pipeline->raster_desc.shader->vertex_desc = vs_desc;
 	pipeline->raster_desc.shader->pixel_desc = ps_desc;
 
-	if (!dm_directx_create_shader(pipeline->raster_desc.shader, v_layout, pipeline)) return false;
+	if (!dm_directx_create_shader(pipeline->raster_desc.shader, v_layout, directx_renderer, pipeline)) return false;
 
 	/*
 	// buffers
@@ -237,15 +238,23 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
 	pipeline->render_packet.vertex_buffer->desc = vb_desc;
 	pipeline->render_packet.index_buffer->desc = ib_desc;
 
-	if (!dm_directx_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, internal_pipe)) return false;
-	if (!dm_directx_create_buffer(pipeline->render_packet.index_buffer, ib_data, internal_pipe)) return false;
+	if (!dm_directx_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_buffer(pipeline->render_packet.index_buffer, ib_data, directx_renderer, internal_pipe)) return false;
 
 	return true;
 }
 
 void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 {
+	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
+	ID3D11DeviceContext* context = directx_renderer->context;
+	ID3D11RasterizerState* raster_state = internal_pipe->rasterizer_state;
+
+	/*
+	// raster state
+	*/
+	context->lpVtbl->RSSetState(context, raster_state);
 }
 
 void dm_renderer_end_rederpass_impl()
@@ -257,7 +266,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 {
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
-	ID3D11DeviceContext* context = internal_pipe->context;
+	ID3D11DeviceContext* context = directx_renderer->context;
 	ID3D11RenderTargetView* render_target = internal_pipe->render_view;
 	ID3D11DepthStencilView* depth_stencil = internal_pipe->depth_stencil_view;
 	ID3D11RasterizerState* raster_state = internal_pipe->rasterizer_state;
@@ -267,12 +276,6 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	// viewport
 	*/
 	context->lpVtbl->RSSetViewports(context, 1, &internal_pipe->viewport);
-
-	/*
-	// raster state
-	*/
-	context->lpVtbl->RSSetState(context, raster_state);
-	
 
 	/*
 	// depth stencil state
@@ -287,8 +290,8 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// buffers
 	*/
-	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, pipeline->interal_pipeline);
-	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, pipeline->interal_pipeline);
+	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, directx_renderer, pipeline->interal_pipeline);
+	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, directx_renderer, pipeline->interal_pipeline);
 
 	/*
 	// shader
@@ -317,7 +320,7 @@ void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 {
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
-	ID3D11DeviceContext* context = internal_pipe->context;
+	ID3D11DeviceContext* context = directx_renderer->context;
 	ID3D11RenderTargetView* render_target = internal_pipe->render_view;
 	ID3D11DepthStencilView* depth_stencil = internal_pipe->depth_stencil_view;
 	

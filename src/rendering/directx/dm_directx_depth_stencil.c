@@ -4,15 +4,15 @@
 
 #include "dm_assert.h"
 
-bool dm_directx_create_depth_stencil(dm_internal_pipeline* pipeline)
+bool dm_directx_create_depth_stencil(dm_internal_renderer* renderer, dm_internal_pipeline* pipeline)
 {
-	DM_ASSERT_MSG(pipeline->device, "DirectX device is NULL!");
+	DM_ASSERT_MSG(renderer->device, "DirectX device is NULL!");
 
 	HRESULT hr;
 	RECT client_rect;
-	GetClientRect(pipeline->hwnd, &client_rect);
+	GetClientRect(renderer->hwnd, &client_rect);
 	
-	ID3D11Device* device = pipeline->device;
+	ID3D11Device* device = renderer->device;
 
 	D3D11_TEXTURE2D_DESC desc = { 0 };
 	desc.Width = client_rect.right;

@@ -5,7 +5,7 @@
 #include "platform/dm_platform_win32.h"
 #include <d3dcompiler.h>
 
-bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_render_pipeline* pipeline)
+bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_internal_renderer* renderer, dm_render_pipeline* pipeline)
 {
 	HRESULT hr;
 
@@ -14,8 +14,8 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_ren
 	shader->internal_shader = (dm_internal_shader*)dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
 	dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
 
-	ID3D11Device* device = internal_pipe->device;
-	ID3D11DeviceContext* context = internal_pipe->context;
+	ID3D11Device* device = renderer->device;
+	ID3D11DeviceContext* context = renderer->context;
 
 	// vertex shader
 	wchar_t ws[100];

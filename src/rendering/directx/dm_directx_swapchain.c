@@ -4,18 +4,18 @@
 
 #include "dm_assert.h"
 
-bool dm_directx_create_swapchain(dm_internal_pipeline* pipeline)
+bool dm_directx_create_swapchain(dm_internal_renderer* renderer)
 {
 	// set up the swap chain pointer to be created in this function
 	IDXGISwapChain* swap_chain = NULL;
 
 	// make sure the device has been created and then grab it
-	DM_ASSERT_MSG(pipeline->device, "DirectX device is NULL!");
-	ID3D11Device* device = pipeline->device;
+	DM_ASSERT_MSG(renderer->device, "DirectX device is NULL!");
+	ID3D11Device* device = renderer->device;
 
 	HRESULT hr;
 	RECT client_rect;
-	GetClientRect(pipeline->hwnd, &client_rect);
+	GetClientRect(renderer->hwnd, &client_rect);
 
 	struct DXGI_SWAP_CHAIN_DESC desc = { 0 };
 	desc.BufferDesc.Width = client_rect.right;
@@ -28,7 +28,7 @@ bool dm_directx_create_swapchain(dm_internal_pipeline* pipeline)
 	desc.SampleDesc.Count = 1;
 	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	desc.BufferCount = 1;
-	desc.OutputWindow = pipeline->hwnd;
+	desc.OutputWindow = renderer->hwnd;
 	desc.Windowed = TRUE;
 	desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 
@@ -43,7 +43,7 @@ bool dm_directx_create_swapchain(dm_internal_pipeline* pipeline)
 	DX_ERROR_CHECK(dxgi_adapter->lpVtbl->GetParent(dxgi_adapter, &IID_IDXGIFactory, (void**)&dxgi_factory), "IDXGIAdapter::GetParent failed!");
 
 	// create the swap chain
-	DX_ERROR_CHECK(dxgi_factory->lpVtbl->CreateSwapChain(dxgi_factory, (IUnknown*)device, &desc, &pipeline->swap_chain), "IDXGIFactory::CreateSwapChain failed!");
+	DX_ERROR_CHECK(dxgi_factory->lpVtbl->CreateSwapChain(dxgi_factory, (IUnknown*)device, &desc, &renderer->swap_chain), "IDXGIFactory::CreateSwapChain failed!");
 	dm_mem_db_adjust(sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE);
 
 	// release pack animal directx objects
@@ -54,10 +54,10 @@ bool dm_directx_create_swapchain(dm_internal_pipeline* pipeline)
 	return true;
 }
 
-void dm_directx_destroy_swapchain(dm_internal_pipeline* pipeline)
+void dm_directx_destroy_swapchain(dm_internal_renderer* renderer)
 {
 	// release the directx object
-	IDXGISwapChain* swap_chain = pipeline->swap_chain;
+	IDXGISwapChain* swap_chain = renderer->swap_chain;
 	DX_RELEASE(swap_chain);
 
 	dm_mem_db_adjust(-sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE);
