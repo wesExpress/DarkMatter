@@ -7,10 +7,10 @@
 
 #include "dm_directx_renderer.h"
 
-bool dm_directx_create_device(dm_internal_pipeline* pipeline);
-void dm_directx_destroy_device(dm_internal_pipeline* pipeline);
+bool dm_directx_create_device(dm_internal_renderer* renderer);
+void dm_directx_destroy_device(dm_internal_renderer* renderer);
 #if DM_DEBUG
-void dm_directx_device_report_live_objects(dm_internal_pipeline* pipeline);
+void dm_directx_device_report_live_objects(dm_internal_renderer* renderer);
 #endif
 
 #endif

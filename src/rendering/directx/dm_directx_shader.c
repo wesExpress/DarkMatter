@@ -5,7 +5,7 @@
 #include "platform/dm_platform_win32.h"
 #include <d3dcompiler.h>
 
-bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_render_pipeline* pipeline)
+bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_internal_renderer* renderer, dm_render_pipeline* pipeline)
 {
 	HRESULT hr;
 
@@ -13,12 +13,9 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_ren
 
 	shader->internal_shader = (dm_internal_shader*)dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
 	dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
-	internal_shader->vertex_shader = (ID3D11VertexShader*)dm_alloc(sizeof(ID3D11VertexShader), DM_MEM_RENDERER_SHADER);
-	internal_shader->pixel_shader = (ID3D11PixelShader*)dm_alloc(sizeof(ID3D11PixelShader), DM_MEM_RENDERER_SHADER);
-	internal_shader->input_layout = (ID3D11InputLayout*)dm_alloc(sizeof(ID3D11InputLayout), DM_MEM_RENDERER_SHADER);
 
-	ID3D11Device* device = internal_pipe->device;
-	ID3D11DeviceContext* context = internal_pipe->context;
+	ID3D11Device* device = renderer->device;
+	ID3D11DeviceContext* context = renderer->context;
 
 	// vertex shader
 	wchar_t ws[100];
@@ -29,6 +26,7 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_ren
 	DX_ERROR_CHECK(D3DReadFileToBlob(ws, &blob), "D3DReadFileToBlob failed!");
 
 	DX_ERROR_CHECK(device->lpVtbl->CreateVertexShader(device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &internal_shader->vertex_shader), "ID3D11Device::CreateVertexShader failed!");
+	dm_mem_db_adjust(sizeof(ID3D11VertexShader), DM_MEM_RENDERER_SHADER);
 
 	// input layout
 	dm_list(D3D11_INPUT_ELEMENT_DESC) desc;
@@ -41,20 +39,18 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_ren
 		DXGI_FORMAT format = dm_vertex_t_to_directx_format(attrib_desc);
 		if (format == DXGI_FORMAT_UNKNOWN) return false;
 
-		D3D11_INPUT_ELEMENT_DESC element_desc = {
-			.SemanticName = attrib_desc.name,
-			.SemanticIndex = 0,
-			.Format = format,
-			.AlignedByteOffset = attrib_desc.offset,
-			.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA,
-			.InstanceDataStepRate = 0
-		};
+		D3D11_INPUT_ELEMENT_DESC element_desc = { 0 };
+		element_desc.SemanticName = attrib_desc.name;
+		element_desc.Format = format;
+		element_desc.AlignedByteOffset = attrib_desc.offset;
+		element_desc.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
 
 		// append the element_desc to the array
 		dm_list_append(&desc, element_desc);
 	}
 
 	DX_ERROR_CHECK(device->lpVtbl->CreateInputLayout(device, desc.array, (UINT)layout.num, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), &internal_shader->input_layout), "ID3D11Device::CreateInputLayout failed!");
+	dm_mem_db_adjust(sizeof(ID3D11InputLayout), DM_MEM_RENDERER_SHADER);
 
 	// pixel shader
 	swprintf(ws, 100, L"%hs", shader->pixel_desc.path);
@@ -62,6 +58,7 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_ren
 	DX_ERROR_CHECK(D3DReadFileToBlob(ws, &blob), "D3DReadFileToBlob failed!");
 
 	DX_ERROR_CHECK(device->lpVtbl->CreatePixelShader(device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &internal_shader->pixel_shader), "ID3D11Device::CreatePixelShader failed!");
+	dm_mem_db_adjust(sizeof(ID3D11PixelShader), DM_MEM_RENDERER_SHADER);
 
 	DX_RELEASE(blob);
 	dm_list_destroy(&desc);

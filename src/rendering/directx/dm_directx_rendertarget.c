@@ -4,20 +4,19 @@
 
 #include "dm_assert.h"
 
-bool dm_directx_create_rendertarget(dm_internal_pipeline* pipeline)
+bool dm_directx_create_rendertarget(dm_internal_renderer* renderer, dm_internal_pipeline* pipeline)
 {
-	DM_ASSERT_MSG(pipeline->device, "DirectX device is NULL!");
-	DM_ASSERT_MSG(pipeline->swap_chain, "DirectX swap chain is NULL!");
+	DM_ASSERT_MSG(renderer->device, "DirectX device is NULL!");
+	DM_ASSERT_MSG(renderer->swap_chain, "DirectX swap chain is NULL!");
 
 	HRESULT hr;
-	ID3D11Device* device = pipeline->device;
-	IDXGISwapChain* swap_chain = pipeline->swap_chain;
-
-	pipeline->render_back_buffer = (ID3D11Texture2D*)dm_alloc(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
-	pipeline->render_view = (ID3D11RenderTargetView*)dm_alloc(sizeof(ID3D11RenderTargetView), DM_MEM_RENDER_PIPELINE);
-
+	ID3D11Device* device = renderer->device;
+	IDXGISwapChain* swap_chain = renderer->swap_chain;
+	
 	DX_ERROR_CHECK(swap_chain->lpVtbl->GetBuffer(swap_chain, 0, &IID_ID3D11Texture2D, (void**)&(ID3D11Resource*)pipeline->render_back_buffer), "IDXGISwapChain::GetBuffer failed!");
 	device->lpVtbl->CreateRenderTargetView(device, (ID3D11Resource*)pipeline->render_back_buffer, 0, &pipeline->render_view);
+	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(sizeof(ID3D11RenderTargetView), DM_MEM_RENDER_PIPELINE);
 
 	return true;
 }

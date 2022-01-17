@@ -5,15 +5,15 @@
 #include "dm_directx_enum_conversion.h"
 #include "dm_mem.h"
 
-bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_pipeline* pipeline)
+bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_renderer* renderer, dm_internal_pipeline* pipeline)
 {
 	HRESULT hr;
 
 	buffer->internal_buffer = (dm_internal_buffer*)dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
 
-	ID3D11Device* device = pipeline->device;
-	ID3D11DeviceContext* context = pipeline->context;
+	ID3D11Device* device = renderer->device;
+	ID3D11DeviceContext* context = renderer->context;
 	internal_buffer->buffer = (ID3D11Buffer*)dm_alloc(sizeof(ID3D11Buffer), DM_MEM_RENDERER_BUFFER);
 
 	D3D11_USAGE usage = dm_buffer_usage_to_directx(buffer->desc.usage);
@@ -49,9 +49,9 @@ void dm_directx_delete_buffer(dm_buffer* buffer, dm_internal_pipeline* pipeline)
 	dm_free(buffer->internal_buffer, sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
 }
 
-void dm_directx_bind_buffer(dm_buffer* buffer, dm_internal_pipeline* pipeline)
+void dm_directx_bind_buffer(dm_buffer* buffer, dm_internal_renderer* renderer, dm_internal_pipeline* pipeline)
 {
-	ID3D11DeviceContext* context = pipeline->context;
+	ID3D11DeviceContext* context = renderer->context;
 	dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
 
 	UINT stride = buffer->desc.elem_size;

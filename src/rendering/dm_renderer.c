@@ -101,6 +101,9 @@ bool dm_renderer_resize(int new_width, int new_height)
 
 void dm_renderer_begin_scene()
 {
+	dm_renderer_begin_scene_impl(&r_data);
+
+	// commands for object pipeline
 	if (r_data.object_pipeline->command_buffer.commands.size > 0)
 	{
 		dm_renderer_clear_command_buffer(&r_data.object_pipeline->command_buffer);
@@ -109,18 +112,12 @@ void dm_renderer_begin_scene()
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, &r_data.object_pipeline->command_buffer);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, &r_data.object_pipeline->command_buffer);
-	
-	// TODO REMOVE
-	// test rendering
 	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, & r_data.object_pipeline->command_buffer);
-
-	dm_renderer_begin_scene_impl(&r_data);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
 }
 
 bool dm_renderer_end_scene()
 {
-	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
-
 	if (!dm_renderer_submit_command_buffer(&r_data.object_pipeline->command_buffer, r_data.object_pipeline)) return false;
 
 	return dm_renderer_end_scene_impl(&r_data);
@@ -227,18 +224,34 @@ bool dm_renderer_init_object_data()
 	// TODO should just be a palceholder for now!
 	// likely need to reed in files here in the future
 
-	// quad render
-	dm_vertex_t vertices[] = {
+	// triangle data
+	dm_vertex_t tri_vertices[] = {
+		{-0.5f, -0.5f, 0.0f},
+		{0.5f, 0.0f, 0.0f},
+		{0.0f, 0.5f, 0.0f}
+	};
+
+	dm_index_t tri_indices[] = {
+		0, 1, 2
+	};
+
+	// quad data
+	dm_vertex_t quad_vertices[] = {
 		{-0.5f, -0.5f,  0.0f},
 		{ 0.5f, -0.75f, 0.0f},
 		{ 0.5f,  0.5f,  0.0f},
 		{-0.5f,  0.5f,  0.0f}
 	};
 	
-	dm_index_t indices[] = {
+	dm_index_t quad_indices[] = {
 		0, 1, 2,
 		2, 3, 0
 	};
+
+	//dm_vertex_t* vertices = tri_vertices;
+	//dm_index_t* indices = tri_indices;
+	dm_vertex_t* vertices = quad_vertices;
+	dm_index_t* indices = quad_indices;
 
 	// buffers
 	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_STATIC };
