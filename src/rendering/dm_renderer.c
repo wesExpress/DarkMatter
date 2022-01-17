@@ -228,11 +228,11 @@ bool dm_renderer_init_object_data()
 	dm_vertex_t tri_vertices[] = {
 		{-0.5f, -0.5f, 0.0f},
 		{ 0.5f, -0.5f, 0.0f},
-		{ 0.0f,  0.5f, 0.0f}
+		{ 0.0f,  0.5f, 0.0f},
 	};
 
 	dm_index_t tri_indices[] = {
-		0, 1, 2
+		0, 2, 1
 	};
 
 	// quad data
