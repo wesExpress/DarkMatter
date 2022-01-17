@@ -13,6 +13,5 @@ The general design philosophy is as follows:
 - Iterate
 
 Current status:
-- Rendering quad and clearing screen with OpenGL
-- Clearing screen with DirectX but **rendering isn't working yet**
+- Rendering quad and clearing screen with OpenGL and DirectX
 - Just starting to get a window and metal context working with Cocoa and Metal on OSX
