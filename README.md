@@ -1,6 +1,11 @@
 # CEngine
 
-This is a cross-platform rendering engine for the purpose of learning.
+This is a cross-platform rendering engine for the purpose of learning. It is written entirely in C and does not use external libraries, with two main exceptions:
+- Libraries
+- - GLFW for prototyping with OpenGL
+- - GLAD to access OpenGL functions
+- Objective C
+- - for OSX specific code and metal rendering
 
 The general design philosophy is as follows:
 - Get a process of the rendering pipeline working with OpenGL
