@@ -42,10 +42,9 @@ bool dm_directx_create_swapchain(dm_internal_pipeline* pipeline)
 	IDXGIFactory* dxgi_factory = NULL;
 	DX_ERROR_CHECK(dxgi_adapter->lpVtbl->GetParent(dxgi_adapter, &IID_IDXGIFactory, (void**)&dxgi_factory), "IDXGIAdapter::GetParent failed!");
 
-	pipeline->swap_chain = (IDXGISwapChain*)dm_alloc(sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE);
-
 	// create the swap chain
 	DX_ERROR_CHECK(dxgi_factory->lpVtbl->CreateSwapChain(dxgi_factory, (IUnknown*)device, &desc, &pipeline->swap_chain), "IDXGIFactory::CreateSwapChain failed!");
+	dm_mem_db_adjust(sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE);
 
 	// release pack animal directx objects
 	DX_RELEASE(dxgi_device);

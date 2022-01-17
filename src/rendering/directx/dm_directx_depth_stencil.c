@@ -23,12 +23,11 @@ bool dm_directx_create_depth_stencil(dm_internal_pipeline* pipeline)
 	desc.SampleDesc.Count = 1;
 	desc.Usage = D3D11_USAGE_DEFAULT;
 	desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-
-	pipeline->depth_stencil_back_buffer = (ID3D11Texture2D*)dm_alloc(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
-	pipeline->depth_stencil_view = (ID3D11DepthStencilView*)dm_alloc(sizeof(ID3D11DepthStencilView), DM_MEM_RENDER_PIPELINE);
-
+	
 	DX_ERROR_CHECK(device->lpVtbl->CreateTexture2D(device, &desc, 0, &pipeline->depth_stencil_back_buffer), "ID3D11Device::CreateTexture2D failed!");
 	DX_ERROR_CHECK(device->lpVtbl->CreateDepthStencilView(device, (ID3D11Resource*)pipeline->depth_stencil_back_buffer, 0, &pipeline->depth_stencil_view), "ID3D11Device::CreateDepthStencilView failed!");
+	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(sizeof(ID3D11DepthStencilView), DM_MEM_RENDER_PIPELINE);
 
 	return true;
 }

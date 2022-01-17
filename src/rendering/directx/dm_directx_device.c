@@ -6,9 +6,6 @@
 
 bool dm_directx_create_device(dm_internal_pipeline* pipeline)
 {
-	ID3D11Device* device = NULL;
-	ID3D11DeviceContext* context = NULL;
-
 	UINT flags = 0;
 #if DM_DEBUG
 	flags |= D3D11_CREATE_DEVICE_DEBUG;
@@ -26,26 +23,22 @@ bool dm_directx_create_device(dm_internal_pipeline* pipeline)
 			flags,
 			0, 0,
 			D3D11_SDK_VERSION,
-			&device,
+			&pipeline->device,
 			&feature_level,
-			&context),
+			&pipeline->context),
 		"D3D11CreateDevice failed!"
 	);
 	DM_ASSERT_MSG((feature_level == D3D_FEATURE_LEVEL_11_0), "Direct3D Feature Level 11 unsupported!");
+	dm_mem_db_adjust(sizeof(ID3D11DeviceContext), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(sizeof(ID3D11Device), DM_MEM_RENDER_PIPELINE);
 
 	UINT msaa_quality;
-	DX_ERROR_CHECK(device->lpVtbl->CheckMultisampleQualityLevels(device, DXGI_FORMAT_R8G8B8A8_UNORM, 4, &msaa_quality), "D3D11Device::CheckMultisampleQualityLevels failed!");
-
-	pipeline->context = (ID3D11DeviceContext*)dm_alloc(sizeof(ID3D11DeviceContext), DM_MEM_RENDER_PIPELINE);
-	pipeline->device = (ID3D11Device*)dm_alloc(sizeof(ID3D11Device), DM_MEM_RENDER_PIPELINE);
-
-	pipeline->context = context;
-	pipeline->device = device;
+	DX_ERROR_CHECK(pipeline->device->lpVtbl->CheckMultisampleQualityLevels(pipeline->device, DXGI_FORMAT_R8G8B8A8_UNORM, 4, &msaa_quality), "D3D11Device::CheckMultisampleQualityLevels failed!");	
 
 	// if in debug, create the debugger to query live objects
 #if DM_DEBUG
-	pipeline->debugger = (ID3D11Debug*)dm_alloc(sizeof(ID3D11Debug), DM_MEM_RENDER_PIPELINE);
-	DX_ERROR_CHECK(device->lpVtbl->QueryInterface(device, &IID_ID3D11Debug, (void**)&(pipeline->debugger)), "D3D11Device::QueryInterface failed!");
+	DX_ERROR_CHECK(pipeline->device->lpVtbl->QueryInterface(pipeline->device, &IID_ID3D11Debug, (void**)&(pipeline->debugger)), "D3D11Device::QueryInterface failed!");
+	dm_mem_db_adjust(sizeof(ID3D11Debug), DM_MEM_RENDER_PIPELINE);
 #endif
 
 	return true;
