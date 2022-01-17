@@ -6,12 +6,17 @@
 #include "dm_render_types.h"
 #include "dm_colors.h"
 #include "dm_camera.h"
+#include "structures/dm_list.h"
+
+#define MAX_RENDER_RESOURCES 100
 
 typedef struct dm_renderer_data
 {
 	dm_camera camera;
 	int width, height;
 	dm_color clear_color;
+
+	dm_render_pipeline* object_pipeline;
 } dm_renderer_data;
 
 /*
@@ -44,6 +49,17 @@ void dm_renderer_begin_scene();
 /*
 mainly a wrapper for the backend renderer end scene the user is not exposed to
 */
-void dm_renderer_end_scene();
+bool dm_renderer_end_scene();
+
+// render object functions
+//bool dm_renderer_create_buffer(dm_buffer_desc desc, dm_buffer_handle* handle);
+//void dm_renderer_delete_buffer(dm_buffer_handle handle);
+//void dm_renderer_bind_buffer(dm_buffer_handle handle);
+//bool dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_shader_handle* handle);
+//void dm_renderer_delete_shader(dm_shader_handle handle);
+//void dm_renderer_bind_shader(dm_shader_handle handle);
+//
+//dm_buffer* dm_renderer_get_buffer(dm_buffer_handle handle);
+//dm_shader* dm_renderer_get_shader(dm_shader_handle handle);
 
 #endif

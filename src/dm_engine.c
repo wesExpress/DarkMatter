@@ -5,6 +5,10 @@
 #include "rendering/dm_renderer.h"
 #include "input/dm_input.h"
 
+// TODO: remove
+#include "structures/dm_list.h"
+#include "structures/dm_map.h"
+
 dm_engine_data* e_data = NULL;
 static bool initialized = false;
 
@@ -16,9 +20,14 @@ bool dm_engine_create()
         return false;
     }
 
-    e_data = (dm_engine_data*)dm_alloc(sizeof(dm_engine_data));
+    e_data = (dm_engine_data*)dm_alloc(sizeof(dm_engine_data), DM_MEM_ENGINE);
     
     dm_event_set_callback(dm_engine_on_event);
+
+#ifdef DM_PLATFORM_UNSUPPORTED
+    DM_LOG_FATAL("Trying to compile on unsupprted platform!");
+    return false;
+#endif
 
     if(!dm_platform_startup(e_data, 1280, 720, "CEngine", 100, 100))
     {
@@ -26,7 +35,7 @@ bool dm_engine_create()
         return false;
     }
 
-    if (!dm_renderer_init(e_data->platform_data, (dm_color) { 0.2f, 0.5f, 0.8f, 1.0f }))
+    if (!dm_renderer_init(e_data->platform_data, (dm_color) { 0.8f, 0.5f, 0.8f, 1.0f }))
     {
         DM_LOG_FATAL("Renderer could not be initialized!");
         return false;
@@ -35,12 +44,16 @@ bool dm_engine_create()
     e_data->is_running = true;
     e_data->is_suspended = false;
 
+    DM_LOG_INFO("%s", dm_mem_track());
+
     return true;
 }
 
 void dm_engine_shutdown()
 {
-    free(e_data);
+    dm_free(e_data, sizeof(dm_engine_data), DM_MEM_ENGINE);
+
+    DM_LOG_INFO("%s", dm_mem_track());
 }
 
 bool dm_engine_run()
@@ -56,7 +69,11 @@ bool dm_engine_run()
         {
             dm_renderer_begin_scene();
 
-            dm_renderer_end_scene();
+            if (!dm_renderer_end_scene())
+            {
+                DM_LOG_FATAL("Something went wrong in end scene...");
+                return false;
+            }
         }
     }
     
@@ -80,28 +97,35 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     } break;
     case DM_KEY_UP_EVENT:
     {
-        dm_key_code key = (dm_key_code)data;
+        dm_key_code key = (dm_key_code)(intptr_t)data;
         dm_input_set_key_released(key);
 
         DM_LOG_DEBUG("Key up event received: %c", key);
     } break;
     case DM_KEY_DOWN_EVENT:
     {
-        dm_key_code key = (dm_key_code)data;
+        dm_key_code key = (dm_key_code)(intptr_t)data;
         dm_input_set_key_pressed(key);
+
+        // TODO: need to remove this eventaully
+        if(key == DM_KEY_ESCAPE) dm_event_dispatch((dm_event){ DM_WINDOW_CLOSE_EVENT, NULL, NULL });
 
         DM_LOG_DEBUG("Key down event received: %c", key);
     } break;
+    case DM_KEY_TYPE_EVENT:
+    {
+        // TODO: figure out what to put here
+    } break;
     case DM_MOUSEBUTTON_UP_EVENT:
     {
-        dm_mousebutton_code button = (dm_mousebutton_code)data;
+        dm_mousebutton_code button = (dm_mousebutton_code)(intptr_t)data;
         dm_input_set_mousebutton_released(button);
 
         DM_LOG_DEBUG("Mousebutton up event received");
     } break;
     case DM_MOUSEBUTTON_DOWN_EVENT:
     {
-        dm_mousebutton_code button = (dm_mousebutton_code)data;
+        dm_mousebutton_code button = (dm_mousebutton_code)(intptr_t)data;
         dm_input_set_mousebutton_pressed(button);
 
         DM_LOG_DEBUG("Mousebutton down event received");
@@ -116,6 +140,8 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     } break;
     case DM_MOUSE_SCROLLED_EVENT:
     {
+        int8_t scroll = (intptr_t)data;
+        DM_LOG_DEBUG("Scroll: %d", scroll);
         // TODO 
     } break;
     case DM_WINDOW_RESIZE_EVENT:

@@ -3,3 +3,7 @@ out/*
 .vs/*
 
 .vscode/*
+
+.DS_STORE
+
+*.cod
