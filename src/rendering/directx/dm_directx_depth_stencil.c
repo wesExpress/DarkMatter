@@ -41,8 +41,8 @@ void dm_directx_destroy_depth_stencil(dm_internal_pipeline* pipeline)
 	DX_RELEASE(back_buffer);
 	DX_RELEASE(view);
 
-	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
-	dm_mem_db_adjust(sizeof(ID3D11DepthStencilView), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(-sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(-sizeof(ID3D11DepthStencilView), DM_MEM_RENDER_PIPELINE);
 }
 
 #endif
