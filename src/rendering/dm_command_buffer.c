@@ -6,7 +6,6 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline);
 void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline);
 
-void dm_renderer_draw_arrays_impl(int first, size_t count);
 void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline);
 
 void dm_renderer_submit_command(dm_render_command_type command_type, void* data, dm_command_buffer* command_buffer)
