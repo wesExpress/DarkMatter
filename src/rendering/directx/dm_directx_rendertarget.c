@@ -14,7 +14,7 @@ bool dm_directx_create_rendertarget(dm_internal_renderer* renderer, dm_internal_
 	IDXGISwapChain* swap_chain = renderer->swap_chain;
 	
 	DX_ERROR_CHECK(swap_chain->lpVtbl->GetBuffer(swap_chain, 0, &IID_ID3D11Texture2D, (void**)&(ID3D11Resource*)pipeline->render_back_buffer), "IDXGISwapChain::GetBuffer failed!");
-	device->lpVtbl->CreateRenderTargetView(device, (ID3D11Resource*)pipeline->render_back_buffer, 0, &pipeline->render_view);
+	device->lpVtbl->CreateRenderTargetView(device, (ID3D11Resource*)pipeline->render_back_buffer, NULL, &pipeline->render_view);
 	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
 	dm_mem_db_adjust(sizeof(ID3D11RenderTargetView), DM_MEM_RENDER_PIPELINE);
 

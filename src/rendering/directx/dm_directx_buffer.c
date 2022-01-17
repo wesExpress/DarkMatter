@@ -14,7 +14,6 @@ bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_rendere
 
 	ID3D11Device* device = renderer->device;
 	ID3D11DeviceContext* context = renderer->context;
-	internal_buffer->buffer = (ID3D11Buffer*)dm_alloc(sizeof(ID3D11Buffer), DM_MEM_RENDERER_BUFFER);
 
 	D3D11_USAGE usage = dm_buffer_usage_to_directx(buffer->desc.usage);
 	if (usage == D3D11_USAGE_STAGING + 1) return false;
@@ -34,6 +33,7 @@ bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_rendere
 	sd.pSysMem = data;
 
 	DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &vbd, &sd, &internal_buffer->buffer), "ID3D11Device::CreateBuffer failed!");
+	dm_mem_db_adjust(sizeof(ID3D11Buffer), DM_MEM_RENDERER_BUFFER);
 
 	return true;
 }

@@ -25,7 +25,7 @@ bool dm_directx_create_depth_stencil(dm_internal_renderer* renderer, dm_internal
 	desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
 	
 	DX_ERROR_CHECK(device->lpVtbl->CreateTexture2D(device, &desc, NULL, &pipeline->depth_stencil_back_buffer), "ID3D11Device::CreateTexture2D failed!");
-	DX_ERROR_CHECK(device->lpVtbl->CreateDepthStencilView(device, (ID3D11Resource*)pipeline->depth_stencil_back_buffer, 0, &pipeline->depth_stencil_view), "ID3D11Device::CreateDepthStencilView failed!");
+	//DX_ERROR_CHECK(device->lpVtbl->CreateDepthStencilView(device, (ID3D11Resource*)pipeline->depth_stencil_back_buffer, 0, &pipeline->depth_stencil_view), "ID3D11Device::CreateDepthStencilView failed!");
 	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
 	dm_mem_db_adjust(sizeof(ID3D11DepthStencilView), DM_MEM_RENDER_PIPELINE);
 
@@ -35,11 +35,11 @@ bool dm_directx_create_depth_stencil(dm_internal_renderer* renderer, dm_internal
 void dm_directx_destroy_depth_stencil(dm_internal_pipeline* pipeline)
 {
 	ID3D11Texture2D* back_buffer = pipeline->depth_stencil_back_buffer;
-	ID3D11DepthStencilView* view = pipeline->depth_stencil_view;
+	//ID3D11DepthStencilView* view = pipeline->depth_stencil_view;
 
 	// release the directx objects
 	DX_RELEASE(back_buffer);
-	DX_RELEASE(view);
+	//DX_RELEASE(view);
 
 	dm_mem_db_adjust(-sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
 	dm_mem_db_adjust(-sizeof(ID3D11DepthStencilView), DM_MEM_RENDER_PIPELINE);

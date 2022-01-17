@@ -1,6 +1,6 @@
 struct VS_INPUT
 {
-    float3 pos : POSITION0;
+    float3 pos : POSITION;
 };
 
 struct VS_OUTPUT

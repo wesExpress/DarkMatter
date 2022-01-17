@@ -39,11 +39,11 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 	if (!dm_directx_create_device(directx_renderer)) return false;
 	if (!dm_directx_create_swapchain(directx_renderer)) return false;
 	if (!dm_directx_create_rendertarget(directx_renderer, internal_pipe)) return false;
-	if (!dm_directx_create_depth_stencil(directx_renderer, internal_pipe)) return false;
+	//if (!dm_directx_create_depth_stencil(directx_renderer, internal_pipe)) return false;
 
 	ID3D11DeviceContext* context = directx_renderer->context;
 
-	context->lpVtbl->OMSetRenderTargets(context, 1, &internal_pipe->render_view, internal_pipe->depth_stencil_view);
+	context->lpVtbl->OMSetRenderTargets(context, 1, &internal_pipe->render_view, NULL);
 	
 	D3D11_VIEWPORT viewport = { 0 };
 	viewport.Width = renderer_data->object_pipeline->viewport.width;
@@ -114,7 +114,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	ID3D11DeviceContext* context = directx_renderer->context;
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 	ID3D11RenderTargetView* render_view = internal_pipe->render_view;
-	ID3D11DepthStencilView* depth_view = internal_pipe->depth_stencil_view;
+	//ID3D11DepthStencilView* depth_view = internal_pipe->depth_stencil_view;
 
 	/*
 	// blending 
@@ -147,7 +147,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 		
 	}
 
-	DX_ERROR_CHECK(device->lpVtbl->CreateDepthStencilState(device, &depth_stencil_desc, &internal_pipe->depth_stencil_state), "ID3D11Device::CreateDepthStencilState failed!");
+	//DX_ERROR_CHECK(device->lpVtbl->CreateDepthStencilState(device, &depth_stencil_desc, &internal_pipe->depth_stencil_state), "ID3D11Device::CreateDepthStencilState failed!");
 	dm_mem_db_adjust(sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE);
 
 	/*
@@ -186,7 +186,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 		return false;
 	}
 
-	DX_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pipe->rasterizer_state), "ID3D11Device::CreateRasterizerState failed!");
+	//DX_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pipe->rasterizer_state), "ID3D11Device::CreateRasterizerState failed!");
 	dm_mem_db_adjust(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
 
 	/*
@@ -206,8 +206,8 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_directx_delete_buffer(pipeline->render_packet.index_buffer, pipeline->interal_pipeline);
 	dm_directx_delete_shader(pipeline->raster_desc.shader, pipeline->interal_pipeline);
 
-	DX_RELEASE(internal_pipe->rasterizer_state);
-	DX_RELEASE(internal_pipe->depth_stencil_state);
+	//DX_RELEASE(internal_pipe->rasterizer_state);
+	//DX_RELEASE(internal_pipe->depth_stencil_state);
 	dm_mem_db_adjust(-sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
 	dm_mem_db_adjust(-sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE);
 
@@ -257,14 +257,14 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
 	ID3D11DeviceContext* context = directx_renderer->context;
 	ID3D11RenderTargetView* render_target = internal_pipe->render_view;
-	ID3D11DepthStencilView* depth_stencil = internal_pipe->depth_stencil_view;
-	ID3D11RasterizerState* raster_state = internal_pipe->rasterizer_state;
+	//ID3D11DepthStencilView* depth_stencil = internal_pipe->depth_stencil_view;
+	//ID3D11RasterizerState* raster_state = internal_pipe->rasterizer_state;
 	dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
 
 	/*
 	// render target
 	*/
-	context->lpVtbl->OMSetRenderTargets(context, 1u, &render_target, depth_stencil);
+	context->lpVtbl->OMSetRenderTargets(context, 1u, &render_target, NULL);
 
 	/*
 	// viewport
@@ -274,13 +274,13 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// raster state
 	*/
-	context->lpVtbl->RSSetState(context, raster_state);
+	//context->lpVtbl->RSSetState(context, raster_state);
 	context->lpVtbl->IASetPrimitiveTopology(context, internal_pipe->topology);
 
 	/*
 	// depth stencil state
 	*/
-	context->lpVtbl->OMSetDepthStencilState(context, internal_pipe->depth_stencil_state, 1);
+	//context->lpVtbl->OMSetDepthStencilState(context, internal_pipe->depth_stencil_state, 1);
 
 	/*
 	// shader
@@ -315,11 +315,11 @@ void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 
 	ID3D11DeviceContext* context = directx_renderer->context;
 	ID3D11RenderTargetView* render_target = internal_pipe->render_view;
-	ID3D11DepthStencilView* depth_stencil = internal_pipe->depth_stencil_view;
+	//ID3D11DepthStencilView* depth_stencil = internal_pipe->depth_stencil_view;
 	
 	// clear framebuffer
 	context->lpVtbl->ClearRenderTargetView(context, render_target, &(clear_color->v[0]));
-	context->lpVtbl->ClearDepthStencilView(context, depth_stencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+	//context->lpVtbl->ClearDepthStencilView(context, depth_stencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 }
 
 #endif
