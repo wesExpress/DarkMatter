@@ -39,19 +39,19 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 	if (!dm_directx_create_device(directx_renderer)) return false;
 	if (!dm_directx_create_swapchain(directx_renderer)) return false;
 	if (!dm_directx_create_rendertarget(directx_renderer, internal_pipe)) return false;
-	//if (!dm_directx_create_depth_stencil(directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_depth_stencil(directx_renderer, internal_pipe)) return false;
 
 	ID3D11DeviceContext* context = directx_renderer->context;
 
-	context->lpVtbl->OMSetRenderTargets(context, 1, &internal_pipe->render_view, NULL);
+	//context->lpVtbl->OMSetRenderTargets(context, 1, &internal_pipe->render_view, NULL);
 	
 	D3D11_VIEWPORT viewport = { 0 };
 	viewport.Width = renderer_data->object_pipeline->viewport.width;
 	viewport.Height = renderer_data->object_pipeline->viewport.height;
 	viewport.MaxDepth = 1.0f;
-	context->lpVtbl->RSSetViewports(context, 1, &viewport);
-
 	internal_pipe->viewport = viewport;
+
+	//context->lpVtbl->RSSetViewports(context, 1, &viewport);
 
 	return true;
 }
