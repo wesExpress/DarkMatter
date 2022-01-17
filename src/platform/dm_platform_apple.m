@@ -11,7 +11,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <Cocoa/Cocoa.h>
+
+#import <Cocoa/Cocoa.h>
 
 dm_key_code dm_translate_key_code(uint32_t cocoa_key);
 
@@ -155,6 +156,10 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key);
     }
 
     [NSApp stop: nil];
+}
+
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)app {
+    return YES;
 }
 
 @end

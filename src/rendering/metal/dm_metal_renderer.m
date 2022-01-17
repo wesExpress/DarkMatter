@@ -10,14 +10,31 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+typedef struct dm_metal_renderer
+{
+    dm_metal_view* view;
+} dm_metal_renderer;
+
+static dm_metal_renderer* internal_renderer = NULL;
+
+/*
+// render functions
+*/
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
+    internal_renderer = (dm_metal_renderer*)dm_alloc(sizeof(dm_metal_renderer), DM_MEM_RENDERER);
+
+    @autoreleasepool
+    {
+        internal_renderer->view = [[dm_metal_view alloc] init];
+    }
+
     return true;
 }
 
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
 {
-
+    dm_free(internal_renderer, sizeof(dm_metal_renderer), DM_MEM_RENDERER);
 }
 
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
@@ -67,7 +84,7 @@ void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pip
 
 void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 {
-
+    
 }
 
 void dm_renderer_draw_arrays_impl(int first, size_t count)

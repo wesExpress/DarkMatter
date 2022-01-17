@@ -10,15 +10,16 @@
 } dm_mem_db;
 
  static const char* mem_tag_str[] = {
-	 "ENGINE",
-	 "PLATFORM",
-	 "STRING",
-	 "LIST",
-	 "MAP",
+	 "ENGINE         ",
+	 "PLATFORM       ",
+	 "STRING         ",
+	 "LIST           ",
+	 "MAP            ",
+	 "RENDERER       ",
 	 "RENDER PIPELINE",
-	 "BUFFER",
-	 "SHADER",
-	 "UNKNOWN"
+	 "BUFFER         ",
+	 "SHADER         ",
+	 "UNKNOWN        "
  };
 
 dm_mem_db mem_db = { 0 };
