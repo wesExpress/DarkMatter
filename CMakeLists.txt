@@ -11,7 +11,7 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 
 project( CEngine )
 
-set(DM_RENDER_OPENGL on)
+set(DM_RENDER_OPENGL off)
 
 if(WIN32)
     if(DM_RENDER_OPENGL)

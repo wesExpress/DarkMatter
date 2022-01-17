@@ -227,7 +227,7 @@ bool dm_renderer_init_object_data()
 	// triangle data
 	dm_vertex_t tri_vertices[] = {
 		{-0.5f, -0.5f, 0.0f},
-		{ 0.5f,  0.0f, 0.0f},
+		{ 0.5f, -0.5f, 0.0f},
 		{ 0.0f,  0.5f, 0.0f}
 	};
 
@@ -237,10 +237,10 @@ bool dm_renderer_init_object_data()
 
 	// quad data
 	dm_vertex_t quad_vertices[] = {
-		{-0.5f, -0.5f,  0.0f},
-		{ 0.5f, -0.75f, 0.0f},
-		{ 0.5f,  0.5f,  0.0f},
-		{-0.5f,  0.5f,  0.0f}
+		{-0.5f, -0.5f, 0.0f},
+		{ 0.5f, -0.5f, 0.0f},
+		{ 0.5f,  0.5f, 0.0f},
+		{-0.5f,  0.5f, 0.0f}
 	};
 	
 	dm_index_t quad_indices[] = {
@@ -248,14 +248,14 @@ bool dm_renderer_init_object_data()
 		2, 3, 0
 	};
 
-	//dm_vertex_t* vertices = tri_vertices;
-	//dm_index_t* indices = tri_indices;
-	dm_vertex_t* vertices = quad_vertices;
-	dm_index_t* indices = quad_indices;
+	dm_vertex_t* vertices = tri_vertices;
+	dm_index_t* indices = tri_indices;
+	//dm_vertex_t* vertices = quad_vertices;
+	//dm_index_t* indices = quad_indices;
 
 	// buffers
-	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(quad_vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_STATIC };
-	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(quad_indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_STATIC };
+	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(tri_vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(tri_indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_DEFAULT };
 
 	r_data.object_pipeline->render_packet.count = ib_desc.buffer_size / ib_desc.elem_size;
 
