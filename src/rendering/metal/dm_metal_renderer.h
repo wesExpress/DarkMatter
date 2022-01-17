@@ -12,10 +12,6 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
-#import <Cocoa/Cocoa.h>
-#import <Metal/Metal.h>
-#import <QuartzCore/CAMetalLayer.h>
-
 // metal view base class
 @interface dm_metal_view : NSView <CALayerDelegate>
     @property (readonly) CAMetalLayer* metalLayer;
