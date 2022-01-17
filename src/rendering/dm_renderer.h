@@ -19,12 +19,6 @@ typedef struct dm_renderer_data
 	dm_render_pipeline* object_pipeline;
 } dm_renderer_data;
 
-typedef struct dm_render_resources
-{
-	dm_buffer* buffers[MAX_RENDER_RESOURCES];
-	dm_shader* shaders[MAX_RENDER_RESOURCES];
-} dm_render_resources;
-
 /*
 mainly a wrapper for the backend renderer initialization the user is not exposed to.
 creates and initializes the camera as well.
