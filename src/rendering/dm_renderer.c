@@ -166,7 +166,7 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	// render packet
 	pipeline->render_packet.vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->render_packet.cb_descs = (dm_constant_buffer_desc*)dm_alloc(sizeof(dm_constant_buffer_desc), DM_MEM_RENDER_PIPELINE);
+	dm_list_init(&pipeline->render_packet.constant_buffers, dm_constant_buffer);
 
 	pipeline->render_packet.count = 0;
 	pipeline->render_packet.offset = 0;
@@ -182,7 +182,7 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 
 	dm_free(pipeline->render_packet.vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_free(pipeline->render_packet.cb_descs, sizeof(dm_constant_buffer_desc), DM_MEM_RENDER_PIPELINE);
+	dm_list_destroy(&pipeline->render_packet.constant_buffers);
 
 	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 }
@@ -262,54 +262,29 @@ bool dm_renderer_init_object_data()
 	// likely need to reed in files here in the future
 
 	// triangle data
-	dm_vertex_t tri_vertices[] = {
+	dm_vertex_t vertices[] = {
 		{ {-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f} },
-		{ { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
-		{ { 0.0f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
+		{ { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f} },
+		{ { 0.0f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f} },
 	};
 
 #ifdef DM_OPENGL
-	dm_index_t tri_indices[] = {
+	dm_index_t indices[] = {
 		0, 1, 2
 	};
 #elif defined DM_DIRECTX
-	dm_index_t tri_indices[] = {
+	dm_index_t indices[] = {
 		0, 2, 1
 	};
 #endif
 
-	// quad data
-	dm_vertex_t quad_vertices[] = {
-		{-0.5f, -0.5f, 0.0f},
-		{ 0.5f, -0.5f, 0.0f},
-		{ 0.5f,  0.5f, 0.0f},
-		{-0.5f,  0.5f, 0.0f}
-	};
-	
-#ifdef DM_OPENGL
-	dm_index_t quad_indices[] = {
-		0, 1, 2,
-		2, 3, 0
-	};
-#elif defined DM_DIRECTX
-	dm_index_t quad_indices[] = {
-		0, 2, 1,
-		2, 0, 3
-	};
-#endif
-
-	dm_vertex_t* vertices = tri_vertices;
-	dm_index_t* indices = tri_indices;
-
 	// buffers
-	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(tri_vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_DEFAULT };
-	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(tri_indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_DEFAULT };
 
 	r_data.object_pipeline->render_packet.vertex_buffer->desc = vb_desc;
 	r_data.object_pipeline->render_packet.index_buffer->desc = ib_desc;
 	r_data.object_pipeline->render_packet.count = ib_desc.buffer_size / ib_desc.elem_size;
-	r_data.object_pipeline->render_packet.cb_descs = NULL;
-	r_data.object_pipeline->render_packet.num_cbs = 0;
 
 	dm_vertex_attrib_desc v_attribs[] = {
 		pos_attrib_desc,

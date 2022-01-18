@@ -15,6 +15,11 @@ typedef struct dm_internal_buffer
 	GLenum type, usage, data_type;
 } dm_internal_buffer;
 
+typedef struct dm_internal_constant_buffer
+{
+	GLint location;
+} dm_internal_constant_buffer;
+
 typedef struct dm_internal_shader
 {
 	GLuint id;
