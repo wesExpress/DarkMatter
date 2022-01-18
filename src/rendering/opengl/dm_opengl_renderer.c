@@ -179,12 +179,11 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
     // constant buffers
     for (int i = 0; i < pipeline->render_packet.constant_buffers.size; i++)
     {
-        dm_constant_buffer cb = pipeline->render_packet.constant_buffers.array[i];
-        cb.internal_buffer = (dm_internal_constant_buffer*)dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
-        dm_internal_constant_buffer* internal_buffer = (dm_internal_constant_buffer*)cb.internal_buffer;
+        dm_constant_buffer* cb = &pipeline->render_packet.constant_buffers.array[i];
+        cb->internal_buffer = (dm_internal_constant_buffer*)dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+        dm_internal_constant_buffer* internal_buffer = (dm_internal_constant_buffer*)cb->internal_buffer;
 
-        internal_buffer->location = glGetUniformLocation(internal_shader->id, cb.desc.name);
-        if (internal_buffer->location == -1) DM_LOG_FATAL("Could not find uniform: %s", cb.desc.name);  return false;
+        if (!dm_opengl_find_uniform_loc(internal_shader->id, cb->desc.name, &internal_buffer->location)) return false;
     }
 
     return true;
@@ -283,7 +282,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     // constant buffers
     for (int i = 0; i < pipeline->render_packet.constant_buffers.size; i++)
     {
-        dm_opengl_bind_uniform(pipeline->render_packet.constant_buffers.array[i]);
+        dm_opengl_bind_uniform(&pipeline->render_packet.constant_buffers.array[i]);
     }
 
     return true;

@@ -57,6 +57,11 @@ dm_vertex_attrib_desc color_attrib_desc = {
 	.normalized = false,
 };
 
+/*
+// constant buffer data
+*/
+dm_vec3 offset = { 1, 0, 0 };
+
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	r_data.clear_color = clear_color;
@@ -140,7 +145,7 @@ void dm_renderer_begin_scene()
 	{
 		dm_renderer_clear_command_buffer(&r_data.object_pipeline->command_buffer);
 	}
-	
+
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, &r_data.object_pipeline->command_buffer);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, &r_data.object_pipeline->command_buffer);
@@ -295,6 +300,19 @@ bool dm_renderer_init_object_data()
 		.attributes = v_attribs,
 		.num = sizeof(v_attribs) / sizeof(dm_vertex_attrib_desc)
 	};
+
+	// constant buffers
+	dm_constant_buffer_desc cb_desc =
+	{
+		.name = "offset",
+		.data_t = DM_CONST_BUFFER_T_FLOAT,
+		.count = 3,
+		.data = &offset
+	};
+	dm_constant_buffer cb = {
+		.desc = cb_desc
+	};
+	dm_list_append(&r_data.object_pipeline->render_packet.constant_buffers, cb);
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);
 }

@@ -5,8 +5,10 @@ layout (location = 1) in vec3 aColor;
 
 out vec3 fragColor;
 
+uniform vec3 offset;
+
 void main()
 {
-    gl_Position = vec4(aPos, 1.0);
+    gl_Position = vec4(aPos + offset, 1.0);
     fragColor = aColor;
 }

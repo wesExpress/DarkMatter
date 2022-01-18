@@ -64,120 +64,120 @@ void dm_opengl_bind_shader(dm_shader* shader)
     glCheckError();
 }
 
-bool dm_opengl_bind_uniform(dm_constant_buffer cb)
+bool dm_opengl_bind_uniform(dm_constant_buffer* cb)
 {
-    dm_internal_constant_buffer* internal_buffer = (dm_internal_constant_buffer*)cb.internal_buffer;
+    dm_internal_constant_buffer* internal_buffer = (dm_internal_constant_buffer*)cb->internal_buffer;
 
-    switch (cb.desc.data_t)
+    switch (cb->desc.data_t)
     {
     case DM_CONST_BUFFER_T_INT:
     {
-        switch (cb.desc.count)
+        switch (cb->desc.count)
         {
-        case 1: 
+        case 1:
         {
-            int data = *(int*)cb.desc.data;
+            int data = *(int*)cb->desc.data;
             glUniform1i(internal_buffer->location, data);
         } break;
-        case 2: 
+        case 2:
         {
-            dm_vec2 data = *(dm_vec2*)cb.desc.data;
+            dm_vec2 data = *(dm_vec2*)cb->desc.data;
             glUniform2i(internal_buffer->location, data.x, data.y);
         } break;
-        case 3: 
+        case 3:
         {
-            dm_vec3 data = *(dm_vec3*)cb.desc.data;
+            dm_vec3 data = *(dm_vec3*)cb->desc.data;
             glUniform3i(internal_buffer->location, data.x, data.y, data.z);
         } break;
         case 4:
         {
-            dm_vec4 data = *(dm_vec4*)cb.desc.data;
+            dm_vec4 data = *(dm_vec4*)cb->desc.data;
             glUniform4i(internal_buffer->location, data.x, data.y, data.z, data.w);
-        } break; 
+        } break;
         default:
             DM_LOG_FATAL("Trying to upload to uniform with wrong size of ints");
             return false;
         }
-    }
+    } break;
 
     case DM_CONST_BUFFER_T_BOOL:
     case DM_CONST_BUFFER_T_UINT:
     {
-        switch (cb.desc.count)
+        switch (cb->desc.count)
         {
         case 1:
         {
-            uint32_t data = *(uint32_t*)cb.desc.data;
+            uint32_t data = *(uint32_t*)cb->desc.data;
             glUniform1ui(internal_buffer->location, data);
         } break;
         case 2:
         {
-            dm_vec2 data = *(dm_vec2*)cb.desc.data;
+            dm_vec2 data = *(dm_vec2*)cb->desc.data;
             glUniform2ui(internal_buffer->location, data.x, data.y);
         } break;
         case 3:
         {
-            dm_vec3 data = *(dm_vec3*)cb.desc.data;
+            dm_vec3 data = *(dm_vec3*)cb->desc.data;
             glUniform3ui(internal_buffer->location, data.x, data.y, data.z);
         } break;
         case 4:
         {
-            dm_vec4 data = *(dm_vec4*)cb.desc.data;
+            dm_vec4 data = *(dm_vec4*)cb->desc.data;
             glUniform4ui(internal_buffer->location, data.x, data.y, data.z, data.w);
         } break;
         default:
             DM_LOG_FATAL("Trying to upload to uniform with wrong size of uints");
             return false;
         }
-    }
+    } break;
 
     case DM_CONST_BUFFER_T_FLOAT:
     {
-        switch (cb.desc.count)
+        switch (cb->desc.count)
         {
         case 1:
         {
-            float data = *(float*)cb.desc.data;
+            float data = *(float*)cb->desc.data;
             glUniform1f(internal_buffer->location, data);
         } break;
         case 2:
         {
-            dm_vec2 data = *(dm_vec2*)cb.desc.data;
+            dm_vec2 data = *(dm_vec2*)cb->desc.data;
             glUniform2f(internal_buffer->location, data.x, data.y);
         } break;
         case 3:
         {
-            dm_vec3 data = *(dm_vec3*)cb.desc.data;
-            glUniform3f(internal_buffer->location, data.x, data.y, data.z);
+            dm_vec3* data = (dm_vec3*)cb->desc.data;
+            glUniform3f(internal_buffer->location, data->x, data->y, data->z);
         } break;
         case 4:
         {
-            dm_vec4 data = *(dm_vec4*)cb.desc.data;
+            dm_vec4 data = *(dm_vec4*)cb->desc.data;
             glUniform4f(internal_buffer->location, data.x, data.y, data.z, data.w);
         } break;
         default:
             DM_LOG_FATAL("Trying to upload to uniform with wrong size of floats");
             return false;
         }
-    }
+    } break;
 
     case DM_CONST_BUFFER_T_MATRIX:
     {
-        switch (cb.desc.count)
+        switch (cb->desc.count)
         {
         case 2:
         {
-            dm_mat2 data = *(dm_mat2*)cb.desc.data;
+            dm_mat2 data = *(dm_mat2*)cb->desc.data;
             glUniformMatrix2fv(internal_buffer->location, 1, GL_FALSE, data.m);
         } break;
         case 3:
         {
-            dm_mat3 data = *(dm_mat3*)cb.desc.data;
+            dm_mat3 data = *(dm_mat3*)cb->desc.data;
             glUniformMatrix3fv(internal_buffer->location, 1, GL_FALSE, data.m);
         } break;
         case 4:
         {
-            dm_mat4 data = *(dm_mat4*)cb.desc.data;
+            dm_mat4 data = *(dm_mat4*)cb->desc.data;
             glUniformMatrix4fv(internal_buffer->location, 1, GL_FALSE, data.m);
         } break;
         default:
@@ -189,8 +189,19 @@ bool dm_opengl_bind_uniform(dm_constant_buffer cb)
     default:
         DM_LOG_FATAL("Unknown constant buffer data type!");
         return false;
-    }
+    } 
 
+    return true;
+}
+
+bool dm_opengl_find_uniform_loc(GLuint program, const char* name, GLint* location)
+{
+    *location = glGetUniformLocation(program, name);
+    if (*location == 1)
+    {
+        DM_LOG_FATAL("Could not find uniform: '%s'", name);
+        return false;
+    }
     return true;
 }
 
