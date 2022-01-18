@@ -129,7 +129,7 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, dm_buffer_desc ib_desc, void* ib_data, dm_shader_desc vs_desc, dm_shader_desc ps_desc, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
 {
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
@@ -139,30 +139,19 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
     /*
     // shader
     */
-    dm_shader* shader = pipeline->raster_desc.shader;
-    shader->vertex_desc = vs_desc;
-    shader->pixel_desc = ps_desc;
-
-    if (!dm_opengl_create_shader(shader)) return false;
-    pipeline->raster_desc.shader = shader;
+    if (!dm_opengl_create_shader(pipeline->raster_desc.shader)) return false;
 
     /*
     // buffers
     */
-    dm_buffer* vertex_buffer = pipeline->render_packet.vertex_buffer;
-    dm_buffer* index_buffer = pipeline->render_packet.index_buffer;
-
-    vertex_buffer->desc = vb_desc;
-    index_buffer->desc = ib_desc;
-
-    if (!dm_opengl_create_buffer(vertex_buffer, vb_data)) return false;
-    if (!dm_opengl_create_buffer(index_buffer, ib_data)) return false;
+    if (!dm_opengl_create_buffer(pipeline->render_packet.vertex_buffer, vb_data)) return false;
+    if (!dm_opengl_create_buffer(pipeline->render_packet.index_buffer, ib_data)) return false;
 
     /*
     // vertex attributes/layout
     */
-    dm_opengl_bind_buffer(vertex_buffer);
-    dm_opengl_bind_buffer(index_buffer);
+    dm_opengl_bind_buffer(pipeline->render_packet.vertex_buffer);
+    dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
 
     for (int i = 0; i < v_layout.num; i++)
     {
@@ -178,9 +167,6 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
     }
 
     glBindVertexArray(0);
-
-    pipeline->render_packet.vertex_buffer = vertex_buffer;
-    pipeline->render_packet.index_buffer = index_buffer;
 
     return true;
 }

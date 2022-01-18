@@ -23,7 +23,7 @@ bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
-bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, dm_buffer_desc ib_desc, void* ib_data, dm_shader_desc vs_desc, dm_shader_desc ps_desc, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
 
 /*
 // vertex attributes
@@ -166,6 +166,7 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	// render packet
 	pipeline->render_packet.vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->render_packet.cb_descs = (dm_constant_buffer_desc*)dm_alloc(sizeof(dm_constant_buffer_desc), DM_MEM_RENDER_PIPELINE);
 
 	pipeline->render_packet.count = 0;
 	pipeline->render_packet.offset = 0;
@@ -181,6 +182,7 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 
 	dm_free(pipeline->render_packet.vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_free(pipeline->render_packet.cb_descs, sizeof(dm_constant_buffer_desc), DM_MEM_RENDER_PIPELINE);
 
 	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 }
@@ -253,6 +255,9 @@ bool dm_renderer_init_object_data()
 #endif
 	ps_desc.type = DM_SHADER_TYPE_PIXEL;
 
+	r_data.object_pipeline->raster_desc.shader->vertex_desc = vs_desc;
+	r_data.object_pipeline->raster_desc.shader->pixel_desc = ps_desc;
+
 	// TODO should just be a palceholder for now!
 	// likely need to reed in files here in the future
 
@@ -300,7 +305,11 @@ bool dm_renderer_init_object_data()
 	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(tri_vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_DEFAULT };
 	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(tri_indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_DEFAULT };
 
+	r_data.object_pipeline->render_packet.vertex_buffer->desc = vb_desc;
+	r_data.object_pipeline->render_packet.index_buffer->desc = ib_desc;
 	r_data.object_pipeline->render_packet.count = ib_desc.buffer_size / ib_desc.elem_size;
+	r_data.object_pipeline->render_packet.cb_descs = NULL;
+	r_data.object_pipeline->render_packet.num_cbs = 0;
 
 	dm_vertex_attrib_desc v_attribs[] = {
 		pos_attrib_desc,
@@ -312,5 +321,5 @@ bool dm_renderer_init_object_data()
 		.num = sizeof(v_attribs) / sizeof(dm_vertex_attrib_desc)
 	};
 
-	return dm_renderer_init_pipeline_data_impl(vb_desc, vertices, ib_desc, indices, vs_desc, ps_desc, v_layout, r_data.object_pipeline);
+	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);
 }

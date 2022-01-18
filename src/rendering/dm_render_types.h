@@ -76,6 +76,22 @@ typedef struct dm_shader
     void* internal_shader;
 } dm_shader;
 
+typedef enum dm_const_buffer_data_t
+{
+    DM_SHADER_DATA_T_INT,
+    DM_SHADER_DATA_T_UINT,
+    DM_SHADER_DATA_T_FLOAT,
+    DM_SHADER_DATA_T_MATRIX,
+    DM_SHADER_DATA_T_UNKNOWN
+} dm_const_buffer_data_t;
+
+typedef struct dm_constant_buffer_desc
+{
+    const char* name;
+    dm_const_buffer_data_t data_t;
+    int count;
+} dm_constant_buffer_desc;
+
 typedef enum dm_vertex_data_t
 {
     DM_VERTEX_DATA_T_BYTE,
@@ -211,8 +227,10 @@ typedef struct dm_render_packet
 {
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
+    dm_constant_buffer_desc* cb_descs;
     size_t count;
     size_t offset;
+    size_t num_cbs;
 } dm_render_packet;
 
 // command buffer
