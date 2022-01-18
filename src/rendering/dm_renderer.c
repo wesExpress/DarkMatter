@@ -25,6 +25,38 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
 bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, dm_buffer_desc ib_desc, void* ib_data, dm_shader_desc vs_desc, dm_shader_desc ps_desc, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
 
+/*
+// vertex attributes
+*/
+
+// position
+dm_vertex_attrib_desc pos_attrib_desc = {
+#ifdef DM_OPENGL
+	.name = "aPos",
+#elif defined DM_DIRECTX
+	.name = "POSITION",
+#endif
+	.data_t =  DM_VERTEX_DATA_T_FLOAT,
+	.stride = sizeof(dm_vertex_t),
+	.offset = offsetof(dm_vertex_t, position),
+	.count = 3,
+	.normalized = false,
+};
+
+// color
+dm_vertex_attrib_desc color_attrib_desc = {
+#ifdef DM_OPENGL
+	.name = "aColor",
+#elif defined DM_DIRECTX
+	.name = "COLOR",
+#endif
+	.data_t = DM_VERTEX_DATA_T_FLOAT,
+	.stride = sizeof(dm_vertex_t),
+	.offset = offsetof(dm_vertex_t, color),
+	.count = 3,
+	.normalized = false,
+};
+
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	r_data.clear_color = clear_color;
@@ -226,9 +258,9 @@ bool dm_renderer_init_object_data()
 
 	// triangle data
 	dm_vertex_t tri_vertices[] = {
-		{-0.5f, -0.5f, 0.0f},
-		{ 0.5f, -0.5f, 0.0f},
-		{ 0.0f,  0.5f, 0.0f},
+		{ {-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f} },
+		{ { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}},
+		{ { 0.0f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}},
 	};
 
 #ifdef DM_OPENGL
@@ -261,35 +293,23 @@ bool dm_renderer_init_object_data()
 	};
 #endif
 
-	//dm_vertex_t* vertices = tri_vertices;
-	//dm_index_t* indices = tri_indices;
-	dm_vertex_t* vertices = quad_vertices;
-	dm_index_t* indices = quad_indices;
+	dm_vertex_t* vertices = tri_vertices;
+	dm_index_t* indices = tri_indices;
 
 	// buffers
-	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(quad_vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_DEFAULT };
-	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(quad_indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(tri_vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(tri_indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_DEFAULT };
 
 	r_data.object_pipeline->render_packet.count = ib_desc.buffer_size / ib_desc.elem_size;
 
-	// vertex layout
 	dm_vertex_attrib_desc v_attribs[] = {
-		(dm_vertex_attrib_desc) {
-#ifdef DM_OPENGL
-		.name = "aPos",
-#elif defined DM_DIRECTX
-		.name = "POSITION",
-#endif
-		.data_t = DM_VERTEX_DATA_T_FLOAT,
-		.count = 3,
-		.stride = sizeof(dm_vertex),
-		.offset = offsetof(dm_vertex, position),
-		.normalized = false},
+		pos_attrib_desc,
+		color_attrib_desc,
 	};
 
 	dm_vertex_layout v_layout = {
 		.attributes = v_attribs,
-		.num = 1
+		.num = sizeof(v_attribs) / sizeof(dm_vertex_attrib_desc)
 	};
 
 	return dm_renderer_init_pipeline_data_impl(vb_desc, vertices, ib_desc, indices, vs_desc, ps_desc, v_layout, r_data.object_pipeline);

@@ -268,8 +268,8 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     float time_val = dm_platform_get_time();
     float green = (sin(time_val) / 2.0f) + 0.5f;
     GLint program = ((dm_internal_shader*)pipeline->raster_desc.shader->internal_shader)->id;
-    int loc = glGetUniformLocation(program, "uColor");
-    glUniform4f(loc, 0.0f, green, 0.0f, 1.0f);
+    //int loc = glGetUniformLocation(program, "uColor");
+    //glUniform4f(loc, 0.0f, green, 0.0f, 1.0f);
 
     // vao
     glBindVertexArray(internal_pipe->vao);
