@@ -39,14 +39,23 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_int
 		DXGI_FORMAT format = dm_vertex_t_to_directx_format(attrib_desc);
 		if (format == DXGI_FORMAT_UNKNOWN) return false;
 
+		DM_LOG_DEBUG("%s", attrib_desc.name);
+
 		D3D11_INPUT_ELEMENT_DESC element_desc = { 0 };
 		element_desc.SemanticName = attrib_desc.name;
+		element_desc.SemanticIndex = 0;
 		element_desc.Format = format;
 		element_desc.AlignedByteOffset = attrib_desc.offset;
 		element_desc.InputSlotClass = D3D11_INPUT_PER_VERTEX_DATA;
 
 		// append the element_desc to the array
 		dm_list_append(&desc, element_desc);
+		DM_LOG_DEBUG("%s", desc.array[i].SemanticName);
+	}
+	
+	for (int i = 0; i < desc.size; i++)
+	{
+		DM_LOG_DEBUG("%s", desc.array[i].SemanticName);
 	}
 
 	DX_ERROR_CHECK(device->lpVtbl->CreateInputLayout(device, desc.array, (UINT)layout.num, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), &internal_shader->input_layout), "ID3D11Device::CreateInputLayout failed!");

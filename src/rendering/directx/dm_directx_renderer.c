@@ -208,23 +208,19 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, dm_buffer_desc ib_desc, void* ib_data, dm_shader_desc vs_desc, dm_shader_desc ps_desc, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
 {
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
 	/*
 	// shader
 	*/
-	pipeline->raster_desc.shader->vertex_desc = vs_desc;
-	pipeline->raster_desc.shader->pixel_desc = ps_desc;
 
 	if (!dm_directx_create_shader(pipeline->raster_desc.shader, v_layout, directx_renderer, pipeline)) return false;
 
 	/*
 	// buffers
 	*/
-	pipeline->render_packet.vertex_buffer->desc = vb_desc;
-	pipeline->render_packet.index_buffer->desc = ib_desc;
 
 	if (!dm_directx_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, directx_renderer, internal_pipe)) return false;
 	if (!dm_directx_create_buffer(pipeline->render_packet.index_buffer, ib_data, directx_renderer, internal_pipe)) return false;

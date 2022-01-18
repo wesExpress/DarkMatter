@@ -8,6 +8,7 @@
 // Name                 Index   Mask Register SysValue  Format   Used
 // -------------------- ----- ------ -------- -------- ------- ------
 // SV_Position              0   xyzw        0      POS   float       
+// COLOR                    0   xyzw        1     NONE   float   xyzw
 //
 //
 // Output signature:
@@ -18,17 +19,19 @@
 //
 ps_5_0
 dcl_globalFlags refactoringAllowed | skipOptimization
+dcl_input_ps linear v1.xyzw
 dcl_output o0.xyzw
 dcl_temps 1
 //
 // Initial variable locations:
 //   v0.x <- input.pos.x; v0.y <- input.pos.y; v0.z <- input.pos.z; v0.w <- input.pos.w; 
+//   v1.x <- input.color.x; v1.y <- input.color.y; v1.z <- input.color.z; v1.w <- input.color.w; 
 //   o0.x <- <p_main return value>.color.x; o0.y <- <p_main return value>.color.y; o0.z <- <p_main return value>.color.z; o0.w <- <p_main return value>.color.w
 //
-#line 15 "C:\Users\wcp\source\c_projects\CEngine\shaders\hlsl\object_pixel.hlsl"
-mov r0.xyzw, l(1.000000,1.000000,1.000000,1.000000)  // r0.x <- output.color.x; r0.y <- output.color.y; r0.z <- output.color.z; r0.w <- output.color.w
+#line 16 "C:\Users\wcp\source\c_projects\CEngine\shaders\hlsl\object_pixel.hlsl"
+mov r0.xyzw, v1.xyzw  // r0.x <- output.color.x; r0.y <- output.color.y; r0.z <- output.color.z; r0.w <- output.color.w
 
-#line 17
+#line 18
 mov o0.xyzw, r0.xyzw
 ret 
 // Approximately 3 instruction slots used
