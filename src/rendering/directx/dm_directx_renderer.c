@@ -300,8 +300,17 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// buffers
 	*/
-	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, directx_renderer, pipeline->interal_pipeline);
-	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, directx_renderer, pipeline->interal_pipeline);
+	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, directx_renderer, internal_pipe);
+	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, directx_renderer, internal_pipe);
+
+	/*
+	// constant buffers
+	*/
+	dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+	{
+		dm_constant_buffer cb = pipeline->render_packet.constant_buffers.array[i];
+		dm_directx_bind_buffer(cb.desc.buffer, directx_renderer, internal_pipe);
+	}
 
 	return true;
 }
