@@ -10,6 +10,8 @@
 
 #include "dm_math_types.h"
 
+#ifdef DM_MATH_IMPLEMENTATION
+
 // helper functions
 DM_API DM_INLINE 
 float dm_rad_to_deg(float radians)
@@ -1334,5 +1336,7 @@ dm_mat4 dm_mat_ortho(float left, float right, float bottom, float top, float n, 
 
 	return ortho;
 }
+
+#endif
 
 #endif
