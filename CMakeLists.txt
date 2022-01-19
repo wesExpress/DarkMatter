@@ -62,6 +62,7 @@ set(
     src/rendering/opengl/dm_opengl_buffer.c
     src/rendering/opengl/dm_opengl_shader.c
     src/rendering/opengl/dm_opengl_enum_conversion.c
+    src/rendering/opengl/dm_opengl_texture.c
 
     src/rendering/directx/dm_directx_renderer.c
     src/rendering/directx/dm_directx_device.c
@@ -168,4 +169,12 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/shaders
             ${CMAKE_CURRENT_BINARY_DIR}/shaders
+)
+
+# move assets to binary dir
+add_custom_command(
+    TARGET CEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_SOURCE_DIR}/assets
+            ${CMAKE_CURRENT_BINARY_DIR}/assets
 )

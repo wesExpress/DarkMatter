@@ -19,6 +19,7 @@
 	 "RENDER PIPELINE",
 	 "BUFFER         ",
 	 "SHADER         ",
+	 "TEXTURE        ",
 	 "UNKNOWN        "
  };
 

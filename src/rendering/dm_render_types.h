@@ -76,6 +76,13 @@ typedef struct dm_shader
     void* internal_shader;
 } dm_shader;
 
+typedef struct dm_texture
+{
+    const char* path;
+    int width, height, n_channels;
+    void* internal_texture;
+} dm_texture;
+
 typedef enum dm_const_buffer_data_t
 {
     DM_CONST_BUFFER_T_BOOL,
@@ -236,7 +243,8 @@ typedef struct dm_render_packet
 {
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
-    dm_list(dm_constant_buffer) constant_buffers;
+    dm_list(dm_constant_buffer*) constant_buffers;
+    dm_list(dm_texture*) textures;
     size_t count;
     size_t offset;
 } dm_render_packet;

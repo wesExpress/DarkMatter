@@ -171,7 +171,8 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	// render packet
 	pipeline->render_packet.vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_list_init(&pipeline->render_packet.constant_buffers, dm_constant_buffer);
+	dm_list_init(&pipeline->render_packet.constant_buffers, dm_constant_buffer*);
+	dm_list_init(&pipeline->render_packet.textures, dm_texture*);
 
 	pipeline->render_packet.count = 0;
 	pipeline->render_packet.offset = 0;
@@ -191,9 +192,17 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 	// constant buffers
 	dm_list_for_range(pipeline->render_packet.constant_buffers, i)
 	{
-		dm_free(pipeline->render_packet.constant_buffers.array[i].desc.buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+		dm_free(pipeline->render_packet.constant_buffers.array[i]->desc.buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+		dm_free(pipeline->render_packet.constant_buffers.array[i], sizeof(dm_constant_buffer), DM_MEM_RENDERER_BUFFER);
 	}
 	dm_list_destroy(&pipeline->render_packet.constant_buffers);
+
+	// textures
+	dm_list_for_range(pipeline->render_packet.textures, i)
+	{
+		dm_free(pipeline->render_packet.textures.array[i], sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
+	}
+	dm_list_destroy(&pipeline->render_packet.textures);
 
 	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 }
@@ -316,10 +325,17 @@ bool dm_renderer_init_object_data()
 		.count = 3,
 		.data = &offset
 	};
-	dm_constant_buffer cb = {
-		.desc = cb_desc
-	};
-	dm_list_append(&r_data.object_pipeline->render_packet.constant_buffers, cb);
+	dm_constant_buffer* cb = (dm_constant_buffer*)dm_alloc(sizeof(dm_constant_buffer*), DM_MEM_RENDERER_BUFFER);
+	cb->desc = cb_desc;
+	//dm_list_append(&r_data.object_pipeline->render_packet.constant_buffers, cb);
+
+	// textures
+	//dm_texture texture = {
+	//	.path = "assets/container.jpg"
+	//};
+	dm_texture* texture = (dm_texture*)dm_alloc(sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
+	texture->path = "assets/container.jpg";
+	dm_list_append(&r_data.object_pipeline->render_packet.textures, texture);
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);
 }

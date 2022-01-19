@@ -22,11 +22,11 @@ bool dm_opengl_create_shader(dm_shader* shader)
     DM_LOG_DEBUG("Linking shader...");
     internal_shader->id = glCreateProgram();
     glAttachShader(internal_shader->id, vertex_shader);
-    glCheckError();
+    glCheckErrorReturn();
     glAttachShader(internal_shader->id, frag_shader);
-    glCheckError();
+    glCheckErrorReturn();
     glLinkProgram(internal_shader->id);
-    glCheckError();
+    glCheckErrorReturn();
 
     if (!dm_opengl_validate_program(internal_shader->id))
     {
@@ -35,14 +35,14 @@ bool dm_opengl_create_shader(dm_shader* shader)
     }
 
     glDetachShader(internal_shader->id, vertex_shader);
-    glCheckError();
+    glCheckErrorReturn();
     glDetachShader(internal_shader->id, frag_shader);
-    glCheckError();
+    glCheckErrorReturn();
 
     glDeleteShader(vertex_shader);
-    glCheckError();
+    glCheckErrorReturn();
     glDeleteShader(frag_shader);
-    glCheckError();
+    glCheckErrorReturn();
 
     return true;
 }
@@ -191,6 +191,7 @@ bool dm_opengl_bind_uniform(dm_constant_buffer* cb)
         return false;
     } 
 
+    glCheckErrorReturn();
     return true;
 }
 
@@ -256,19 +257,19 @@ bool dm_opengl_validate_shader(GLuint shader)
     int length = -1;
 
     glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
-    glCheckError();
+    glCheckErrorReturn();
 
     if (result != GL_TRUE)
     {
         GLchar message[512];
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
-        glCheckError();
+        glCheckErrorReturn();
         glGetShaderInfoLog(shader, sizeof(message), &length, message);
-        glCheckError();
+        glCheckErrorReturn();
         DM_LOG_FATAL("%s", message);
 
         glDeleteShader(shader);
-        glCheckError();
+        glCheckErrorReturn();
 
         return false;
     }
@@ -282,20 +283,20 @@ bool dm_opengl_validate_program(GLuint program)
     int length = -1;
 
     glGetProgramiv(program, GL_LINK_STATUS, &result);
-    glCheckError();
+    glCheckErrorReturn();
 
     if (result == GL_FALSE)
     {
         DM_LOG_ERROR("OpenGL Error: %d", glGetError());
         char message[512];
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
-        glCheckError();
+        glCheckErrorReturn();
         glGetProgramInfoLog(program, length, NULL, message);
-        glCheckError();
+        glCheckErrorReturn();
         DM_LOG_FATAL("%s", message);
 
         glDeleteProgram(program);
-        glCheckError();
+        glCheckErrorReturn();
 
         return false;
     }

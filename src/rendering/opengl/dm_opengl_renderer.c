@@ -9,6 +9,7 @@
 #include "dm_opengl_enum_conversion.h"
 #include "dm_opengl_shader.h"
 #include "dm_opengl_buffer.h"
+#include "dm_opengl_texture.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -76,7 +77,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
     glGenVertexArrays(1, &internal_pipe->vao);
-    glCheckError();
+    glCheckErrorReturn();
 
     if (pipeline->blend_desc.is_enabled)
     {
@@ -129,8 +130,15 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     // constant buffers
     dm_list_for_range(pipeline->render_packet.constant_buffers, i)
     {
-        dm_constant_buffer cb = pipeline->render_packet.constant_buffers.array[i];
-        dm_free(cb.internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+        dm_constant_buffer* cb = pipeline->render_packet.constant_buffers.array[i];
+        dm_free(cb->internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+    }
+
+    // textures
+    dm_list_for_range(pipeline->render_packet.textures, i)
+    {
+        dm_texture* texture = pipeline->render_packet.textures.array[i];
+        dm_opengl_destroy_texture(texture);
     }
 
     dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
@@ -141,7 +149,7 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
     glBindVertexArray(internal_pipe->vao);
-    glCheckError();
+    glCheckErrorReturn();
 
     /*
     // shader
@@ -168,9 +176,9 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
         if (data_t == DM_VERTEX_DATA_T_UNKNOWN) return false;
 
         glVertexAttribPointer(i, attrib_desc.count, data_t, attrib_desc.normalized, attrib_desc.stride, (void*)(uintptr_t)attrib_desc.offset);
-        glCheckError();
+        glCheckErrorReturn();
         glEnableVertexAttribArray(i);
-        glCheckError();
+        glCheckErrorReturn();
     }
 
     glBindVertexArray(0);
@@ -179,11 +187,18 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
     dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
     dm_list_for_range(pipeline->render_packet.constant_buffers, i)
     {
-        dm_constant_buffer* cb = &pipeline->render_packet.constant_buffers.array[i];
+        dm_constant_buffer* cb = pipeline->render_packet.constant_buffers.array[i];
         cb->internal_buffer = (dm_internal_constant_buffer*)dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
         dm_internal_constant_buffer* internal_buffer = (dm_internal_constant_buffer*)cb->internal_buffer;
 
         if (!dm_opengl_find_uniform_loc(internal_shader->id, cb->desc.name, &internal_buffer->location)) return false;
+    }
+
+    // textures
+    dm_list_for_range(pipeline->render_packet.textures, i)
+    {
+        dm_texture* texture = pipeline->render_packet.textures.array[i];
+        if (!dm_opengl_create_texture(texture)) return false;
     }
 
     return true;
@@ -216,9 +231,9 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     {
         glEnable(GL_BLEND);
         glBlendEquation(internal_pipe->blend_func);
-        glCheckError();
+        glCheckErrorReturn();
         glBlendFunc(internal_pipe->blend_src, internal_pipe->blend_dest);
-        glCheckError();
+        glCheckErrorReturn();
     }
     else
     {
@@ -230,7 +245,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     {
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(internal_pipe->depth_func);
-        glCheckError();
+        glCheckErrorReturn();
     }
     else
     {
@@ -251,10 +266,10 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     // face culling
     //glEnable(GL_CULL_FACE);
     //glCullFace(internal_pipe->cull);
-    //glCheckError();
+    //glCheckErrorReturn();
 
     //glFrontFace(internal_pipe->winding);
-   // glCheckError();
+   // glCheckErrorReturn();
 
     // wireframe
     if (pipeline->wireframe)
@@ -274,7 +289,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
     // vao
     glBindVertexArray(internal_pipe->vao);
-    glCheckError();
+    glCheckErrorReturn();
 
     dm_opengl_bind_buffer(pipeline->render_packet.vertex_buffer);
     dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
@@ -282,7 +297,8 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     // constant buffers
     dm_list_for_range(pipeline->render_packet.constant_buffers, i)
     {
-        dm_opengl_bind_uniform(&pipeline->render_packet.constant_buffers.array[i]);
+        dm_constant_buffer* cb = pipeline->render_packet.constant_buffers.array[i];
+        dm_opengl_bind_uniform(cb);
     }
 
     return true;

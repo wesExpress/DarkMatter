@@ -14,13 +14,13 @@ bool dm_opengl_create_buffer(dm_buffer* buffer, void* data)
     if (internal_buffer->usage == DM_BUFFER_USAGE_UNKNOWN) return false;
 
     glGenBuffers(1, &internal_buffer->id);
-    glCheckError();
+    glCheckErrorReturn();
 
     glBindBuffer(internal_buffer->type, internal_buffer->id);
-    glCheckError();
+    glCheckErrorReturn();
 
     glBufferData(internal_buffer->type, buffer->desc.buffer_size, data, internal_buffer->usage);
-    glCheckError();
+    glCheckErrorReturn();
 
     return true;
 }
