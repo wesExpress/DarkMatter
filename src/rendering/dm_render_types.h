@@ -217,7 +217,7 @@ typedef struct dm_stencil_state_desc
 
 typedef struct dm_vertex_attrib_desc
 {
-    char name[512];
+    const char* name;
     dm_vertex_data_t data_t;
     size_t stride;
     size_t offset;
