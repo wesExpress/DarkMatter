@@ -11,7 +11,7 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 
 project( CEngine )
 
-set(DM_RENDER_OPENGL off)
+set(DM_RENDER_OPENGL on)
 
 if(WIN32)
     if(DM_RENDER_OPENGL)
@@ -97,11 +97,13 @@ set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${SHADERS})
 
+set(INCLUDES PUBLIC src PRIVATE lib/stb_image/include)
+
 if(DM_RENDER_OPENGL)
-    target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include lib/glad/include)
-else()
-    target_include_directories(${PROJECT_NAME} PUBLIC src)
+    set(INCLUDES ${INCLUDES} PRIVATE lib/glfw/include lib/glad/include)
 endif()
+
+target_include_directories(${PROJECT_NAME} ${INCLUDES})
 
 if(DM_RENDER_OPENGL)
     target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)

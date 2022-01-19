@@ -3,6 +3,7 @@
 #include "dm_mem.h"
 #include "dm_logger.h"
 #include <stddef.h>
+#include <stb_image/stb_image.h>
 
 static dm_renderer_data r_data = { 0 };
 
@@ -59,7 +60,7 @@ dm_vertex_attrib_desc color_attrib_desc = {
 /*
 // constant buffer data
 */
-dm_vec3 offset = { 1, 0, 0 };
+dm_vec3 offset = { 0, 0, 0 };
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {

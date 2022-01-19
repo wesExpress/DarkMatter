@@ -44,4 +44,6 @@
 #endif
 #endif
 
+#define STB_IMAGE_IMPLEMENTATION
+
 #endif
