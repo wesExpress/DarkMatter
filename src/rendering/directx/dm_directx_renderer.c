@@ -38,17 +38,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 
 	if (!dm_directx_create_device(directx_renderer)) return false;
 	if (!dm_directx_create_swapchain(directx_renderer)) return false;
-	if (!dm_directx_create_rendertarget(directx_renderer, internal_pipe)) return false;
-	if (!dm_directx_create_depth_stencil(directx_renderer, internal_pipe)) return false;
-
-	ID3D11DeviceContext* context = directx_renderer->context;
 	
-	D3D11_VIEWPORT viewport = { 0 };
-	viewport.Width = renderer_data->width;
-	viewport.Height = renderer_data->height;
-	viewport.MaxDepth = 1.0f;
-	internal_pipe->viewport = viewport;
-
 	return true;
 }
 
@@ -106,6 +96,19 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 	ID3D11RenderTargetView* render_view = internal_pipe->render_view;
 	//ID3D11DepthStencilView* depth_view = internal_pipe->depth_stencil_view;
+
+	/*
+	// Create the render target and depth stencil
+	*/
+	if (!dm_directx_create_rendertarget(directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_depth_stencil(directx_renderer, internal_pipe)) return false;
+
+	/*
+	// viewport
+	*/
+	internal_pipe->viewport.Width = pipeline->viewport.width;
+	internal_pipe->viewport.Height = pipeline->viewport.height;
+	internal_pipe->viewport.MaxDepth = pipeline->viewport.max_depth;
 
 	/*
 	// blending 
@@ -197,6 +200,14 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_directx_delete_buffer(pipeline->render_packet.index_buffer, pipeline->interal_pipeline);
 	dm_directx_delete_shader(pipeline->raster_desc.shader, pipeline->interal_pipeline);
 
+	// constant buffers
+	dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+	{
+		dm_constant_buffer cb = pipeline->render_packet.constant_buffers.array[i];
+	
+		dm_directx_delete_buffer(cb.desc.buffer, pipeline->interal_pipeline);
+	}
+
 	//DX_RELEASE(internal_pipe->rasterizer_state);
 	//DX_RELEASE(internal_pipe->depth_stencil_state);
 	dm_mem_db_adjust(-sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
@@ -208,26 +219,32 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, dm_buffer_desc ib_desc, void* ib_data, dm_shader_desc vs_desc, dm_shader_desc ps_desc, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
 {
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
 	/*
 	// shader
 	*/
-	pipeline->raster_desc.shader->vertex_desc = vs_desc;
-	pipeline->raster_desc.shader->pixel_desc = ps_desc;
 
 	if (!dm_directx_create_shader(pipeline->raster_desc.shader, v_layout, directx_renderer, pipeline)) return false;
 
 	/*
 	// buffers
 	*/
-	pipeline->render_packet.vertex_buffer->desc = vb_desc;
-	pipeline->render_packet.index_buffer->desc = ib_desc;
 
 	if (!dm_directx_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, directx_renderer, internal_pipe)) return false;
 	if (!dm_directx_create_buffer(pipeline->render_packet.index_buffer, ib_data, directx_renderer, internal_pipe)) return false;
+
+	/*
+	// constant buffer(s)
+	*/
+	dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+	{
+		dm_constant_buffer cb = pipeline->render_packet.constant_buffers.array[i];
+
+		if (!dm_directx_create_buffer(cb.desc.buffer, cb.desc.data, directx_renderer, internal_pipe)) return false;
+	}
 
 	return true;
 }
@@ -283,8 +300,17 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// buffers
 	*/
-	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, directx_renderer, pipeline->interal_pipeline);
-	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, directx_renderer, pipeline->interal_pipeline);
+	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, directx_renderer, internal_pipe);
+	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, directx_renderer, internal_pipe);
+
+	/*
+	// constant buffers
+	*/
+	dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+	{
+		dm_constant_buffer cb = pipeline->render_packet.constant_buffers.array[i];
+		dm_directx_bind_buffer(cb.desc.buffer, directx_renderer, internal_pipe);
+	}
 
 	return true;
 }

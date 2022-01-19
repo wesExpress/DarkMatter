@@ -1,6 +1,7 @@
 struct PS_INPUT
 {
-    float4 pos : SV_Position;
+    float4 pos   : SV_Position;
+    float4 color : COLOR;
 };
 
 struct PS_OUPUT
@@ -12,7 +13,7 @@ PS_OUPUT p_main(PS_INPUT input)
 {
     PS_OUPUT output;
     
-    output.color = float4(1.0f, 1.0f, 1.0f, 1.0f);
+    output.color = input.color;
     
     return output;
 }

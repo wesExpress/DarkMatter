@@ -110,7 +110,7 @@ do{\
 }while(0)
 
 // helpful functions
-#define dm_list_for_range(LIST) for(int i=0; i<LIST.size; i++)
+#define dm_list_for_range(LIST, ITER) for(int ITER=0; ITER<LIST.size; ITER++)
 
 #define dm_list_push_array(LIST, ARRAY, SIZE)\
 do{\

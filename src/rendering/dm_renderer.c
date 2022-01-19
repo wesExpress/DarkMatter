@@ -7,7 +7,6 @@
 static dm_renderer_data r_data = { 0 };
 
 bool dm_renderer_create_object_pipeline();
-void dm_renderer_destroy_object_pipeline();
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
 bool dm_renderer_init_object_data();
@@ -23,7 +22,44 @@ bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
-bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, dm_buffer_desc ib_desc, void* ib_data, dm_shader_desc vs_desc, dm_shader_desc ps_desc, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
+
+/*
+// vertex attributes
+*/
+
+// position
+dm_vertex_attrib_desc pos_attrib_desc = {
+#ifdef DM_OPENGL
+	.name = "aPos",
+#elif defined DM_DIRECTX
+	.name = "POSITION",
+#endif
+	.data_t =  DM_VERTEX_DATA_T_FLOAT,
+	.stride = sizeof(dm_vertex_t),
+	.offset = offsetof(dm_vertex_t, position),
+	.count = 3,
+	.normalized = false,
+};
+
+// color
+dm_vertex_attrib_desc color_attrib_desc = {
+#ifdef DM_OPENGL
+	.name = "aColor",
+#elif defined DM_DIRECTX
+	.name = "COLOR",
+#endif
+	.data_t = DM_VERTEX_DATA_T_FLOAT,
+	.stride = sizeof(dm_vertex_t),
+	.offset = offsetof(dm_vertex_t, color),
+	.count = 3,
+	.normalized = false,
+};
+
+/*
+// constant buffer data
+*/
+dm_vec3 offset = { 1, 0, 0 };
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -75,7 +111,8 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 void dm_renderer_shutdown()
 {
 	// cleanup
-	dm_renderer_destroy_object_pipeline();
+	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
+	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 
 	// backend shutdown
 	dm_renderer_shutdown_impl(&r_data);
@@ -108,7 +145,7 @@ void dm_renderer_begin_scene()
 	{
 		dm_renderer_clear_command_buffer(&r_data.object_pipeline->command_buffer);
 	}
-	
+
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, &r_data.object_pipeline->command_buffer);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, &r_data.object_pipeline->command_buffer);
@@ -134,6 +171,7 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	// render packet
 	pipeline->render_packet.vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_list_init(&pipeline->render_packet.constant_buffers, dm_constant_buffer);
 
 	pipeline->render_packet.count = 0;
 	pipeline->render_packet.offset = 0;
@@ -149,6 +187,13 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 
 	dm_free(pipeline->render_packet.vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	
+	// constant buffers
+	dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+	{
+		dm_free(pipeline->render_packet.constant_buffers.array[i].desc.buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	}
+	dm_list_destroy(&pipeline->render_packet.constant_buffers);
 
 	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 }
@@ -195,13 +240,6 @@ bool dm_renderer_create_object_pipeline()
 	return true;
 }
 
-void dm_renderer_destroy_object_pipeline()
-{
-	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
-
-	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
-}
-
 bool dm_renderer_init_object_data()
 {
 	// built-in shader
@@ -221,76 +259,67 @@ bool dm_renderer_init_object_data()
 #endif
 	ps_desc.type = DM_SHADER_TYPE_PIXEL;
 
+	r_data.object_pipeline->raster_desc.shader->vertex_desc = vs_desc;
+	r_data.object_pipeline->raster_desc.shader->pixel_desc = ps_desc;
+
 	// TODO should just be a palceholder for now!
 	// likely need to reed in files here in the future
 
 	// triangle data
-	dm_vertex_t tri_vertices[] = {
-		{-0.5f, -0.5f, 0.0f},
-		{ 0.5f, -0.5f, 0.0f},
-		{ 0.0f,  0.5f, 0.0f},
+	dm_vertex_t vertices[] = {
+		{ {-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f} },
+		{ { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f} },
+		{ { 0.0f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f} },
 	};
 
 #ifdef DM_OPENGL
-	dm_index_t tri_indices[] = {
+	dm_index_t indices[] = {
 		0, 1, 2
 	};
 #elif defined DM_DIRECTX
-	dm_index_t tri_indices[] = {
+	dm_index_t indices[] = {
 		0, 2, 1
 	};
 #endif
 
-	// quad data
-	dm_vertex_t quad_vertices[] = {
-		{-0.5f, -0.5f, 0.0f},
-		{ 0.5f, -0.5f, 0.0f},
-		{ 0.5f,  0.5f, 0.0f},
-		{-0.5f,  0.5f, 0.0f}
-	};
-	
-#ifdef DM_OPENGL
-	dm_index_t quad_indices[] = {
-		0, 1, 2,
-		2, 3, 0
-	};
-#elif defined DM_DIRECTX
-	dm_index_t quad_indices[] = {
-		0, 2, 1,
-		2, 0, 3
-	};
-#endif
-
-	//dm_vertex_t* vertices = tri_vertices;
-	//dm_index_t* indices = tri_indices;
-	dm_vertex_t* vertices = quad_vertices;
-	dm_index_t* indices = quad_indices;
-
 	// buffers
-	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(quad_vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_DEFAULT };
-	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(quad_indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_DEFAULT };
 
+	r_data.object_pipeline->render_packet.vertex_buffer->desc = vb_desc;
+	r_data.object_pipeline->render_packet.index_buffer->desc = ib_desc;
 	r_data.object_pipeline->render_packet.count = ib_desc.buffer_size / ib_desc.elem_size;
 
-	// vertex layout
 	dm_vertex_attrib_desc v_attribs[] = {
-		(dm_vertex_attrib_desc) {
-#ifdef DM_OPENGL
-		.name = "aPos",
-#elif defined DM_DIRECTX
-		.name = "POSITION",
-#endif
-		.data_t = DM_VERTEX_DATA_T_FLOAT,
-		.count = 3,
-		.stride = sizeof(dm_vertex),
-		.offset = offsetof(dm_vertex, position),
-		.normalized = false},
+		pos_attrib_desc,
+		color_attrib_desc,
 	};
 
 	dm_vertex_layout v_layout = {
 		.attributes = v_attribs,
-		.num = 1
+		.num = sizeof(v_attribs) / sizeof(dm_vertex_attrib_desc)
 	};
 
-	return dm_renderer_init_pipeline_data_impl(vb_desc, vertices, ib_desc, indices, vs_desc, ps_desc, v_layout, r_data.object_pipeline);
+	// constant buffers
+	dm_buffer* cb_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	cb_buffer->desc.type = DM_BUFFER_TYPE_CONSTANT;
+	cb_buffer->desc.usage = DM_BUFFER_USAGE_DYNAMIC;
+	cb_buffer->desc.elem_size = sizeof(float);
+	cb_buffer->desc.buffer_size = ((sizeof(offset) + 15) / 16) * 16;
+	cb_buffer->desc.cpu_access = DM_BUFFER_CPU_WRITE;
+
+	dm_constant_buffer_desc cb_desc =
+	{
+		.buffer = cb_buffer,
+		.name = "offset",
+		.data_t = DM_CONST_BUFFER_T_FLOAT,
+		.count = 3,
+		.data = &offset
+	};
+	dm_constant_buffer cb = {
+		.desc = cb_desc
+	};
+	dm_list_append(&r_data.object_pipeline->render_packet.constant_buffers, cb);
+
+	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);
 }

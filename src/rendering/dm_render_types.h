@@ -12,6 +12,7 @@ typedef dm_vec4 dm_color;
 typedef struct dm_vertex
 {
     dm_vec3 position;
+    dm_color color;
 } dm_vertex;
 
 typedef uint32_t  dm_index_t;
@@ -74,6 +75,31 @@ typedef struct dm_shader
 
     void* internal_shader;
 } dm_shader;
+
+typedef enum dm_const_buffer_data_t
+{
+    DM_CONST_BUFFER_T_BOOL,
+    DM_CONST_BUFFER_T_INT,
+    DM_CONST_BUFFER_T_UINT,
+    DM_CONST_BUFFER_T_FLOAT,
+    DM_CONST_BUFFER_T_MATRIX,
+    DM_CONST_BUFFER_T_UNKNOWN
+} dm_const_buffer_data_t;
+
+typedef struct dm_constant_buffer_desc
+{
+    dm_buffer* buffer;
+    const char* name;
+    dm_const_buffer_data_t data_t;
+    int count;
+    void* data;
+} dm_constant_buffer_desc;
+
+typedef struct dm_constant_buffer
+{
+    dm_constant_buffer_desc desc;
+    void* internal_buffer;
+} dm_constant_buffer;
 
 typedef enum dm_vertex_data_t
 {
@@ -192,7 +218,7 @@ typedef struct dm_stencil_state_desc
 
 typedef struct dm_vertex_attrib_desc
 {
-    char name[512];
+    const char* name;
     dm_vertex_data_t data_t;
     size_t stride;
     size_t offset;
@@ -210,6 +236,7 @@ typedef struct dm_render_packet
 {
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
+    dm_list(dm_constant_buffer) constant_buffers;
     size_t count;
     size_t offset;
 } dm_render_packet;

@@ -31,7 +31,7 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_int
 	// input layout
 	dm_list(D3D11_INPUT_ELEMENT_DESC) desc;
 	dm_list_init(&desc, D3D11_INPUT_ELEMENT_DESC);
-
+	
 	for (int i = 0; i < layout.num; i++)
 	{
 		dm_vertex_attrib_desc attrib_desc = layout.attributes[i];

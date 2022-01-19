@@ -11,6 +11,7 @@
 #include "dm_opengl_buffer.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
@@ -125,10 +126,17 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_delete_buffer(pipeline->render_packet.index_buffer);
     dm_opengl_delete_shader(pipeline->raster_desc.shader);
 
+    // constant buffers
+    dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+    {
+        dm_constant_buffer cb = pipeline->render_packet.constant_buffers.array[i];
+        dm_free(cb.internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+    }
+
     dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, dm_buffer_desc ib_desc, void* ib_data, dm_shader_desc vs_desc, dm_shader_desc ps_desc, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
 {
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
 
@@ -138,30 +146,19 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
     /*
     // shader
     */
-    dm_shader* shader = pipeline->raster_desc.shader;
-    shader->vertex_desc = vs_desc;
-    shader->pixel_desc = ps_desc;
-
-    if (!dm_opengl_create_shader(shader)) return false;
-    pipeline->raster_desc.shader = shader;
+    if (!dm_opengl_create_shader(pipeline->raster_desc.shader)) return false;
 
     /*
     // buffers
     */
-    dm_buffer* vertex_buffer = pipeline->render_packet.vertex_buffer;
-    dm_buffer* index_buffer = pipeline->render_packet.index_buffer;
-
-    vertex_buffer->desc = vb_desc;
-    index_buffer->desc = ib_desc;
-
-    if (!dm_opengl_create_buffer(vertex_buffer, vb_data)) return false;
-    if (!dm_opengl_create_buffer(index_buffer, ib_data)) return false;
+    if (!dm_opengl_create_buffer(pipeline->render_packet.vertex_buffer, vb_data)) return false;
+    if (!dm_opengl_create_buffer(pipeline->render_packet.index_buffer, ib_data)) return false;
 
     /*
     // vertex attributes/layout
     */
-    dm_opengl_bind_buffer(vertex_buffer);
-    dm_opengl_bind_buffer(index_buffer);
+    dm_opengl_bind_buffer(pipeline->render_packet.vertex_buffer);
+    dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
 
     for (int i = 0; i < v_layout.num; i++)
     {
@@ -178,8 +175,16 @@ bool dm_renderer_init_pipeline_data_impl(dm_buffer_desc vb_desc, void* vb_data, 
 
     glBindVertexArray(0);
 
-    pipeline->render_packet.vertex_buffer = vertex_buffer;
-    pipeline->render_packet.index_buffer = index_buffer;
+    // constant buffers
+    dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
+    dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+    {
+        dm_constant_buffer* cb = &pipeline->render_packet.constant_buffers.array[i];
+        cb->internal_buffer = (dm_internal_constant_buffer*)dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+        dm_internal_constant_buffer* internal_buffer = (dm_internal_constant_buffer*)cb->internal_buffer;
+
+        if (!dm_opengl_find_uniform_loc(internal_shader->id, cb->desc.name, &internal_buffer->location)) return false;
+    }
 
     return true;
 }
@@ -263,6 +268,9 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
     // shader
     dm_opengl_bind_shader(pipeline->raster_desc.shader);
+    
+    //int loc = glGetUniformLocation(program, "uColor");
+    //glUniform4f(loc, 0.0f, green, 0.0f, 1.0f);
 
     // vao
     glBindVertexArray(internal_pipe->vao);
@@ -270,6 +278,12 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
     dm_opengl_bind_buffer(pipeline->render_packet.vertex_buffer);
     dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
+
+    // constant buffers
+    dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+    {
+        dm_opengl_bind_uniform(&pipeline->render_packet.constant_buffers.array[i]);
+    }
 
     return true;
 }

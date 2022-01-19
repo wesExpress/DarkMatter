@@ -63,6 +63,11 @@ platform specific stderr functionality
 void dm_platform_write_error(const char* message, uint8_t color);
 
 /*
+platform specific means to get time
+*/
+float dm_platform_get_time();
+
+/*
 platform specific buffer swapping
 */
 void dm_platform_swap_buffers();
