@@ -56,6 +56,20 @@ dm_vertex_attrib_desc color_attrib_desc = {
 	.normalized = false,
 };
 
+// texture coords
+dm_vertex_attrib_desc tex_coord_desc = {
+#ifdef DM_OPENGL
+	.name = "aTexCoords",
+#elif defined DM_DIRECTX
+	.name = "TEX_COORDS",
+#endif
+	.data_t = DM_VERTEX_DATA_T_FLOAT,
+	.stride = sizeof(dm_vertex_t),
+	.offset = offsetof(dm_vertex_t, tex_coords),
+	.count = 2,
+	.normalized = false
+};
+
 /*
 // constant buffer data
 */
@@ -302,6 +316,7 @@ bool dm_renderer_init_object_data()
 	dm_vertex_attrib_desc v_attribs[] = {
 		pos_attrib_desc,
 		color_attrib_desc,
+		tex_coord_desc
 	};
 
 	dm_vertex_layout v_layout = {

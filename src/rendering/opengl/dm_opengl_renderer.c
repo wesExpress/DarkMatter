@@ -301,6 +301,15 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
         dm_opengl_bind_uniform(cb);
     }
 
+    // TODO: need to change this eventually, this won't work with multiple textures per draw call
+    // textures
+    dm_list_for_range(pipeline->render_packet.textures, i)
+    {
+        dm_texture* texture = pipeline->render_packet.textures.array[i];
+
+        if (!dm_opengl_bind_texture(texture)) return false;
+    }
+
     return true;
 }
 
