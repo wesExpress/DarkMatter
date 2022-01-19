@@ -290,9 +290,9 @@ bool dm_renderer_init_object_data()
 
 	// triangle data
 	dm_vertex_t vertices[] = {
-		{ {-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f} },
-		{ { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f} },
-		{ { 0.0f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+		{ {-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} },
+		{ { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f} },
+		{ { 0.0f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.5f, 1.0f} },
 	};
 
 #ifdef DM_OPENGL
