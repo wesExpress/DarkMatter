@@ -2,7 +2,7 @@
 
 #ifdef DM_DIRECTX
 
-#include "dm_assert.h"
+#include "core/dm_assert.h"
 
 bool dm_directx_create_depth_stencil(dm_internal_renderer* renderer, dm_internal_pipeline* pipeline)
 {

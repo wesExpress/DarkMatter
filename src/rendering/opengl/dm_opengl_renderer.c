@@ -2,10 +2,10 @@
 
 #ifdef DM_OPENGL
 
-#include "dm_logger.h"
+#include "core/dm_logger.h"
+#include "core/dm_assert.h"
+#include "core/dm_mem.h"
 #include "platform/dm_platform.h"
-#include "dm_assert.h"
-#include "dm_mem.h"
 #include "dm_opengl_enum_conversion.h"
 #include "dm_opengl_shader.h"
 #include "dm_opengl_buffer.h"

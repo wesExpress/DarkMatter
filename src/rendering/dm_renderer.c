@@ -1,10 +1,8 @@
 #include "dm_renderer.h"
 #include "dm_command_buffer.h"
-#include "dm_mem.h"
-#include "dm_logger.h"
+#include "core/dm_mem.h"
+#include "core/dm_logger.h"
 #include <stddef.h>
-#define STB_IMAGE_IMPLEMENTATION
-#include <stb_image/stb_image.h>
 
 static dm_renderer_data r_data = { 0 };
 

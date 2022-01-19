@@ -3,7 +3,7 @@
 #ifdef DM_DIRECTX
 
 #include "dm_directx_enum_conversion.h"
-#include "dm_mem.h"
+#include "core/dm_mem.h"
 
 bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_renderer* renderer, dm_internal_pipeline* pipeline)
 {

@@ -3,9 +3,9 @@
 #ifdef DM_OPENGL
 
 #include "dm_opengl_enum_conversion.h"
-#include "dm_logger.h"
-#include "dm_assert.h"
-#include "dm_mem.h"
+#include "core/dm_logger.h"
+#include "core/dm_assert.h"
+#include "core/dm_mem.h"
 
 GLuint dm_opengl_compile_shader(dm_shader_desc desc);
 bool dm_opengl_validate_shader(GLuint shader);

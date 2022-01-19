@@ -1,16 +1,15 @@
 #ifndef __DM_MATH_H__
 #define __DM_MATH_H__
 
+#ifdef DM_MATH_IMPLEMENTATION
+
 #include <math.h>
 #include <stdbool.h>
 
-#include "dm_defines.h"
-#include "dm_assert.h"
+#include "core/dm_defines.h"
+#include "core/dm_assert.h"
 #include "platform/dm_platform.h"
-
-#include "dm_math_types.h"
-
-#ifdef DM_MATH_IMPLEMENTATION
+#include "core/dm_math_types.h"
 
 // helper functions
 DM_API DM_INLINE 

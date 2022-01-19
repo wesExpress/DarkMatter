@@ -2,7 +2,7 @@
 #define __DM_RENDERER_H__
 
 #include <stdbool.h>
-#include "dm_engine_types.h"
+#include "core/dm_engine_types.h"
 #include "dm_render_types.h"
 #include "dm_colors.h"
 #include "dm_camera.h"

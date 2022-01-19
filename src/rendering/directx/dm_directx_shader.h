@@ -1,7 +1,7 @@
 #ifndef __DM_DIRECTX_SHADER_H__
 #define __DM_DIRECTX_SHADER_H__
 
-#include "dm_defines.h"
+#include "core/dm_defines.h"
 
 #ifdef DM_DIRECTX
 

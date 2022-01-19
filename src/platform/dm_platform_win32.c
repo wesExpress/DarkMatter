@@ -3,11 +3,11 @@
 #ifdef DM_PLATFORM_WIN32
 
 #include "dm_platform_win32.h"
-#include "dm_logger.h"
-#include "dm_assert.h"
-#include "dm_event.h"
+#include "core/dm_logger.h"
+#include "core/dm_assert.h"
+#include "core/dm_event.h"
+#include "core/dm_mem.h"
 #include "input/dm_input.h"
-#include "dm_mem.h"
 
 typedef struct dm_internal_data
 {

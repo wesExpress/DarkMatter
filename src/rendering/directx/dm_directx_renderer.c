@@ -10,10 +10,10 @@
 #include "dm_directx_shader.h"
 #include "dm_directx_enum_conversion.h"
 
-#include "dm_logger.h"
+#include "core/dm_logger.h"
+#include "core/dm_assert.h"
+#include "core/dm_mem.h"
 #include "platform/dm_platform.h"
-#include "dm_assert.h"
-#include "dm_mem.h"
 #include "structures/dm_list.h"
 #include <stdio.h>
 #include <stdlib.h>

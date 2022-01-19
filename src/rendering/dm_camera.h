@@ -1,8 +1,8 @@
 #ifndef __DM_CAMERA_H__
 #define __DM_CAMERA_H__
 
-#include "../dm_defines.h"
-#include "dm_math_types.h"
+#include "core/dm_defines.h"
+#include "core/dm_math_types.h"
 
 typedef enum dm_camera_type
 {

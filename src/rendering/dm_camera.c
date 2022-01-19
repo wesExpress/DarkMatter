@@ -1,9 +1,8 @@
 #include "dm_camera.h"
 #include "dm_renderer.h"
 #include "input/dm_input.h"
-#include "dm_mem.h"
-#define DM_MATH_IMPLEMENTATION
-#include "dm_math.h"
+#include "core/dm_mem.h"
+#include "core/dm_math.h"
 
 static dm_camera* camera;
 

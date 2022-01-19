@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "dm_defines.h"
-#include "dm_engine_types.h"
+#include "core/dm_defines.h"
+#include "core/dm_engine_types.h"
 
 /*
 Sets up the platform specific data.

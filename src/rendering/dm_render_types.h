@@ -1,7 +1,7 @@
 #ifndef __DM_RENDER_TYPES_H__
 #define __DM_RENDER_TYPES_H__
 
-#include "dm_math_types.h"
+#include "core/dm_math_types.h"
 #include "structures/dm_list.h"
 #include <stdlib.h>
 #include <stdbool.h>

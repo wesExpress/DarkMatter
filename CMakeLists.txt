@@ -12,6 +12,7 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 project( CEngine )
 
 set(DM_RENDER_OPENGL on)
+set(DM_BUILD_DEBUG on)
 
 if(WIN32)
     if(DM_RENDER_OPENGL)
@@ -30,19 +31,23 @@ if(DM_RENDER_OPENGL)
     add_subdirectory(lib/glad)
 endif()
 
-add_definitions(-DDM_DEBUG)
+if(DM_BUILD_DEBUG)
+    add_definitions(-DDM_DEBUG)
+else()
+    add_definitions(-DDM_RELEASE)
+endif()
 
 set(BUILD_SHARED_LIBS TRUE)
 
 set(
     SOURCES
     
-    src/dm_engine_entry.c
-    src/dm_engine.c
-    src/dm_mem.c
-    src/dm_logger.c
-    src/dm_event.c
-    src/dm_camera_controller.c
+    src/core/dm_engine_entry.c
+    src/core/dm_engine.c
+    src/core/dm_mem.c
+    src/core/dm_logger.c
+    src/core/dm_event.c
+    src/core/dm_camera_controller.c
 
     src/input/dm_input.c
 
@@ -66,6 +71,9 @@ set(
     src/rendering/directx/dm_directx_buffer.c
     src/rendering/directx/dm_directx_shader.c
     src/rendering/directx/dm_directx_enum_conversion.c
+
+    # stb image
+    lib/stb_image/include/stb_image/stb_image.c
 )
 
 # objective c files if using metal

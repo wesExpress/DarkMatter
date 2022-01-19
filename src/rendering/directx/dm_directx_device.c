@@ -2,7 +2,7 @@
 
 #ifdef DM_PLATFORM_WIN32
 
-#include "dm_assert.h"
+#include "core/dm_assert.h"
 
 bool dm_directx_create_device(dm_internal_renderer* renderer)
 {

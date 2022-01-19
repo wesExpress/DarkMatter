@@ -7,10 +7,10 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include "dm_mem.h"
-#include "dm_logger.h"
-#include "dm_event.h"
-#include "dm_assert.h"
+#include "core/dm_mem.h"
+#include "core/dm_logger.h"
+#include "core/dm_event.h"
+#include "core/dm_assert.h"
 #include "input/dm_input.h"
 
 typedef struct dm_internal_data

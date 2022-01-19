@@ -2,7 +2,7 @@
 
 #ifdef DM_DIRECTX
 
-#include "dm_logger.h"
+#include "core/dm_logger.h"
 
 D3D11_CULL_MODE dm_cull_to_directx_cull(dm_cull_mode dm_mode)
 {
