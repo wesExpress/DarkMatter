@@ -26,7 +26,7 @@ void dm_renderer_destroy_command_buffer(dm_command_buffer* command_buffer)
 
 bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer, dm_render_pipeline* pipeline)
 {
-	dm_list_for_range(command_buffer->commands)
+	dm_list_for_range(command_buffer->commands, i)
 	{
 		dm_render_command command = command_buffer->commands.array[i];
 

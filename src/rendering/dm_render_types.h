@@ -88,6 +88,7 @@ typedef enum dm_const_buffer_data_t
 
 typedef struct dm_constant_buffer_desc
 {
+    dm_buffer* buffer;
     const char* name;
     dm_const_buffer_data_t data_t;
     int count;

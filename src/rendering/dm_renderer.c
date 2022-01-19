@@ -7,7 +7,6 @@
 static dm_renderer_data r_data = { 0 };
 
 bool dm_renderer_create_object_pipeline();
-void dm_renderer_destroy_object_pipeline();
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
 bool dm_renderer_init_object_data();
@@ -112,7 +111,8 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 void dm_renderer_shutdown()
 {
 	// cleanup
-	dm_renderer_destroy_object_pipeline();
+	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
+	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 
 	// backend shutdown
 	dm_renderer_shutdown_impl(&r_data);
@@ -187,6 +187,12 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 
 	dm_free(pipeline->render_packet.vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	
+	// constant buffers
+	dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+	{
+		dm_free(pipeline->render_packet.constant_buffers.array[i].desc.buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	}
 	dm_list_destroy(&pipeline->render_packet.constant_buffers);
 
 	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
@@ -232,13 +238,6 @@ bool dm_renderer_create_object_pipeline()
 	dm_renderer_init_render_pipeline(r_data.object_pipeline);
 
 	return true;
-}
-
-void dm_renderer_destroy_object_pipeline()
-{
-	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
-
-	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
 bool dm_renderer_init_object_data()
@@ -302,8 +301,16 @@ bool dm_renderer_init_object_data()
 	};
 
 	// constant buffers
+	dm_buffer* cb_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	cb_buffer->desc.type = DM_BUFFER_TYPE_CONSTANT;
+	cb_buffer->desc.usage = DM_BUFFER_USAGE_DYNAMIC;
+	cb_buffer->desc.elem_size = sizeof(float);
+	cb_buffer->desc.buffer_size = ((sizeof(offset) + 15) / 16) * 16;
+	cb_buffer->desc.cpu_access = DM_BUFFER_CPU_WRITE;
+
 	dm_constant_buffer_desc cb_desc =
 	{
+		.buffer = cb_buffer,
 		.name = "offset",
 		.data_t = DM_CONST_BUFFER_T_FLOAT,
 		.count = 3,
