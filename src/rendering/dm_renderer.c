@@ -310,23 +310,23 @@ bool dm_renderer_init_object_data()
 	};
 
 	// constant buffers
-	dm_buffer* cb_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	cb_buffer->desc.type = DM_BUFFER_TYPE_CONSTANT;
-	cb_buffer->desc.usage = DM_BUFFER_USAGE_DYNAMIC;
-	cb_buffer->desc.elem_size = sizeof(float);
-	cb_buffer->desc.buffer_size = ((sizeof(offset) + 15) / 16) * 16;
-	cb_buffer->desc.cpu_access = DM_BUFFER_CPU_WRITE;
-
-	dm_constant_buffer_desc cb_desc =
-	{
-		.buffer = cb_buffer,
-		.name = "offset",
-		.data_t = DM_CONST_BUFFER_T_FLOAT,
-		.count = 3,
-		.data = &offset
-	};
-	dm_constant_buffer* cb = (dm_constant_buffer*)dm_alloc(sizeof(dm_constant_buffer*), DM_MEM_RENDERER_BUFFER);
-	cb->desc = cb_desc;
+	//dm_buffer* cb_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	//cb_buffer->desc.type = DM_BUFFER_TYPE_CONSTANT;
+	//cb_buffer->desc.usage = DM_BUFFER_USAGE_DYNAMIC;
+	//cb_buffer->desc.elem_size = sizeof(float);
+	//cb_buffer->desc.buffer_size = ((sizeof(offset) + 15) / 16) * 16;
+	//cb_buffer->desc.cpu_access = DM_BUFFER_CPU_WRITE;
+	//
+	//dm_constant_buffer_desc cb_desc =
+	//{
+	//	.buffer = cb_buffer,
+	//	.name = "offset",
+	//	.data_t = DM_CONST_BUFFER_T_FLOAT,
+	//	.count = 3,
+	//	.data = &offset
+	//};
+	//dm_constant_buffer* cb = (dm_constant_buffer*)dm_alloc(sizeof(dm_constant_buffer*), DM_MEM_RENDERER_BUFFER);
+	//cb->desc = cb_desc;
 	//dm_list_append(&r_data.object_pipeline->render_packet.constant_buffers, cb);
 
 	dm_texture* texture = (dm_texture*)dm_alloc(sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
