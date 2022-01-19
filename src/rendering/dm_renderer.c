@@ -329,10 +329,6 @@ bool dm_renderer_init_object_data()
 	cb->desc = cb_desc;
 	//dm_list_append(&r_data.object_pipeline->render_packet.constant_buffers, cb);
 
-	// textures
-	//dm_texture texture = {
-	//	.path = "assets/container.jpg"
-	//};
 	dm_texture* texture = (dm_texture*)dm_alloc(sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
 	texture->path = "assets/container.jpg";
 	dm_list_append(&r_data.object_pipeline->render_packet.textures, texture);
