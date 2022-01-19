@@ -127,7 +127,7 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_delete_shader(pipeline->raster_desc.shader);
 
     // constant buffers
-    for (int i = 0; i < pipeline->render_packet.constant_buffers.size; i++)
+    dm_list_for_range(pipeline->render_packet.constant_buffers, i)
     {
         dm_constant_buffer cb = pipeline->render_packet.constant_buffers.array[i];
         dm_free(cb.internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
@@ -175,9 +175,9 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
 
     glBindVertexArray(0);
 
-    dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
     // constant buffers
-    for (int i = 0; i < pipeline->render_packet.constant_buffers.size; i++)
+    dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
+    dm_list_for_range(pipeline->render_packet.constant_buffers, i)
     {
         dm_constant_buffer* cb = &pipeline->render_packet.constant_buffers.array[i];
         cb->internal_buffer = (dm_internal_constant_buffer*)dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
@@ -280,7 +280,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
 
     // constant buffers
-    for (int i = 0; i < pipeline->render_packet.constant_buffers.size; i++)
+    dm_list_for_range(pipeline->render_packet.constant_buffers, i)
     {
         dm_opengl_bind_uniform(&pipeline->render_packet.constant_buffers.array[i]);
     }
