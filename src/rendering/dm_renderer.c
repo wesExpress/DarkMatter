@@ -3,6 +3,7 @@
 #include "dm_mem.h"
 #include "dm_logger.h"
 #include <stddef.h>
+#define STB_IMAGE_IMPLEMENTATION
 #include <stb_image/stb_image.h>
 
 static dm_renderer_data r_data = { 0 };
