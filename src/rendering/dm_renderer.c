@@ -344,9 +344,15 @@ bool dm_renderer_init_object_data()
 	cb->desc = cb_desc;
 	dm_list_append(&r_data.object_pipeline->render_packet.constant_buffers, cb);
 
-	dm_texture* texture = (dm_texture*)dm_alloc(sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
-	texture->path = "assets/container.jpg";
-	dm_list_append(&r_data.object_pipeline->render_packet.textures, texture);
+	dm_texture* texture1 = (dm_texture*)dm_alloc(sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
+	texture1->path = "assets/container.jpg";
+	texture1->name = "uTexture1";
+	dm_list_append(&r_data.object_pipeline->render_packet.textures, texture1);
+
+	dm_texture* texture2 = (dm_texture*)dm_alloc(sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
+	texture2->path = "assets/awesomeface.png";
+	texture2->name = "uTexture2";
+	dm_list_append(&r_data.object_pipeline->render_packet.textures, texture2);
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);
 }

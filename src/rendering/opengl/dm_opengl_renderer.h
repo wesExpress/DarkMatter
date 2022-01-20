@@ -36,7 +36,8 @@ typedef struct dm_internal_pipeline
 
 typedef struct dm_internal_texture
 {
-	GLuint id;
+	GLuint id, slot;
+	GLint location;
 } dm_internal_texture;
 
 typedef enum dm_opengl_uniform

@@ -198,7 +198,7 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
     dm_list_for_range(pipeline->render_packet.textures, i)
     {
         dm_texture* texture = pipeline->render_packet.textures.array[i];
-        if (!dm_opengl_create_texture(texture)) return false;
+        if (!dm_opengl_create_texture(texture, i, internal_shader->id)) return false;
     }
 
     return true;
@@ -307,7 +307,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     {
         dm_texture* texture = pipeline->render_packet.textures.array[i];
 
-        if (!dm_opengl_bind_texture(texture, i)) return false;
+        if (!dm_opengl_bind_texture(texture)) return false;
     }
 
     return true;

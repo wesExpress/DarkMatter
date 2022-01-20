@@ -198,7 +198,7 @@ bool dm_opengl_bind_uniform(dm_constant_buffer* cb)
 bool dm_opengl_find_uniform_loc(GLuint program, const char* name, GLint* location)
 {
     *location = glGetUniformLocation(program, name);
-    if (*location == 1)
+    if (*location == -1)
     {
         DM_LOG_FATAL("Could not find uniform: '%s'", name);
         return false;

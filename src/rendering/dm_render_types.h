@@ -80,6 +80,7 @@ typedef struct dm_shader
 typedef struct dm_texture
 {
     const char* path;
+    const char* name;
     int width, height, n_channels;
     void* internal_texture;
 } dm_texture;

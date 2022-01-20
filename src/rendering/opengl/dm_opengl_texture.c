@@ -4,9 +4,10 @@
 
 #include "core/dm_mem.h"
 #include "dm_opengl_renderer.h"
+#include "dm_opengl_shader.h"
 #include <stb_image/stb_image.h>
 
-bool dm_opengl_create_texture(dm_texture* texture)
+bool dm_opengl_create_texture(dm_texture* texture, int texture_slot, GLuint shader)
 {
 	texture->internal_texture = (dm_internal_texture*)dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
 	dm_internal_texture* internal_texture = (dm_internal_texture*)texture->internal_texture;
@@ -37,6 +38,9 @@ bool dm_opengl_create_texture(dm_texture* texture)
 
 	stbi_image_free(data);
 
+	internal_texture->slot = texture_slot;
+	if(!dm_opengl_find_uniform_loc(shader, texture->name, &internal_texture->location)) return false;
+
 	return true;
 }
 
@@ -48,12 +52,15 @@ void dm_opengl_destroy_texture(dm_texture* texture)
 	dm_free(texture->internal_texture, sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
 }
 
-bool dm_opengl_bind_texture(dm_texture* texture, int texture_slot)
+bool dm_opengl_bind_texture(dm_texture* texture)
 {
 	dm_internal_texture* internal_texture = (dm_internal_texture*)texture->internal_texture;
 
-	glActiveTexture(GL_TEXTURE0 + texture_slot);
+	glActiveTexture(GL_TEXTURE0 + internal_texture->slot);
 	glBindTexture(GL_TEXTURE_2D, internal_texture->id);
+	glCheckErrorReturn();
+
+	glUniform1i(internal_texture->location, internal_texture->slot);
 	glCheckErrorReturn();
 
 	return true;

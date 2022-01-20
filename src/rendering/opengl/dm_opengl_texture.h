@@ -6,11 +6,12 @@
 #ifdef DM_OPENGL
 
 #include "rendering/dm_render_types.h"
+#include "dm_opengl_renderer.h"
 #include <stdbool.h>
 
-bool dm_opengl_create_texture(dm_texture* texture);
+bool dm_opengl_create_texture(dm_texture* texture, int texture_slot, GLuint shader);
 void dm_opengl_destroy_texture(dm_texture* texture);
-bool dm_opengl_bind_texture(dm_texture* texture, int texture_slot);
+bool dm_opengl_bind_texture(dm_texture* texture);
 
 #endif
 
