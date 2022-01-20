@@ -359,6 +359,7 @@ bool dm_renderer_init_object_data()
 	texture2->name = "uTexture2";
 	texture2->format = DM_TEXTURE_FORMAT_RGBA;
 	texture2->internal_format = DM_TEXTURE_FORMAT_RGB;
+	texture2->flip = true;
 	dm_list_append(&r_data.object_pipeline->render_packet.textures, texture2);
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);

@@ -18,6 +18,7 @@ bool dm_opengl_create_texture(dm_texture* texture, int texture_slot, GLuint shad
 	GLenum internal_format = dm_texture_format_to_opengl_format(texture->internal_format);
 	if (internal_format == DM_TEXTURE_FORMAT_UNKNOWN) return false;
 
+	stbi_set_flip_vertically_on_load(texture->flip);
 	unsigned char* data = stbi_load(texture->path, &texture->width, &texture->height, &texture->n_channels, 0);
 	if (!data)
 	{

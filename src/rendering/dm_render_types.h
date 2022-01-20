@@ -91,6 +91,7 @@ typedef struct dm_texture
     int width, height, n_channels;
     dm_texture_format format;
     dm_texture_format internal_format;
+    bool flip;
     void* internal_texture;
 } dm_texture;
 
