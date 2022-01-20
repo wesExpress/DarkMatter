@@ -13,4 +13,5 @@ void main()
 {
     gl_Position = vec4(aPos + offset, 1.0);
     fragColor = aColor;
+    texCoords = aTexCoords;
 }
