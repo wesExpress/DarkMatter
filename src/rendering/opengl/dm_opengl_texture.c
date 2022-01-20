@@ -48,10 +48,11 @@ void dm_opengl_destroy_texture(dm_texture* texture)
 	dm_free(texture->internal_texture, sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
 }
 
-bool dm_opengl_bind_texture(dm_texture* texture)
+bool dm_opengl_bind_texture(dm_texture* texture, int texture_slot)
 {
 	dm_internal_texture* internal_texture = (dm_internal_texture*)texture->internal_texture;
 
+	glActiveTexture(GL_TEXTURE0 + texture_slot);
 	glBindTexture(GL_TEXTURE_2D, internal_texture->id);
 	glCheckErrorReturn();
 

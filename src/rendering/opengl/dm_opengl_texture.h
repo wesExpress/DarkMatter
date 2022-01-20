@@ -10,7 +10,7 @@
 
 bool dm_opengl_create_texture(dm_texture* texture);
 void dm_opengl_destroy_texture(dm_texture* texture);
-bool dm_opengl_bind_texture(dm_texture* texture);
+bool dm_opengl_bind_texture(dm_texture* texture, int texture_slot);
 
 #endif
 

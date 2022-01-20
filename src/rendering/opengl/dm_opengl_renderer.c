@@ -307,7 +307,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     {
         dm_texture* texture = pipeline->render_packet.textures.array[i];
 
-        if (!dm_opengl_bind_texture(texture)) return false;
+        if (!dm_opengl_bind_texture(texture, i)) return false;
     }
 
     return true;
