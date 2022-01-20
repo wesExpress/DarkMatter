@@ -5,12 +5,18 @@
 #include "core/dm_mem.h"
 #include "dm_opengl_renderer.h"
 #include "dm_opengl_shader.h"
+#include "dm_opengl_enum_conversion.h"
 #include <stb_image/stb_image.h>
 
 bool dm_opengl_create_texture(dm_texture* texture, int texture_slot, GLuint shader)
 {
 	texture->internal_texture = (dm_internal_texture*)dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
 	dm_internal_texture* internal_texture = (dm_internal_texture*)texture->internal_texture;
+
+	GLenum format = dm_texture_format_to_opengl_format(texture->format);
+	if (format == DM_TEXTURE_FORMAT_UNKNOWN) return false;
+	GLenum internal_format = dm_texture_format_to_opengl_format(texture->internal_format);
+	if (internal_format == DM_TEXTURE_FORMAT_UNKNOWN) return false;
 
 	unsigned char* data = stbi_load(texture->path, &texture->width, &texture->height, &texture->n_channels, 0);
 	if (!data)
@@ -31,7 +37,7 @@ bool dm_opengl_create_texture(dm_texture* texture, int texture_slot, GLuint shad
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	// load data in
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, texture->width, texture->height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
+	glTexImage2D(GL_TEXTURE_2D, 0, internal_format, texture->width, texture->height, 0, format, GL_UNSIGNED_BYTE, data);
 	glCheckErrorReturn();
 	glGenerateMipmap(GL_TEXTURE_2D);
 	glCheckErrorReturn();

@@ -77,11 +77,20 @@ typedef struct dm_shader
     void* internal_shader;
 } dm_shader;
 
+typedef enum dm_texture_format
+{
+    DM_TEXTURE_FORMAT_RGB,
+    DM_TEXTURE_FORMAT_RGBA,
+    DM_TEXTURE_FORMAT_UNKNOWN
+} dm_texture_format;
+
 typedef struct dm_texture
 {
     const char* path;
     const char* name;
     int width, height, n_channels;
+    dm_texture_format format;
+    dm_texture_format internal_format;
     void* internal_texture;
 } dm_texture;
 

@@ -292,16 +292,19 @@ bool dm_renderer_init_object_data()
 	dm_vertex_t vertices[] = {
 		{ {-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} },
 		{ { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f} },
-		{ { 0.0f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {0.5f, 1.0f} },
+		{ { 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f} },
+		{ {-0.5f,  0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f} }
 	};
 
 #ifdef DM_OPENGL
 	dm_index_t indices[] = {
-		0, 1, 2
+		0, 1, 2,
+		2, 3, 0
 	};
 #elif defined DM_DIRECTX
 	dm_index_t indices[] = {
-		0, 2, 1
+		0, 2, 1,
+		2, 0, 3
 	};
 #endif
 
@@ -347,11 +350,15 @@ bool dm_renderer_init_object_data()
 	dm_texture* texture1 = (dm_texture*)dm_alloc(sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
 	texture1->path = "assets/container.jpg";
 	texture1->name = "uTexture1";
+	texture1->format = DM_TEXTURE_FORMAT_RGB;
+	texture1->internal_format = DM_TEXTURE_FORMAT_RGB;
 	dm_list_append(&r_data.object_pipeline->render_packet.textures, texture1);
 
 	dm_texture* texture2 = (dm_texture*)dm_alloc(sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
 	texture2->path = "assets/awesomeface.png";
 	texture2->name = "uTexture2";
+	texture2->format = DM_TEXTURE_FORMAT_RGBA;
+	texture2->internal_format = DM_TEXTURE_FORMAT_RGB;
 	dm_list_append(&r_data.object_pipeline->render_packet.textures, texture2);
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);

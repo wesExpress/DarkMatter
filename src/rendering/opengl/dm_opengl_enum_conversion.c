@@ -154,4 +154,16 @@ GLenum dm_wind_top_opengl_wind(dm_winding_order winding)
     }
 }
 
+GLenum dm_texture_format_to_opengl_format(dm_texture_format dm_format)
+{
+    switch (dm_format)
+    {
+    case DM_TEXTURE_FORMAT_RGB: return GL_RGB;
+    case DM_TEXTURE_FORMAT_RGBA: return GL_RGBA;
+    default:
+        DM_LOG_FATAL("Unknown texture format!");
+        return DM_TEXTURE_FORMAT_UNKNOWN;
+    }
+}
+
 #endif

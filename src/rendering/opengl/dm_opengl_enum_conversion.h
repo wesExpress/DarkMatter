@@ -17,6 +17,7 @@ GLenum dm_blend_func_to_opengl_func(dm_blend_func func);
 GLenum dm_comp_to_opengl_comp(dm_comparison dm_comp);
 GLenum dm_cull_to_opengl_cull(dm_cull_mode cull);
 GLenum dm_wind_top_opengl_wind(dm_winding_order winding);
+GLenum dm_texture_format_to_opengl_format(dm_texture_format dm_format);
 
 #endif
 
