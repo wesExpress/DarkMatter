@@ -1,5 +1,6 @@
 #include "dm_renderer.h"
 #include "dm_command_buffer.h"
+#include "dm_texture.h"
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
 #include <stddef.h>
@@ -74,6 +75,12 @@ dm_vertex_attrib_desc tex_coord_desc = {
 // constant buffer data
 */
 dm_vec3 offset = { 0, 0, 0 };
+
+
+/*
+// texture
+*/
+const char* textures[] = { "assets/container.jpg", "assets/awesomeface.png" };
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -361,6 +368,8 @@ bool dm_renderer_init_object_data()
 	texture2->internal_format = DM_TEXTURE_FORMAT_RGB;
 	texture2->flip = true;
 	dm_list_append(&r_data.object_pipeline->render_packet.textures, texture2);
+
+	if (!dm_textures_load(textures, 2)) return false;
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);
 }

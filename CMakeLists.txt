@@ -54,8 +54,11 @@ set(
     src/platform/dm_platform_glfw.c
     src/platform/dm_platform_win32.c
 
+    src/structures/dm_new_map.c
+
     src/rendering/dm_renderer.c
     src/rendering/dm_command_buffer.c
+    src/rendering/dm_texture.c
     src/rendering/dm_camera.c
 
     src/rendering/opengl/dm_opengl_renderer.c
