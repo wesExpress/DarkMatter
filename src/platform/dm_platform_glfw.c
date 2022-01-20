@@ -135,6 +135,14 @@ void* dm_platform_alloc(size_t size)
     return temp;
 }
 
+void* dm_platform_calloc(size_t count, size_t size)
+{
+    void* temp = calloc(count, size);
+    DM_ASSERT_MSG(temp, "Calloc return null pointer!");
+    if (!temp) return NULL;
+    return temp;
+}
+
 void* dm_platform_realloc(void* block, size_t size)
 {
     void* temp = realloc(block, size);

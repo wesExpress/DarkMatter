@@ -37,6 +37,7 @@ bool dm_platform_pump_messages(dm_engine_data* e_data);
 
 // various platform memory functions
 void* dm_platform_alloc(size_t size);
+void* dm_platform_calloc(size_t count, size_t size);
 void* dm_platform_realloc(void* block, size_t size);
 void dm_platform_free(void* block);
 void* dm_platform_memzero(void* block, size_t size);

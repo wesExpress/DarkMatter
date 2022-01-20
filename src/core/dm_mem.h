@@ -27,6 +27,11 @@ typedef enum dm_mem_tag
 void* dm_alloc(size_t size, dm_mem_tag tag);
 
 /*
+* wrapper for calloc
+*/
+void* dm_calloc(size_t count, size_t size, dm_mem_tag tag);
+
+/*
 * wrapper for realloc. reallocate the size of a memory block.
 * if you care about mem tracking, make sure to call dm_mem_db_adjust before this!!!
 * 

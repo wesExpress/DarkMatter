@@ -33,6 +33,14 @@ void* dm_alloc(size_t size, dm_mem_tag tag)
 	return dm_platform_alloc(size);
 }
 
+void* dm_calloc(size_t count, size_t size, dm_mem_tag tag)
+{
+	mem_db.total += size * count;
+	mem_db.allocs[tag] += size * count;
+
+	return dm_platform_calloc(count, size);
+}
+
 void* dm_realloc(void* block, size_t new_size)
 {
 	return dm_platform_realloc(block, new_size);
