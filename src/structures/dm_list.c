@@ -41,9 +41,14 @@ void dm_list_append(void* list, void* value)
 {
 	dm_list_header* header = dm_list_get_header(list);
 
-	dm_memcpy((size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT + header->count, value, header->element_size);
+	dm_texture* texture = (dm_texture*)value;
+	void* dest = (size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT + header->count;
+	dm_memcpy(dest, value, header->element_size);
 	header->count++;
 	dm_list_grow(header);
+	
+	dm_texture* test1 = (dm_texture*)((size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT);
+	dm_texture* test2 = (dm_texture*)((size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT + 1);
 }
 
 void dm_list_insert(void* list, void* value, uint32_t index)

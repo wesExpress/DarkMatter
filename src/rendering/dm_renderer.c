@@ -352,20 +352,26 @@ bool dm_renderer_init_object_data()
 	cb->desc.data = &offset;
 	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, cb);
 
-	dm_texture* texture1 = (dm_texture*)dm_alloc(sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
-	texture1->path = "assets/container.jpg";
-	texture1->name = "uTexture1";
-	texture1->format = DM_TEXTURE_FORMAT_RGB;
-	texture1->internal_format = DM_TEXTURE_FORMAT_RGB;
-	dm_list_append(r_data.object_pipeline->render_packet.textures, texture1);
+	dm_texture texture1 = { 0 };
+	texture1.path = "assets/container.jpg";
+	texture1.name = "uTexture1";
+	texture1.format = DM_TEXTURE_FORMAT_RGB;
+	texture1.internal_format = DM_TEXTURE_FORMAT_RGB;
+	dm_list_append(r_data.object_pipeline->render_packet.textures, &texture1);
 
-	dm_texture* texture2 = (dm_texture*)dm_alloc(sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
-	texture2->path = "assets/awesomeface.png";
-	texture2->name = "uTexture2";
-	texture2->format = DM_TEXTURE_FORMAT_RGBA;
-	texture2->internal_format = DM_TEXTURE_FORMAT_RGB;
-	texture2->flip = true;
-	dm_list_append(r_data.object_pipeline->render_packet.textures, texture2);
+	dm_texture texture2 = { 0 };
+	texture2.path = "assets/awesomeface.png";
+	texture2.name = "uTexture2";
+	texture2.format = DM_TEXTURE_FORMAT_RGBA;
+	texture2.internal_format = DM_TEXTURE_FORMAT_RGB;
+	texture2.flip = true;
+	dm_list_append(r_data.object_pipeline->render_packet.textures, &texture2);
+
+	for (uint32_t i = 0; i < dm_list_get_count(r_data.object_pipeline->render_packet.textures); i++)
+	{
+		dm_texture texture = r_data.object_pipeline->render_packet.textures[i];
+		int j = i;
+	}
 
 	if (!dm_textures_load(textures, 2)) return false;
 
