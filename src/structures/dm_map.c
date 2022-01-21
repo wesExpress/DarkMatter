@@ -89,15 +89,15 @@ void dm_map_insert(dm_map_t* map, char* key, void* value)
 
 	if (!map->items[index])
 	{
-		if (((float)map->count / (float)map->capacity) > DM_MAP_LOAD_FACTOR)
-		{
-			dm_map_resize(map);
-		}
-
 		dm_map_item* item = dm_map_create_item(key, value, map->type_size);
 
 		map->items[index] = item;
 		map->count++;
+
+		if (((float)map->count / (float)map->capacity) > DM_MAP_LOAD_FACTOR)
+		{
+			dm_map_resize(map);
+		}
 	}
 	else
 	{
@@ -233,15 +233,29 @@ void dm_map_resize(dm_map_t* map)
 
 	for (int i = 0; i < map->capacity; i++)
 	{
-		if (map->items[i]) dm_map_insert(new_map, map->items[i]->key, map->items[i]->value);
-	}
+		if (map->items[i])
+		{
+			dm_map_insert(new_map, map->items[i]->key, map->items[i]->value);
+			dm_map_destroy_item(map->items[i], map);
+		}
 
+		if (map->overflow_buckets[i])
+		{
+			dm_map_link_list* runner = map->overflow_buckets[i];
+			while (runner)
+			{
+				dm_map_link_list* temp = runner;
+				runner = runner->next;
+
+				dm_map_destroy_item(temp->item, map);
+			}
+		}
+	}
+	size_t test = sizeof(dm_map_t);
 	dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
 	dm_free(map->overflow_buckets, sizeof(dm_map_link_list*) * map->capacity, DM_MEM_MAP);
 	*map = *new_map;
-
-	// also need to adjust memory database
-	dm_mem_db_adjust(sizeof(dm_map_t), DM_MEM_MAP, DM_MEM_ADJUST_SUBTRACT);
+	
 }
 
 dm_map_item* dm_map_create_item(char* key, void* value, size_t type_size)
