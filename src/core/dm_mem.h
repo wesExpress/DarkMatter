@@ -2,6 +2,7 @@
 #define __MEM_H__
 
 #include <stdlib.h>
+#include <stdbool.h>
 
 typedef enum dm_mem_tag
 {
@@ -15,7 +16,7 @@ typedef enum dm_mem_tag
 	DM_MEM_RENDERER_BUFFER,
 	DM_MEM_RENDERER_SHADER,
 	DM_MEM_RENDERER_TEXTURE,
-	DM_MEM_RENDERER_UNKNOWN
+	DM_MEM_UNKNOWN
 } dm_mem_tag;
 
 /*
@@ -85,5 +86,8 @@ void dm_mem_db_adjust(size_t size, dm_mem_tag tag);
 
 // memory tracking printing functions
 char* dm_mem_track();
+
+// to be called at the end of the application to check if you've freed all allocated memory
+void dm_mem_all_freed();
 
 #endif

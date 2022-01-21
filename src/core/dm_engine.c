@@ -54,6 +54,7 @@ void dm_engine_shutdown()
     dm_free(e_data, sizeof(dm_engine_data), DM_MEM_ENGINE);
 
     DM_LOG_INFO("%s", dm_mem_track());
+    dm_mem_all_freed();
 }
 
 bool dm_engine_run()

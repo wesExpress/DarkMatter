@@ -1,11 +1,12 @@
 #include "dm_mem.h"
 #include "platform/dm_platform.h"
+#include "core/dm_logger.h"
 #include <string.h>
 #include <stdio.h>
 
  typedef struct dm_mem_db
 {
-	size_t allocs[DM_MEM_RENDERER_UNKNOWN];
+	size_t allocs[DM_MEM_UNKNOWN];
 	size_t total;
 } dm_mem_db;
 
@@ -84,7 +85,7 @@ char* dm_mem_track()
 	char buffer[1024] = "System memory usage: \n";
 	size_t offset = strlen(buffer);
 
-	for (int i = 0; i < DM_MEM_RENDERER_UNKNOWN; i++)
+	for (int i = 0; i < DM_MEM_UNKNOWN; i++)
 	{
 		char unit[4] = "XiB";
 		float amount = 1.0f;
@@ -121,4 +122,59 @@ char* dm_mem_track()
 	char* out_str = strdup(buffer);
 #endif
 	return out_str;
+}
+
+void dm_mem_all_freed()
+{
+	if (mem_db.total > 0)
+	{
+		DM_LOG_WARN("You have a memory leak somewhere! Total allocated memory is not 0!");
+		DM_LOG_WARN("You should... ");
+
+		for (int i = 0; i < DM_MEM_UNKNOWN; i++)
+		{
+			char buffer[512];
+
+			if (mem_db.allocs[i] > 0)
+			{
+				switch (i)
+				{
+				case DM_MEM_ENGINE:
+					strcpy(buffer, "engine");
+					break;
+				case DM_MEM_PLATFORM:
+					strcpy(buffer, "platform");
+					break;
+				case DM_MEM_STRING:
+					strcpy(buffer, "string");
+					break;
+				case DM_MEM_LIST:
+					strcpy(buffer, "list");
+					break;
+				case DM_MEM_MAP:
+					strcpy(buffer, "map");
+					break;
+				case DM_MEM_RENDERER:
+					strcpy(buffer, "renderer");
+					break;
+				case DM_MEM_RENDER_PIPELINE:
+					strcpy(buffer, "render pipeline");
+					break;
+				case DM_MEM_RENDERER_BUFFER:
+					strcpy(buffer, "buffer");
+					break;
+				case DM_MEM_RENDERER_SHADER:
+					strcpy(buffer, "shader");
+					break;
+				case DM_MEM_RENDERER_TEXTURE:
+					strcpy(buffer, "texture");
+					break;
+				default:
+					break;
+				}
+
+				DM_LOG_WARN("Check %s allocations...", buffer);
+			}
+		}
+	}
 }
