@@ -185,14 +185,14 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
 
     // constant buffers
     dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
-   //dm_list_for_range(pipeline->render_packet.constant_buffers, i)
-   //{
-   //    dm_constant_buffer* cb = (dm_constant_buffer*)dm_list_get(pipeline->render_packet.constant_buffers, i);
-   //    cb->internal_buffer = (dm_internal_constant_buffer*)dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
-   //    dm_internal_constant_buffer* internal_buffer = (dm_internal_constant_buffer*)cb->internal_buffer;
-   //
-   //    if (!dm_opengl_find_uniform_loc(internal_shader->id, cb->desc.name, &internal_buffer->location)) return false;
-   //}
+    for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.constant_buffers); i++)
+    {
+        dm_constant_buffer* cb = &pipeline->render_packet.constant_buffers[i];
+        cb->internal_buffer = (dm_internal_constant_buffer*)dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+        dm_internal_constant_buffer* internal_buffer = (dm_internal_constant_buffer*)cb->internal_buffer;
+   
+        if (!dm_opengl_find_uniform_loc(internal_shader->id, cb->desc.name, &internal_buffer->location)) return false;
+    }
 
     // textures
     for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.textures); i++)
