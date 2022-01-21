@@ -213,18 +213,12 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 	// constant buffers
 	for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.constant_buffers); i++)
 	{
-		dm_constant_buffer* buffer = &pipeline->render_packet.constant_buffers[i];
-		dm_free(buffer->desc.buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-		dm_free(buffer, sizeof(dm_constant_buffer), DM_MEM_RENDERER_BUFFER);
+		dm_constant_buffer buffer = pipeline->render_packet.constant_buffers[i];
+		dm_free(buffer.desc.buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	}
 	dm_list_destroy(pipeline->render_packet.constant_buffers);
 
 	// textures
-	for (uint32_t i = 0; i < dm_list_get_count(pipeline->render_packet.textures); i++)
-	{
-		dm_texture* texture = &pipeline->render_packet.textures[i];
-		dm_free(texture, sizeof(dm_texture), DM_MEM_RENDERER_TEXTURE);
-	}
 	dm_list_destroy(pipeline->render_packet.textures);
 
 	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
@@ -344,13 +338,13 @@ bool dm_renderer_init_object_data()
 	cb_buffer->desc.buffer_size = ((sizeof(offset) + 15) / 16) * 16;
 	cb_buffer->desc.cpu_access = DM_BUFFER_CPU_WRITE;
 	
-	dm_constant_buffer* cb = (dm_constant_buffer*)dm_alloc(sizeof(dm_constant_buffer), DM_MEM_RENDERER_BUFFER);
-	cb->desc.buffer = cb_buffer;
-	cb->desc.name = "offset";
-	cb->desc.data_t = DM_CONST_BUFFER_T_FLOAT;
-	cb->desc.count = 3;
-	cb->desc.data = &offset;
-	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, cb);
+	dm_constant_buffer cb = { 0 };
+	cb.desc.buffer = cb_buffer;
+	cb.desc.name = "offset";
+	cb.desc.data_t = DM_CONST_BUFFER_T_FLOAT;
+	cb.desc.count = 3;
+	cb.desc.data = &offset;
+	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &cb);
 
 	dm_texture texture1 = { 0 };
 	texture1.path = "assets/container.jpg";
@@ -366,12 +360,6 @@ bool dm_renderer_init_object_data()
 	texture2.internal_format = DM_TEXTURE_FORMAT_RGB;
 	texture2.flip = true;
 	dm_list_append(r_data.object_pipeline->render_packet.textures, &texture2);
-
-	for (uint32_t i = 0; i < dm_list_get_count(r_data.object_pipeline->render_packet.textures); i++)
-	{
-		dm_texture texture = r_data.object_pipeline->render_packet.textures[i];
-		int j = i;
-	}
 
 	if (!dm_textures_load(textures, 2)) return false;
 

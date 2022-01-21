@@ -6,7 +6,7 @@
 
 #define DM_LIST_RESIZE_FACTOR 2
 #define DM_LIST_LOAD_FACTOR 0.75
-#define DM_LIST_HEADER_MEMBERS_COUNT 3
+#define DM_LIST_HEADER_OFFSET 3 * sizeof(size_t)
 typedef char* dm_void_to_arith;
 
 typedef struct dm_list_header
@@ -27,7 +27,7 @@ void* dm_list_init(size_t element_size, size_t capacity)
 	header->capacity = capacity;
 	header->element_size = element_size;
 
-	return (size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT;
+	return (char*)header + DM_LIST_HEADER_OFFSET;
 }
 
 void dm_list_destroy(void* list)
@@ -41,14 +41,10 @@ void dm_list_append(void* list, void* value)
 {
 	dm_list_header* header = dm_list_get_header(list);
 
-	dm_texture* texture = (dm_texture*)value;
-	void* dest = (size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT + header->count;
+	void* dest = (char*)header + DM_LIST_HEADER_OFFSET + header->count * header->element_size;
 	dm_memcpy(dest, value, header->element_size);
 	header->count++;
 	dm_list_grow(header);
-	
-	dm_texture* test1 = (dm_texture*)((size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT);
-	dm_texture* test2 = (dm_texture*)((size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT + 1);
 }
 
 void dm_list_insert(void* list, void* value, uint32_t index)
@@ -61,8 +57,8 @@ void dm_list_insert(void* list, void* value, uint32_t index)
 		size_t block_size = (header->count - index) * header->element_size;
 
 		// move all elements after index one index to the right
-		void* dest = (size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT + (index + 1);
-		void* src = (size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT + index;
+		void* dest = (char*)header + DM_LIST_HEADER_OFFSET + (index + 1) * header->element_size;
+		void* src = (char*)header + DM_LIST_HEADER_OFFSET + index * header->element_size;
 		dm_memmove(dest, src, block_size);
 		// copy value into index
 		dm_memcpy(src, value, header->element_size);
@@ -100,8 +96,8 @@ void dm_list_pop_at(void* list, uint32_t index)
 		size_t block_size = (header->count - index) * header->element_size;
 
 		// move all elements after index one index to the right
-		void* dest = (size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT + index;
-		void* src = (size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT + (index + 1);
+		void* dest = (char*)header + DM_LIST_HEADER_OFFSET + index * header->element_size;
+		void* src = (char*)header + DM_LIST_HEADER_OFFSET + (index + 1) * header->element_size;
 		dm_memmove(dest, src, block_size);
 
 		header->count--;
@@ -124,7 +120,7 @@ void dm_list_clear(void* list)
 		header->capacity = DM_LIST_DEFAULT_SIZE;
 		header->count = 0;
 
-		list = (size_t*)header + DM_LIST_HEADER_MEMBERS_COUNT;
+		list = (char*)header + DM_LIST_HEADER_OFFSET;
 	}
 	else
 	{
