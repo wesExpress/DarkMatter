@@ -255,8 +255,8 @@ typedef struct dm_render_packet
 {
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
-    dm_list(dm_constant_buffer*) constant_buffers;
-    dm_list(dm_texture*) textures;
+    dm_list(dm_constant_buffer) constant_buffers;
+    dm_list(dm_texture) textures;
     size_t count;
     size_t offset;
 } dm_render_packet;

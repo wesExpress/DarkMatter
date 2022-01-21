@@ -3,6 +3,7 @@
 #ifdef DM_OPENGL
 
 #include "core/dm_mem.h"
+#include "core/dm_logger.h"
 #include "dm_opengl_renderer.h"
 #include "dm_opengl_shader.h"
 #include "dm_opengl_enum_conversion.h"

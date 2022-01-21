@@ -1,8 +1,8 @@
 #include "dm_texture.h"
-#include "structures/dm_new_map.h"
+#include "structures/dm_map.h"
 #include "dm_render_types.h"
 
-bool dm_textures_load(char** paths, int num_paths)
+bool dm_textures_load(const char** paths, int num_paths)
 {
 	//dm_map(dm_texture*) map;
 	//dm_map_init(&map, dm_texture*);

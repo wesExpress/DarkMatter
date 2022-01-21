@@ -54,7 +54,8 @@ set(
     src/platform/dm_platform_glfw.c
     src/platform/dm_platform_win32.c
 
-    src/structures/dm_new_map.c
+    src/structures/dm_list.c
+    src/structures/dm_map.c
 
     src/rendering/dm_renderer.c
     src/rendering/dm_command_buffer.c

@@ -3,6 +3,7 @@
 #ifdef DM_OPENGL
 
 #include "dm_opengl_enum_conversion.h"
+#include "core/dm_mem.h"
 
 bool dm_opengl_create_buffer(dm_buffer* buffer, void* data)
 {

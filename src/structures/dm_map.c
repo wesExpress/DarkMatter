@@ -1,235 +1,308 @@
 #include "dm_map.h"
-#include "dm_mem.h"
-#include "dm_logger.h"
-#include "string.h"
+#include "core/dm_mem.h"
+#include "core/dm_logger.h"
+#include <string.h>
+#include <stdint.h>
 
-dm_map_link_list* dm_map_allocate_list();
+#define DM_MAP_RESIZE_FACTOR 2
+#define DM_MAP_LOAD_FACTOR 0.75
+
+// forward declare "private functions"
+void dm_map_resize(dm_map_t* map);
+dm_map_item* dm_map_create_item(char* key, void* value, size_t type_size);
+void dm_map_destroy_item(dm_map_item* item, dm_map_t* map);
+void dm_map_handle_collision(dm_map_t* map, uint32_t index, dm_map_item* item);
 dm_map_link_list* dm_map_list_insert(dm_map_link_list* list, dm_map_item* item);
-dm_map_item* dm_map_list_remove(dm_map_link_list* list);
-void dm_map_delete_list(dm_map_link_list* list);
-dm_map_link_list** dm_map_create_overflow(dm_map* map);
-void dm_map_delete_overflow(dm_map* map);
+dm_map_link_list* dm_map_list_create(dm_map_item* item);
 
-void dm_map_collision(dm_map* map, unsigned long index, dm_map_item* item);
-
-unsigned long simple_hash_function(const char* str)
+// just add the characters together
+uint32_t dm_map_simple_hash_function(dm_map_t* map, char* key)
 {
-    unsigned long index = 0;
-    for (int i=0; str[i]; i++)
-    {
-        index += str[i];
-    }
-    return index % CAPACITY;
+	uint32_t hash = 0;
+	for (int i = 0; key[i]; i++)
+	{
+		hash += key[i];
+	}
+
+	return hash % map->capacity;
 }
 
-dm_map* dm_map_create(int size)
+// FNV-1a algorithm
+uint32_t dm_map_hash(const char* key, dm_map_t* map)
 {
-    dm_map* map = (dm_map*)dm_alloc(sizeof(dm_map), DM_MEM_MAP);
-    map->size = size;
-    map->count = 0;
-    map->items = (dm_map_item**)calloc(map->size, sizeof(dm_map_item*));
-    for (int i=0; i<size;i++) map->items[i] = NULL;
-    map->overflows = dm_map_create_overflow(map);
-    return map;
+	uint32_t hash = 14695981039346656037;
+	for (int i = 0; key[i]; i++)
+	{
+		hash ^= key[i];
+		hash *= 1099511628211;
+	}
+
+	return hash % map->capacity;
 }
 
-dm_map_item* dm_map_create_item(char* key, char* value)
+dm_map_t* dm_map_create(size_t type_size, size_t capacity)
 {
-    dm_map_item* item = (dm_map_item*)dm_alloc(sizeof(dm_map_item));
-    item->key = (char*)dm_alloc(strlen(key)+1);
-    item->value = (char*)dm_alloc(strlen(value)+1);
+	dm_map_t* map = (dm_map_t*)dm_alloc(sizeof(dm_map_t), DM_MEM_MAP);
 
-    strcpy(item->key, key);
-    strcpy(item->value, value);
+	map->capacity = capacity;
+	map->type_size = type_size;
 
-    return item;
+	map->items = (dm_map_item**)dm_alloc(sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
+	map->overflow_buckets = (dm_map_link_list**)dm_alloc(sizeof(dm_map_link_list*) * map->capacity, DM_MEM_MAP);
+
+	return map;
 }
 
-void dm_map_delete_item(dm_map_item* item)
+void dm_map_destroy(dm_map_t* map)
 {
-    dm_free(item->key);
-    dm_free(item->value);
-    dm_free(item);
+	for (int i = 0; i < map->capacity; i++)
+	{
+		// items
+		if (map->items[i]) dm_map_destroy_item(map->items[i], map);
+
+		// overflow buckets
+		if (map->overflow_buckets[i])
+		{
+			dm_map_link_list* temp = map->overflow_buckets[i];
+			dm_map_link_list* runner = map->overflow_buckets[i];
+
+			while (runner)
+			{
+				temp = runner;
+				runner = runner->next;
+
+				dm_map_destroy_item(temp->item, map);
+				dm_free(temp, sizeof(dm_map_link_list), DM_MEM_MAP);
+			}
+		}
+	}
+	dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
+	dm_free(map->overflow_buckets, sizeof(dm_map_link_list*) * map->capacity, DM_MEM_MAP);
+	
+	// map itself
+	dm_free(map, sizeof(dm_map_t), DM_MEM_MAP);
 }
 
-void dm_map_delete(dm_map* map)
+void dm_map_insert(dm_map_t* map, char* key, void* value)
 {
-    for(int i=0; i<map->size; i++)
-    {
-        if(map->items[i]) dm_map_delete_item(map->items[i]);
-    }
-    dm_map_delete_overflow(map);
-    dm_free(map->items);
-    dm_free(map);
+	uint32_t index = dm_map_hash(key, map);
+
+	if (!map->items[index])
+	{
+		if (((float)map->count / (float)map->capacity) > DM_MAP_LOAD_FACTOR)
+		{
+			dm_map_resize(map);
+		}
+
+		dm_map_item* item = dm_map_create_item(key, value, map->type_size);
+
+		map->items[index] = item;
+		map->count++;
+	}
+	else
+	{
+		//DM_LOG_ERROR("Haven't implemented map collisions yet!");
+		if (strcmp(map->items[index]->key, key) == 0)
+		{
+			map->items[index]->value = value;
+		}
+		else
+		{
+			dm_map_item* item = dm_map_create_item(key, value, map->type_size);
+			dm_map_handle_collision(map, index, item);
+		}
+	}
 }
 
-void dm_map_insert(dm_map* map, char* key, char* value)
+void dm_map_delete(dm_map_t* map, char* key)
 {
-    int index = simple_hash_function(key);
+	uint32_t index = dm_map_hash(key, map);
 
-    if(!map->items[index])
-    {
-        if(map->count == map->size)
-        {
-            DM_LOG_ERROR("Trying to insert into full map!");
-            return;
-        }
+	// check the index right away
+	if (map->items[index])
+	{
+		if (strcmp(map->items[index]->key, key) == 0)
+		{
+			dm_map_destroy_item(map->items[index], map);
+			map->count--;
+		}
+	}
 
-         dm_map_item* item = dm_map_create_item(key, value);
-         map->items[index] = item;
-         map->count++;
-    }
-    else
-    {
-        if(strcmp(map->items[index]->key, key) == 0)
-        {
-            strcpy(map->items[index]->value, value);
-            return;
-        }
-        else
-        {
-            dm_map_item* item = dm_map_create_item(key, value);
-            dm_map_collision(map, index, item);
-            return;
-        }
-    }
+	// check the overflow buckets
+	if (map->overflow_buckets[index])
+	{
+		dm_map_link_list* head = map->overflow_buckets[index];
+
+		if (strcmp(head->item->key, key) == 0)
+		{
+			if(head->next) map->overflow_buckets[index] = head->next;
+
+			dm_map_destroy_item(head->item, map);
+		}
+
+		// run through the overflow buckets
+		if (head->next)
+		{
+			dm_map_link_list* runner = head;
+			while (runner->next->next)
+			{
+				if (strcmp(runner->next->item->key, key) == 0)
+				{
+					head->next = runner->next;
+					dm_map_destroy_item(runner->item, map);
+					break;
+				}
+
+				runner = runner->next;
+			}
+		}
+	}
 }
 
-char* dm_map_search(dm_map* map, char* key)
+void* dm_map_get(dm_map_t* map, char* key)
 {
-    int index = simple_hash_function(key);
-    dm_map_item* item = map->items[index];
-    dm_map_link_list* head = map->overflows[index];
+	uint32_t index = dm_map_hash(key, map);
 
-    while(item)
-    {
-        if(strcmp(item->key, key)==0) return item->value;
-        if(!head) return NULL;
-        item = head->item;
-        head = head->next;
-    }
+	// check the index right away
+	if (map->items[index])
+	{
+		if (strcmp(map->items[index]->key, key) == 0) return map->items[index]->value;
+	}
 
-    return NULL;
+	// check the overflow buckets
+	if (map->overflow_buckets[index])
+	{
+		dm_map_link_list* head = map->overflow_buckets[index];
+
+		if (strcmp(head->item->key, key) == 0) return head->item->value;
+
+		// run through the overflow buckets
+		if (head->next)
+		{
+			dm_map_link_list* runner = head;
+			while (runner->next->next)
+			{
+				runner = runner->next;
+
+				if (strcmp(runner->item->key, key) == 0) return runner->item->value;
+			}
+		}
+	}
+
+	// not found;
+	return NULL;
 }
 
-void dm_map_print(dm_map* map)
+bool dm_map_exists(dm_map_t* map, char* key)
 {
-    for(int i =0; i<map->size; i++)
-    {
-        if(map->items[i])
-        {
-            DM_LOG_DEBUG("Index: %d; Key: %s; Value: %s", i, map->items[i]->key, map->items[i]->value);
-        }
-    }
+	uint32_t index = dm_map_hash(key, map);
+
+	// check the index right away
+	if (map->items[index])
+	{
+		if (strcmp(map->items[index]->key, key) == 0) return true;
+	}
+
+	// check the overflow bucket
+	if (map->overflow_buckets[index])
+	{
+		dm_map_link_list* head = map->overflow_buckets[index];
+
+		if (strcmp(head->item->key, key) == 0) return true;
+
+		// run through the overflow buckets
+		if (head->next)
+		{
+			dm_map_link_list* runner = head;
+			while (runner->next->next)
+			{
+				runner = runner->next;
+
+				if (strcmp(runner->item->key, key) == 0) return true;
+			}
+		}
+	}
+	
+	// not in the map
+	return false;
 }
 
-void dm_map_search_print(dm_map* map, char* key)
+void dm_map_resize(dm_map_t* map)
 {
-    char* val;
-    if((val = dm_map_search(map, key)) == NULL) DM_LOG_DEBUG("Key not found.");
-    else DM_LOG_DEBUG("Key: %s; Value: %s", key, val);
+	dm_map_t* new_map = dm_map_create(map->type_size, map->capacity * DM_MAP_RESIZE_FACTOR);
+
+	for (int i = 0; i < map->capacity; i++)
+	{
+		if (map->items[i]) dm_map_insert(new_map, map->items[i]->key, map->items[i]->value);
+	}
+
+	dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
+	dm_free(map->overflow_buckets, sizeof(dm_map_link_list*) * map->capacity, DM_MEM_MAP);
+	*map = *new_map;
+
+	// also need to adjust memory database
+	dm_mem_db_adjust(sizeof(dm_map_t), DM_MEM_MAP, DM_MEM_ADJUST_SUBTRACT);
 }
 
-// collisions
-void dm_map_collision(dm_map* map, unsigned long index, dm_map_item* item)
+dm_map_item* dm_map_create_item(char* key, void* value, size_t type_size)
 {
-    dm_map_link_list* head = map->overflows[index];
+	dm_map_item* item = dm_alloc(sizeof(dm_map_item), DM_MEM_MAP);
+	item->key = strdup(key);
+	item->value = value;
 
-    if(!head)
-    {
-        head = dm_map_allocate_list();
-        head->item = item;
-        map->overflows[index] = head;
-    }
-    else
-    {
-        map->overflows[index] = dm_map_list_insert(head, item);
-    }
+	return item;
 }
 
-dm_map_link_list* dm_map_allocate_list()
+void dm_map_destroy_item(dm_map_item* item, dm_map_t* map)
 {
-    dm_map_link_list* list = (dm_map_link_list*)dm_alloc(sizeof(dm_map_link_list));
-    return list;
+	dm_free(item->key, strlen(item->key) + 1, DM_MEM_MAP);
+	dm_free(item, sizeof(dm_map_item), DM_MEM_MAP);
+}
+
+void dm_map_handle_collision(dm_map_t* map, uint32_t index, dm_map_item* item)
+{
+	dm_map_link_list* head = map->overflow_buckets[index];
+
+	if (!head)
+	{
+		head = dm_map_list_create(item);
+		map->overflow_buckets[index] = head;
+	}
+	else
+	{
+		map->overflow_buckets[index] = dm_map_list_insert(head, item);
+	}
 }
 
 dm_map_link_list* dm_map_list_insert(dm_map_link_list* list, dm_map_item* item)
 {
-    if(!list)
-    {
-        dm_map_link_list* head = dm_map_allocate_list();
-        head->item = item;
-        head->next = NULL;
-        list = head;
-        return list;
-    }
-    else if(list->next == NULL)
-    {
-        dm_map_link_list* node = dm_map_allocate_list();
-        node->item = item;
-        node->next = NULL;
-        list = node;
-        return list;
-    }
+	if (!list)
+	{
+		dm_map_link_list* head = dm_map_list_create(item);
+		list = head;
+	}
+	else if (!list->next)
+	{
+		dm_map_link_list* node = dm_map_list_create(item);
+		list->next = node;
+	}
+	else
+	{
+		// find end of list to append to
+		dm_map_link_list* runner = list;
+		while (runner->next->next) runner = runner->next;
 
-    // find end of list to append to
-    dm_map_link_list* temp = list;
-    while(temp->next->next) temp = temp->next;
+		// attach the new node
+		dm_map_link_list* node = dm_map_list_create(item);
+		runner->next = node;
+	}
 
-    // attach the new node
-    dm_map_link_list* node = dm_map_allocate_list();
-    node->item = item;
-    node->next = NULL;
-    temp->next = node;
-
-    return list;
+	return list;
 }
 
-dm_map_item* dm_map_list_remove(dm_map_link_list* list)
+dm_map_link_list* dm_map_list_create(dm_map_item* item)
 {
-    if(!list) return NULL;
-    if(!list->next) return NULL;
-
-    dm_map_link_list* node = list->next;
-    dm_map_link_list* temp = list;
-    temp->next = NULL;
-    list = node;
-
-    dm_map_item* item = NULL;
-    dm_memcpy(temp->item, item, sizeof(dm_map_item));
-    dm_free(temp->item->key);
-    dm_free(temp->item->value);
-    dm_free(temp->item);
-    dm_free(temp);
-
-    return item;
-}
-
-void dm_map_delete_list(dm_map_link_list* list)
-{
-    dm_map_link_list* temp = list;
-
-    while(list)
-    {
-        temp = list;
-        list = list->next;
-        dm_free(temp->item->key);
-        dm_free(temp->item->value);
-        dm_free(temp->item);
-        dm_free(temp);
-    }
-}
-
-dm_map_link_list** dm_map_create_overflow(dm_map* map)
-{
-    dm_map_link_list** buckets = (dm_map_link_list**)calloc(map->size, sizeof(dm_map_link_list*));
-    for(int i=0; i<map->size;i++) buckets[i] = NULL;
-    return buckets;
-}
-
-void dm_map_delete_overflow(dm_map* map)
-{
-    dm_map_link_list** buckets = map->overflows;
-    for(int i =0; i< map->size; i++) dm_map_delete_list(buckets[i]);
-    dm_free(buckets);
+	dm_map_link_list* node = (dm_map_link_list*)dm_alloc(sizeof(dm_map_link_list), DM_MEM_MAP);
+	node->item = item;
+	return node;
 }

@@ -2,6 +2,8 @@
 
 #ifdef DM_OPENGL
 
+#include "core/dm_logger.h"
+
 GLenum dm_buffer_to_opengl_buffer(dm_buffer_type dm_type)
 {
     switch (dm_type)

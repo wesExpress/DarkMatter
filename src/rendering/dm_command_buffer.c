@@ -1,4 +1,5 @@
 #include "dm_command_buffer.h"
+#include "core/dm_logger.h"
 
 void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline);
 void dm_renderer_end_rederpass_impl();
@@ -11,24 +12,24 @@ void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline);
 void dm_renderer_submit_command(dm_render_command_type command_type, void* data, dm_command_buffer* command_buffer)
 {
 	dm_render_command command = { .command = command_type, .data = data };
-	dm_list_append(&command_buffer->commands, command);
+	dm_list_append(command_buffer->commands, &command);
 }
 
 void dm_renderer_clear_command_buffer(dm_command_buffer* command_buffer)
 {
-	dm_list_clear(&command_buffer->commands);
+	dm_list_clear(command_buffer->commands);
 }
 
 void dm_renderer_destroy_command_buffer(dm_command_buffer* command_buffer)
 {
-	dm_list_destroy(&command_buffer->commands);
+	dm_list_destroy(command_buffer->commands);
 }
 
 bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer, dm_render_pipeline* pipeline)
 {
-	dm_list_for_range(command_buffer->commands, i)
+	for(uint32_t i=0; i<dm_list_get_count(command_buffer->commands); i++)
 	{
-		dm_render_command command = command_buffer->commands.array[i];
+		dm_render_command command = command_buffer->commands[i];
 
 		switch (command.command)
 		{
@@ -61,7 +62,7 @@ bool dm_renderer_submit_command_buffer(dm_command_buffer* command_buffer, dm_ren
 		{} break;
 		default:
 			DM_LOG_ERROR("Uknown render command. Shouldn't be here...");
-			break;
+			return false;
 		}
 	}
 

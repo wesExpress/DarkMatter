@@ -4,6 +4,6 @@
 #include "core/dm_defines.h"
 #include <stdbool.h>
 
-bool dm_textures_load(char** paths, int num_paths);
+bool dm_textures_load(const char** paths, int num_paths);
 
 #endif

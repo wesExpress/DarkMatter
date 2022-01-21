@@ -17,6 +17,7 @@
 	 "LIST           ",
 	 "MAP            ",
 	 "RENDERER       ",
+	 "RENDER COMMAND ",
 	 "RENDER PIPELINE",
 	 "BUFFER         ",
 	 "SHADER         ",
@@ -175,6 +176,9 @@ void dm_mem_all_freed()
 					break;
 				case DM_MEM_RENDERER:
 					strcpy(buffer, "renderer");
+					break;
+				case DM_MEM_RENDER_COMMAND:
+					strcpy(buffer, "render command");
 					break;
 				case DM_MEM_RENDER_PIPELINE:
 					strcpy(buffer, "render pipeline");
