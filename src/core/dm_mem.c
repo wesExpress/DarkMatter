@@ -70,10 +70,29 @@ void dm_memmove(void* dest, const void* src, size_t size)
 	dm_platform_memmove(dest, src, size);
 }
 
-void dm_mem_db_adjust(size_t size, dm_mem_tag tag)
+void dm_mem_db_adjust(size_t size, dm_mem_tag tag, dm_mem_adjust_func adjust_func)
 {
-	mem_db.total += size;
-	mem_db.allocs[tag] += size;
+	switch (adjust_func)
+	{
+	case DM_MEM_ADJUST_ADD:
+		mem_db.total += size;
+		mem_db.allocs[tag] += size;
+		break;
+	case DM_MEM_ADJUST_SUBTRACT:
+		mem_db.total -= size;
+		mem_db.allocs[tag] -= size;
+		break;
+	case DM_MEM_ADJUST_MULTIPLY:
+		mem_db.total += (mem_db.allocs[tag] * size);
+		mem_db.allocs[tag] *= size;
+		break;
+	case DM_MEM_ADJUST_DIVIDE:
+		mem_db.total += (mem_db.allocs[tag] / size);
+		mem_db.allocs[tag] *= size;
+		break;
+	default: break;
+	}
+	
 }
 
 char* dm_mem_track()

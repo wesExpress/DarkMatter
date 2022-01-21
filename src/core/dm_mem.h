@@ -19,6 +19,15 @@ typedef enum dm_mem_tag
 	DM_MEM_UNKNOWN
 } dm_mem_tag;
 
+typedef enum dm_mem_adjust_func
+{
+	DM_MEM_ADJUST_ADD,
+	DM_MEM_ADJUST_SUBTRACT,
+	DM_MEM_ADJUST_MULTIPLY,
+	DM_MEM_ADJUST_DIVIDE,
+	DM_MEM_ADJUST_UNKNOWN
+} dm_mem_adjust_func;
+
 /*
 * wrapper for alloc. checks the block is not NULL before returning
 * 
@@ -82,7 +91,7 @@ void dm_memmove(void* dest, const void* src, size_t size);
 * @param size - size in bytes
 * @param tag - memory tag
 */
-void dm_mem_db_adjust(size_t size, dm_mem_tag tag);
+void dm_mem_db_adjust(size_t size, dm_mem_tag tag, dm_mem_adjust_func adjust_func);
 
 // memory tracking printing functions
 char* dm_mem_track();

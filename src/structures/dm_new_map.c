@@ -46,8 +46,8 @@ dm_map_t* dm_map_create(size_t type_size, size_t capacity)
 
 	map->capacity = capacity;
 	map->type_size = type_size;
-	map->items = (dm_map_item**)dm_alloc(sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
 
+	map->items = (dm_map_item**)dm_alloc(sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
 	map->overflow_buckets = (dm_map_link_list**)dm_alloc(sizeof(dm_map_link_list*) * map->capacity, DM_MEM_MAP);
 
 	return map;
@@ -200,7 +200,7 @@ bool dm_map_exists(dm_map_t* map, char* key)
 	// check the index right away
 	if (map->items[index])
 	{
-		if (strcmp(map->items[index], key) == 0) return true;
+		if (strcmp(map->items[index]->key, key) == 0) return true;
 	}
 
 	// check the overflow bucket
@@ -239,6 +239,9 @@ void dm_map_resize(dm_map_t* map)
 	dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
 	dm_free(map->overflow_buckets, sizeof(dm_map_link_list*) * map->capacity, DM_MEM_MAP);
 	*map = *new_map;
+
+	// also need to adjust memory database to refelct
+	dm_mem_db_adjust(sizeof(dm_map_t), DM_MEM_MAP, DM_MEM_ADJUST_SUBTRACT);
 }
 
 dm_map_item* dm_map_create_item(char* key, void* value, size_t type_size)
@@ -277,22 +280,22 @@ dm_map_link_list* dm_map_list_insert(dm_map_link_list* list, dm_map_item* item)
 	{
 		dm_map_link_list* head = dm_map_list_create(item);
 		list = head;
-		return list;
 	}
 	else if (!list->next)
 	{
 		dm_map_link_list* node = dm_map_list_create(item);
 		list->next = node;
-		return list;
 	}
+	else
+	{
+		// find end of list to append to
+		dm_map_link_list* runner = list;
+		while (runner->next->next) runner = runner->next;
 
-	// find end of list to append to
-	dm_map_link_list* runner = list;
-	while (runner->next->next) runner = runner->next;
-
-	// attach the new node
-	dm_map_link_list* node = dm_map_list_create(item);
-	runner->next = node;
+		// attach the new node
+		dm_map_link_list* node = dm_map_list_create(item);
+		runner->next = node;
+	}
 
 	return list;
 }
