@@ -1,6 +1,7 @@
 #include "dm_string.h"
 #include "dm_mem.h"
 #include <string.h>
+#include <stdlib.h>
 
 char* dm_strdup(const char* src)
 {
