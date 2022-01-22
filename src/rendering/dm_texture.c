@@ -1,6 +1,7 @@
 #include "dm_texture.h"
 #include "structures/dm_map.h"
 #include "dm_render_types.h"
+#include <stdio.h>
 
 bool dm_textures_load(const char** paths, int num_paths)
 {

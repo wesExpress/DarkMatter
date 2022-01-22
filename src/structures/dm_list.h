@@ -1,6 +1,7 @@
 #ifndef __DM_LIST_H__
 #define __DM_LIST_H__
 
+#include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
 

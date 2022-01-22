@@ -158,7 +158,8 @@ void dm_list_shrink(dm_list_header* header)
 
 void dm_list_resize(dm_list_header* header, size_t new_capacity, dm_mem_adjust_func adjust_func)
 {
-	dm_mem_db_adjust(abs(header->capacity - new_capacity), DM_MEM_LIST, adjust_func);
+	int64_t block_size = header->capacity - new_capacity;
+	dm_mem_db_adjust(llabs(block_size), DM_MEM_LIST, adjust_func);
 	header = (dm_list_header*)dm_realloc(header, new_capacity * header->element_size);
 	header->capacity = new_capacity;
 }
