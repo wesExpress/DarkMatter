@@ -12,5 +12,5 @@ char* dm_strdup(const char* src)
 
 void dm_strdel(char* str)
 {
-    dm_free(str, strlen(str), DM_MEM_STRING);
+    dm_free(str, strlen(str)+1, DM_MEM_STRING);
 }
