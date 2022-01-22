@@ -10,7 +10,7 @@ bool dm_textures_load(const char** paths, int num_paths)
 	//dm_map_destroy(&map);
 
 	dm_map_t* map = dm_map_create(sizeof(int), DM_MAP_DEFAULT_SIZE);
-	for (int i = 0; i < 16; i++)
+	for (int i = 0; i < 5; i++)
 	{
 		char buffer[512];
 		sprintf(buffer, "%d", i);

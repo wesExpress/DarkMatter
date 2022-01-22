@@ -12,24 +12,20 @@ typedef struct dm_map_item
 	void* value;
 } dm_map_item;
 
-typedef struct dm_map_link_list
-{
-	dm_map_item* item;
-	struct dm_map_link_list* next;
-} dm_map_link_list;
-
 typedef struct dm_map_t
 {
 	size_t capacity, count, type_size;
 	dm_map_item** items;
-	dm_map_link_list** overflow_buckets;
 } dm_map_t;
 
 dm_map_t* dm_map_create(size_t type_size, size_t capacity);
 void dm_map_destroy(dm_map_t* map);
 
+/*
+Insert an element using linear probing
+*/
 void dm_map_insert(dm_map_t* map, char* key, void* value);
-void dm_map_delete(dm_map_t* map, char* key);
+void dm_map_delete_elem(dm_map_t* map, char* key);
 /*
 It is the user's responsibility to cast this to whatever it actually is! Returns NULL if not found
 */
