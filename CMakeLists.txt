@@ -47,6 +47,8 @@ set(
     src/core/dm_mem.c
     src/core/dm_logger.c
     src/core/dm_event.c
+    src/core/dm_string.c
+
     src/core/dm_camera_controller.c
 
     src/input/dm_input.c
