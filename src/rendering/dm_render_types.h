@@ -84,14 +84,20 @@ typedef enum dm_texture_format
     DM_TEXTURE_FORMAT_UNKNOWN
 } dm_texture_format;
 
-typedef struct dm_texture
+typedef struct dm_image_desc
 {
     const char* path;
     const char* name;
-    int width, height, n_channels;
     dm_texture_format format;
     dm_texture_format internal_format;
+    int width, height, n_channels;
     bool flip;
+} dm_image_desc;
+
+typedef struct dm_texture
+{
+    dm_image_desc desc;   
+    void* data;
     void* internal_texture;
 } dm_texture;
 
