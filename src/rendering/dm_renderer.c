@@ -215,6 +215,10 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 	dm_list_destroy(pipeline->render_packet.constant_buffers);
 
 	// textures
+	for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.texture_paths); i++)
+	{
+		dm_strdel(pipeline->render_packet.texture_paths[i].string);
+	}
 	dm_list_destroy(pipeline->render_packet.texture_paths);
 
 	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
