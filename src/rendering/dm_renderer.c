@@ -76,13 +76,6 @@ dm_vertex_attrib_desc tex_coord_desc = {
 */
 dm_vec3 offset = { 0, 0, 0 };
 
-
-/*
-// textures
-*/
-dm_image_desc tex_desc1 = {0};
-const char* textures[] = { "assets/container.jpg", "assets/awesomeface.png" };
-
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	r_data.clear_color = clear_color;
@@ -196,7 +189,9 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	pipeline->render_packet.vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.constant_buffers = dm_list_init(sizeof(dm_constant_buffer), DM_LIST_DEFAULT_SIZE);
-	pipeline->render_packet.textures = dm_list_init(sizeof(dm_texture), DM_LIST_DEFAULT_SIZE);
+	// TODO make sure that this makes sense. Here just allocating 512 bytes for char arrays that we can shove
+	// paths into.
+	pipeline->render_packet.texture_paths = dm_list_init(512, DM_LIST_DEFAULT_SIZE);
 
 	pipeline->render_packet.count = 0;
 	pipeline->render_packet.offset = 0;
@@ -222,7 +217,7 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 	dm_list_destroy(pipeline->render_packet.constant_buffers);
 
 	// textures
-	dm_list_destroy(pipeline->render_packet.textures);
+	dm_list_destroy(pipeline->render_packet.texture_paths);
 
 	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 }
@@ -366,8 +361,11 @@ bool dm_renderer_init_object_data()
 	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
 
 	if(!dm_textures_load(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
-	dm_texture* test = dm_texture_get("assets/container.jpg");
-	test = dm_texture_get("assets/awesomeface.png");
+	
+	for(uint32_t i=0; i<sizeof(image_descs)/sizeof(dm_image_desc);i++)
+	{
+		dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &image_descs[i].path);
+	}
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);
 }

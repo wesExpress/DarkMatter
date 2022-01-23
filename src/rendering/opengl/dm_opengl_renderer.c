@@ -10,6 +10,7 @@
 #include "dm_opengl_shader.h"
 #include "dm_opengl_buffer.h"
 #include "dm_opengl_texture.h"
+#include "rendering/dm_texture.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -135,9 +136,9 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     }
 
     // textures
-    for (uint32_t i = 0; i < dm_list_get_count(pipeline->render_packet.textures); i++)
+    for (uint32_t i = 0; i < dm_list_get_count(pipeline->render_packet.texture_paths); i++)
     {
-        dm_texture* texture = &pipeline->render_packet.textures[i];
+        dm_texture* texture = dm_texture_get(pipeline->render_packet.texture_paths[i]);
         dm_opengl_destroy_texture(texture);
     }
 
@@ -195,9 +196,11 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
     }
 
     // textures
-    for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.textures); i++)
+
+    for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.texture_paths); i++)
     {
-        dm_texture* texture = &pipeline->render_packet.textures[i];
+        char* test = pipeline->render_packet.texture_paths[i];
+        dm_texture* texture = dm_texture_get(pipeline->render_packet.texture_paths[i]);
         if (!dm_opengl_create_texture(texture, i, internal_shader->id)) return false;
     }
 
@@ -303,9 +306,9 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
     // TODO: need to change this eventually, this won't work with multiple textures per draw call
     // textures
-    for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.textures); i++)
+    for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.texture_paths); i++)
     {
-        dm_texture* texture = &pipeline->render_packet.textures[i];
+        dm_texture* texture = dm_texture_get(pipeline->render_packet.texture_paths[i]);
 
         if (!dm_opengl_bind_texture(texture)) return false;
     }
