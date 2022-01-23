@@ -10,7 +10,7 @@
 
 // forward declare "private functions"
 void dm_map_resize(dm_map_t* map);
-dm_map_item* dm_map_create_item(char* key, void* value, size_t type_size);
+dm_map_item* dm_map_create_item(const char* key, void* value, size_t type_size);
 void dm_map_destroy_item(dm_map_item* item);
 
 // just add the characters together
@@ -62,7 +62,7 @@ void dm_map_destroy(dm_map_t* map)
 	dm_free(map, sizeof(dm_map_t), DM_MEM_MAP);
 }
 
-void dm_map_insert(dm_map_t* map, char* key, void* value)
+void dm_map_insert(dm_map_t* map, const char* key, void* value)
 {
 	uint32_t index = dm_map_hash(key, map);
 
@@ -157,7 +157,7 @@ void dm_map_resize(dm_map_t* map)
 	*map = *new_map;
 }
 
-dm_map_item* dm_map_create_item(char* key, void* value, size_t type_size)
+dm_map_item* dm_map_create_item(const char* key, void* value, size_t type_size)
 {
 	dm_map_item* item = dm_alloc(sizeof(dm_map_item), DM_MEM_MAP);
 	item->key = dm_strdup(key);

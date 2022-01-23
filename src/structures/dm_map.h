@@ -24,7 +24,7 @@ void dm_map_destroy(dm_map_t* map);
 /*
 Insert an element using linear probing
 */
-void dm_map_insert(dm_map_t* map, char* key, void* value);
+void dm_map_insert(dm_map_t* map, const char* key, void* value);
 void dm_map_delete_elem(dm_map_t* map, char* key);
 /*
 It is the user's responsibility to cast this to whatever it actually is! Returns NULL if not found
