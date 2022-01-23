@@ -23,11 +23,11 @@ dm_list_header* dm_list_get_header(void* list);
 
 void* dm_list_init(size_t element_size, size_t capacity)
 {
-	dm_list_header* header = (dm_list_header*)dm_alloc(sizeof(dm_list_header) + element_size * capacity, DM_MEM_LIST);
+	dm_list_header* header = (dm_list_header*)dm_alloc(DM_LIST_HEADER_OFFSET + element_size * capacity, DM_MEM_LIST);
 	header->capacity = capacity;
 	header->element_size = element_size;
 
-	return (char*)header + DM_LIST_HEADER_OFFSET;
+	return ((char*)header + DM_LIST_HEADER_OFFSET);
 }
 
 void dm_list_destroy(void* list)
