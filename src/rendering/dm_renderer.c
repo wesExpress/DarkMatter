@@ -78,8 +78,9 @@ dm_vec3 offset = { 0, 0, 0 };
 
 
 /*
-// texture
+// textures
 */
+dm_image_desc tex_desc1 = {0};
 const char* textures[] = { "assets/container.jpg", "assets/awesomeface.png" };
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
@@ -104,6 +105,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		return false;
 	}
 
+	dm_texture_map_init();
 	if (!dm_renderer_create_object_pipeline())
 	{
 		DM_LOG_FATAL("Failed to create object render pipeline!");
@@ -134,6 +136,7 @@ void dm_renderer_shutdown()
 	// cleanup
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
 	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
+	dm_texture_map_destroy();
 
 	// backend shutdown
 	dm_renderer_shutdown_impl(&r_data);
@@ -346,22 +349,25 @@ bool dm_renderer_init_object_data()
 	cb.desc.data = &offset;
 	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &cb);
 
-	dm_texture texture1 = { 0 };
-	texture1.path = "assets/container.jpg";
-	texture1.name = "uTexture1";
-	texture1.format = DM_TEXTURE_FORMAT_RGB;
-	texture1.internal_format = DM_TEXTURE_FORMAT_RGB;
-	dm_list_append(r_data.object_pipeline->render_packet.textures, &texture1);
+	// texture initialization
+	dm_image_desc image_desc1 = { 0 };
+	image_desc1.path = "assets/container.jpg";
+	image_desc1.name = "uTexture1";
+	image_desc1.format = DM_TEXTURE_FORMAT_RGB;
+	image_desc1.internal_format = DM_TEXTURE_FORMAT_RGB;
 
-	dm_texture texture2 = { 0 };
-	texture2.path = "assets/awesomeface.png";
-	texture2.name = "uTexture2";
-	texture2.format = DM_TEXTURE_FORMAT_RGBA;
-	texture2.internal_format = DM_TEXTURE_FORMAT_RGB;
-	texture2.flip = true;
-	dm_list_append(r_data.object_pipeline->render_packet.textures, &texture2);
+	dm_image_desc image_desc2 = { 0 };
+	image_desc2.path = "assets/awesomeface.png";
+	image_desc2.name = "uTexture2";
+	image_desc2.format = DM_TEXTURE_FORMAT_RGBA;
+	image_desc2.internal_format = DM_TEXTURE_FORMAT_RGB;
+	image_desc2.flip = true;
 
-	if (!dm_textures_load(textures, 2)) return false;
+	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
+
+	if(!dm_textures_load(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
+	dm_texture* test = dm_texture_get("assets/container.jpg");
+	test = dm_texture_get("assets/awesomeface.png");
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);
 }

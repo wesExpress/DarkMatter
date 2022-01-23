@@ -25,12 +25,12 @@ void dm_map_destroy(dm_map_t* map);
 Insert an element using linear probing
 */
 void dm_map_insert(dm_map_t* map, const char* key, void* value);
-void dm_map_delete_elem(dm_map_t* map, char* key);
+void dm_map_delete_elem(dm_map_t* map, const char* key);
 /*
 It is the user's responsibility to cast this to whatever it actually is! Returns NULL if not found
 */
-void* dm_map_get(dm_map_t* map, char* key);
+void* dm_map_get(dm_map_t* map, const char* key);
 
-bool dm_map_exists(dm_map_t* map, char* key);
+bool dm_map_exists(dm_map_t* map, const char* key);
 
 #endif

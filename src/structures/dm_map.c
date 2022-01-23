@@ -86,7 +86,7 @@ void dm_map_insert(dm_map_t* map, const char* key, void* value)
 	if(( (float)map->count / (float)map->capacity) >= DM_MAP_LOAD_FACTOR) dm_map_resize(map);
 }
 
-void dm_map_delete_elem(dm_map_t* map, char* key)
+void dm_map_delete_elem(dm_map_t* map, const char* key)
 {
 	uint32_t index = dm_map_hash(key, map);
 
@@ -107,7 +107,7 @@ void dm_map_delete_elem(dm_map_t* map, char* key)
 	DM_LOG_WARN("Trying to delete invalid index from map.");
 }
 
-void* dm_map_get(dm_map_t* map, char* key)
+void* dm_map_get(dm_map_t* map, const char* key)
 {
 	uint32_t index = dm_map_hash(key, map);
 
@@ -124,7 +124,7 @@ void* dm_map_get(dm_map_t* map, char* key)
 	return NULL;
 }
 
-bool dm_map_exists(dm_map_t* map, char* key)
+bool dm_map_exists(dm_map_t* map, const char* key)
 {
 	uint32_t index = dm_map_hash(key, map);
 
