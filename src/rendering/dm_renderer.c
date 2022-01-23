@@ -189,9 +189,7 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	pipeline->render_packet.vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.constant_buffers = dm_list_init(sizeof(dm_constant_buffer), DM_LIST_DEFAULT_SIZE);
-	// TODO make sure that this makes sense. Here just allocating 512 bytes for char arrays that we can shove
-	// paths into.
-	pipeline->render_packet.texture_paths = dm_list_init(512, DM_LIST_DEFAULT_SIZE);
+	pipeline->render_packet.texture_paths = dm_list_init(sizeof(dm_string), DM_LIST_DEFAULT_SIZE);
 
 	pipeline->render_packet.count = 0;
 	pipeline->render_packet.offset = 0;
@@ -364,7 +362,10 @@ bool dm_renderer_init_object_data()
 	
 	for(uint32_t i=0; i<sizeof(image_descs)/sizeof(dm_image_desc);i++)
 	{
-		dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &image_descs[i].path);
+		dm_string str = {0};
+		str.string = dm_strdup(image_descs[i].path);
+		str.len = strlen(str.string);
+		dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &str);
 	}
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);

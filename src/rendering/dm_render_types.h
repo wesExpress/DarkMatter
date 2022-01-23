@@ -2,6 +2,7 @@
 #define __DM_RENDER_TYPES_H__
 
 #include "core/dm_math_types.h"
+#include "core/dm_string.h"
 #include "structures/dm_list.h"
 #include <stdlib.h>
 #include <stdbool.h>
@@ -262,7 +263,7 @@ typedef struct dm_render_packet
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
     dm_list(dm_constant_buffer) constant_buffers;
-    dm_list(char*) texture_paths;
+    dm_list(dm_string) texture_paths;
     size_t count;
     size_t offset;
 } dm_render_packet;
