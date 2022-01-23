@@ -11,7 +11,7 @@
 // forward declare "private functions"
 void dm_map_resize(dm_map_t* map);
 dm_map_item* dm_map_create_item(const char* key, void* value, size_t type_size);
-void dm_map_destroy_item(dm_map_item* item);
+void dm_map_destroy_item(dm_map_item* item, size_t type_size);
 
 // just add the characters together
 uint32_t dm_map_simple_hash_function(dm_map_t* map, char* key)
@@ -55,7 +55,7 @@ void dm_map_destroy(dm_map_t* map)
 	for (int i = 0; i < map->capacity; i++)
 	{
 		// items
-		if (map->items[i]) dm_map_destroy_item(map->items[i]);
+		if (map->items[i]) dm_map_destroy_item(map->items[i], map->type_size);
 
 	}
 	dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
@@ -95,7 +95,7 @@ void dm_map_delete_elem(dm_map_t* map, const char* key)
 	{
 		if (strcmp(map->items[index]->key, key) == 0)
 		{
-			dm_map_destroy_item(map->items[index]);
+			dm_map_destroy_item(map->items[index], map->type_size);
 			map->count--;
 			return;
 		}
@@ -149,7 +149,7 @@ void dm_map_resize(dm_map_t* map)
 		if (map->items[i])
 		{
 			dm_map_insert(new_map, map->items[i]->key, map->items[i]->value);
-			dm_map_destroy_item(map->items[i]);
+			dm_map_destroy_item(map->items[i], map->type_size);
 		}
 	}
 	size_t test = sizeof(dm_map_t);
@@ -161,13 +161,15 @@ dm_map_item* dm_map_create_item(const char* key, void* value, size_t type_size)
 {
 	dm_map_item* item = dm_alloc(sizeof(dm_map_item), DM_MEM_MAP);
 	item->key = dm_strdup(key);
-	item->value = value;
+	item->value = dm_alloc(sizeof(type_size), DM_MEM_MAP);
+	dm_memcpy(item->value, value, type_size);
 
 	return item;
 }
 
-void dm_map_destroy_item(dm_map_item* item)
+void dm_map_destroy_item(dm_map_item* item, size_t type_size)
 {
 	dm_strdel(item->key);
+	dm_free(item->value, type_size, DM_MEM_MAP);
 	dm_free(item, sizeof(dm_map_item), DM_MEM_MAP);
 }
