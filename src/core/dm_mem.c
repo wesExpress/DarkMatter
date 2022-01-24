@@ -1,5 +1,6 @@
 #include "dm_mem.h"
 #include "platform/dm_platform.h"
+#include "dm_logger.h"
 #include "core/dm_logger.h"
 #include <string.h>
 #include <stdio.h>
@@ -136,12 +137,7 @@ char* dm_mem_track()
 		offset += len;
 	}
 
-#if __WIN32__ || _WIN32 || WIN32
-	char* out_str = _strdup(buffer);
-#else
-	char* out_str = strdup(buffer);
-#endif
-	return out_str;
+	DM_LOG_INFO("%s", buffer);
 }
 
 void dm_mem_all_freed()
