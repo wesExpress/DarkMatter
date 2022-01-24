@@ -81,7 +81,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	r_data.clear_color = clear_color;
 	r_data.width = platform_data->window_width;
 	r_data.height = platform_data->window_height;
-	r_data.object_pipeline = (dm_render_pipeline*)dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
+	r_data.object_pipeline = dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 
 #ifdef DM_OPENGL
 	char* backend = "OpenGL";
@@ -166,7 +166,7 @@ void dm_renderer_begin_scene()
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, &r_data.object_pipeline->command_buffer);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, &r_data.object_pipeline->command_buffer);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, & r_data.object_pipeline->command_buffer);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, &r_data.object_pipeline->command_buffer);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
 }
 
@@ -180,16 +180,16 @@ bool dm_renderer_end_scene()
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 {
 	// command buffer
-	pipeline->command_buffer.commands = dm_list_init(sizeof(dm_render_command), DM_LIST_DEFAULT_SIZE);
+	pipeline->command_buffer.commands = dm_list_init(sizeof(dm_render_command), DM_LIST_DEFAULT_COUNT);
 
 	// rasterizer
-	pipeline->raster_desc.shader = (dm_shader*)dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+	pipeline->raster_desc.shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 
 	// render packet
-	pipeline->render_packet.vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->render_packet.index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->render_packet.constant_buffers = dm_list_init(sizeof(dm_constant_buffer), DM_LIST_DEFAULT_SIZE);
-	pipeline->render_packet.texture_paths = dm_list_init(sizeof(dm_string), DM_LIST_DEFAULT_SIZE);
+	pipeline->render_packet.vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->render_packet.index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->render_packet.constant_buffers = dm_list_init(sizeof(dm_constant_buffer), DM_LIST_DEFAULT_COUNT);
+	pipeline->render_packet.texture_paths = dm_list_init(sizeof(dm_string), DM_LIST_DEFAULT_COUNT);
 
 	pipeline->render_packet.count = 0;
 	pipeline->render_packet.offset = 0;
