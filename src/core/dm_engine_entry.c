@@ -1,7 +1,13 @@
 #include "dm_engine.h"
+#include "dm_logger.h"
 
 int main()
 {
+#ifdef DM_PLATFORM_UNSUPPORTED
+    DM_LOG_FATAL("Trying to compile on unsupprted platform!");
+    return false;
+#endif
+
     if(!dm_engine_create())
     {
         return -1;
