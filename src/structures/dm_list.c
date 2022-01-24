@@ -6,13 +6,14 @@
 
 #define DM_LIST_RESIZE_FACTOR 2
 #define DM_LIST_LOAD_FACTOR 0.75
-#define DM_LIST_HEADER_OFFSET 3 * sizeof(size_t)
+
 typedef char* dm_void_to_arith;
 
 typedef struct dm_list_header
 {
 	size_t capacity, count, element_size;
 } dm_list_header;
+#define DM_LIST_HEADER_OFFSET sizeof(dm_list_header)
 
 bool dm_list_should_grow(dm_list_header* header);
 bool dm_list_should_shrink(dm_list_header* header);
@@ -34,10 +35,10 @@ void dm_list_destroy(void* list)
 {
 	dm_list_header* header = dm_list_get_header(list);
 
-	dm_free(header, sizeof(dm_list_header) + header->capacity * header->element_size, DM_MEM_LIST);
+	dm_free(header, DM_LIST_HEADER_OFFSET + header->capacity * header->element_size, DM_MEM_LIST);
 }
 
-void dm_list_append(void* list, void* value)
+void dm_list_append(void* list, const void* value)
 {
 	dm_list_header* header = dm_list_get_header(list);
 
@@ -45,9 +46,11 @@ void dm_list_append(void* list, void* value)
 	dm_memcpy(dest, value, header->element_size);
 	header->count++;
 	dm_list_grow(header);
+
+	list = ((char*)header + DM_LIST_HEADER_OFFSET);
 }
 
-void dm_list_insert(void* list, void* value, uint32_t index)
+void dm_list_insert(void* list, const void* value, uint32_t index)
 {
 	dm_list_header* header = dm_list_get_header(list);
 
@@ -64,6 +67,7 @@ void dm_list_insert(void* list, void* value, uint32_t index)
 		dm_memcpy(src, value, header->element_size);
 		header->count++;
 		dm_list_grow(header);
+		list = ((char*)header + DM_LIST_HEADER_OFFSET);
 	}
 	else
 	{
@@ -79,6 +83,7 @@ void dm_list_pop(void* list)
 	{
 		header->count--;
 		dm_list_shrink(header);
+		list = ((char*)header + DM_LIST_HEADER_OFFSET);
 	}
 	else
 	{
@@ -102,6 +107,7 @@ void dm_list_pop_at(void* list, uint32_t index)
 
 		header->count--;
 		dm_list_shrink(header);
+		list = ((char*)header + DM_LIST_HEADER_OFFSET);
 	}
 	else
 	{
@@ -109,18 +115,21 @@ void dm_list_pop_at(void* list, uint32_t index)
 	}
 }
 
-void dm_list_clear(void* list)
+void dm_list_clear(void* list, size_t new_capacity)
 {
 	dm_list_header* header = dm_list_get_header(list);
+	if(new_capacity==0) new_capacity = DM_LIST_DEFAULT_CAPACITY;
+	size_t old_size = DM_LIST_HEADER_OFFSET + header->capacity * header->element_size;
+	size_t new_size = DM_LIST_HEADER_OFFSET + new_capacity * header->element_size;
+	size_t elem_size = header->element_size;
 
 	if (header->count > 0)
 	{
-		dm_mem_db_adjust((header->capacity - DM_LIST_DEFAULT_COUNT) * header->element_size, DM_MEM_LIST, DM_MEM_ADJUST_SUBTRACT);
-		header = dm_realloc(header, DM_LIST_HEADER_OFFSET + DM_LIST_DEFAULT_COUNT * header->element_size);
-		header->capacity = DM_LIST_DEFAULT_COUNT;
-		header->count = 0;
-
-		list = (char*)header + DM_LIST_HEADER_OFFSET;
+		dm_free(header, old_size, DM_MEM_LIST);
+		header = dm_alloc(new_size, DM_MEM_LIST);
+		header->capacity = new_capacity;
+		header->element_size = elem_size;
+		list = ((char*)header + DM_LIST_HEADER_OFFSET);
 	}
 	else
 	{
@@ -158,9 +167,9 @@ void dm_list_shrink(dm_list_header* header)
 
 void dm_list_resize(dm_list_header* header, size_t new_capacity, dm_mem_adjust_func adjust_func)
 {
-	int64_t block_size = header->capacity - new_capacity;
+	int64_t block_size = (header->capacity - new_capacity) * header->element_size;
 	dm_mem_db_adjust(llabs(block_size), DM_MEM_LIST, adjust_func);
-	header = dm_realloc(header, DM_LIST_HEADER_OFFSET + new_capacity * header->element_size);
+	dm_realloc(header, DM_LIST_HEADER_OFFSET + new_capacity * header->element_size);
 	header->capacity = new_capacity;
 }
 
@@ -173,7 +182,7 @@ bool dm_list_is_empty(void* list)
 {
 	dm_list_header* header = dm_list_get_header(list);
 
-	return header->count == 0;
+	return (header->count == 0);
 }
 
 size_t dm_list_get_count(void* list)

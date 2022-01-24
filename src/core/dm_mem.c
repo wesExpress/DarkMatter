@@ -44,9 +44,9 @@ void* dm_calloc(size_t count, size_t size, dm_mem_tag tag)
 	return dm_platform_calloc(count, size);
 }
 
-void* dm_realloc(void* block, size_t new_size)
+void dm_realloc(void* block, size_t new_size)
 {
-	return dm_platform_realloc(block, new_size);
+	dm_platform_realloc(block, new_size);
 }
 
 void dm_free(void* block, size_t size, dm_mem_tag tag)
