@@ -148,7 +148,7 @@ bool dm_renderer_resize(int new_width, int new_height)
 		.max_depth = 1.0f
 	};
 	r_data.object_pipeline->viewport = viewport;
-	dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, NULL, &r_data.object_pipeline->command_buffer);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, NULL, r_data.object_pipeline->render_commands);
 
 	return true;
 }
@@ -158,21 +158,21 @@ void dm_renderer_begin_scene()
 	dm_renderer_begin_scene_impl(&r_data);
 
 	// commands for object pipeline
-	if (!dm_list_is_empty(r_data.object_pipeline->command_buffer.commands))
+	if (!dm_list_is_empty(r_data.object_pipeline->render_commands))
 	{
-		dm_renderer_clear_command_buffer(&r_data.object_pipeline->command_buffer);
+		dm_renderer_clear_command_buffer(r_data.object_pipeline->render_commands);
 	}
 
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, &r_data.object_pipeline->command_buffer);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, &r_data.object_pipeline->command_buffer);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, &r_data.object_pipeline->command_buffer);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, r_data.object_pipeline->render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, r_data.object_pipeline->render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, r_data.object_pipeline->render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, r_data.object_pipeline->render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, r_data.object_pipeline->render_commands);
 }
 
 bool dm_renderer_end_scene()
 {
-	if (!dm_renderer_submit_command_buffer(&r_data.object_pipeline->command_buffer, r_data.object_pipeline)) return false;
+	if (!dm_renderer_submit_command_buffer(r_data.object_pipeline->render_commands, r_data.object_pipeline)) return false;
 
 	return dm_renderer_end_scene_impl(&r_data);
 }
@@ -180,7 +180,7 @@ bool dm_renderer_end_scene()
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 {
 	// command buffer
-	pipeline->command_buffer.commands = dm_list_init(sizeof(dm_render_command), DM_LIST_DEFAULT_COUNT);
+	pipeline->render_commands = dm_list_init(sizeof(dm_render_command), DM_LIST_DEFAULT_CAPACITY);
 
 	// rasterizer
 	pipeline->raster_desc.shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
@@ -188,8 +188,8 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	// render packet
 	pipeline->render_packet.vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->render_packet.constant_buffers = dm_list_init(sizeof(dm_constant_buffer), DM_LIST_DEFAULT_COUNT);
-	pipeline->render_packet.texture_paths = dm_list_init(sizeof(dm_string), DM_LIST_DEFAULT_COUNT);
+	pipeline->render_packet.constant_buffers = dm_list_init(sizeof(dm_constant_buffer), DM_LIST_DEFAULT_CAPACITY);
+	pipeline->render_packet.texture_paths = dm_list_init(sizeof(dm_string), DM_LIST_DEFAULT_CAPACITY);
 
 	pipeline->render_packet.count = 0;
 	pipeline->render_packet.offset = 0;
@@ -199,7 +199,7 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 {
-	dm_list_destroy(pipeline->command_buffer.commands);
+	dm_list_destroy(pipeline->render_commands);
 
 	dm_renderer_destroy_render_pipeline_impl(pipeline);
 

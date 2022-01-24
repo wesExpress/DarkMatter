@@ -287,11 +287,6 @@ typedef struct dm_render_command
     void* data;
 } dm_render_command;
 
-typedef struct dm_command_buffer
-{
-    dm_list(dm_render_command) commands;
-} dm_command_buffer;
-
 typedef struct dm_render_pipeline
 {
     dm_raster_state_desc raster_desc;
@@ -299,7 +294,7 @@ typedef struct dm_render_pipeline
     dm_depth_state_desc depth_desc;
     dm_stencil_state_desc stencil_desc;
     dm_render_packet render_packet;
-    dm_command_buffer command_buffer;
+    dm_list(dm_render_command) render_commands;
     dm_viewport viewport;
     bool wireframe;
     void* interal_pipeline;
