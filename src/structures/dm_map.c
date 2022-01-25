@@ -53,83 +53,101 @@ dm_map_t* dm_map_create(size_t type_size, size_t capacity)
 
 void dm_map_destroy(dm_map_t* map)
 {
-	for (int i = 0; i < map->capacity; i++)
+	if(map)
 	{
-		// items
-		if (map->items[i]) dm_map_destroy_item(map->items[i], map->type_size);
+		for (int i = 0; i < map->capacity; i++)
+		{
+			// items
+			if (map->items[i]) dm_map_destroy_item(map->items[i], map->type_size);
 
+		}
+		dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
+		dm_free(map->tombstones, sizeof(bool) * map->capacity, DM_MEM_MAP);
+		dm_free(map, sizeof(dm_map_t), DM_MEM_MAP);
 	}
-	dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
-	dm_free(map->tombstones, sizeof(bool) * map->capacity, DM_MEM_MAP);
-	dm_free(map, sizeof(dm_map_t), DM_MEM_MAP);
+	else
+	{
+		DM_LOG_ERROR("Trying to destroy NULL map!");
+	}
 }
 
 void dm_map_insert(dm_map_t* map, const char* key, void* value)
 {
-	uint32_t index = dm_map_hash(key, map);
-	uint32_t hash = index;
-
-	while(map->items[index] || map->tombstones[index])
+	if(map)
 	{
-		if (map->items[index])
+		uint32_t index = dm_map_hash(key, map);
+		uint32_t hash = index;
+
+		while(map->items[index] || map->tombstones[index])
 		{
-			if (strcmp(map->items[index]->key, key) == 0)
+			if (map->items[index])
 			{
-				map->items[index]->value = value;
-				break;
+				if (strcmp(map->items[index]->key, key) == 0)
+				{
+					map->items[index]->value = value;
+					break;
+				}
+			}
+			else
+			{
+				if(index >= map->capacity) index=0;
+				index++;
 			}
 		}
-		else
-		{
-			if(index >= map->capacity) index=0;
-			index++;
-		}
-	}
 
-	// insert element
-	map->items[index] = dm_map_create_item(key, value, map->type_size);
-	map->count++;
-	if(index==hash) map->tombstones[index] = false;
-	if(( (float)map->count / (float)map->capacity) >= DM_MAP_LOAD_FACTOR) dm_map_resize(map);
+		// insert element
+		map->items[index] = dm_map_create_item(key, value, map->type_size);
+		map->count++;
+		if(index==hash) map->tombstones[index] = false;
+		if(( (float)map->count / (float)map->capacity) >= DM_MAP_LOAD_FACTOR) dm_map_resize(map);
+	}
+	else DM_LOG_ERROR("Trying to insert into NULL map!");
 }
 
 void dm_map_delete_elem(dm_map_t* map, const char* key)
 {
-	uint32_t index = dm_map_hash(key, map);
-
-	while(map->items[index])
+	if(map)
 	{
-		if (strcmp(map->items[index]->key, key) == 0)
+		uint32_t index = dm_map_hash(key, map);
+
+		while(map->items[index])
 		{
-			dm_map_destroy_item(map->items[index], map->type_size);
-			map->tombstones[index] = true;
-			map->count--;
+			if (strcmp(map->items[index]->key, key) == 0)
+			{
+				dm_map_destroy_item(map->items[index], map->type_size);
+				map->tombstones[index] = true;
+				map->count--;
 
-			return;
+				return;
+			}
+
+			index++;
+			if(index >= map->capacity) index=0;
 		}
-
-		index++;
-		if(index >= map->capacity) index=0;
+		DM_LOG_WARN("Trying to delete invalid index from map.");
 	}
-
-	DM_LOG_WARN("Trying to delete invalid index from map.");
+	else DM_LOG_ERROR("Trying to delete from NULL map!");
 }
 
 void* dm_map_get(dm_map_t* map, const char* key)
 {
-	uint32_t index = dm_map_hash(key, map);
-
-	while(map->items[index] || map->tombstones[index])
+	if(map)
 	{
-		if (map->items[index])
+		uint32_t index = dm_map_hash(key, map);
+
+		while(map->items[index] || map->tombstones[index])
 		{
-			if (strcmp(map->items[index]->key, key) == 0) 
-				return map->items[index]->value;
+			if (map->items[index])
+			{
+				if (strcmp(map->items[index]->key, key) == 0) 
+					return map->items[index]->value;
+			}
+			
+			index++;
+			if(index>=map->capacity) index=0;
 		}
-		
-		index++;
-		if(index>=map->capacity) index=0;
 	}
+	else DM_LOG_ERROR("Map is NULL! Returning NULL...");
 
 	// not found;
 	return NULL;
@@ -137,20 +155,24 @@ void* dm_map_get(dm_map_t* map, const char* key)
 
 bool dm_map_exists(dm_map_t* map, const char* key)
 {
-	uint32_t index = dm_map_hash(key, map);
-
-	while(map->items[index] || map->tombstones[index])
+	if(map)
 	{
-		if (map->items[index])
+		uint32_t index = dm_map_hash(key, map);
+
+		while(map->items[index] || map->tombstones[index])
 		{
-			if (strcmp(map->items[index]->key, key) == 0) return true;
+			if (map->items[index])
+			{
+				if (strcmp(map->items[index]->key, key) == 0) return true;
+			}
+			
+			if(index>=map->capacity) index = 0;
+
+			index++;
 		}
-		
-		if(index>=map->capacity) index = 0;
-
-		index++;
 	}
-
+	else DM_LOG_ERROR("Map is NULL! Returning false...");
+	
 	return false;
 }
 
