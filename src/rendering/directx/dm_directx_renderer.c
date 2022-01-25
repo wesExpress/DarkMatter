@@ -142,7 +142,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	}
 
 	//DX_ERROR_CHECK(device->lpVtbl->CreateDepthStencilState(device, &depth_stencil_desc, &internal_pipe->depth_stencil_state), "ID3D11Device::CreateDepthStencilState failed!");
-	dm_mem_db_adjust(sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
 
 	/*
 	// rasterizer
@@ -181,7 +181,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	}
 
 	//DX_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pipe->rasterizer_state), "ID3D11Device::CreateRasterizerState failed!");
-	dm_mem_db_adjust(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
 
 	/*
 	// topology
@@ -201,17 +201,17 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_directx_delete_shader(pipeline->raster_desc.shader, pipeline->interal_pipeline);
 
 	// constant buffers
-	dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+	for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
 	{
-		dm_constant_buffer cb = pipeline->render_packet.constant_buffers.array[i];
+		dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
 	
-		dm_directx_delete_buffer(cb.desc.buffer, pipeline->interal_pipeline);
+		dm_directx_delete_buffer(&cb->desc.buffer, pipeline->interal_pipeline);
 	}
 
 	//DX_RELEASE(internal_pipe->rasterizer_state);
 	//DX_RELEASE(internal_pipe->depth_stencil_state);
-	dm_mem_db_adjust(-sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE);
-	dm_mem_db_adjust(-sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
+	dm_mem_db_adjust(sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
 
 	dm_directx_destroy_depth_stencil(internal_pipe);
 	dm_directx_destroy_rendertarget(internal_pipe);
@@ -239,11 +239,11 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
 	/*
 	// constant buffer(s)
 	*/
-	dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+	for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
 	{
-		dm_constant_buffer cb = pipeline->render_packet.constant_buffers.array[i];
+		dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
 
-		if (!dm_directx_create_buffer(cb.desc.buffer, cb.desc.data, directx_renderer, internal_pipe)) return false;
+		if (!dm_directx_create_buffer(&cb->desc.buffer, cb->desc.data, directx_renderer, internal_pipe)) return false;
 	}
 
 	return true;
@@ -306,10 +306,10 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// constant buffers
 	*/
-	dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+	for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
 	{
-		dm_constant_buffer cb = pipeline->render_packet.constant_buffers.array[i];
-		dm_directx_bind_buffer(cb.desc.buffer, directx_renderer, internal_pipe);
+		dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
+		dm_directx_bind_buffer(&cb->desc.buffer, directx_renderer, internal_pipe);
 	}
 
 	return true;

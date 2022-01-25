@@ -3,6 +3,7 @@
 #ifdef DM_DIRECTX
 
 #include "core/dm_assert.h"
+#include "core/dm_mem.h"
 
 bool dm_directx_create_swapchain(dm_internal_renderer* renderer)
 {
@@ -45,7 +46,7 @@ bool dm_directx_create_swapchain(dm_internal_renderer* renderer)
 
 	// create the swap chain
 	DX_ERROR_CHECK(dxgi_factory->lpVtbl->CreateSwapChain(dxgi_factory, (IUnknown*)device, &desc, &renderer->swap_chain), "IDXGIFactory::CreateSwapChain failed!");
-	dm_mem_db_adjust(sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
 
 	// release pack animal directx objects
 	DX_RELEASE(dxgi_device);
@@ -61,7 +62,7 @@ void dm_directx_destroy_swapchain(dm_internal_renderer* renderer)
 	IDXGISwapChain* swap_chain = renderer->swap_chain;
 	DX_RELEASE(swap_chain);
 
-	dm_mem_db_adjust(-sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
 }
 
 #endif // directx check
