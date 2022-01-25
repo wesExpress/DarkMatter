@@ -33,7 +33,12 @@ bool dm_textures_load(dm_image_desc* image_descs, int num_descs)
 			dm_texture texture = { 0 };
 			texture.desc = image_descs[i];
 			stbi_set_flip_vertically_on_load(texture.desc.flip);
-			unsigned char* data = stbi_load(texture.desc.path, &texture.desc.width, &texture.desc.height, &texture.desc.n_channels, 0);
+#ifdef DM_OPENGL
+			int num_channels = 0;
+#elif defined DM_DIRECTX
+			int num_channels = STBI_rgb_alpha;
+#endif
+			unsigned char* data = stbi_load(texture.desc.path, &texture.desc.width, &texture.desc.height, &texture.desc.n_channels, num_channels);
 			if(!data)
 			{
 				DM_LOG_FATAL("Failed to load image: %s", texture.desc.path);
