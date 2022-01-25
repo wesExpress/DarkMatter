@@ -194,16 +194,26 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	sampler state
 	*/
-	//D3D11_FILTER filter = dm_image_filter_to_directx_filter()
-	D3D11_SAMPLER_DESC sample_desc = { 0 };
-	sample_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-	sample_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
-	sample_desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
-	sample_desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
-	sample_desc.MaxAnisotropy = 1;
-	sample_desc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
-	sample_desc.MaxLOD = D3D11_FLOAT32_MAX;
+	D3D11_FILTER filter = dm_image_filter_to_directx_filter(pipeline->sampler_desc.filter);
+	if (filter == D3D11_FILTER_MAXIMUM_ANISOTROPIC + 1) return false;
+	D3D11_TEXTURE_ADDRESS_MODE u_mode = dm_texture_mode_to_directx_mode(pipeline->sampler_desc.u);
+	if (u_mode == D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1) return false;
+	D3D11_TEXTURE_ADDRESS_MODE v_mode = dm_texture_mode_to_directx_mode(pipeline->sampler_desc.v);
+	if (v_mode == D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1) return false;
+	D3D11_TEXTURE_ADDRESS_MODE w_mode = dm_texture_mode_to_directx_mode(pipeline->sampler_desc.w);
+	if (w_mode == D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1) return false;
+	D3D11_COMPARISON_FUNC comp = dm_comp_to_directx_comp(pipeline->sampler_desc.comparison);
+	if (comp == D3D11_COMPARISON_ALWAYS + 1) return false;
 
+	D3D11_SAMPLER_DESC sample_desc = { 0 };
+	sample_desc.Filter = filter;
+	sample_desc.AddressU = u_mode;
+	sample_desc.AddressV = v_mode;
+	sample_desc.AddressW = w_mode;
+	sample_desc.MaxAnisotropy = 1;
+	sample_desc.ComparisonFunc = comp;
+	if (filter != D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT) sample_desc.MaxLOD = D3D11_FLOAT32_MAX;
+	
 	DX_ERROR_CHECK(directx_renderer->device->lpVtbl->CreateSamplerState(directx_renderer->device, &sample_desc, &internal_pipe->sample_state), "ID3D11Device::CreateSamplerState failed!");
 	dm_mem_db_adjust(sizeof(ID3D11SamplerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
 

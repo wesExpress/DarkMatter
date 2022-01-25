@@ -193,11 +193,30 @@ DXGI_FORMAT dm_image_fmt_to_directx_fmt(dm_texture_format dm_fmt)
 	}
 }
 
-D3D11_FILTER dm_image_filter_to_directx_filter(dm_texture_filter dm_filter)
+D3D11_FILTER dm_image_filter_to_directx_filter(dm_filter filter)
 {
-	switch (dm_filter)
+	switch (filter)
 	{
-	case DM_TEXTURE_FILTER_LINEAR: return D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+	case DM_FILTER_NEAREST:
+	case DM_FILTER_LINEAR: return D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+	default:
+		DM_LOG_FATAL("Unknown filter function!");
+		return D3D11_FILTER_MAXIMUM_ANISOTROPIC + 1;
+	}
+}
+
+D3D11_TEXTURE_ADDRESS_MODE dm_texture_mode_to_directx_mode(dm_texture_mode dm_mode)
+{
+	switch (dm_mode)
+	{
+	case DM_TEXTURE_MODE_WRAP: return D3D11_TEXTURE_ADDRESS_WRAP;
+	case DM_TEXTURE_MODE_BORDER: return D3D11_TEXTURE_ADDRESS_BORDER;
+	case DM_TEXTURE_MODE_EDGE: return D3D11_TEXTURE_ADDRESS_CLAMP;
+	case DM_TEXTURE_MODE_MIRROR_REPEAT: return D3D11_TEXTURE_ADDRESS_MIRROR;
+	case DM_TEXTURE_MODE_MIRROR_EDGE: return D3D11_TEXTURE_ADDRESS_MIRROR_ONCE;
+	default:
+		DM_LOG_FATAL("Unknown texture mode!");
+		return D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1;
 	}
 }
 

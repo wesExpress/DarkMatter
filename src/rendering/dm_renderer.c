@@ -242,6 +242,14 @@ bool dm_renderer_create_object_pipeline()
 	// stencil
 	dm_stencil_state_desc stencil = { 0 };
 
+	// sampler
+	dm_sampler_desc sampler = { 0 };
+	sampler.comparison = DM_COMPARISON_ALWAYS;
+	sampler.filter = DM_FILTER_LINEAR;
+	sampler.u = DM_TEXTURE_MODE_WRAP;
+	sampler.v = DM_TEXTURE_MODE_WRAP;
+	sampler.w = DM_TEXTURE_MODE_WRAP;
+
 	// viewport
 	dm_viewport viewport = { 0 };
 	viewport.y = r_data.height;
@@ -254,6 +262,7 @@ bool dm_renderer_create_object_pipeline()
 	r_data.object_pipeline->blend_desc = blend;
 	r_data.object_pipeline->depth_desc = depth;
 	r_data.object_pipeline->stencil_desc = stencil;
+	r_data.object_pipeline->sampler_desc = sampler;
 	r_data.object_pipeline->viewport = viewport;
 
 	// internal pipeline
@@ -348,20 +357,12 @@ bool dm_renderer_init_object_data()
 	image_desc1.name = "uTexture1";
 	image_desc1.format = DM_TEXTURE_FORMAT_RGB;
 	image_desc1.internal_format = DM_TEXTURE_FORMAT_RGB;
-	image_desc1.min_filter = DM_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR;
-	image_desc1.mag_filter = DM_TEXTURE_FILTER_LINEAR;
-	image_desc1.s_wrap = DM_TEXTURE_EDGE_REPEAT;
-	image_desc1.t_wrap = DM_TEXTURE_EDGE_REPEAT;
 
 	dm_image_desc image_desc2 = { 0 };
 	image_desc2.path = "assets/awesomeface.png";
 	image_desc2.name = "uTexture2";
 	image_desc2.format = DM_TEXTURE_FORMAT_RGBA;
 	image_desc2.internal_format = DM_TEXTURE_FORMAT_RGB;
-	image_desc2.min_filter = DM_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR;
-	image_desc2.mag_filter = DM_TEXTURE_FILTER_LINEAR;
-	image_desc2.s_wrap = DM_TEXTURE_EDGE_REPEAT;
-	image_desc2.t_wrap = DM_TEXTURE_EDGE_REPEAT;
 	image_desc2.flip = true;
 
 	dm_image_desc image_descs[] = { image_desc1, image_desc2 };

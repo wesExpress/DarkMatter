@@ -20,6 +20,19 @@ typedef struct dm_vertex
 typedef uint32_t  dm_index_t;
 typedef dm_vertex dm_vertex_t;
 
+typedef enum dm_comparison
+{
+    DM_COMPARISON_ALWAYS,
+    DM_COMPARISON_NEVER,
+    DM_COMPARISON_EQUAL,
+    DM_COMPARISON_NOTEQUAL,
+    DM_COMPARISON_LESS,
+    DM_COMPARISON_LEQUAL,
+    DM_COMPARISON_GREATER,
+    DM_COMPARISON_GEQUAL,
+    DM_COMPARISON_UNKNOWN
+} dm_comparison;
+
 typedef enum dm_buffer_type
 {
 	DM_BUFFER_TYPE_VERTEX,
@@ -85,26 +98,26 @@ typedef enum dm_texture_format
     DM_TEXTURE_FORMAT_UNKNOWN
 } dm_texture_format;
 
-typedef enum dm_texture_filter
+typedef enum dm_filter
 {
-    DM_TEXTURE_FILTER_NEAREST,
-    DM_TEXTURE_FILTER_LINEAR,
-    DM_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST,
-    DM_TEXTURE_FILTER_LIENAR_MIPMAP_NEAREST,
-    DM_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR,
-    DM_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR,
-    DM_TEXTURE_FILTER_UNKNOWN
-} dm_texture_filter;
+    DM_FILTER_NEAREST,
+    DM_FILTER_LINEAR,
+    DM_FILTER_NEAREST_MIPMAP_NEAREST,
+    DM_FILTER_LIENAR_MIPMAP_NEAREST,
+    DM_FILTER_NEAREST_MIPMAP_LINEAR,
+    DM_FILTER_LINEAR_MIPMAP_LINEAR,
+    DM_FILTER_UNKNOWN
+} dm_filter;
 
-typedef enum dm_texture_edge_sample
+typedef enum dm_texture_mode
 {
-    DM_TEXTURE_EDGE_REPEAT,
-    DM_TEXTURE_EDGE_MIRRORED_REPEAT,
-    DM_TEXTURE_EDGE_CLAMP_TO_EDGE,
-    DM_TEXTURE_EDGE_CLAMP_TO_BORDER,
-    DM_TEXTURE_EDGE_MIRROR_CLAMP_TO_EDGE,
-    DM_TEXTURE_EDGE_UNKNOWN
-} dm_texture_edge_sample;
+    DM_TEXTURE_MODE_WRAP,
+    DM_TEXTURE_MODE_EDGE,
+    DM_TEXTURE_MODE_BORDER,
+    DM_TEXTURE_MODE_MIRROR_REPEAT,
+    DM_TEXTURE_MODE_MIRROR_EDGE,
+    DM_TEXTURE_MODE_UNKNOWN
+} dm_texture_mode;
 
 typedef struct dm_image_desc
 {
@@ -112,13 +125,20 @@ typedef struct dm_image_desc
     const char* name;
     dm_texture_format format;
     dm_texture_format internal_format;
-    dm_texture_filter min_filter;
-    dm_texture_filter mag_filter;
-    dm_texture_edge_sample s_wrap;
-    dm_texture_edge_sample t_wrap;
     int width, height, n_channels;
     bool flip;
 } dm_image_desc;
+
+typedef struct dm_sampler_desc
+{
+    dm_filter filter;
+    dm_texture_mode u;
+    dm_texture_mode v;
+    dm_texture_mode w;
+    dm_comparison comparison;
+    float min_lod, max_lod;
+    dm_vec4 border_color;
+} dm_sampler_desc;
 
 typedef struct dm_texture
 {
@@ -210,18 +230,7 @@ typedef enum dm_blend_func
     DM_BLEND_FUNC_UNKNOWN
 } dm_blend_func;
 
-typedef enum dm_comparison
-{
-    DM_COMPARISON_ALWAYS,
-    DM_COMPARISON_NEVER,
-    DM_COMPARISON_EQUAL,
-    DM_COMPARISON_NOTEQUAL,
-    DM_COMPARISON_LESS,
-    DM_COMPARISON_LEQUAL,
-    DM_COMPARISON_GREATER,
-    DM_COMPARISON_GEQUAL,
-    DM_COMPARISON_UNKNOWN
-} dm_comparison;
+
 
 typedef enum dm_primitive_topology
 {
@@ -318,6 +327,7 @@ typedef struct dm_render_pipeline
     dm_blend_state_desc blend_desc;
     dm_depth_state_desc depth_desc;
     dm_stencil_state_desc stencil_desc;
+    dm_sampler_desc sampler_desc;
     dm_render_packet render_packet;
     dm_list* render_commands;
     dm_viewport viewport;
