@@ -23,17 +23,17 @@ bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_rendere
 	D3D11_CPU_ACCESS_FLAG cpu_access = dm_buffer_cpu_access_to_directx(buffer->desc.cpu_access);
 	if (cpu_access == D3D11_CPU_ACCESS_READ + 1) return false;
 
-	D3D11_BUFFER_DESC vbd = { 0 };
-	vbd.Usage = usage;
-	vbd.BindFlags = type;
-	vbd.ByteWidth = buffer->desc.buffer_size;
-	vbd.StructureByteStride = buffer->desc.elem_size;
-	if (type == D3D11_BIND_CONSTANT_BUFFER) vbd.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	D3D11_BUFFER_DESC desc = { 0 };
+	desc.Usage = usage;
+	desc.BindFlags = type;
+	desc.ByteWidth = buffer->desc.buffer_size;
+	desc.StructureByteStride = buffer->desc.elem_size;
+	if (type == D3D11_BIND_CONSTANT_BUFFER) desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
 
 	D3D11_SUBRESOURCE_DATA sd = { 0 };
 	sd.pSysMem = data;
 
-	DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &vbd, &sd, &internal_buffer->buffer), "ID3D11Device::CreateBuffer failed!");
+	DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &desc, &sd, &internal_buffer->buffer), "ID3D11Device::CreateBuffer failed!");
 	dm_mem_db_adjust(sizeof(ID3D11Buffer), DM_MEM_RENDERER_BUFFER, DM_MEM_ADJUST_ADD);
 
 	return true;

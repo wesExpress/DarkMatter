@@ -56,6 +56,7 @@ typedef struct dm_internal_pipeline
 	ID3D11Texture2D* depth_stencil_back_buffer;
 	//ID3D11DepthStencilState* depth_stencil_state;
 	//ID3D11RasterizerState* rasterizer_state;
+	ID3D11SamplerState* sample_state;
 	D3D11_PRIMITIVE_TOPOLOGY topology;
 	D3D11_VIEWPORT viewport;
 } dm_internal_pipeline;

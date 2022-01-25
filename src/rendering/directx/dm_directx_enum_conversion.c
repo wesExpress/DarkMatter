@@ -186,10 +186,18 @@ DXGI_FORMAT dm_image_fmt_to_directx_fmt(dm_texture_format dm_fmt)
 	switch (dm_fmt)
 	{
 	case DM_TEXTURE_FORMAT_RGB: 
-	case DM_TEXTURE_FORMAT_RGBA: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+	case DM_TEXTURE_FORMAT_RGBA: return DXGI_FORMAT_R8G8B8A8_UNORM;
 	default:
 		DM_LOG_FATAL("Unknown texture format!");
 		return DXGI_FORMAT_UNKNOWN;
+	}
+}
+
+D3D11_FILTER dm_image_filter_to_directx_filter(dm_texture_filter dm_filter)
+{
+	switch (dm_filter)
+	{
+	case DM_TEXTURE_FILTER_LINEAR: return D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT;
 	}
 }
 

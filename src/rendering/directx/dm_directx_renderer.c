@@ -191,6 +191,22 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	internal_pipe->topology = dm_toplogy_to_directx_topology(pipeline->raster_desc.primitive_topology);
 	if (internal_pipe->topology == D3D11_PRIMITIVE_UNDEFINED) return false;
 
+	/*
+	sampler state
+	*/
+	//D3D11_FILTER filter = dm_image_filter_to_directx_filter()
+	D3D11_SAMPLER_DESC sample_desc = { 0 };
+	sample_desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+	sample_desc.AddressU = D3D11_TEXTURE_ADDRESS_WRAP;
+	sample_desc.AddressV = D3D11_TEXTURE_ADDRESS_WRAP;
+	sample_desc.AddressW = D3D11_TEXTURE_ADDRESS_WRAP;
+	sample_desc.MaxAnisotropy = 1;
+	sample_desc.ComparisonFunc = D3D11_COMPARISON_ALWAYS;
+	sample_desc.MaxLOD = D3D11_FLOAT32_MAX;
+
+	DX_ERROR_CHECK(directx_renderer->device->lpVtbl->CreateSamplerState(directx_renderer->device, &sample_desc, &internal_pipe->sample_state), "ID3D11Device::CreateSamplerState failed!");
+	dm_mem_db_adjust(sizeof(ID3D11SamplerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
+
 	return true;
 }
 
@@ -228,6 +244,9 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 	dm_directx_destroy_depth_stencil(internal_pipe);
 	dm_directx_destroy_rendertarget(internal_pipe);
+
+	DX_RELEASE(internal_pipe->sample_state);
+	dm_mem_db_adjust(sizeof(ID3D11SamplerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
 
 	dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
@@ -334,6 +353,16 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	{
 		dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
 		dm_directx_bind_buffer(&cb->desc.buffer, directx_renderer, internal_pipe);
+	}
+
+	/*
+	textures
+	*/
+	for (uint32_t i = 0; i < pipeline->render_packet.texture_paths->count; i++)
+	{
+		dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
+		dm_texture* texture = dm_texture_get(key->string);
+		dm_directx_bind_texture(texture, i, directx_renderer, internal_pipe);
 	}
 
 	return true;
