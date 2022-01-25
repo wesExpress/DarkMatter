@@ -180,7 +180,7 @@ bool dm_renderer_end_scene()
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 {
 	// command buffer
-	pipeline->render_commands = dm_list_init(sizeof(dm_render_command), DM_LIST_DEFAULT_CAPACITY);
+	pipeline->render_commands = dm_list_create(sizeof(dm_render_command), 0);
 
 	// rasterizer
 	pipeline->raster_desc.shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
@@ -188,8 +188,8 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	// render packet
 	pipeline->render_packet.vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->render_packet.constant_buffers = dm_list_init(sizeof(dm_constant_buffer), DM_LIST_DEFAULT_CAPACITY);
-	pipeline->render_packet.texture_paths = dm_list_init(sizeof(dm_string), DM_LIST_DEFAULT_CAPACITY);
+	pipeline->render_packet.constant_buffers = dm_list_create(sizeof(dm_constant_buffer), 0);
+	pipeline->render_packet.texture_paths = dm_list_create(sizeof(dm_string), 0);
 
 	pipeline->render_packet.count = 0;
 	pipeline->render_packet.offset = 0;
@@ -207,17 +207,13 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 	dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	
 	// constant buffers
-	for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.constant_buffers); i++)
-	{
-		dm_constant_buffer buffer = pipeline->render_packet.constant_buffers[i];
-		dm_free(buffer.desc.buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	}
 	dm_list_destroy(pipeline->render_packet.constant_buffers);
 
 	// textures
-	for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.texture_paths); i++)
+	for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
 	{
-		dm_strdel(pipeline->render_packet.texture_paths[i].string);
+		dm_string* str = dm_list_at(pipeline->render_packet.texture_paths, i);
+		dm_strdel(str->string);
 	}
 	dm_list_destroy(pipeline->render_packet.texture_paths);
 
@@ -331,12 +327,12 @@ bool dm_renderer_init_object_data()
 	};
 
 	// constant buffers
-	dm_buffer* cb_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	cb_buffer->desc.type = DM_BUFFER_TYPE_CONSTANT;
-	cb_buffer->desc.usage = DM_BUFFER_USAGE_DYNAMIC;
-	cb_buffer->desc.elem_size = sizeof(float);
-	cb_buffer->desc.buffer_size = ((sizeof(offset) + 15) / 16) * 16;
-	cb_buffer->desc.cpu_access = DM_BUFFER_CPU_WRITE;
+	dm_buffer cb_buffer = {0};
+	cb_buffer.desc.type = DM_BUFFER_TYPE_CONSTANT;
+	cb_buffer.desc.usage = DM_BUFFER_USAGE_DYNAMIC;
+	cb_buffer.desc.elem_size = sizeof(float);
+	cb_buffer.desc.buffer_size = ((sizeof(offset) + 15) / 16) * 16;
+	cb_buffer.desc.cpu_access = DM_BUFFER_CPU_WRITE;
 	
 	dm_constant_buffer cb = { 0 };
 	cb.desc.buffer = cb_buffer;
@@ -369,7 +365,7 @@ bool dm_renderer_init_object_data()
 		dm_string str = {0};
 		str.string = dm_strdup(image_descs[i].path);
 		str.len = strlen(str.string);
-		//dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &str);
+		//dm_dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &str);
 	}
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);

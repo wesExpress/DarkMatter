@@ -2,26 +2,29 @@
 #define __DM_LIST_H__
 
 #include <stdlib.h>
-#include <stdint.h>
 #include <stdbool.h>
+#include <stdint.h>
 
-#define DM_LIST_DEFAULT_CAPACITY 16
-#define dm_list(TYPE) TYPE*
+typedef struct dm_list
+{
+    size_t capacity;
+    size_t count;
+    size_t element_size;
+    void* data;
+} dm_list;
 
-void* dm_list_init(size_t element_size, size_t capacity);
-void dm_list_destroy(void* list);
+dm_list* dm_list_create(size_t element_size, size_t capacity);
+void dm_list_destroy(dm_list* list);
 
-void dm_list_append(void* list, const void* value);
-void dm_list_insert(void* list, const void* value, uint32_t index);
+void dm_list_append(dm_list* list, void* value);
+void dm_list_insert(dm_list* list, void* value, uint32_t index);
 
-void dm_list_pop(void* list);
-void dm_list_pop_at(void* list, uint32_t index);
+void dm_list_pop(dm_list* list);
+void dm_list_pop_at(dm_list* list, uint32_t index);
 
-void dm_list_clear(void* list, size_t new_capacity);
+void* dm_list_at(dm_list* list, uint32_t index);
+void dm_list_clear(dm_list* list, size_t new_capacity);
 
-bool dm_list_is_empty(void* list);
-
-size_t dm_list_get_count(void* list);
-size_t dm_list_get_capacity(void* list);
+bool dm_list_is_empty(dm_list* list);
 
 #endif

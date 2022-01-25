@@ -49,7 +49,7 @@ void* dm_calloc(size_t count, size_t size, dm_mem_tag tag);
 * @param block - memory block to reallocate
 * @param new_size - size in bytes
 */
-void dm_realloc(void* block, size_t new_size);
+void* dm_realloc(void* block, size_t new_size);
 
 /*
 * wrapper for free. frees block of memory. must have been created with dm_alloc!

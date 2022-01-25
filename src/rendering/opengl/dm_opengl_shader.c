@@ -197,6 +197,7 @@ bool dm_opengl_bind_uniform(dm_constant_buffer* cb)
 
 bool dm_opengl_find_uniform_loc(GLuint program, const char* name, GLint* location)
 {
+    DM_ASSERT_MSG(name, "Uniform name is NULL! Something went wrong with the constant buffer.");
     *location = glGetUniformLocation(program, name);
     if (*location == -1)
     {

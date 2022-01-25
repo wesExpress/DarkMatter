@@ -143,13 +143,13 @@ void* dm_platform_calloc(size_t count, size_t size)
     return temp;
 }
 
-void dm_platform_realloc(void* block, size_t size)
+void* dm_platform_realloc(void* block, size_t size)
 {
     void* temp = realloc(block, size);
     DM_ASSERT_MSG(temp, "Realloc returned null pointer!");
     if (temp) block = temp;
     else DM_LOG_FATAL("Realloc returned NULL ptr!");
-    block = NULL;
+    return block;
 }
 
 void dm_platform_free(void* block)

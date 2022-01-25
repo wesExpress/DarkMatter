@@ -114,7 +114,7 @@ typedef enum dm_const_buffer_data_t
 
 typedef struct dm_constant_buffer_desc
 {
-    dm_buffer* buffer;
+    dm_buffer buffer;
     const char* name;
     dm_const_buffer_data_t data_t;
     int count;
@@ -262,8 +262,8 @@ typedef struct dm_render_packet
 {
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
-    dm_list(dm_constant_buffer) constant_buffers;
-    dm_list(dm_string) texture_paths;
+    dm_list* constant_buffers;
+    dm_list* texture_paths;
     size_t count;
     size_t offset;
 } dm_render_packet;
@@ -294,7 +294,7 @@ typedef struct dm_render_pipeline
     dm_depth_state_desc depth_desc;
     dm_stencil_state_desc stencil_desc;
     dm_render_packet render_packet;
-    dm_list(dm_render_command) render_commands;
+    dm_list* render_commands;
     dm_viewport viewport;
     bool wireframe;
     void* interal_pipeline;

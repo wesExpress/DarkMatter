@@ -129,16 +129,17 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_delete_shader(pipeline->raster_desc.shader);
 
     // constant buffers
-    for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.constant_buffers); i++)
+    for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
     {
-        dm_constant_buffer* cb = &pipeline->render_packet.constant_buffers[i];
+        dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
         dm_free(cb->internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
     }
 
     // textures
-    for (uint32_t i = 0; i < dm_list_get_count(pipeline->render_packet.texture_paths); i++)
+    for (uint32_t i = 0; i < pipeline->render_packet.texture_paths->count; i++)
     {
-        dm_texture* texture = dm_texture_get(pipeline->render_packet.texture_paths[i].string);
+        dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
+        dm_texture* texture = dm_texture_get(key->string);
         dm_opengl_destroy_texture(texture);
     }
 
@@ -186,10 +187,10 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
 
     // constant buffers
     dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
-    for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.constant_buffers); i++)
+    for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
     {
-        dm_constant_buffer* cb = &pipeline->render_packet.constant_buffers[i];
-        cb->internal_buffer = (dm_internal_constant_buffer*)dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+        dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
+        cb->internal_buffer = dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
         dm_internal_constant_buffer* internal_buffer = (dm_internal_constant_buffer*)cb->internal_buffer;
    
         if (!dm_opengl_find_uniform_loc(internal_shader->id, cb->desc.name, &internal_buffer->location)) return false;
@@ -197,10 +198,10 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
 
     // textures
 
-    for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.texture_paths); i++)
+    for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
     {
-        char* test = pipeline->render_packet.texture_paths[i].string;
-        dm_texture* texture = dm_texture_get(pipeline->render_packet.texture_paths[i].string);
+        dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
+        dm_texture* texture = dm_texture_get(key->string);
         if (!dm_opengl_create_texture(texture, i, internal_shader->id)) return false;
     }
 
@@ -298,17 +299,18 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
 
     // constant buffers
-    for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.constant_buffers); i++)
+    for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
     {
-        dm_constant_buffer* cb = &pipeline->render_packet.constant_buffers[i];
+        dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
         dm_opengl_bind_uniform(cb);
     }
 
     // TODO: need to change this eventually, this won't work with multiple textures per draw call
     // textures
-    for(uint32_t i=0; i<dm_list_get_count(pipeline->render_packet.texture_paths); i++)
+    for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
     {
-        dm_texture* texture = dm_texture_get(pipeline->render_packet.texture_paths[i].string);
+        dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
+        dm_texture* texture = dm_texture_get(key->string);
 
         if (!dm_opengl_bind_texture(texture)) return false;
     }

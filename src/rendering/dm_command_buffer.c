@@ -9,29 +9,24 @@ void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 
 void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline);
 
-void dm_renderer_submit_command(dm_render_command_type command_type, void* data, dm_render_command* render_commands)
+void dm_renderer_submit_command(dm_render_command_type command_type, void* data, dm_list* render_commands)
 {
 	dm_render_command command = { .command = command_type, .data = data };
 	dm_list_append(render_commands, &command);
 }
 
-void dm_renderer_clear_command_buffer(dm_render_command* render_commands)
+void dm_renderer_clear_command_buffer(dm_list* render_commands)
 {
 	dm_list_clear(render_commands, 0);
 }
 
-void dm_renderer_destroy_command_buffer(dm_render_command* render_commands)
+bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipeline* pipeline)
 {
-	dm_list_destroy(render_commands);
-}
-
-bool dm_renderer_submit_command_buffer(dm_render_command* render_commands, dm_render_pipeline* pipeline)
-{
-	for(uint32_t i=0; i<dm_list_get_count(render_commands); i++)
+	for(uint32_t i=0; i<render_commands->count; i++)
 	{
-		dm_render_command command = render_commands[i];
+		dm_render_command* command = dm_list_at(render_commands, i);
 
-		switch (command.command)
+		switch (command->command)
 		{
 		// TODO flesh out
 		case DM_RENDER_COMMAND_BEGIN_RENDER_PASS:
@@ -48,11 +43,11 @@ bool dm_renderer_submit_command_buffer(dm_render_command* render_commands, dm_re
 		} break;
 		case DM_RENDER_COMMAND_CLEAR:
 		{
-			dm_renderer_clear_impl((dm_color*)command.data, pipeline);
+			dm_renderer_clear_impl((dm_color*)command->data, pipeline);
 		} break;
 		case DM_RENDER_COMMAND_BIND_PIPELINE:
 		{
-			if (!dm_renderer_bind_pipeline_impl((dm_render_pipeline*)command.data)) return false;
+			if (!dm_renderer_bind_pipeline_impl((dm_render_pipeline*)command->data)) return false;
 		} break;
 		case DM_RENDER_COMMAND_DRAW_INDEXED:
 		{
