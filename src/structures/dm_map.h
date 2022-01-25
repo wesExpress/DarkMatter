@@ -15,7 +15,7 @@ typedef struct dm_map_item
 typedef struct dm_map_t
 {
 	size_t capacity, count, type_size;
-	dm_map_item* items;
+	dm_map_item** items;
 	bool* tombstones;
 } dm_map_t;
 

@@ -358,14 +358,14 @@ bool dm_renderer_init_object_data()
 
 	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
 
-	//if(!dm_textures_load(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
+	if(!dm_textures_load(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
 	
 	for(uint32_t i=0; i<sizeof(image_descs)/sizeof(dm_image_desc);i++)
 	{
 		dm_string str = {0};
 		str.string = dm_strdup(image_descs[i].path);
 		str.len = strlen(str.string);
-		//dm_dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &str);
+		dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &str);
 	}
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);

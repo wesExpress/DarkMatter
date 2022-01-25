@@ -45,7 +45,7 @@ dm_map_t* dm_map_create(size_t type_size, size_t capacity)
 	map->capacity = capacity;
 	map->type_size = type_size;
 
-	map->items = dm_alloc(sizeof(dm_map_item) * map->capacity, DM_MEM_MAP);
+	map->items = dm_alloc(sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
 	map->tombstones = dm_alloc(sizeof(bool) * map->capacity, DM_MEM_MAP);
 
 	return map;
@@ -56,7 +56,7 @@ void dm_map_destroy(dm_map_t* map)
 	for (int i = 0; i < map->capacity; i++)
 	{
 		// items
-		if (map->items[i].key) dm_map_destroy_item(&map->items[i], map->type_size);
+		if (map->items[i]) dm_map_destroy_item(map->items[i], map->type_size);
 
 	}
 	dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
@@ -69,13 +69,13 @@ void dm_map_insert(dm_map_t* map, const char* key, void* value)
 	uint32_t index = dm_map_hash(key, map);
 	uint32_t hash = index;
 
-	while(map->items[index].key || map->tombstones[index])
+	while(map->items[index] || map->tombstones[index])
 	{
-		if (map->items[index].key)
+		if (map->items[index])
 		{
-			if (strcmp(map->items[index].key, key) == 0)
+			if (strcmp(map->items[index]->key, key) == 0)
 			{
-				map->items[index].value = value;
+				map->items[index]->value = value;
 				break;
 			}
 		}
@@ -87,7 +87,7 @@ void dm_map_insert(dm_map_t* map, const char* key, void* value)
 	}
 
 	// insert element
-	map->items[index] = *dm_map_create_item(key, value, map->type_size);
+	map->items[index] = dm_map_create_item(key, value, map->type_size);
 	map->count++;
 	if(index==hash) map->tombstones[index] = false;
 	if(( (float)map->count / (float)map->capacity) >= DM_MAP_LOAD_FACTOR) dm_map_resize(map);
@@ -97,12 +97,11 @@ void dm_map_delete_elem(dm_map_t* map, const char* key)
 {
 	uint32_t index = dm_map_hash(key, map);
 
-	// check the index right away
-	while(map->items[index].key)
+	while(map->items[index])
 	{
-		if (strcmp(map->items[index].key, key) == 0)
+		if (strcmp(map->items[index]->key, key) == 0)
 		{
-			dm_map_destroy_item(&map->items[index], map->type_size);
+			dm_map_destroy_item(map->items[index], map->type_size);
 			map->tombstones[index] = true;
 			map->count--;
 
@@ -120,12 +119,12 @@ void* dm_map_get(dm_map_t* map, const char* key)
 {
 	uint32_t index = dm_map_hash(key, map);
 
-	while(map->items[index].key || map->tombstones[index])
+	while(map->items[index] || map->tombstones[index])
 	{
-		if (map->items[index].key)
+		if (map->items[index])
 		{
-			if (strcmp(map->items[index].key, key) == 0) 
-				return map->items[index].value;
+			if (strcmp(map->items[index]->key, key) == 0) 
+				return map->items[index]->value;
 		}
 		
 		index++;
@@ -140,11 +139,11 @@ bool dm_map_exists(dm_map_t* map, const char* key)
 {
 	uint32_t index = dm_map_hash(key, map);
 
-	while(map->items[index].key || map->tombstones[index])
+	while(map->items[index] || map->tombstones[index])
 	{
-		if (map->items[index].key)
+		if (map->items[index])
 		{
-			if (strcmp(map->items[index].key, key) == 0) return true;
+			if (strcmp(map->items[index]->key, key) == 0) return true;
 		}
 		
 		if(index>=map->capacity) index = 0;
@@ -161,10 +160,10 @@ void dm_map_resize(dm_map_t* map)
 
 	for (int i = 0; i < map->capacity; i++)
 	{
-		if (map->items[i].key)
+		if (map->items[i])
 		{
-			dm_map_insert(new_map, map->items[i].key, map->items[i].value);
-			dm_map_destroy_item(&map->items[i], map->type_size);
+			dm_map_insert(new_map, map->items[i]->key, map->items[i]->value);
+			dm_map_destroy_item(map->items[i], map->type_size);
 		}
 	}
 	
@@ -176,7 +175,7 @@ dm_map_item* dm_map_create_item(const char* key, void* value, size_t type_size)
 {
 	dm_map_item* item = dm_alloc(sizeof(dm_map_item), DM_MEM_MAP);
 	item->key = dm_strdup(key);
-	item->value = dm_alloc(sizeof(type_size), DM_MEM_MAP);
+	item->value = dm_alloc(type_size, DM_MEM_MAP);
 	dm_memcpy(item->value, value, type_size);
 
 	return item;

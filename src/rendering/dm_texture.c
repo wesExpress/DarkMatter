@@ -15,9 +15,9 @@ void dm_texture_map_destroy()
 {
 	for(uint32_t i=0; i<texture_map->capacity; i++)
 	{
-		if(texture_map->items[i].key)
+		if(texture_map->items[i])
 		{
-			dm_texture* texture = (dm_texture*)texture_map->items[i].value;
+			dm_texture* texture = (dm_texture*)texture_map->items[i]->value;
 			stbi_image_free(texture->data);
 		}
 	}
