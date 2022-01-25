@@ -28,10 +28,10 @@ dcl_temps 1
 //   v1.x <- input.color.x; v1.y <- input.color.y; v1.z <- input.color.z; v1.w <- input.color.w; 
 //   o0.x <- <p_main return value>.color.x; o0.y <- <p_main return value>.color.y; o0.z <- <p_main return value>.color.z; o0.w <- <p_main return value>.color.w
 //
-#line 16 "C:\Users\wcp\source\c_projects\CEngine\shaders\hlsl\object_pixel.hlsl"
+#line 19 "C:\Users\wcp\source\c_projects\CEngine\shaders\hlsl\object_pixel.hlsl"
 mov r0.xyzw, v1.xyzw  // r0.x <- output.color.x; r0.y <- output.color.y; r0.z <- output.color.z; r0.w <- output.color.w
 
-#line 18
+#line 21
 mov o0.xyzw, r0.xyzw
 ret 
 // Approximately 3 instruction slots used

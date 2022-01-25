@@ -9,6 +9,9 @@ struct PS_OUPUT
     float4 color : SV_Target;
 };
 
+Texture2D uTexture1;
+Texture2D uTexture2;
+
 PS_OUPUT p_main(PS_INPUT input)
 {
     PS_OUPUT output;

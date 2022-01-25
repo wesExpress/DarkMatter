@@ -10,7 +10,7 @@
 
 bool dm_opengl_create_texture(dm_texture* texture, int texture_slot, GLuint shader)
 {
-	texture->internal_texture = (dm_internal_texture*)dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
+	texture->internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
 	dm_internal_texture* internal_texture = (dm_internal_texture*)texture->internal_texture;
 
 	GLenum format = dm_texture_format_to_opengl_format(texture->desc.format);

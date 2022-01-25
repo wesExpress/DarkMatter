@@ -2,12 +2,14 @@ struct VS_INPUT
 {
     float3 pos   : POSITION;
     float3 color : COLOR;
+    float2 tex_coords : TEXCOORD;
 };
 
 struct VS_OUTPUT
 {
     float4 pos   : SV_Position;
     float4 color : COLOR;
+    float2 tex_coords : TEXCOORD;
 };
 
 cbuffer MODEL_CB : register(b0)

@@ -77,6 +77,7 @@ set(
     src/rendering/directx/dm_directx_depth_stencil.c
     src/rendering/directx/dm_directx_buffer.c
     src/rendering/directx/dm_directx_shader.c
+    src/rendering/directx/dm_directx_texture.c
     src/rendering/directx/dm_directx_enum_conversion.c
 
     # stb image

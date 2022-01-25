@@ -62,7 +62,7 @@ dm_vertex_attrib_desc tex_coord_desc = {
 #ifdef DM_OPENGL
 	.name = "aTexCoords",
 #elif defined DM_DIRECTX
-	.name = "TEX_COORDS",
+	.name = "TEXCOORD",
 #endif
 	.data_t = DM_VERTEX_DATA_T_FLOAT,
 	.stride = sizeof(dm_vertex_t),

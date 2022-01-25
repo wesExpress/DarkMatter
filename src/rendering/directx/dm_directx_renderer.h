@@ -28,6 +28,12 @@ typedef struct dm_internal_shader
 	ID3D11InputLayout* input_layout;
 } dm_internal_shader;
 
+typedef struct dm_internal_texture
+{
+	ID3D11Texture2D* texture;
+	ID3D11ShaderResourceView* view;
+} dm_internal_texture;
+
 typedef struct dm_internal_renderer
 {
 	HWND hwnd;

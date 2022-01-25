@@ -181,4 +181,16 @@ dm_comp_to_directx_comp(dm_comparison dm_comp)
 	}
 }
 
+DXGI_FORMAT dm_image_fmt_to_directx_fmt(dm_texture_format dm_fmt)
+{
+	switch (dm_fmt)
+	{
+	case DM_TEXTURE_FORMAT_RGB: 
+	case DM_TEXTURE_FORMAT_RGBA: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+	default:
+		DM_LOG_FATAL("Unknown texture format!");
+		return DXGI_FORMAT_UNKNOWN;
+	}
+}
+
 #endif

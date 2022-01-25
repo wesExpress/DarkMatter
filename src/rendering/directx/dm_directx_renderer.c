@@ -8,7 +8,9 @@
 #include "dm_directx_depth_stencil.h"
 #include "dm_directx_buffer.h"
 #include "dm_directx_shader.h"
+#include "dm_directx_texture.h"
 #include "dm_directx_enum_conversion.h"
+#include "rendering/dm_texture.h"
 
 #include "core/dm_logger.h"
 #include "core/dm_assert.h"
@@ -208,6 +210,17 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 		dm_directx_delete_buffer(&cb->desc.buffer, pipeline->interal_pipeline);
 	}
 
+	/*
+	texture
+	*/
+	for (uint32_t i = 0; i < pipeline->render_packet.texture_paths->count; i++)
+	{
+		dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
+		dm_texture* texture = dm_texture_get(key->string);
+
+		dm_directx_destroy_texture(texture);
+	}
+
 	//DX_RELEASE(internal_pipe->rasterizer_state);
 	//DX_RELEASE(internal_pipe->depth_stencil_state);
 	dm_mem_db_adjust(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
@@ -244,6 +257,17 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
 		dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
 
 		if (!dm_directx_create_buffer(&cb->desc.buffer, cb->desc.data, directx_renderer, internal_pipe)) return false;
+	}
+
+	/*
+	textures
+	*/
+	for (uint32_t i = 0; i < pipeline->render_packet.texture_paths->count; i++ )
+	{
+		dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
+		dm_texture* texture = dm_texture_get(key->string);
+
+		if(!dm_directx_create_texture(texture, directx_renderer)) return false;
 	}
 
 	return true;
