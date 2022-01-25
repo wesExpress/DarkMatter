@@ -6,7 +6,6 @@
 #include "dm_render_types.h"
 #include "dm_colors.h"
 #include "dm_camera.h"
-#include "structures/dm_list.h"
 
 #define MAX_RENDER_RESOURCES 100
 

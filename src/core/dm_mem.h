@@ -95,7 +95,7 @@ void dm_memmove(void* dest, const void* src, size_t size);
 void dm_mem_db_adjust(size_t size, dm_mem_tag tag, dm_mem_adjust_func adjust_func);
 
 // memory tracking printing functions
-char* dm_mem_track();
+void dm_mem_track();
 
 // to be called at the end of the application to check if you've freed all allocated memory
 void dm_mem_all_freed();

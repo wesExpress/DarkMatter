@@ -97,7 +97,7 @@ void dm_mem_db_adjust(size_t size, dm_mem_tag tag, dm_mem_adjust_func adjust_fun
 	
 }
 
-char* dm_mem_track()
+void dm_mem_track()
 {
 	const size_t gb = 1024 * 1024 * 1024;
 	const size_t mb = 1024 * 1024;
