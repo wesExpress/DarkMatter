@@ -168,4 +168,35 @@ GLenum dm_texture_format_to_opengl_format(dm_texture_format dm_format)
     }
 }
 
+GLenum dm_texture_filter_to_opengl_filter(dm_texture_filter dm_filter)
+{
+    switch (dm_filter)
+    {
+    case DM_TEXTURE_FILTER_LINEAR: return GL_LINEAR;
+    case DM_TEXTURE_FILTER_NEAREST: return GL_NEAREST;
+    case DM_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR: return GL_LINEAR_MIPMAP_LINEAR;
+    case DM_TEXTURE_FILTER_LIENAR_MIPMAP_NEAREST: return GL_LINEAR_MIPMAP_NEAREST;
+    case DM_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR: return GL_NEAREST_MIPMAP_LINEAR;
+    case DM_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST: return GL_NEAREST_MIPMAP_NEAREST;
+    default:
+        DM_LOG_FATAL("Unknown texture filter function!");
+        return DM_TEXTURE_FILTER_UNKNOWN;
+    }
+}
+
+GLenum dm_edge_to_opengl_edge(dm_texture_edge_sample dm_edge)
+{
+    switch (dm_edge)
+    {
+    case DM_TEXTURE_EDGE_REPEAT: return GL_REPEAT;
+    case DM_TEXTURE_EDGE_MIRRORED_REPEAT: return GL_MIRRORED_REPEAT;
+    case DM_TEXTURE_EDGE_CLAMP_TO_EDGE: return GL_CLAMP_TO_EDGE;
+    case DM_TEXTURE_EDGE_CLAMP_TO_BORDER: return GL_CLAMP_TO_BORDER;
+    case DM_TEXTURE_EDGE_MIRROR_CLAMP_TO_EDGE: return GL_MIRROR_CLAMP_TO_EDGE;
+    default:
+        DM_LOG_FATAL("Unknwon clamping function!");
+        return DM_TEXTURE_EDGE_UNKNOWN;
+    }
+}
+
 #endif

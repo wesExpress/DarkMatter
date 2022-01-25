@@ -85,12 +85,37 @@ typedef enum dm_texture_format
     DM_TEXTURE_FORMAT_UNKNOWN
 } dm_texture_format;
 
+typedef enum dm_texture_filter
+{
+    DM_TEXTURE_FILTER_NEAREST,
+    DM_TEXTURE_FILTER_LINEAR,
+    DM_TEXTURE_FILTER_NEAREST_MIPMAP_NEAREST,
+    DM_TEXTURE_FILTER_LIENAR_MIPMAP_NEAREST,
+    DM_TEXTURE_FILTER_NEAREST_MIPMAP_LINEAR,
+    DM_TEXTURE_FILTER_LINEAR_MIPMAP_LINEAR,
+    DM_TEXTURE_FILTER_UNKNOWN
+} dm_texture_filter;
+
+typedef enum dm_texture_edge_sample
+{
+    DM_TEXTURE_EDGE_REPEAT,
+    DM_TEXTURE_EDGE_MIRRORED_REPEAT,
+    DM_TEXTURE_EDGE_CLAMP_TO_EDGE,
+    DM_TEXTURE_EDGE_CLAMP_TO_BORDER,
+    DM_TEXTURE_EDGE_MIRROR_CLAMP_TO_EDGE,
+    DM_TEXTURE_EDGE_UNKNOWN
+} dm_texture_edge_sample;
+
 typedef struct dm_image_desc
 {
     const char* path;
     const char* name;
     dm_texture_format format;
     dm_texture_format internal_format;
+    dm_texture_filter min_filter;
+    dm_texture_filter mag_filter;
+    dm_texture_edge_sample s_wrap;
+    dm_texture_edge_sample t_wrap;
     int width, height, n_channels;
     bool flip;
 } dm_image_desc;
