@@ -32,6 +32,7 @@ dcl_sampler s0, mode_default
 dcl_resource_texture2d (float,float,float,float) t0
 dcl_input_ps linear v2.xy
 dcl_output o0.xyzw
+dcl_temps 1
 //
 // Initial variable locations:
 //   v0.x <- input.pos.x; v0.y <- input.pos.y; v0.z <- input.pos.z; v0.w <- input.pos.w; 
@@ -39,7 +40,10 @@ dcl_output o0.xyzw
 //   v2.x <- input.tex_coords.x; v2.y <- input.tex_coords.y; 
 //   o0.x <- <p_main return value>.x; o0.y <- <p_main return value>.y; o0.z <- <p_main return value>.z; o0.w <- <p_main return value>.w
 //
-#line 22 "C:\Users\wcp\source\c_projects\CEngine\shaders\hlsl\object_pixel.hlsl"
-sample_indexable(texture2d)(float,float,float,float) o0.xyzw, v2.xyxx, t0.xyzw, s0
+#line 23 "C:\Users\wcp\source\c_projects\CEngine\shaders\hlsl\object_pixel.hlsl"
+sample_indexable(texture2d)(float,float,float,float) r0.xyzw, v2.xyxx, t0.xyzw, s0  // r0.x <- color1.x; r0.y <- color1.y; r0.z <- color1.z; r0.w <- color1.w
+
+#line 27
+mov o0.xyzw, r0.xyzw
 ret 
-// Approximately 2 instruction slots used
+// Approximately 3 instruction slots used

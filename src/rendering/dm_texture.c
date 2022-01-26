@@ -32,6 +32,9 @@ bool dm_textures_load(dm_image_desc* image_descs, int num_descs)
 		{
 			dm_texture texture = { 0 };
 			texture.desc = image_descs[i];
+
+			DM_LOG_INFO("Loading texture: %s", texture.desc.path);
+
 			stbi_set_flip_vertically_on_load(texture.desc.flip);
 #ifdef DM_OPENGL
 			int num_channels = 0;

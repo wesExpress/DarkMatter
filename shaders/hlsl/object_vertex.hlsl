@@ -23,6 +23,7 @@ VS_OUTPUT v_main(VS_INPUT input)
     
     output.pos = float4(input.pos + offset, 1.0f);
     output.color = float4(input.color, 1.0f);
+    output.tex_coords = input.tex_coords;
     
     return output;
 }

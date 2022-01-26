@@ -20,6 +20,12 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+#ifdef DM_DEBUG
+void dm_directx_print_errors();
+const char* dm_directx_decode_category(D3D11_MESSAGE_CATEGORY category);
+const char* dm_directx_decode_severity(D3D11_MESSAGE_SEVERITY severity);
+#endif
+
 typedef struct windows_internal_data
 {
 	HINSTANCE h_instance;
@@ -310,40 +316,7 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 void dm_renderer_end_rederpass_impl()
 {
 #ifdef DM_DEBUG
-	HRESULT hr;
-
-	ID3D11InfoQueue* info_queue;
-	hr = directx_renderer->device->lpVtbl->QueryInterface(directx_renderer->device, &IID_ID3D11InfoQueue, (void**)&info_queue);
-	if (hr != S_OK)
-	{
-		DM_LOG_ERROR("ID3D11Device::QueryInterface failed!");
-		return;
-	}
-
-	hr = info_queue->lpVtbl->PushEmptyStorageFilter(info_queue);
-	if (hr != S_OK)
-	{
-		DM_LOG_ERROR("ID3D11InfoQueue::PushEmptyStorageFilter failed!");
-		return;
-	}
-
-
-	UINT64 message_count = info_queue->lpVtbl->GetNumStoredMessages(info_queue);
-
-	for (UINT64 i = 0; i < message_count; i++)
-	{
-		SIZE_T message_size = 0;
-		info_queue->lpVtbl->GetMessage(info_queue, i, NULL, &message_size);
-
-		D3D11_MESSAGE* message = dm_alloc(message_size, DM_MEM_RENDER_PIPELINE);
-		info_queue->lpVtbl->GetMessage(info_queue, i, message, &message_size);
-
-		DM_LOG_ERROR("DirectX11 Error: %s", message->pDescription);
-
-		dm_free(message, message_size, DM_MEM_RENDER_PIPELINE);
-	}
-
-	DX_RELEASE(info_queue);
+	dm_directx_print_errors();
 #endif
 }
 
@@ -412,7 +385,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	{
 		dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
 		dm_texture* texture = dm_texture_get(key->string);
-		dm_directx_bind_texture(texture, i, directx_renderer, internal_pipe);
+		dm_directx_bind_texture(texture, i, directx_renderer);
 	}
 
 	return true;
@@ -441,5 +414,92 @@ void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 	context->lpVtbl->ClearRenderTargetView(context, render_target, &(clear_color->v[0]));
 	//context->lpVtbl->ClearDepthStencilView(context, depth_stencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 }
+
+#ifdef DM_DEBUG
+void dm_directx_print_errors()
+{
+	HRESULT hr;
+
+	ID3D11InfoQueue* info_queue;
+	hr = directx_renderer->device->lpVtbl->QueryInterface(directx_renderer->device, &IID_ID3D11InfoQueue, (void**)&info_queue);
+	if (hr != S_OK)
+	{
+		DM_LOG_ERROR("ID3D11Device::QueryInterface failed!");
+		return;
+	}
+
+	hr = info_queue->lpVtbl->PushEmptyStorageFilter(info_queue);
+	if (hr != S_OK)
+	{
+		DM_LOG_ERROR("ID3D11InfoQueue::PushEmptyStorageFilter failed!");
+		return;
+	}
+
+	UINT64 message_count = info_queue->lpVtbl->GetNumStoredMessages(info_queue);
+
+	for (UINT64 i = 0; i < message_count; i++)
+	{
+		SIZE_T message_size = 0;
+		info_queue->lpVtbl->GetMessage(info_queue, i, NULL, &message_size);
+
+		D3D11_MESSAGE* message = dm_alloc(message_size, DM_MEM_RENDER_PIPELINE);
+		info_queue->lpVtbl->GetMessage(info_queue, i, message, &message_size);
+
+		const char* category = dm_directx_decode_category(message->Category);
+		const char* severity = dm_directx_decode_severity(message->Severity);
+		D3D11_MESSAGE_ID id = message->ID;
+
+		switch (message->Severity)
+		{
+		case D3D11_MESSAGE_SEVERITY_CORRUPTION: DM_LOG_FATAL("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
+		case D3D11_MESSAGE_SEVERITY_ERROR: DM_LOG_ERROR("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
+		case D3D11_MESSAGE_SEVERITY_WARNING: DM_LOG_WARN("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
+		case D3D11_MESSAGE_SEVERITY_INFO: DM_LOG_INFO("\n    [DirectX11 %s]: (%d) %s", severity, (int)id, message->pDescription); break;
+		case D3D11_MESSAGE_SEVERITY_MESSAGE: DM_LOG_TRACE("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
+		}
+
+		dm_free(message, message_size, DM_MEM_RENDER_PIPELINE);
+	}
+
+	DX_RELEASE(info_queue);
+}
+
+const char* dm_directx_decode_category(D3D11_MESSAGE_CATEGORY category)
+{
+	switch (category)
+	{
+	case D3D11_MESSAGE_CATEGORY_APPLICATION_DEFINED: return "APPLICATION_DEFINED";
+	case D3D11_MESSAGE_CATEGORY_MISCELLANEOUS: return "MISCELLANEOUS";
+	case D3D11_MESSAGE_CATEGORY_INITIALIZATION: return "INITIALIZATION";
+	case D3D11_MESSAGE_CATEGORY_CLEANUP: return "CLEANUP";
+	case D3D11_MESSAGE_CATEGORY_COMPILATION: return "COMPILATION";
+	case D3D11_MESSAGE_CATEGORY_STATE_CREATION: return "STATE_CREATION";
+	case D3D11_MESSAGE_CATEGORY_STATE_SETTING: return "STATE_SETTING";
+	case D3D11_MESSAGE_CATEGORY_STATE_GETTING: return "STATE_GETTING";
+	case D3D11_MESSAGE_CATEGORY_RESOURCE_MANIPULATION: return "RESOURCE_MANIPULATION";
+	case D3D11_MESSAGE_CATEGORY_EXECUTION: return "EXECUTION";
+	case D3D11_MESSAGE_CATEGORY_SHADER: return "SHADER";
+	default:
+		DM_LOG_FATAL("Unknown D3D11_MESSAGE_CATEGORY! Shouldn't be here...");
+		return "Unknown category";
+	}
+}
+
+const char* dm_directx_decode_severity(D3D11_MESSAGE_SEVERITY severity)
+{
+	switch (severity)
+	{
+		case D3D11_MESSAGE_SEVERITY_CORRUPTION: return "CORRUPTION";
+		case D3D11_MESSAGE_SEVERITY_ERROR: return "ERROR";
+		case D3D11_MESSAGE_SEVERITY_WARNING: return "WARNING";
+		case D3D11_MESSAGE_SEVERITY_INFO: return "INFO";
+		case D3D11_MESSAGE_SEVERITY_MESSAGE: return "MESSAGE";
+		default:
+			DM_LOG_FATAL("Unknwon D3D11_MESSAGE_SEVERITY! Shouldn't be here...");
+			return "Unknown severity";
+	}
+}
+
+#endif
 
 #endif

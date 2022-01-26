@@ -35,7 +35,7 @@ bool dm_directx_create_texture(dm_texture* texture, dm_internal_renderer* render
 	view_desc.Format = tex_desc.Format;
 	view_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 	view_desc.Texture2D.MostDetailedMip = 0;
-	view_desc.Texture2D.MipLevels = 1;
+	view_desc.Texture2D.MipLevels = -1;
 
 	DX_ERROR_CHECK(renderer->device->lpVtbl->CreateShaderResourceView(renderer->device, (ID3D11Resource*)internal_texture->texture, &view_desc, &internal_texture->view), "ID3D11Device::CreateShaderResourceView failed!");
 	dm_mem_db_adjust(sizeof(ID3D11ShaderResourceView), DM_MEM_RENDERER_TEXTURE, DM_MEM_ADJUST_ADD);

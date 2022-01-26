@@ -26,7 +26,7 @@
 // -------------------- ----- ------ -------- -------- ------- ------
 // POSITION                 0   xyz         0     NONE   float   xyz 
 // COLOR                    0   xyz         1     NONE   float   xyz 
-// TEXCOORD                 0   xy          2     NONE   float       
+// TEXCOORD                 0   xy          2     NONE   float   xy  
 //
 //
 // Output signature:
@@ -42,6 +42,7 @@ dcl_globalFlags refactoringAllowed | skipOptimization
 dcl_constantbuffer CB0[1], immediateIndexed
 dcl_input v0.xyz
 dcl_input v1.xyz
+dcl_input v2.xy
 dcl_output_siv o0.xyzw, position
 dcl_output o1.xyzw
 dcl_output o2.xy
@@ -55,20 +56,20 @@ dcl_temps 3
 //   o1.x <- <v_main return value>.color.x; o1.y <- <v_main return value>.color.y; o1.z <- <v_main return value>.color.z; o1.w <- <v_main return value>.color.w; 
 //   o0.x <- <v_main return value>.pos.x; o0.y <- <v_main return value>.pos.y; o0.z <- <v_main return value>.pos.z; o0.w <- <v_main return value>.pos.w
 //
-#line 22 "C:\Users\wcp\source\c_projects\CEngine\shaders\hlsl\object_vertex.hlsl"
-itof r0.xy, l(0, 0, 0, 0)  // r0.x <- output.tex_coords.x; r0.y <- output.tex_coords.y
-
-#line 24
-add r1.xyz, v0.xyzx, cb0[0].xyzx  // r1.x <- output.pos.x; r1.y <- output.pos.y; r1.z <- output.pos.z
-mov r1.w, l(1.000000)  // r1.w <- output.pos.w
+#line 24 "C:\Users\wcp\source\c_projects\CEngine\shaders\hlsl\object_vertex.hlsl"
+add r0.xyz, v0.xyzx, cb0[0].xyzx  // r0.x <- output.pos.x; r0.y <- output.pos.y; r0.z <- output.pos.z
+mov r0.w, l(1.000000)  // r0.w <- output.pos.w
 
 #line 25
-mov r2.xyz, v1.xyzx  // r2.x <- output.color.x; r2.y <- output.color.y; r2.z <- output.color.z
-mov r2.w, l(1.000000)  // r2.w <- output.color.w
+mov r1.xyz, v1.xyzx  // r1.x <- output.color.x; r1.y <- output.color.y; r1.z <- output.color.z
+mov r1.w, l(1.000000)  // r1.w <- output.color.w
 
-#line 27
-mov o0.xyzw, r1.xyzw
-mov o1.xyzw, r2.xyzw
-mov o2.xy, r0.xyxx
+#line 26
+mov r2.xy, v2.xyxx  // r2.x <- output.tex_coords.x; r2.y <- output.tex_coords.y
+
+#line 28
+mov o0.xyzw, r0.xyzw
+mov o1.xyzw, r1.xyzw
+mov o2.xy, r2.xyxx
 ret 
 // Approximately 9 instruction slots used
