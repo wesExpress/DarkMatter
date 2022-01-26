@@ -2,6 +2,7 @@
 #define __MEM_H__
 
 #include <stdlib.h>
+#include <stdbool.h>
 
 typedef enum dm_mem_tag
 {
@@ -11,11 +12,22 @@ typedef enum dm_mem_tag
 	DM_MEM_LIST,
 	DM_MEM_MAP,
 	DM_MEM_RENDERER,
+	DM_MEM_RENDER_COMMAND,
 	DM_MEM_RENDER_PIPELINE,
 	DM_MEM_RENDERER_BUFFER,
 	DM_MEM_RENDERER_SHADER,
-	DM_MEM_RENDERER_UNKNOWN
+	DM_MEM_RENDERER_TEXTURE,
+	DM_MEM_UNKNOWN
 } dm_mem_tag;
+
+typedef enum dm_mem_adjust_func
+{
+	DM_MEM_ADJUST_ADD,
+	DM_MEM_ADJUST_SUBTRACT,
+	DM_MEM_ADJUST_MULTIPLY,
+	DM_MEM_ADJUST_DIVIDE,
+	DM_MEM_ADJUST_UNKNOWN
+} dm_mem_adjust_func;
 
 /*
 * wrapper for alloc. checks the block is not NULL before returning
@@ -24,6 +36,11 @@ typedef enum dm_mem_tag
 * @param tag - memory tag
 */
 void* dm_alloc(size_t size, dm_mem_tag tag);
+
+/*
+* wrapper for calloc
+*/
+void* dm_calloc(size_t count, size_t size, dm_mem_tag tag);
 
 /*
 * wrapper for realloc. reallocate the size of a memory block.
@@ -75,9 +92,12 @@ void dm_memmove(void* dest, const void* src, size_t size);
 * @param size - size in bytes
 * @param tag - memory tag
 */
-void dm_mem_db_adjust(size_t size, dm_mem_tag tag);
+void dm_mem_db_adjust(size_t size, dm_mem_tag tag, dm_mem_adjust_func adjust_func);
 
 // memory tracking printing functions
-char* dm_mem_track();
+void dm_mem_track();
+
+// to be called at the end of the application to check if you've freed all allocated memory
+void dm_mem_all_freed();
 
 #endif

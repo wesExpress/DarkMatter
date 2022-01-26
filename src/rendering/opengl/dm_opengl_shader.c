@@ -3,9 +3,9 @@
 #ifdef DM_OPENGL
 
 #include "dm_opengl_enum_conversion.h"
-#include "dm_logger.h"
-#include "dm_assert.h"
-#include "dm_mem.h"
+#include "core/dm_logger.h"
+#include "core/dm_assert.h"
+#include "core/dm_mem.h"
 
 GLuint dm_opengl_compile_shader(dm_shader_desc desc);
 bool dm_opengl_validate_shader(GLuint shader);
@@ -22,11 +22,11 @@ bool dm_opengl_create_shader(dm_shader* shader)
     DM_LOG_DEBUG("Linking shader...");
     internal_shader->id = glCreateProgram();
     glAttachShader(internal_shader->id, vertex_shader);
-    glCheckError();
+    glCheckErrorReturn();
     glAttachShader(internal_shader->id, frag_shader);
-    glCheckError();
+    glCheckErrorReturn();
     glLinkProgram(internal_shader->id);
-    glCheckError();
+    glCheckErrorReturn();
 
     if (!dm_opengl_validate_program(internal_shader->id))
     {
@@ -35,14 +35,14 @@ bool dm_opengl_create_shader(dm_shader* shader)
     }
 
     glDetachShader(internal_shader->id, vertex_shader);
-    glCheckError();
+    glCheckErrorReturn();
     glDetachShader(internal_shader->id, frag_shader);
-    glCheckError();
+    glCheckErrorReturn();
 
     glDeleteShader(vertex_shader);
-    glCheckError();
+    glCheckErrorReturn();
     glDeleteShader(frag_shader);
-    glCheckError();
+    glCheckErrorReturn();
 
     return true;
 }
@@ -191,13 +191,15 @@ bool dm_opengl_bind_uniform(dm_constant_buffer* cb)
         return false;
     } 
 
+    glCheckErrorReturn();
     return true;
 }
 
 bool dm_opengl_find_uniform_loc(GLuint program, const char* name, GLint* location)
 {
+    DM_ASSERT_MSG(name, "Uniform name is NULL! Something went wrong with the constant buffer.");
     *location = glGetUniformLocation(program, name);
-    if (*location == 1)
+    if (*location == -1)
     {
         DM_LOG_FATAL("Could not find uniform: '%s'", name);
         return false;
@@ -256,19 +258,19 @@ bool dm_opengl_validate_shader(GLuint shader)
     int length = -1;
 
     glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
-    glCheckError();
+    glCheckErrorReturn();
 
     if (result != GL_TRUE)
     {
         GLchar message[512];
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
-        glCheckError();
+        glCheckErrorReturn();
         glGetShaderInfoLog(shader, sizeof(message), &length, message);
-        glCheckError();
+        glCheckErrorReturn();
         DM_LOG_FATAL("%s", message);
 
         glDeleteShader(shader);
-        glCheckError();
+        glCheckErrorReturn();
 
         return false;
     }
@@ -282,20 +284,20 @@ bool dm_opengl_validate_program(GLuint program)
     int length = -1;
 
     glGetProgramiv(program, GL_LINK_STATUS, &result);
-    glCheckError();
+    glCheckErrorReturn();
 
     if (result == GL_FALSE)
     {
         DM_LOG_ERROR("OpenGL Error: %d", glGetError());
         char message[512];
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
-        glCheckError();
+        glCheckErrorReturn();
         glGetProgramInfoLog(program, length, NULL, message);
-        glCheckError();
+        glCheckErrorReturn();
         DM_LOG_FATAL("%s", message);
 
         glDeleteProgram(program);
-        glCheckError();
+        glCheckErrorReturn();
 
         return false;
     }

@@ -2,7 +2,7 @@
 
 #ifdef DM_DIRECTX
 
-#include "dm_logger.h"
+#include "core/dm_logger.h"
 
 D3D11_CULL_MODE dm_cull_to_directx_cull(dm_cull_mode dm_mode)
 {
@@ -178,6 +178,45 @@ dm_comp_to_directx_comp(dm_comparison dm_comp)
 	default:
 		DM_LOG_FATAL("Unknown comparison function!");
 		return D3D11_COMPARISON_ALWAYS + 1;
+	}
+}
+
+DXGI_FORMAT dm_image_fmt_to_directx_fmt(dm_texture_format dm_fmt)
+{
+	switch (dm_fmt)
+	{
+	case DM_TEXTURE_FORMAT_RGB: 
+	case DM_TEXTURE_FORMAT_RGBA: return DXGI_FORMAT_R8G8B8A8_UNORM;
+	default:
+		DM_LOG_FATAL("Unknown texture format!");
+		return DXGI_FORMAT_UNKNOWN;
+	}
+}
+
+D3D11_FILTER dm_image_filter_to_directx_filter(dm_filter filter)
+{
+	switch (filter)
+	{
+	case DM_FILTER_NEAREST:
+	case DM_FILTER_LINEAR: return D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT;
+	default:
+		DM_LOG_FATAL("Unknown filter function!");
+		return D3D11_FILTER_MAXIMUM_ANISOTROPIC + 1;
+	}
+}
+
+D3D11_TEXTURE_ADDRESS_MODE dm_texture_mode_to_directx_mode(dm_texture_mode dm_mode)
+{
+	switch (dm_mode)
+	{
+	case DM_TEXTURE_MODE_WRAP: return D3D11_TEXTURE_ADDRESS_WRAP;
+	case DM_TEXTURE_MODE_BORDER: return D3D11_TEXTURE_ADDRESS_BORDER;
+	case DM_TEXTURE_MODE_EDGE: return D3D11_TEXTURE_ADDRESS_CLAMP;
+	case DM_TEXTURE_MODE_MIRROR_REPEAT: return D3D11_TEXTURE_ADDRESS_MIRROR;
+	case DM_TEXTURE_MODE_MIRROR_EDGE: return D3D11_TEXTURE_ADDRESS_MIRROR_ONCE;
+	default:
+		DM_LOG_FATAL("Unknown texture mode!");
+		return D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1;
 	}
 }
 

@@ -3,11 +3,11 @@
 #ifdef DM_PLATFORM_WIN32
 
 #include "dm_platform_win32.h"
-#include "dm_logger.h"
-#include "dm_assert.h"
-#include "dm_event.h"
+#include "core/dm_logger.h"
+#include "core/dm_assert.h"
+#include "core/dm_event.h"
+#include "core/dm_mem.h"
 #include "input/dm_input.h"
-#include "dm_mem.h"
 
 typedef struct dm_internal_data
 {
@@ -131,6 +131,14 @@ void* dm_platform_alloc(size_t size)
 	DM_ASSERT_MSG(temp, "Malloc returned null pointer!");
 	if (!temp) return NULL;
 	dm_memzero(temp, size);
+	return temp;
+}
+
+void* dm_platform_calloc(size_t count, size_t size)
+{
+	void* temp = calloc(count, size);
+	DM_ASSERT_MSG(temp, "Calloc returned NULL pointer!");
+	if (!temp) return NULL;
 	return temp;
 }
 

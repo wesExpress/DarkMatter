@@ -1,14 +1,15 @@
 #ifndef __DM_MATH_H__
 #define __DM_MATH_H__
 
+#ifdef DM_MATH_IMPLEMENTATION
+
 #include <math.h>
 #include <stdbool.h>
 
-#include "dm_defines.h"
-#include "dm_assert.h"
+#include "core/dm_defines.h"
+#include "core/dm_assert.h"
 #include "platform/dm_platform.h"
-
-#include "dm_math_types.h"
+#include "core/dm_math_types.h"
 
 // helper functions
 DM_API DM_INLINE 
@@ -1334,5 +1335,7 @@ dm_mat4 dm_mat_ortho(float left, float right, float bottom, float top, float n, 
 
 	return ortho;
 }
+
+#endif
 
 #endif

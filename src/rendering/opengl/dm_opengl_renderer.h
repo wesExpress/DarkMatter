@@ -1,7 +1,7 @@
 #ifndef __DM_OPENGL_RENDERER_H__
 #define __DM_OPENGL_RENDERER_H__
 
-#include "dm_defines.h"
+#include "core/dm_defines.h"
 
 #ifdef DM_OPENGL
 
@@ -34,6 +34,12 @@ typedef struct dm_internal_pipeline
 	GLenum primitive;
 } dm_internal_pipeline;
 
+typedef struct dm_internal_texture
+{
+	GLuint id, slot;
+	GLint location;
+} dm_internal_texture;
+
 typedef enum dm_opengl_uniform
 {
 	DM_OPENGL_UNI_INT,
@@ -52,8 +58,10 @@ typedef enum dm_opengl_uniform
 #if DM_DEBUG
 GLenum glCheckError_(const char* file, int line);
 #define glCheckError() glCheckError_(__FILE__, __LINE__) 
+#define glCheckErrorReturn() if(glCheckError()) return false
 #else
 #define glCheckError()
+#define glCheckErrorReturn()
 #endif
 
 #endif

@@ -2,7 +2,8 @@
 
 #ifdef DM_DIRECTX
 
-#include "dm_assert.h"
+#include "core/dm_assert.h"
+#include "core/dm_mem.h"
 
 bool dm_directx_create_rendertarget(dm_internal_renderer* renderer, dm_internal_pipeline* pipeline)
 {
@@ -15,8 +16,8 @@ bool dm_directx_create_rendertarget(dm_internal_renderer* renderer, dm_internal_
 	
 	DX_ERROR_CHECK(swap_chain->lpVtbl->GetBuffer(swap_chain, 0, &IID_ID3D11Texture2D, (void**)&(ID3D11Resource*)pipeline->render_back_buffer), "IDXGISwapChain::GetBuffer failed!");
 	device->lpVtbl->CreateRenderTargetView(device, (ID3D11Resource*)pipeline->render_back_buffer, NULL, &pipeline->render_view);
-	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
-	dm_mem_db_adjust(sizeof(ID3D11RenderTargetView), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
+	dm_mem_db_adjust(sizeof(ID3D11RenderTargetView), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
 
 	return true;
 }
@@ -29,8 +30,8 @@ void dm_directx_destroy_rendertarget(dm_internal_pipeline* pipeline)
 	DX_RELEASE(view);
 	DX_RELEASE(back_buffer);
 
-	dm_mem_db_adjust(-sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE);
-	dm_mem_db_adjust(-sizeof(ID3D11RenderTargetView), DM_MEM_RENDER_PIPELINE);
+	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
+	dm_mem_db_adjust(sizeof(ID3D11RenderTargetView), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
 }
 
 #endif

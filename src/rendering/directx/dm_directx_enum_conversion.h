@@ -1,7 +1,7 @@
 #ifndef __DM_DIRECTX_ENUM_CONVERSION_H__
 #define __DM_DIRECTX_ENUM_CONVERSION_H__
 
-#include "dm_defines.h"
+#include "core/dm_defines.h"
 
 #ifdef DM_DIRECTX
 
@@ -15,6 +15,9 @@ D3D11_BIND_FLAG dm_buffer_type_to_directx(dm_buffer_type type);
 D3D11_CPU_ACCESS_FLAG dm_buffer_cpu_access_to_directx(dm_buffer_cpu_access access);
 DXGI_FORMAT dm_vertex_t_to_directx_format(dm_vertex_attrib_desc desc);
 D3D11_COMPARISON_FUNC dm_comp_to_directx_comp(dm_comparison dm_comp);
+DXGI_FORMAT dm_image_fmt_to_directx_fmt(dm_texture_format dm_fmt);
+D3D11_FILTER dm_image_filter_to_directx_filter(dm_filter filter);
+D3D11_TEXTURE_ADDRESS_MODE dm_texture_mode_to_directx_mode(dm_texture_mode dm_mode);
 
 #endif
 

@@ -2,6 +2,8 @@
 
 #ifdef DM_OPENGL
 
+#include "core/dm_logger.h"
+
 GLenum dm_buffer_to_opengl_buffer(dm_buffer_type dm_type)
 {
     switch (dm_type)
@@ -151,6 +153,49 @@ GLenum dm_wind_top_opengl_wind(dm_winding_order winding)
     default:
         DM_LOG_FATAL("Unkown winding order!");
         return DM_WINDING_UNKNOWN;
+    }
+}
+
+GLenum dm_texture_format_to_opengl_format(dm_texture_format dm_format)
+{
+    switch (dm_format)
+    {
+    case DM_TEXTURE_FORMAT_RGB: return GL_RGB;
+    case DM_TEXTURE_FORMAT_RGBA: return GL_RGBA;
+    default:
+        DM_LOG_FATAL("Unknown texture format!");
+        return DM_TEXTURE_FORMAT_UNKNOWN;
+    }
+}
+
+GLenum dm_filter_to_opengl_filter(dm_filter filter)
+{
+    switch (filter)
+    {
+    case DM_FILTER_LINEAR: return GL_LINEAR;
+    case DM_FILTER_NEAREST: return GL_NEAREST;
+    case DM_FILTER_LINEAR_MIPMAP_LINEAR: return GL_LINEAR_MIPMAP_LINEAR;
+    case DM_FILTER_LIENAR_MIPMAP_NEAREST: return GL_LINEAR_MIPMAP_NEAREST;
+    case DM_FILTER_NEAREST_MIPMAP_LINEAR: return GL_NEAREST_MIPMAP_LINEAR;
+    case DM_FILTER_NEAREST_MIPMAP_NEAREST: return GL_NEAREST_MIPMAP_NEAREST;
+    default:
+        DM_LOG_FATAL("Unknown texture filter function!");
+        return DM_FILTER_UNKNOWN;
+    }
+}
+
+GLenum dm_texture_mode_to_opengl_mode(dm_texture_mode dm_mode)
+{
+    switch (dm_mode)
+    {
+    case DM_TEXTURE_MODE_WRAP: return GL_REPEAT;
+    case DM_TEXTURE_MODE_EDGE: return GL_CLAMP_TO_EDGE;
+    case DM_TEXTURE_MODE_BORDER: return GL_CLAMP_TO_BORDER;
+    case DM_TEXTURE_MODE_MIRROR_REPEAT: return GL_MIRRORED_REPEAT;
+    case DM_TEXTURE_MODE_MIRROR_EDGE: return GL_MIRROR_CLAMP_TO_EDGE;
+    default:
+        DM_LOG_FATAL("Unknwon clamping function!");
+        return DM_TEXTURE_MODE_UNKNOWN;
     }
 }
 

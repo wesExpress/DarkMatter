@@ -1,7 +1,8 @@
 #include "dm_renderer.h"
 #include "dm_command_buffer.h"
-#include "dm_mem.h"
-#include "dm_logger.h"
+#include "dm_texture.h"
+#include "core/dm_mem.h"
+#include "core/dm_logger.h"
 #include <stddef.h>
 
 static dm_renderer_data r_data = { 0 };
@@ -56,17 +57,31 @@ dm_vertex_attrib_desc color_attrib_desc = {
 	.normalized = false,
 };
 
+// texture coords
+dm_vertex_attrib_desc tex_coord_desc = {
+#ifdef DM_OPENGL
+	.name = "aTexCoords",
+#elif defined DM_DIRECTX
+	.name = "TEXCOORD",
+#endif
+	.data_t = DM_VERTEX_DATA_T_FLOAT,
+	.stride = sizeof(dm_vertex_t),
+	.offset = offsetof(dm_vertex_t, tex_coords),
+	.count = 2,
+	.normalized = false
+};
+
 /*
 // constant buffer data
 */
-dm_vec3 offset = { 1, 0, 0 };
+dm_vec3 offset = { 0, -0.5, 0 };
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	r_data.clear_color = clear_color;
 	r_data.width = platform_data->window_width;
 	r_data.height = platform_data->window_height;
-	r_data.object_pipeline = (dm_render_pipeline*)dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
+	r_data.object_pipeline = dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 
 #ifdef DM_OPENGL
 	char* backend = "OpenGL";
@@ -83,6 +98,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		return false;
 	}
 
+	dm_texture_map_init();
 	if (!dm_renderer_create_object_pipeline())
 	{
 		DM_LOG_FATAL("Failed to create object render pipeline!");
@@ -113,6 +129,7 @@ void dm_renderer_shutdown()
 	// cleanup
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
 	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
+	dm_texture_map_destroy();
 
 	// backend shutdown
 	dm_renderer_shutdown_impl(&r_data);
@@ -131,7 +148,7 @@ bool dm_renderer_resize(int new_width, int new_height)
 		.max_depth = 1.0f
 	};
 	r_data.object_pipeline->viewport = viewport;
-	dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, NULL, &r_data.object_pipeline->command_buffer);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, NULL, r_data.object_pipeline->render_commands);
 
 	return true;
 }
@@ -141,21 +158,21 @@ void dm_renderer_begin_scene()
 	dm_renderer_begin_scene_impl(&r_data);
 
 	// commands for object pipeline
-	if (r_data.object_pipeline->command_buffer.commands.size > 0)
+	if (!dm_list_is_empty(r_data.object_pipeline->render_commands))
 	{
-		dm_renderer_clear_command_buffer(&r_data.object_pipeline->command_buffer);
+		dm_renderer_clear_command_buffer(r_data.object_pipeline->render_commands);
 	}
 
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, &r_data.object_pipeline->command_buffer);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, &r_data.object_pipeline->command_buffer);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, & r_data.object_pipeline->command_buffer);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, &r_data.object_pipeline->command_buffer);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, r_data.object_pipeline->render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, r_data.object_pipeline->render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, r_data.object_pipeline->render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, r_data.object_pipeline->render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, r_data.object_pipeline->render_commands);
 }
 
 bool dm_renderer_end_scene()
 {
-	if (!dm_renderer_submit_command_buffer(&r_data.object_pipeline->command_buffer, r_data.object_pipeline)) return false;
+	if (!dm_renderer_submit_command_buffer(r_data.object_pipeline->render_commands, r_data.object_pipeline)) return false;
 
 	return dm_renderer_end_scene_impl(&r_data);
 }
@@ -163,15 +180,16 @@ bool dm_renderer_end_scene()
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 {
 	// command buffer
-	dm_list_init(&pipeline->command_buffer.commands, dm_render_command);
+	pipeline->render_commands = dm_list_create(sizeof(dm_render_command), 0);
 
 	// rasterizer
-	pipeline->raster_desc.shader = (dm_shader*)dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+	pipeline->raster_desc.shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 
 	// render packet
-	pipeline->render_packet.vertex_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->render_packet.index_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_list_init(&pipeline->render_packet.constant_buffers, dm_constant_buffer);
+	pipeline->render_packet.vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->render_packet.index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->render_packet.constant_buffers = dm_list_create(sizeof(dm_constant_buffer), 0);
+	pipeline->render_packet.texture_paths = dm_list_create(sizeof(dm_string), 0);
 
 	pipeline->render_packet.count = 0;
 	pipeline->render_packet.offset = 0;
@@ -181,7 +199,7 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 {
-	dm_list_destroy(&pipeline->command_buffer.commands);
+	dm_list_destroy(pipeline->render_commands);
 
 	dm_renderer_destroy_render_pipeline_impl(pipeline);
 
@@ -189,11 +207,15 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 	dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	
 	// constant buffers
-	dm_list_for_range(pipeline->render_packet.constant_buffers, i)
+	dm_list_destroy(pipeline->render_packet.constant_buffers);
+
+	// textures
+	for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
 	{
-		dm_free(pipeline->render_packet.constant_buffers.array[i].desc.buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+		dm_string* str = dm_list_at(pipeline->render_packet.texture_paths, i);
+		dm_strdel(str->string);
 	}
-	dm_list_destroy(&pipeline->render_packet.constant_buffers);
+	dm_list_destroy(pipeline->render_packet.texture_paths);
 
 	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 }
@@ -220,6 +242,14 @@ bool dm_renderer_create_object_pipeline()
 	// stencil
 	dm_stencil_state_desc stencil = { 0 };
 
+	// sampler
+	dm_sampler_desc sampler = { 0 };
+	sampler.comparison = DM_COMPARISON_ALWAYS;
+	sampler.filter = DM_FILTER_LINEAR;
+	sampler.u = DM_TEXTURE_MODE_WRAP;
+	sampler.v = DM_TEXTURE_MODE_WRAP;
+	sampler.w = DM_TEXTURE_MODE_WRAP;
+
 	// viewport
 	dm_viewport viewport = { 0 };
 	viewport.y = r_data.height;
@@ -232,6 +262,7 @@ bool dm_renderer_create_object_pipeline()
 	r_data.object_pipeline->blend_desc = blend;
 	r_data.object_pipeline->depth_desc = depth;
 	r_data.object_pipeline->stencil_desc = stencil;
+	r_data.object_pipeline->sampler_desc = sampler;
 	r_data.object_pipeline->viewport = viewport;
 
 	// internal pipeline
@@ -267,18 +298,21 @@ bool dm_renderer_init_object_data()
 
 	// triangle data
 	dm_vertex_t vertices[] = {
-		{ {-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f} },
-		{ { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f} },
-		{ { 0.0f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f} },
+		{ {-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} },
+		{ { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f} },
+		{ { 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f} },
+		{ {-0.5f,  0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f} }
 	};
 
 #ifdef DM_OPENGL
 	dm_index_t indices[] = {
-		0, 1, 2
+		0, 1, 2,
+		2, 3, 0
 	};
 #elif defined DM_DIRECTX
 	dm_index_t indices[] = {
-		0, 2, 1
+		0, 2, 1,
+		2, 0, 3
 	};
 #endif
 
@@ -293,6 +327,7 @@ bool dm_renderer_init_object_data()
 	dm_vertex_attrib_desc v_attribs[] = {
 		pos_attrib_desc,
 		color_attrib_desc,
+		tex_coord_desc
 	};
 
 	dm_vertex_layout v_layout = {
@@ -301,25 +336,46 @@ bool dm_renderer_init_object_data()
 	};
 
 	// constant buffers
-	dm_buffer* cb_buffer = (dm_buffer*)dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	cb_buffer->desc.type = DM_BUFFER_TYPE_CONSTANT;
-	cb_buffer->desc.usage = DM_BUFFER_USAGE_DYNAMIC;
-	cb_buffer->desc.elem_size = sizeof(float);
-	cb_buffer->desc.buffer_size = ((sizeof(offset) + 15) / 16) * 16;
-	cb_buffer->desc.cpu_access = DM_BUFFER_CPU_WRITE;
+	dm_buffer cb_buffer = {0};
+	cb_buffer.desc.type = DM_BUFFER_TYPE_CONSTANT;
+	cb_buffer.desc.usage = DM_BUFFER_USAGE_DYNAMIC;
+	cb_buffer.desc.elem_size = sizeof(float);
+	cb_buffer.desc.buffer_size = ((sizeof(offset) + 15) / 16) * 16;
+	cb_buffer.desc.cpu_access = DM_BUFFER_CPU_WRITE;
+	
+	dm_constant_buffer cb = { 0 };
+	cb.desc.buffer = cb_buffer;
+	cb.desc.name = "offset";
+	cb.desc.data_t = DM_CONST_BUFFER_T_FLOAT;
+	cb.desc.count = 3;
+	cb.desc.data = &offset;
+	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &cb);
 
-	dm_constant_buffer_desc cb_desc =
+	// texture initialization
+	dm_image_desc image_desc1 = { 0 };
+	image_desc1.path = "assets/container.jpg";
+	image_desc1.name = "uTexture1";
+	image_desc1.format = DM_TEXTURE_FORMAT_RGB;
+	image_desc1.internal_format = DM_TEXTURE_FORMAT_RGB;
+
+	dm_image_desc image_desc2 = { 0 };
+	image_desc2.path = "assets/awesomeface.png";
+	image_desc2.name = "uTexture2";
+	image_desc2.format = DM_TEXTURE_FORMAT_RGBA;
+	image_desc2.internal_format = DM_TEXTURE_FORMAT_RGB;
+	image_desc2.flip = true;
+
+	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
+
+	if(!dm_textures_load(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
+	
+	for(uint32_t i=0; i<sizeof(image_descs)/sizeof(dm_image_desc);i++)
 	{
-		.buffer = cb_buffer,
-		.name = "offset",
-		.data_t = DM_CONST_BUFFER_T_FLOAT,
-		.count = 3,
-		.data = &offset
-	};
-	dm_constant_buffer cb = {
-		.desc = cb_desc
-	};
-	dm_list_append(&r_data.object_pipeline->render_packet.constant_buffers, cb);
+		dm_string str = {0};
+		str.string = dm_strdup(image_descs[i].path);
+		str.len = strlen(str.string);
+		dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &str);
+	}
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);
 }

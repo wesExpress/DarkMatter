@@ -24,11 +24,6 @@ bool dm_engine_create()
     
     dm_event_set_callback(dm_engine_on_event);
 
-#ifdef DM_PLATFORM_UNSUPPORTED
-    DM_LOG_FATAL("Trying to compile on unsupprted platform!");
-    return false;
-#endif
-
     if(!dm_platform_startup(e_data, 1280, 720, "CEngine", 100, 100))
     {
         DM_LOG_FATAL("Platform could not be initialized!");
@@ -44,7 +39,7 @@ bool dm_engine_create()
     e_data->is_running = true;
     e_data->is_suspended = false;
 
-    DM_LOG_INFO("%s", dm_mem_track());
+    dm_mem_track();
 
     return true;
 }
@@ -53,7 +48,8 @@ void dm_engine_shutdown()
 {
     dm_free(e_data, sizeof(dm_engine_data), DM_MEM_ENGINE);
 
-    DM_LOG_INFO("%s", dm_mem_track());
+    dm_mem_track();
+    dm_mem_all_freed();
 }
 
 bool dm_engine_run()

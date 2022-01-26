@@ -1,7 +1,7 @@
 #ifndef __DM_PLATFORM_WIN32_H__
 #define __DM_PLATFORM_WIN32_H__
 
-#include "dm_defines.h"
+#include "core/dm_defines.h"
 
 #ifdef DM_PLATFORM_WIN32
 

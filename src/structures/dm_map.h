@@ -1,36 +1,37 @@
 #ifndef __DM_MAP_H__
 #define __DM_MAP_H__
 
-#define CAPACITY 50000
+#define DM_MAP_DEFAULT_SIZE 16
+
+#include <stdlib.h>
+#include <stdbool.h>
 
 typedef struct dm_map_item
 {
-    char* key;
-    char* value;
+	char* key;
+	void* value;
 } dm_map_item;
 
-typedef struct dm_map_link_list
+typedef struct dm_map_t
 {
-    dm_map_item* item;
-    struct dm_map_link_list* next;
-} dm_map_link_list;
+	size_t capacity, count, type_size;
+	dm_map_item** items;
+	bool* tombstones;
+} dm_map_t;
 
-typedef struct dm_map
-{
-    int size, count;
-    dm_map_item** items;
-    dm_map_link_list** overflows;
-} dm_map;
+dm_map_t* dm_map_create(size_t type_size, size_t capacity);
+void dm_map_destroy(dm_map_t* map);
 
-unsigned long simple_hash_function(const char* str);
-dm_map* dm_map_create(int size);
-dm_map_item* dm_map_create_item(char* key, char* value);
-void dm_map_delete_item(dm_map_item* item);
-void dm_map_delete(dm_map* map);
+/*
+Insert an element using linear probing
+*/
+void dm_map_insert(dm_map_t* map, const char* key, void* value);
+void dm_map_delete_elem(dm_map_t* map, const char* key);
+/*
+It is the user's responsibility to cast this to whatever it actually is! Returns NULL if not found
+*/
+void* dm_map_get(dm_map_t* map, const char* key);
 
-void dm_map_insert(dm_map* map, char* key, char* value);
-char* dm_map_search(dm_map* map, char* key);
+bool dm_map_exists(dm_map_t* map, const char* key);
 
-void dm_map_print(dm_map* map);
-void dm_map_search_print(dm_map* map, char* key);
 #endif

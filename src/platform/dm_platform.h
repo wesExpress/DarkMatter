@@ -5,8 +5,8 @@
 #include <stdlib.h>
 #include <stdint.h>
 
-#include "dm_defines.h"
-#include "dm_engine_types.h"
+#include "core/dm_defines.h"
+#include "core/dm_engine_types.h"
 
 /*
 Sets up the platform specific data.
@@ -37,6 +37,7 @@ bool dm_platform_pump_messages(dm_engine_data* e_data);
 
 // various platform memory functions
 void* dm_platform_alloc(size_t size);
+void* dm_platform_calloc(size_t count, size_t size);
 void* dm_platform_realloc(void* block, size_t size);
 void dm_platform_free(void* block);
 void* dm_platform_memzero(void* block, size_t size);

@@ -44,4 +44,6 @@
 #endif
 #endif
 
+#define DM_MATH_IMPLEMENTATION
+
 #endif

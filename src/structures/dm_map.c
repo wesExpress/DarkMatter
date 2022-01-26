@@ -1,235 +1,211 @@
 #include "dm_map.h"
-#include "dm_mem.h"
-#include "dm_logger.h"
-#include "string.h"
+#include "core/dm_mem.h"
+#include "core/dm_logger.h"
+#include "core/dm_string.h"
+#include <stdint.h>
+#include <string.h>
 
-dm_map_link_list* dm_map_allocate_list();
-dm_map_link_list* dm_map_list_insert(dm_map_link_list* list, dm_map_item* item);
-dm_map_item* dm_map_list_remove(dm_map_link_list* list);
-void dm_map_delete_list(dm_map_link_list* list);
-dm_map_link_list** dm_map_create_overflow(dm_map* map);
-void dm_map_delete_overflow(dm_map* map);
+#define DM_MAP_RESIZE_FACTOR 2
+#define DM_MAP_LOAD_FACTOR 0.75
 
-void dm_map_collision(dm_map* map, unsigned long index, dm_map_item* item);
+// forward declare "private functions"
+void dm_map_resize(dm_map_t* map);
+dm_map_item* dm_map_create_item(const char* key, void* value, size_t type_size);
+void dm_map_destroy_item(dm_map_item* item, size_t type_size);
 
-unsigned long simple_hash_function(const char* str)
+// just add the characters together
+uint32_t dm_map_simple_hash_function(dm_map_t* map, char* key)
 {
-    unsigned long index = 0;
-    for (int i=0; str[i]; i++)
-    {
-        index += str[i];
-    }
-    return index % CAPACITY;
+	uint32_t hash = 0;
+	for (int i = 0; key[i]; i++)
+	{
+		hash += key[i];
+	}
+
+	return hash % map->capacity;
 }
 
-dm_map* dm_map_create(int size)
+// FNV-1a algorithm
+uint64_t dm_map_hash(const char* key, dm_map_t* map)
 {
-    dm_map* map = (dm_map*)dm_alloc(sizeof(dm_map), DM_MEM_MAP);
-    map->size = size;
-    map->count = 0;
-    map->items = (dm_map_item**)calloc(map->size, sizeof(dm_map_item*));
-    for (int i=0; i<size;i++) map->items[i] = NULL;
-    map->overflows = dm_map_create_overflow(map);
-    return map;
+	uint64_t hash = 14695981039346656037UL;
+	for (int i = 0; key[i]; i++)
+	{
+		hash ^= key[i];
+		hash *= 1099511628211;
+	}
+
+	return hash % map->capacity;
 }
 
-dm_map_item* dm_map_create_item(char* key, char* value)
+dm_map_t* dm_map_create(size_t type_size, size_t capacity)
 {
-    dm_map_item* item = (dm_map_item*)dm_alloc(sizeof(dm_map_item));
-    item->key = (char*)dm_alloc(strlen(key)+1);
-    item->value = (char*)dm_alloc(strlen(value)+1);
+	dm_map_t* map = dm_alloc(sizeof(dm_map_t), DM_MEM_MAP);
 
-    strcpy(item->key, key);
-    strcpy(item->value, value);
+	map->capacity = capacity;
+	map->type_size = type_size;
 
-    return item;
+	map->items = dm_alloc(sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
+	map->tombstones = dm_alloc(sizeof(bool) * map->capacity, DM_MEM_MAP);
+
+	return map;
 }
 
-void dm_map_delete_item(dm_map_item* item)
+void dm_map_destroy(dm_map_t* map)
 {
-    dm_free(item->key);
-    dm_free(item->value);
-    dm_free(item);
+	if(map)
+	{
+		for (int i = 0; i < map->capacity; i++)
+		{
+			// items
+			if (map->items[i]) dm_map_destroy_item(map->items[i], map->type_size);
+
+		}
+		dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
+		dm_free(map->tombstones, sizeof(bool) * map->capacity, DM_MEM_MAP);
+		dm_free(map, sizeof(dm_map_t), DM_MEM_MAP);
+	}
+	else
+	{
+		DM_LOG_ERROR("Trying to destroy NULL map!");
+	}
 }
 
-void dm_map_delete(dm_map* map)
+void dm_map_insert(dm_map_t* map, const char* key, void* value)
 {
-    for(int i=0; i<map->size; i++)
-    {
-        if(map->items[i]) dm_map_delete_item(map->items[i]);
-    }
-    dm_map_delete_overflow(map);
-    dm_free(map->items);
-    dm_free(map);
+	if(map)
+	{
+		uint32_t index = dm_map_hash(key, map);
+		uint32_t hash = index;
+
+		while(map->items[index] || map->tombstones[index])
+		{
+			if (map->items[index])
+			{
+				if (strcmp(map->items[index]->key, key) == 0)
+				{
+					map->items[index]->value = value;
+					break;
+				}
+			}
+			else
+			{
+				if(index >= map->capacity) index=0;
+				index++;
+			}
+		}
+
+		// insert element
+		map->items[index] = dm_map_create_item(key, value, map->type_size);
+		map->count++;
+		if(index==hash) map->tombstones[index] = false;
+		if(( (float)map->count / (float)map->capacity) >= DM_MAP_LOAD_FACTOR) dm_map_resize(map);
+	}
+	else DM_LOG_ERROR("Trying to insert into NULL map!");
 }
 
-void dm_map_insert(dm_map* map, char* key, char* value)
+void dm_map_delete_elem(dm_map_t* map, const char* key)
 {
-    int index = simple_hash_function(key);
+	if(map)
+	{
+		uint32_t index = dm_map_hash(key, map);
 
-    if(!map->items[index])
-    {
-        if(map->count == map->size)
-        {
-            DM_LOG_ERROR("Trying to insert into full map!");
-            return;
-        }
+		while(map->items[index])
+		{
+			if (strcmp(map->items[index]->key, key) == 0)
+			{
+				dm_map_destroy_item(map->items[index], map->type_size);
+				map->tombstones[index] = true;
+				map->count--;
 
-         dm_map_item* item = dm_map_create_item(key, value);
-         map->items[index] = item;
-         map->count++;
-    }
-    else
-    {
-        if(strcmp(map->items[index]->key, key) == 0)
-        {
-            strcpy(map->items[index]->value, value);
-            return;
-        }
-        else
-        {
-            dm_map_item* item = dm_map_create_item(key, value);
-            dm_map_collision(map, index, item);
-            return;
-        }
-    }
+				return;
+			}
+
+			index++;
+			if(index >= map->capacity) index=0;
+		}
+		DM_LOG_WARN("Trying to delete invalid index from map.");
+	}
+	else DM_LOG_ERROR("Trying to delete from NULL map!");
 }
 
-char* dm_map_search(dm_map* map, char* key)
+void* dm_map_get(dm_map_t* map, const char* key)
 {
-    int index = simple_hash_function(key);
-    dm_map_item* item = map->items[index];
-    dm_map_link_list* head = map->overflows[index];
+	if(map)
+	{
+		uint32_t index = dm_map_hash(key, map);
 
-    while(item)
-    {
-        if(strcmp(item->key, key)==0) return item->value;
-        if(!head) return NULL;
-        item = head->item;
-        head = head->next;
-    }
+		while(map->items[index] || map->tombstones[index])
+		{
+			if (map->items[index])
+			{
+				if (strcmp(map->items[index]->key, key) == 0) 
+					return map->items[index]->value;
+			}
+			
+			index++;
+			if(index>=map->capacity) index=0;
+		}
+	}
+	else DM_LOG_ERROR("Map is NULL! Returning NULL...");
 
-    return NULL;
+	// not found;
+	return NULL;
 }
 
-void dm_map_print(dm_map* map)
+bool dm_map_exists(dm_map_t* map, const char* key)
 {
-    for(int i =0; i<map->size; i++)
-    {
-        if(map->items[i])
-        {
-            DM_LOG_DEBUG("Index: %d; Key: %s; Value: %s", i, map->items[i]->key, map->items[i]->value);
-        }
-    }
+	if(map)
+	{
+		uint32_t index = dm_map_hash(key, map);
+
+		while(map->items[index] || map->tombstones[index])
+		{
+			if (map->items[index])
+			{
+				if (strcmp(map->items[index]->key, key) == 0) return true;
+			}
+			
+			if(index>=map->capacity) index = 0;
+
+			index++;
+		}
+	}
+	else DM_LOG_ERROR("Map is NULL! Returning false...");
+	
+	return false;
 }
 
-void dm_map_search_print(dm_map* map, char* key)
+void dm_map_resize(dm_map_t* map)
 {
-    char* val;
-    if((val = dm_map_search(map, key)) == NULL) DM_LOG_DEBUG("Key not found.");
-    else DM_LOG_DEBUG("Key: %s; Value: %s", key, val);
+	dm_map_t* new_map = dm_map_create(map->type_size, map->capacity * DM_MAP_RESIZE_FACTOR);
+
+	for (int i = 0; i < map->capacity; i++)
+	{
+		if (map->items[i])
+		{
+			dm_map_insert(new_map, map->items[i]->key, map->items[i]->value);
+			dm_map_destroy_item(map->items[i], map->type_size);
+		}
+	}
+	
+	dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
+	*map = *new_map;
 }
 
-// collisions
-void dm_map_collision(dm_map* map, unsigned long index, dm_map_item* item)
+dm_map_item* dm_map_create_item(const char* key, void* value, size_t type_size)
 {
-    dm_map_link_list* head = map->overflows[index];
+	dm_map_item* item = dm_alloc(sizeof(dm_map_item), DM_MEM_MAP);
+	item->key = dm_strdup(key);
+	item->value = dm_alloc(type_size, DM_MEM_MAP);
+	dm_memcpy(item->value, value, type_size);
 
-    if(!head)
-    {
-        head = dm_map_allocate_list();
-        head->item = item;
-        map->overflows[index] = head;
-    }
-    else
-    {
-        map->overflows[index] = dm_map_list_insert(head, item);
-    }
+	return item;
 }
 
-dm_map_link_list* dm_map_allocate_list()
+void dm_map_destroy_item(dm_map_item* item, size_t type_size)
 {
-    dm_map_link_list* list = (dm_map_link_list*)dm_alloc(sizeof(dm_map_link_list));
-    return list;
-}
-
-dm_map_link_list* dm_map_list_insert(dm_map_link_list* list, dm_map_item* item)
-{
-    if(!list)
-    {
-        dm_map_link_list* head = dm_map_allocate_list();
-        head->item = item;
-        head->next = NULL;
-        list = head;
-        return list;
-    }
-    else if(list->next == NULL)
-    {
-        dm_map_link_list* node = dm_map_allocate_list();
-        node->item = item;
-        node->next = NULL;
-        list = node;
-        return list;
-    }
-
-    // find end of list to append to
-    dm_map_link_list* temp = list;
-    while(temp->next->next) temp = temp->next;
-
-    // attach the new node
-    dm_map_link_list* node = dm_map_allocate_list();
-    node->item = item;
-    node->next = NULL;
-    temp->next = node;
-
-    return list;
-}
-
-dm_map_item* dm_map_list_remove(dm_map_link_list* list)
-{
-    if(!list) return NULL;
-    if(!list->next) return NULL;
-
-    dm_map_link_list* node = list->next;
-    dm_map_link_list* temp = list;
-    temp->next = NULL;
-    list = node;
-
-    dm_map_item* item = NULL;
-    dm_memcpy(temp->item, item, sizeof(dm_map_item));
-    dm_free(temp->item->key);
-    dm_free(temp->item->value);
-    dm_free(temp->item);
-    dm_free(temp);
-
-    return item;
-}
-
-void dm_map_delete_list(dm_map_link_list* list)
-{
-    dm_map_link_list* temp = list;
-
-    while(list)
-    {
-        temp = list;
-        list = list->next;
-        dm_free(temp->item->key);
-        dm_free(temp->item->value);
-        dm_free(temp->item);
-        dm_free(temp);
-    }
-}
-
-dm_map_link_list** dm_map_create_overflow(dm_map* map)
-{
-    dm_map_link_list** buckets = (dm_map_link_list**)calloc(map->size, sizeof(dm_map_link_list*));
-    for(int i=0; i<map->size;i++) buckets[i] = NULL;
-    return buckets;
-}
-
-void dm_map_delete_overflow(dm_map* map)
-{
-    dm_map_link_list** buckets = map->overflows;
-    for(int i =0; i< map->size; i++) dm_map_delete_list(buckets[i]);
-    dm_free(buckets);
+	dm_strdel(item->key);
+	dm_free(item->value, type_size, DM_MEM_MAP);
+	dm_free(item, sizeof(dm_map_item), DM_MEM_MAP);
 }

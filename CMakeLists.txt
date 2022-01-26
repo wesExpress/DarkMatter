@@ -11,7 +11,8 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 
 project( CEngine )
 
-set(DM_RENDER_OPENGL off)
+set(DM_RENDER_OPENGL on)
+set(DM_BUILD_DEBUG on)
 
 if(WIN32)
     if(DM_RENDER_OPENGL)
@@ -30,33 +31,44 @@ if(DM_RENDER_OPENGL)
     add_subdirectory(lib/glad)
 endif()
 
-add_definitions(-DDM_DEBUG)
+if(DM_BUILD_DEBUG)
+    add_definitions(-DDM_DEBUG)
+else()
+    add_definitions(-DDM_RELEASE)
+endif()
 
 set(BUILD_SHARED_LIBS TRUE)
 
 set(
     SOURCES
     
-    src/dm_engine_entry.c
-    src/dm_engine.c
-    src/dm_mem.c
-    src/dm_logger.c
-    src/dm_event.c
-    src/dm_camera_controller.c
+    src/core/dm_engine_entry.c
+    src/core/dm_engine.c
+    src/core/dm_mem.c
+    src/core/dm_logger.c
+    src/core/dm_event.c
+    src/core/dm_string.c
+
+    src/core/dm_camera_controller.c
 
     src/input/dm_input.c
 
     src/platform/dm_platform_glfw.c
     src/platform/dm_platform_win32.c
 
+    src/structures/dm_list.c
+    src/structures/dm_map.c
+
     src/rendering/dm_renderer.c
     src/rendering/dm_command_buffer.c
+    src/rendering/dm_texture.c
     src/rendering/dm_camera.c
 
     src/rendering/opengl/dm_opengl_renderer.c
     src/rendering/opengl/dm_opengl_buffer.c
     src/rendering/opengl/dm_opengl_shader.c
     src/rendering/opengl/dm_opengl_enum_conversion.c
+    src/rendering/opengl/dm_opengl_texture.c
 
     src/rendering/directx/dm_directx_renderer.c
     src/rendering/directx/dm_directx_device.c
@@ -65,7 +77,11 @@ set(
     src/rendering/directx/dm_directx_depth_stencil.c
     src/rendering/directx/dm_directx_buffer.c
     src/rendering/directx/dm_directx_shader.c
+    src/rendering/directx/dm_directx_texture.c
     src/rendering/directx/dm_directx_enum_conversion.c
+
+    # stb image
+    lib/stb_image/include/stb_image/stb_image.c
 )
 
 # objective c files if using metal
@@ -97,11 +113,13 @@ set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
 
 add_executable(${PROJECT_NAME} ${SOURCES} ${SHADERS})
 
+set(INCLUDES PUBLIC src PRIVATE lib/stb_image/include)
+
 if(DM_RENDER_OPENGL)
-    target_include_directories(${PROJECT_NAME} PUBLIC src PRIVATE lib/glfw/include lib/glad/include)
-else()
-    target_include_directories(${PROJECT_NAME} PUBLIC src)
+    set(INCLUDES ${INCLUDES} PRIVATE lib/glfw/include lib/glad/include)
 endif()
+
+target_include_directories(${PROJECT_NAME} ${INCLUDES})
 
 if(DM_RENDER_OPENGL)
     target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)
@@ -158,4 +176,12 @@ add_custom_command(
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/shaders
             ${CMAKE_CURRENT_BINARY_DIR}/shaders
+)
+
+# move assets to binary dir
+add_custom_command(
+    TARGET CEngine POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_SOURCE_DIR}/assets
+            ${CMAKE_CURRENT_BINARY_DIR}/assets
 )

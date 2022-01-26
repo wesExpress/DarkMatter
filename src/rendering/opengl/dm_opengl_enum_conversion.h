@@ -1,7 +1,7 @@
 #ifndef __DM_OPENGL_ENUM_CONVERSIONS_H__
 #define __DM_OPENGL_ENUM_CONVERSIONS_H__
 
-#include "dm_defines.h"
+#include "core/dm_defines.h"
 
 #ifdef DM_OPENGL
 
@@ -17,6 +17,9 @@ GLenum dm_blend_func_to_opengl_func(dm_blend_func func);
 GLenum dm_comp_to_opengl_comp(dm_comparison dm_comp);
 GLenum dm_cull_to_opengl_cull(dm_cull_mode cull);
 GLenum dm_wind_top_opengl_wind(dm_winding_order winding);
+GLenum dm_texture_format_to_opengl_format(dm_texture_format dm_format);
+GLenum dm_filter_to_opengl_filter(dm_filter filter);
+GLenum dm_texture_mode_to_opengl_mode(dm_texture_mode dm_mode);
 
 #endif
 
