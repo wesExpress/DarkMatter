@@ -339,7 +339,6 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
 bool dm_renderer_update_constant_buffer(dm_constant_buffer* cb, void* data)
 {
-    dm_memcpy(cb->desc.data, data, sizeof(dm_mat4));
     return true;
 }
 

@@ -47,6 +47,18 @@ void dm_camera_set_pos(dm_camera* camera, dm_vec3 pos)
 	);
 }
 
+void dm_camera_set_forward(dm_camera* camera, dm_vec3 forward)
+{
+	camera->forward = forward;
+
+	dm_camera_set_view(
+		camera,
+		camera->pos,
+		camera->forward,
+		camera->up
+	);
+}
+
 void dm_camera_set_view(dm_camera* camera, dm_vec3 view_origin, dm_vec3 target, dm_vec3 up)
 {
 	camera->view = dm_mat_view(view_origin, dm_vec3_add_vec3(view_origin, target), up);

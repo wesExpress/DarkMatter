@@ -52,5 +52,6 @@ bool dm_renderer_end_scene();
 
 // render object functions
 DM_API dm_renderer_update_camera_pos(dm_vec3 delta_pos);
+DM_API dm_renderer_update_camera_forward(dm_vec3 delta_forward);
 
 #endif

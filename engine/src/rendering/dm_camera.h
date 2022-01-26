@@ -30,6 +30,7 @@ void dm_camera_init(dm_camera* camera, dm_vec3 pos, float fov, int width, int he
 
 void dm_camera_update_view_proj(dm_camera* camera);
 void dm_camera_set_pos(dm_camera* camera, dm_vec3 pos);
+void dm_camera_set_forward(dm_camera* camera, dm_vec3 forward);
 void dm_camera_set_view(dm_camera* camera, dm_vec3 view_origin, dm_vec3 target, dm_vec3 up);
 void dm_camera_set_projection(dm_camera* camera, float fov, int width, int height, float n, float f);
 

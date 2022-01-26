@@ -170,6 +170,7 @@ bool dm_renderer_resize(int new_width, int new_height)
 
 bool dm_renderer_begin_scene()
 {
+	dm_memcpy(vp_cb.desc.data, &r_data.camera.view_proj, sizeof(dm_mat4));
 	if (!dm_renderer_update_constant_buffer(&vp_cb, &r_data.camera.view_proj)) return false;
 
 	dm_renderer_begin_scene_impl(&r_data);
@@ -442,4 +443,10 @@ dm_renderer_update_camera_pos(dm_vec3 delta_pos)
 {
 	dm_vec3 pos = dm_vec3_add_vec3(r_data.camera.pos, delta_pos);
 	dm_camera_set_pos(&r_data.camera, pos);
+}
+
+dm_renderer_update_camera_forward(dm_vec3 delta_forward)
+{
+	dm_vec3 forward = dm_vec3_add_vec3(r_data.camera.forward, delta_forward);
+	dm_camera_set_forward(&r_data.camera, forward);
 }
