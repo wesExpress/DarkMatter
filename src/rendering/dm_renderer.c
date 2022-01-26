@@ -74,7 +74,7 @@ dm_vertex_attrib_desc tex_coord_desc = {
 /*
 // constant buffer data
 */
-dm_vec3 offset = { 0, -0.5, 0 };
+dm_vec3 offset = { 0, 0, 0 };
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -300,7 +300,7 @@ bool dm_renderer_init_object_data()
 	dm_vertex_t vertices[] = {
 		{ {-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} },
 		{ { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f} },
-		{ { 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f} },
+		{ { 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 2.0f} },
 		{ {-0.5f,  0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f} }
 	};
 
