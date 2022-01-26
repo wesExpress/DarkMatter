@@ -28,9 +28,9 @@ typedef struct dm_camera
 
 void dm_camera_init(dm_camera* camera, dm_vec3 pos, float fov, int width, int height, float n, float f, dm_camera_type type);
 
-DM_API void dm_camera_update_view_proj(dm_camera* camera);
-DM_API void dm_camera_set_pos(dm_camera* camera, dm_vec3 pos);
-DM_API void dm_camera_set_view(dm_camera* camera, dm_vec3 view_origin, dm_vec3 target, dm_vec3 up);
-DM_API void dm_camera_set_projection(dm_camera* camera, float fov, int width, int height, float n, float f);
+void dm_camera_update_view_proj(dm_camera* camera);
+void dm_camera_set_pos(dm_camera* camera, dm_vec3 pos);
+void dm_camera_set_view(dm_camera* camera, dm_vec3 view_origin, dm_vec3 target, dm_vec3 up);
+void dm_camera_set_projection(dm_camera* camera, float fov, int width, int height, float n, float f);
 
 #endif

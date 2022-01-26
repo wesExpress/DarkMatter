@@ -1,9 +1,10 @@
 #ifndef __ENGINE_H__
 #define __ENGINE_H__
 
-#include <stdbool.h>
 #include "dm_event.h"
-#include "dm_app_config.h"
+#include "dm_engine_types.h"
+#include <stdbool.h>
+
 /*
 * create engine data ptr
 * run platform startup

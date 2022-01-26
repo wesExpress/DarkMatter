@@ -2,6 +2,7 @@ project(Application)
 
 set(SOURCES
 	src/entry.c
+	src/application.c
 )
 
 add_executable(${PROJECT_NAME} ${SOURCES})

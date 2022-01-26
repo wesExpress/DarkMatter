@@ -51,14 +51,6 @@ mainly a wrapper for the backend renderer end scene the user is not exposed to
 bool dm_renderer_end_scene();
 
 // render object functions
-//bool dm_renderer_create_buffer(dm_buffer_desc desc, dm_buffer_handle* handle);
-//void dm_renderer_delete_buffer(dm_buffer_handle handle);
-//void dm_renderer_bind_buffer(dm_buffer_handle handle);
-//bool dm_renderer_create_shader(dm_shader_desc v_desc, dm_shader_desc p_desc, dm_shader_handle* handle);
-//void dm_renderer_delete_shader(dm_shader_handle handle);
-//void dm_renderer_bind_shader(dm_shader_handle handle);
-//
-//dm_buffer* dm_renderer_get_buffer(dm_buffer_handle handle);
-//dm_shader* dm_renderer_get_shader(dm_shader_handle handle);
+DM_API dm_renderer_update_camera_pos(dm_vec3 delta_pos);
 
 #endif

@@ -1,13 +1,10 @@
-#include "dm_engine.h"
-#include "platform/dm_platform.h"
+#include "core/dm_engine.h"
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
+#include "core/dm_app_config.h"
 #include "rendering/dm_renderer.h"
+#include "platform/dm_platform.h"
 #include "input/dm_input.h"
-
-// TODO: remove
-#include "structures/dm_list.h"
-#include "structures/dm_map.h"
 
 dm_engine_data* e_data = NULL;
 static bool initialized = false;
@@ -20,8 +17,9 @@ bool dm_engine_create(dm_application* app)
         return false;
     }
 
-    e_data = (dm_engine_data*)dm_alloc(sizeof(dm_engine_data), DM_MEM_ENGINE);
-    
+    e_data = dm_alloc(sizeof(dm_engine_data), DM_MEM_ENGINE);
+    e_data->application = app;
+
     dm_event_set_callback(dm_engine_on_event);
 
     if(!dm_platform_startup(e_data, 
@@ -39,6 +37,12 @@ bool dm_engine_create(dm_application* app)
         return false;
     }
 
+    if (!e_data->application->dm_application_init(e_data->application))
+    {
+        DM_LOG_FATAL("Application could not be initialized!");
+        return false;
+    }
+
     e_data->is_running = true;
     e_data->is_suspended = false;
 
@@ -49,6 +53,8 @@ bool dm_engine_create(dm_application* app)
 
 void dm_engine_shutdown()
 {
+    e_data->application->dm_application_shutdown(e_data->application);
+
     dm_free(e_data, sizeof(dm_engine_data), DM_MEM_ENGINE);
 
     dm_mem_track();
@@ -66,16 +72,32 @@ bool dm_engine_run()
 
         if (!e_data->is_suspended)
         {
+            if (!e_data->application->dm_application_update(e_data->application, 0))
+            {
+                DM_LOG_FATAL("Application update failed!");
+                e_data->is_running = false;
+                break;
+            }
+
+            if (!e_data->application->dm_application_render(e_data->application, 0))
+            {
+                DM_LOG_FATAL("Application rendering failed!");
+                e_data->is_running = false;
+                break;
+            }
+
             if (!dm_renderer_begin_scene())
             {
                 DM_LOG_FATAL("Something went wrong in begin scene...");
-                return false;
+                e_data->is_running = false;
+                break;
             }
 
             if (!dm_renderer_end_scene())
             {
                 DM_LOG_FATAL("Something went wrong in end scene...");
-                return false;
+                e_data->is_running = false;
+                break;
             }
         }
     }

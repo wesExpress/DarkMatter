@@ -437,3 +437,9 @@ bool dm_renderer_init_object_data()
 
 	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);
 }
+
+dm_renderer_update_camera_pos(dm_vec3 delta_pos)
+{
+	dm_vec3 pos = dm_vec3_add_vec3(r_data.camera.pos, delta_pos);
+	dm_camera_set_pos(&r_data.camera, pos);
+}

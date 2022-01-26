@@ -12,7 +12,6 @@ static dm_input_state dm_prev_input = { 0 };
 
 void dm_input_update_state()
 {
-	//dm_prev_input = dm_current_input;
 	dm_platform_memcpy(&dm_prev_input, &dm_current_input, sizeof(dm_input_state));
 	dm_platform_memzero(&dm_current_input, sizeof(dm_input_state));
 }

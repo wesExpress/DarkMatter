@@ -23,8 +23,8 @@ endif()
 
 
 if(MSVC)
-    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
-    set(BUILD_SHARED_LIBS TRUE)
+    set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS on)
+    set(BUILD_SHARED_LIBS on)
 endif()
 
 set(
@@ -35,8 +35,6 @@ set(
     src/core/dm_logger.c
     src/core/dm_event.c
     src/core/dm_string.c
-
-    src/core/dm_camera_controller.c
 
     src/input/dm_input.c
 
@@ -121,7 +119,7 @@ elseif(APPLE AND NOT DM_RENDER_OPENGL)
 endif()
 
 if(BUILD_SHARED_LIBS)
-    add_definitions(-DDMEXPORT)
+    add_definitions(-DDM_EXPORT)
 endif()
 
 # compile shaders for directx
