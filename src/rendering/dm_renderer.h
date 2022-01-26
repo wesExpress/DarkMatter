@@ -43,7 +43,7 @@ bool dm_renderer_resize(int new_width, int new_height);
 /*
 mainly a wrapper for the backend renderer begin scene the user is not exposed to
 */
-void dm_renderer_begin_scene();
+bool dm_renderer_begin_scene();
 
 /*
 mainly a wrapper for the backend renderer end scene the user is not exposed to

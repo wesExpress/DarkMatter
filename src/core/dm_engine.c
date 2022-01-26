@@ -63,7 +63,11 @@ bool dm_engine_run()
 
         if (!e_data->is_suspended)
         {
-            dm_renderer_begin_scene();
+            if (!dm_renderer_begin_scene())
+            {
+                DM_LOG_FATAL("Something went wrong in begin scene...");
+                return false;
+            }
 
             if (!dm_renderer_end_scene())
             {

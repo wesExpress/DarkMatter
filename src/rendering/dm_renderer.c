@@ -3,6 +3,8 @@
 #include "dm_texture.h"
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
+#include "core/dm_math.h"
+#include "structures/dm_map.h"
 #include <stddef.h>
 
 static dm_renderer_data r_data = { 0 };
@@ -24,6 +26,8 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
 bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
+
+bool dm_renderer_update_constant_buffer(dm_constant_buffer* cb, void* data);
 
 /*
 // vertex attributes
@@ -76,6 +80,10 @@ dm_vertex_attrib_desc tex_coord_desc = {
 */
 dm_vec3 offset = { 0, 0, 0 };
 
+// view projection constant buffer
+dm_constant_buffer vp_cb = { 0 };
+dm_constant_buffer model_cb = { 0 };
+
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	r_data.clear_color = clear_color;
@@ -98,7 +106,20 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		return false;
 	}
 
+	// maps
 	dm_texture_map_init();
+
+	// camera
+	dm_camera_init(
+		&r_data.camera, (dm_vec3) { 0, 0, 2 },
+		70.0f,
+		platform_data->window_width,
+		platform_data->window_height,
+		0, 1,
+		DM_CAMERA_PERSPECTIVE
+	);
+
+	// object pipeline
 	if (!dm_renderer_create_object_pipeline())
 	{
 		DM_LOG_FATAL("Failed to create object render pipeline!");
@@ -110,22 +131,16 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		DM_LOG_FATAL("Could not initialize object data!");
 		return false;
 	}
-		
-	// camera init
-	dm_camera_init(
-		&r_data.camera,(dm_vec3) { 0, 0, 0},
-		70.0f,
-		platform_data->window_width,
-		platform_data->window_height,
-		0, 1,
-		DM_CAMERA_PERSPECTIVE
-	);
-
+	
 	return true;
 }
 
 void dm_renderer_shutdown()
 {
+	// constant buffer data
+	dm_free(model_cb.desc.data, sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
+	dm_free(vp_cb.desc.data, sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
+
 	// cleanup
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
 	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
@@ -153,8 +168,10 @@ bool dm_renderer_resize(int new_width, int new_height)
 	return true;
 }
 
-void dm_renderer_begin_scene()
+bool dm_renderer_begin_scene()
 {
+	if (!dm_renderer_update_constant_buffer(&vp_cb, &r_data.camera.view_proj)) return false;
+
 	dm_renderer_begin_scene_impl(&r_data);
 
 	// commands for object pipeline
@@ -168,6 +185,8 @@ void dm_renderer_begin_scene()
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, r_data.object_pipeline->render_commands);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, r_data.object_pipeline->render_commands);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, r_data.object_pipeline->render_commands);
+
+	return true;
 }
 
 bool dm_renderer_end_scene()
@@ -335,7 +354,46 @@ bool dm_renderer_init_object_data()
 		.num = sizeof(v_attribs) / sizeof(dm_vertex_attrib_desc)
 	};
 
+	/*
 	// constant buffers
+	*/
+	// view projection constant buffer
+	// we append this and model so we can access them
+	dm_buffer vp_cb_buffer = { 0 };
+	vp_cb_buffer.desc.type = DM_BUFFER_TYPE_CONSTANT;
+	vp_cb_buffer.desc.usage = DM_BUFFER_USAGE_DYNAMIC;
+	vp_cb_buffer.desc.elem_size = sizeof(float);
+	vp_cb_buffer.desc.buffer_size = ((sizeof(dm_mat4) + 15) / 16) * 16;
+	vp_cb_buffer.desc.cpu_access = DM_BUFFER_CPU_WRITE;
+
+	vp_cb.desc.buffer = vp_cb_buffer;
+	vp_cb.desc.name = "view_proj";
+	vp_cb.desc.count = 4;
+	vp_cb.desc.data_t = DM_CONST_BUFFER_T_MATRIX;
+	vp_cb.desc.data = dm_alloc(sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
+	dm_memcpy(vp_cb.desc.data, &r_data.camera.view_proj, sizeof(dm_mat4));
+
+	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &vp_cb);
+
+	dm_buffer model_cb_buffer = { 0 };
+	model_cb_buffer.desc.type = DM_BUFFER_TYPE_CONSTANT;
+	model_cb_buffer.desc.usage = DM_BUFFER_USAGE_DYNAMIC;
+	model_cb_buffer.desc.elem_size = sizeof(float);
+	model_cb_buffer.desc.buffer_size = ((sizeof(dm_mat4) + 15) / 16) * 16;
+	model_cb_buffer.desc.cpu_access = DM_BUFFER_CPU_WRITE;
+
+	model_cb.desc.buffer = model_cb_buffer;
+	model_cb.desc.name = "model";
+	model_cb.desc.count = 4;
+	model_cb.desc.data_t = DM_CONST_BUFFER_T_MATRIX;
+
+	dm_mat4 model = dm_mat4_identity();
+	model_cb.desc.data = dm_alloc(sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
+	dm_memcpy(model_cb.desc.data, &model, sizeof(dm_mat4));
+
+	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &model_cb);
+
+	// test constant buffer
 	dm_buffer cb_buffer = {0};
 	cb_buffer.desc.type = DM_BUFFER_TYPE_CONSTANT;
 	cb_buffer.desc.usage = DM_BUFFER_USAGE_DYNAMIC;

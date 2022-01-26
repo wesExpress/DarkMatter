@@ -337,6 +337,11 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     return true;
 }
 
+bool dm_renderer_update_constant_buffer(dm_constant_buffer* cb, void* data)
+{
+    return true;
+}
+
 void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline)
 {
     glViewport(viewport.x, viewport.y, viewport.width, viewport.height);
