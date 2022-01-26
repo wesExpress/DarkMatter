@@ -12,7 +12,6 @@ struct PS_OUPUT
 
 SamplerState sample_state;
 Texture2D uTexture1 : register(t0);
-Texture2D uTexture2 : register(t1);
 
 float4 p_main(PS_INPUT input) : SV_Target
 {

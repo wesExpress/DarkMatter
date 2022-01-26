@@ -39,7 +39,7 @@ dcl_output o0.xyzw
 //   v2.x <- input.tex_coords.x; v2.y <- input.tex_coords.y; 
 //   o0.x <- <p_main return value>.x; o0.y <- <p_main return value>.y; o0.z <- <p_main return value>.z; o0.w <- <p_main return value>.w
 //
-#line 23 "C:\Users\wcp\source\c_projects\CEngine\shaders\hlsl\object_pixel.hlsl"
+#line 22 "C:\Users\wcp\source\c_projects\CEngine\shaders\hlsl\object_pixel.hlsl"
 sample_indexable(texture2d)(float,float,float,float) o0.xyzw, v2.xyxx, t0.xyzw, s0
 ret 
 // Approximately 2 instruction slots used

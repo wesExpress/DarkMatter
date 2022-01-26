@@ -309,7 +309,42 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_end_rederpass_impl()
 {
+#ifdef DM_DEBUG
+	HRESULT hr;
 
+	ID3D11InfoQueue* info_queue;
+	hr = directx_renderer->device->lpVtbl->QueryInterface(directx_renderer->device, &IID_ID3D11InfoQueue, (void**)&info_queue);
+	if (hr != S_OK)
+	{
+		DM_LOG_ERROR("ID3D11Device::QueryInterface failed!");
+		return;
+	}
+
+	hr = info_queue->lpVtbl->PushEmptyStorageFilter(info_queue);
+	if (hr != S_OK)
+	{
+		DM_LOG_ERROR("ID3D11InfoQueue::PushEmptyStorageFilter failed!");
+		return;
+	}
+
+
+	UINT64 message_count = info_queue->lpVtbl->GetNumStoredMessages(info_queue);
+
+	for (UINT64 i = 0; i < message_count; i++)
+	{
+		SIZE_T message_size = 0;
+		info_queue->lpVtbl->GetMessage(info_queue, i, NULL, &message_size);
+
+		D3D11_MESSAGE* message = dm_alloc(message_size, DM_MEM_RENDER_PIPELINE);
+		info_queue->lpVtbl->GetMessage(info_queue, i, message, &message_size);
+
+		DM_LOG_ERROR("DirectX11 Error: %s", message->pDescription);
+
+		dm_free(message, message_size, DM_MEM_RENDER_PIPELINE);
+	}
+
+	DX_RELEASE(info_queue);
+#endif
 }
 
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
@@ -349,6 +384,11 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	context->lpVtbl->VSSetShader(context, internal_shader->vertex_shader, NULL, 0);
 	context->lpVtbl->PSSetShader(context, internal_shader->pixel_shader, NULL, 0);
 	context->lpVtbl->IASetInputLayout(context, internal_shader->input_layout);
+
+	/*
+	// sampler
+	*/
+	context->lpVtbl->PSSetSamplers(context, 0, 1, &internal_pipe->sample_state);
 
 	/*
 	// buffers
