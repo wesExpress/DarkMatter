@@ -18,8 +18,8 @@ GLenum dm_comp_to_opengl_comp(dm_comparison dm_comp);
 GLenum dm_cull_to_opengl_cull(dm_cull_mode cull);
 GLenum dm_wind_top_opengl_wind(dm_winding_order winding);
 GLenum dm_texture_format_to_opengl_format(dm_texture_format dm_format);
-GLenum dm_texture_filter_to_opengl_filter(dm_texture_filter dm_filter);
-GLenum dm_edge_to_opengl_edge(dm_texture_edge_sample dm_edge);
+GLenum dm_filter_to_opengl_filter(dm_filter filter);
+GLenum dm_texture_mode_to_opengl_mode(dm_texture_mode dm_mode);
 
 #endif
 

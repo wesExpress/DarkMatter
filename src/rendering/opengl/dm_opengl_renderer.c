@@ -104,6 +104,25 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
         if (internal_pipe->stencil_func == DM_COMPARISON_UNKNOWN) return false;
     }
 
+    // sampler
+    GLenum min_filter = dm_filter_to_opengl_filter(pipeline->sampler_desc.filter);
+    if (min_filter == DM_FILTER_UNKNOWN) return false;
+    GLenum mag_filter = dm_filter_to_opengl_filter(pipeline->sampler_desc.filter);
+    if (mag_filter == DM_FILTER_UNKNOWN) return false;
+    GLenum s_wrap = dm_texture_mode_to_opengl_mode(pipeline->sampler_desc.u);
+    if (s_wrap == DM_TEXTURE_MODE_UNKNOWN) return false;
+    GLenum t_wrap = dm_texture_mode_to_opengl_mode(pipeline->sampler_desc.v);
+    if (t_wrap == DM_TEXTURE_MODE_UNKNOWN) return false;
+
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, s_wrap);
+    glCheckErrorReturn();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, t_wrap);
+    glCheckErrorReturn();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, min_filter);
+    glCheckErrorReturn();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag_filter);
+    glCheckErrorReturn();
+
     // face culling
     internal_pipe->cull = dm_cull_to_opengl_cull(pipeline->raster_desc.cull_mode);
     if (internal_pipe->cull == DM_CULL_UNKNOWN) return false;
