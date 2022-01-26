@@ -428,13 +428,6 @@ void dm_directx_print_errors()
 		return;
 	}
 
-	hr = info_queue->lpVtbl->PushEmptyStorageFilter(info_queue);
-	if (hr != S_OK)
-	{
-		DM_LOG_ERROR("ID3D11InfoQueue::PushEmptyStorageFilter failed!");
-		return;
-	}
-
 	UINT64 message_count = info_queue->lpVtbl->GetNumStoredMessages(info_queue);
 
 	for (UINT64 i = 0; i < message_count; i++)
