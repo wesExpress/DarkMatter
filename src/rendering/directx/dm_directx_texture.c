@@ -10,7 +10,7 @@ bool dm_directx_create_texture(dm_texture* texture, dm_internal_renderer* render
 {
 	HRESULT hr;
 
-	texture->internal_texture = dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDERER_TEXTURE);
+	texture->internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
 	dm_internal_texture* internal_texture = texture->internal_texture;
 
 	DXGI_FORMAT image_format = dm_image_fmt_to_directx_fmt(texture->desc.format);
@@ -29,7 +29,7 @@ bool dm_directx_create_texture(dm_texture* texture, dm_internal_renderer* render
 	DX_ERROR_CHECK(renderer->device->lpVtbl->CreateTexture2D(renderer->device, &tex_desc, NULL, &internal_texture->texture), "ID3D11Device::CreateTexture2D failed!");
 	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDERER_TEXTURE, DM_MEM_ADJUST_ADD);
 
-	renderer->context->lpVtbl->UpdateSubresource(renderer->context, (ID3D11Resource*)internal_texture->texture, 0, NULL, texture->data, texture->desc.width * 4, texture->desc.width * 4 * texture->desc.height);
+	renderer->context->lpVtbl->UpdateSubresource(renderer->context, (ID3D11Resource*)internal_texture->texture, 0, NULL, texture->data, texture->desc.width * 4, 0);
 
 	D3D11_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
 	view_desc.Format = tex_desc.Format;
@@ -58,7 +58,7 @@ void dm_directx_destroy_texture(dm_texture* texture)
 	dm_free(texture->internal_texture, sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
 }
 
-void dm_directx_bind_texture(dm_texture* texture, uint32_t slot, dm_internal_renderer* renderer, dm_internal_pipeline* pipeline)
+void dm_directx_bind_texture(dm_texture* texture, uint32_t slot, dm_internal_renderer* renderer)
 {
 	dm_internal_texture* internal_texture = texture->internal_texture;
 	

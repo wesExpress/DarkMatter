@@ -11,7 +11,7 @@
 
 bool dm_directx_create_texture(dm_texture* texture, dm_internal_renderer* renderer);
 void dm_directx_destroy_texture(dm_texture* texture);
-void dm_directx_bind_texture(dm_texture* texture, uint32_t slot, dm_internal_renderer* renderer, dm_internal_pipeline* pipeline);
+void dm_directx_bind_texture(dm_texture* texture, uint32_t slot, dm_internal_renderer* renderer);
 
 #endif
 
