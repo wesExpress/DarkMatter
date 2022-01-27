@@ -9,6 +9,9 @@
 dm_engine_data* e_data = NULL;
 static bool initialized = false;
 
+static double start_time = 0.0;
+static double end_time = 0.0;
+
 bool dm_engine_create(dm_application* app)
 {
     if (initialized)
@@ -65,6 +68,9 @@ bool dm_engine_run()
 {
     while (e_data->is_running)
     {
+        start_time = dm_platform_get_time();
+        double delta_time = start_time - end_time;
+        
         if (!dm_platform_pump_messages(e_data))
         {
             e_data->is_running = false;
@@ -72,14 +78,14 @@ bool dm_engine_run()
 
         if (!e_data->is_suspended)
         {
-            if (!e_data->application->dm_application_update(e_data->application, 0))
+            if (!e_data->application->dm_application_update(e_data->application, delta_time))
             {
                 DM_LOG_FATAL("Application update failed!");
                 e_data->is_running = false;
                 break;
             }
 
-            if (!e_data->application->dm_application_render(e_data->application, 0))
+            if (!e_data->application->dm_application_render(e_data->application, delta_time))
             {
                 DM_LOG_FATAL("Application rendering failed!");
                 e_data->is_running = false;
@@ -99,6 +105,10 @@ bool dm_engine_run()
                 e_data->is_running = false;
                 break;
             }
+
+
+
+            end_time = start_time;
         }
     }
     
