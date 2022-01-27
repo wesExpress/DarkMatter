@@ -17,6 +17,8 @@
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
+    DM_LOG_DEBUG("Initializing OpenGL render backend...");
+
     if (!dm_platform_init_opengl())
     {
         return false;

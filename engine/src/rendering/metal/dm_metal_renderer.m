@@ -22,6 +22,8 @@ static dm_metal_renderer* internal_renderer = NULL;
 */
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
+    DM_LOG_DEBUG("Initializing Metal render backend...");
+
     internal_renderer = (dm_metal_renderer*)dm_alloc(sizeof(dm_metal_renderer), DM_MEM_RENDERER);
 
     @autoreleasepool

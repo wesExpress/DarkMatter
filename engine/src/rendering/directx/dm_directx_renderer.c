@@ -36,6 +36,8 @@ static dm_internal_renderer* directx_renderer = NULL;
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
+	DM_LOG_DEBUG("Initializing Directx11 Backend...");
+
 	renderer_data->object_pipeline->interal_pipeline = (dm_internal_pipeline*)dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 	windows_internal_data* internal_data = (windows_internal_data*)platform_data->internal_data;
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)renderer_data->object_pipeline->interal_pipeline;
