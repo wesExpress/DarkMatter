@@ -177,14 +177,6 @@ add_custom_command(
             ${CMAKE_CURRENT_BINARY_DIR}/engine/shaders
 )
 
-# move assets to binary dir
-add_custom_command(
-    TARGET CEngine POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/engine/assets
-            ${CMAKE_CURRENT_BINARY_DIR}/engine/assets
-)
-
 if(BUILD_SHARED_LIBS)
     add_definitions(-DDM_EXPORT)
 endif()
