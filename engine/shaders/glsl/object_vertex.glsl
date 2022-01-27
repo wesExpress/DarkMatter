@@ -9,11 +9,10 @@ out vec2 texCoords;
 
 uniform mat4 model;
 uniform mat4 view_proj;
-uniform vec3 offset;
 
 void main()
 {
-    gl_Position = view_proj * model * vec4(aPos + offset, 1.0);
+    gl_Position = view_proj * model * vec4(aPos, 1.0);
     fragColor = aColor;
     texCoords = aTexCoords;
 }

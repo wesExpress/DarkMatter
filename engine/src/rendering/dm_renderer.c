@@ -78,11 +78,6 @@ dm_vertex_attrib_desc tex_coord_desc = {
 dm_list* vertices = NULL;
 dm_list* indices = NULL;
 
-/*
-// constant buffer data
-*/
-dm_vec3 offset = { 0, 0, 0 };
-
 // view projection constant buffer
 dm_constant_buffer vp_cb = { 0 };
 dm_constant_buffer model_cb = { 0 };
@@ -378,22 +373,6 @@ bool dm_renderer_init_object_data()
 	dm_memcpy(model_cb.desc.data, &model, sizeof(dm_mat4));
 
 	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &model_cb);
-
-	// test constant buffer
-	dm_buffer cb_buffer = {0};
-	cb_buffer.desc.type = DM_BUFFER_TYPE_CONSTANT;
-	cb_buffer.desc.usage = DM_BUFFER_USAGE_DYNAMIC;
-	cb_buffer.desc.elem_size = sizeof(float);
-	cb_buffer.desc.buffer_size = ((sizeof(offset) + 15) / 16) * 16;
-	cb_buffer.desc.cpu_access = DM_BUFFER_CPU_WRITE;
-	
-	dm_constant_buffer cb = { 0 };
-	cb.desc.buffer = cb_buffer;
-	cb.desc.name = "offset";
-	cb.desc.data_t = DM_CONST_BUFFER_T_FLOAT;
-	cb.desc.count = 3;
-	cb.desc.data = &offset;
-	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &cb);
 	
 	return dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, v_layout, r_data.object_pipeline);
 }

@@ -12,16 +12,11 @@ struct VS_OUTPUT
     float2 tex_coords : TEXCOORD;
 };
 
-cbuffer MODEL_CB : register(b0)
-{
-    float3 offset;
-};
-
 VS_OUTPUT v_main(VS_INPUT input)
 {
     VS_OUTPUT output = (VS_OUTPUT)0;
     
-    output.pos = float4(input.pos + offset, 1.0f);
+    output.pos = float4(input.pos, 1.0f);
     output.color = float4(input.color, 1.0f);
     output.tex_coords = input.tex_coords;
     
