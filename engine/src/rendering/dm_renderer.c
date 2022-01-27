@@ -4,7 +4,7 @@
 #include "dm_texture.h"
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
-#include "core/dm_math.h"
+#include "core/math/dm_math.h"
 #include "structures/dm_map.h"
 #include <stddef.h>
 

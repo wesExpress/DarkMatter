@@ -1,6 +1,8 @@
 #ifndef __DM_MATH_TYPES_H__
 #define __DM_MATH_TYPES_H__
 
+#include "core/dm_defines.h"
+
 #define DM_MATH_PI 3.14159265359826
 #define DM_MATH_INV_PI 0.31830988618
 #define DM_MATH_ANGLE_RAD_TOLERANCE 0.001
@@ -45,6 +47,19 @@ typedef struct dm_vec4
 		};
 	};
 } dm_vec4;
+
+typedef struct dm_quat
+{
+	union
+	{
+		float q[4];
+		float ijkr[4];
+		struct
+		{
+			float i, j, k, r;
+		};
+	};
+} dm_quat;
 
 typedef struct dm_mat2
 {

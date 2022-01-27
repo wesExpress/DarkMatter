@@ -2,7 +2,7 @@
 #include "dm_renderer.h"
 #include "input/dm_input.h"
 #include "core/dm_mem.h"
-#include "core/dm_math.h"
+#include "core/math/dm_math.h"
 
 static dm_camera* camera;
 

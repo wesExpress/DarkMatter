@@ -36,6 +36,16 @@ set(
     src/core/dm_event.c
     src/core/dm_string.c
 
+    src/core/math/dm_math_misc.c
+    src/core/math/dm_math_vec2.c
+    src/core/math/dm_math_vec3.c
+    src/core/math/dm_math_vec4.c
+    src/core/math/dm_math_quat.c
+    src/core/math/dm_math_mat2.c
+    src/core/math/dm_math_mat3.c
+    src/core/math/dm_math_mat4.c
+    src/core/math/dm_math_mat_transforms.c
+
     src/input/dm_input.c
 
     src/platform/dm_platform_glfw.c
