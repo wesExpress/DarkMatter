@@ -15,8 +15,10 @@ DM_API bool dm_renderer_api_submit_textures(dm_image_desc* image_descs, uint32_t
 
 // updating functions
 
+DM_API void dm_renderer_api_set_camera_pos(dm_vec3 pos);
 DM_API void dm_renderer_api_update_camera_pos(dm_vec3 delta_pos);
 
+DM_API void dm_renderer_api_set_camera_forward(dm_vec3 forward);
 DM_API void dm_renderer_api_update_camera_forward(dm_vec3 delta_forward);
 
 #endif

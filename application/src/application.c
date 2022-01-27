@@ -1,6 +1,5 @@
 #include "application.h"
 
-
 static float velocity = 1.0f;
 
 bool dm_application_init(dm_application* app)
@@ -53,6 +52,9 @@ bool dm_application_init(dm_application* app)
 	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
 
 	if (!dm_renderer_api_submit_textures(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
+
+	// camera
+	dm_renderer_api_set_camera_pos((dm_vec3) { 0, 0, 2 });
 
 	return true;
 }
