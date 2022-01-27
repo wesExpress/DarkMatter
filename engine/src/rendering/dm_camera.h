@@ -17,6 +17,7 @@ typedef struct dm_camera
 	dm_mat4 projection;
 	dm_mat4 view_proj;
 
+	dm_vec3 euler;
 	dm_vec3 forward;
 	dm_vec3 up;
 

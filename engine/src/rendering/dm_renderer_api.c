@@ -30,3 +30,13 @@ void dm_renderer_api_update_camera_forward(dm_vec3 delta_forward)
 {
 	dm_renderer_update_camera_forward(delta_forward);
 }
+
+void dm_renderer_api_set_camera_euler(dm_vec3 delta_euler)
+{
+
+}
+
+void dm_renderer_api_update_camera_euler(dm_vec3 delta_euler)
+{
+
+}

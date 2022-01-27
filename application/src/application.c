@@ -1,6 +1,6 @@
 #include "application.h"
 
-static float velocity = 1.0f;
+static float velocity = 2.0f;
 
 bool dm_application_init(dm_application* app)
 {
@@ -67,14 +67,15 @@ void dm_application_shutdown(dm_application* app)
 bool dm_application_update(dm_application* app, float delta_time)
 {
 	dm_vec3 pos_delta = { 0 };
+	dm_vec3 forward_delta = { 0 };
 	
 	if (dm_input_key_just_pressed(DM_KEY_A))
 	{
-		pos_delta.x = 1;
+		pos_delta.x = -1;
 	}
 	else if (dm_input_key_just_pressed(DM_KEY_D))
 	{
-		pos_delta.x = -1;
+		pos_delta.x = 1;
 	}
 
 	if (dm_input_key_just_pressed(DM_KEY_W))
@@ -86,9 +87,20 @@ bool dm_application_update(dm_application* app, float delta_time)
 		pos_delta.z = 1;
 	}
 
+	if (dm_input_key_just_pressed(DM_KEY_Q))
+	{
+		forward_delta.x = -1;
+	}
+	else if (dm_input_key_just_pressed(DM_KEY_E))
+	{
+		forward_delta.x = 1;
+	}
+
 	pos_delta = dm_vec3_scale(pos_delta, velocity * delta_time);
+	forward_delta = dm_vec3_scale(forward_delta, velocity * delta_time);
 
 	dm_renderer_api_update_camera_pos(pos_delta);
+	dm_renderer_api_update_camera_forward(forward_delta);
 
 	return true;
 }
