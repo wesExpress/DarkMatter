@@ -34,7 +34,7 @@ bool dm_engine_create(dm_application* app)
         return false;
     }
 
-    if (!dm_renderer_init(e_data->platform_data, (dm_color) { 0.2f, 0.5f, 0.8f, 1.0f }))
+    if (!dm_renderer_init(e_data->platform_data, e_data->application->engine_config.clear_color))
     {
         DM_LOG_FATAL("Renderer could not be initialized!");
         return false;
@@ -43,6 +43,12 @@ bool dm_engine_create(dm_application* app)
     if (!e_data->application->dm_application_init(e_data->application))
     {
         DM_LOG_FATAL("Application could not be initialized!");
+        return false;
+    }
+
+    if (!dm_renderer_init_object_data())
+    {
+        DM_LOG_FATAL("Could not initialize object data!");
         return false;
     }
 

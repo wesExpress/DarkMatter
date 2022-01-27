@@ -1,9 +1,7 @@
 #ifndef __APPLICATION_H__
 #define __APPLICATION_H__
 
-#include <core/dm_app_config.h>
-#include <core/dm_defines.h>
-#include <stdbool.h>
+#include <DarkMatter/DarkMatter.h>
 
 bool dm_application_init(dm_application* app);
 void dm_application_shutdown(dm_application* app);

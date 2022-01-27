@@ -1,8 +1,6 @@
 #ifndef __DM_MATH_H__
 #define __DM_MATH_H__
 
-#ifdef DM_MATH_IMPLEMENTATION
-
 #include <math.h>
 #include <stdbool.h>
 
@@ -1335,7 +1333,5 @@ dm_mat4 dm_mat_ortho(float left, float right, float bottom, float top, float n, 
 
 	return ortho;
 }
-
-#endif
 
 #endif

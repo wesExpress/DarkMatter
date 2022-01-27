@@ -50,8 +50,15 @@ mainly a wrapper for the backend renderer end scene the user is not exposed to
 */
 bool dm_renderer_end_scene();
 
-// render object functions
-DM_API dm_renderer_update_camera_pos(dm_vec3 delta_pos);
-DM_API dm_renderer_update_camera_forward(dm_vec3 delta_forward);
+/*
+initializes the vertex and index buffers. called after the application has submitted everything.
+*/
+bool dm_renderer_init_object_data();
+
+// API functions
+
+void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices);
+void dm_renderer_update_camera_pos(dm_vec3 delta_pos);
+void dm_renderer_update_camera_forward(dm_vec3 delta_forward);
 
 #endif

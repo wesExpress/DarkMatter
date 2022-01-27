@@ -12,7 +12,6 @@ static dm_renderer_data r_data = { 0 };
 bool dm_renderer_create_object_pipeline();
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
-bool dm_renderer_init_object_data();
 
 // forward declaration of the implementation, or backend, functionality
 // if not defined, compiler will be angry
@@ -75,6 +74,10 @@ dm_vertex_attrib_desc tex_coord_desc = {
 	.normalized = false
 };
 
+// vertex data
+dm_list* vertices = NULL;
+dm_list* indices = NULL;
+
 /*
 // constant buffer data
 */
@@ -106,6 +109,10 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		return false;
 	}
 
+	// vertex data
+	vertices = dm_list_create(sizeof(dm_vertex_t), 0);
+	indices = dm_list_create(sizeof(dm_index_t), 0);
+
 	// maps
 	dm_texture_map_init();
 
@@ -125,12 +132,6 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		DM_LOG_FATAL("Failed to create object render pipeline!");
 		return false;
 	}
-
-	if (!dm_renderer_init_object_data())
-	{
-		DM_LOG_FATAL("Could not initialize object data!");
-		return false;
-	}
 	
 	return true;
 }
@@ -140,6 +141,10 @@ void dm_renderer_shutdown()
 	// constant buffer data
 	dm_free(model_cb.desc.data, sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
 	dm_free(vp_cb.desc.data, sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
+
+	// vertex data
+	dm_list_destroy(vertices);
+	dm_list_destroy(indices);
 
 	// cleanup
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
@@ -316,29 +321,9 @@ bool dm_renderer_init_object_data()
 	// TODO should just be a palceholder for now!
 	// likely need to reed in files here in the future
 
-	// triangle data
-	dm_vertex_t vertices[] = {
-		{ {-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f} },
-		{ { 0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f} },
-		{ { 0.5f,  0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f} },
-		{ {-0.5f,  0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f} }
-	};
-
-#ifdef DM_OPENGL
-	dm_index_t indices[] = {
-		0, 1, 2,
-		2, 3, 0
-	};
-#elif defined DM_DIRECTX
-	dm_index_t indices[] = {
-		0, 2, 1,
-		2, 0, 3
-	};
-#endif
-
 	// buffers
-	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = sizeof(vertices), .elem_size=sizeof(dm_vertex), .usage=DM_BUFFER_USAGE_DEFAULT };
-	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = sizeof(indices), .elem_size=sizeof(dm_index_t), .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = vertices->count * vertices->element_size, .elem_size=vertices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = indices->count * indices->element_size, .elem_size=indices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT };
 
 	r_data.object_pipeline->render_packet.vertex_buffer->desc = vb_desc;
 	r_data.object_pipeline->render_packet.index_buffer->desc = ib_desc;
@@ -436,16 +421,29 @@ bool dm_renderer_init_object_data()
 		dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &str);
 	}
 
-	return dm_renderer_init_pipeline_data_impl(vertices, indices, v_layout, r_data.object_pipeline);
+	return dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, v_layout, r_data.object_pipeline);
 }
 
-dm_renderer_update_camera_pos(dm_vec3 delta_pos)
+void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices)
+{
+	for (uint32_t i = 0; i < num_vertices; i++)
+	{
+		dm_list_append(vertices, &vertex_data[i]);
+	}
+
+	for (uint32_t i = 0; i < num_indices; i++)
+	{
+		dm_list_append(indices, &index_data[i]);
+	}
+}
+
+void dm_renderer_update_camera_pos(dm_vec3 delta_pos)
 {
 	dm_vec3 pos = dm_vec3_add_vec3(r_data.camera.pos, delta_pos);
 	dm_camera_set_pos(&r_data.camera, pos);
 }
 
-dm_renderer_update_camera_forward(dm_vec3 delta_forward)
+void dm_renderer_update_camera_forward(dm_vec3 delta_forward)
 {
 	dm_vec3 forward = dm_vec3_add_vec3(r_data.camera.forward, delta_forward);
 	dm_camera_set_forward(&r_data.camera, forward);

@@ -3,10 +3,12 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include "rendering/dm_render_types.h"
 
 typedef struct dm_engine_config
 {
 	uint32_t start_x, start_y, start_width, start_height;
+	dm_color clear_color;
 	char* name;
 } dm_engine_config;
 

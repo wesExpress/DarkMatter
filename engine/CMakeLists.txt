@@ -45,6 +45,7 @@ set(
     src/structures/dm_map.c
 
     src/rendering/dm_renderer.c
+    src/rendering/dm_renderer_api.c
     src/rendering/dm_command_buffer.c
     src/rendering/dm_texture.c
     src/rendering/dm_camera.c
@@ -98,13 +99,16 @@ set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES} ${SHADERS})
 
-set(INCLUDES PUBLIC src PRIVATE lib/stb_image/include)
+set(INCLUDES PUBLIC include  PRIVATE )
+
+set(PRIVATE_H lib/stb_image/include)
+set(PUBLIC_H src include)
 
 if(DM_RENDER_OPENGL)
-    set(INCLUDES ${INCLUDES} PRIVATE lib/glfw/include lib/glad/include)
+    set(PRIVATE_H ${PRIVATE_H} lib/glfw/include lib/glad/include)
 endif()
 
-target_include_directories(${PROJECT_NAME} ${INCLUDES})
+target_include_directories(${PROJECT_NAME} PUBLIC ${PUBLIC_H} PRIVATE ${PRIVATE_H})
 
 if(DM_RENDER_OPENGL)
     target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)
