@@ -1,4 +1,5 @@
 #include "dm_renderer.h"
+#include "dm_vertex_attribs.h"
 #include "dm_command_buffer.h"
 #include "dm_texture.h"
 #include "core/dm_mem.h"
@@ -27,52 +28,6 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
 
 bool dm_renderer_update_constant_buffer(dm_constant_buffer* cb, void* data);
-
-/*
-// vertex attributes
-*/
-
-// position
-dm_vertex_attrib_desc pos_attrib_desc = {
-#ifdef DM_OPENGL
-	.name = "aPos",
-#elif defined DM_DIRECTX
-	.name = "POSITION",
-#endif
-	.data_t =  DM_VERTEX_DATA_T_FLOAT,
-	.stride = sizeof(dm_vertex_t),
-	.offset = offsetof(dm_vertex_t, position),
-	.count = 3,
-	.normalized = false,
-};
-
-// color
-dm_vertex_attrib_desc color_attrib_desc = {
-#ifdef DM_OPENGL
-	.name = "aColor",
-#elif defined DM_DIRECTX
-	.name = "COLOR",
-#endif
-	.data_t = DM_VERTEX_DATA_T_FLOAT,
-	.stride = sizeof(dm_vertex_t),
-	.offset = offsetof(dm_vertex_t, color),
-	.count = 3,
-	.normalized = false,
-};
-
-// texture coords
-dm_vertex_attrib_desc tex_coord_desc = {
-#ifdef DM_OPENGL
-	.name = "aTexCoords",
-#elif defined DM_DIRECTX
-	.name = "TEXCOORD",
-#endif
-	.data_t = DM_VERTEX_DATA_T_FLOAT,
-	.stride = sizeof(dm_vertex_t),
-	.offset = offsetof(dm_vertex_t, tex_coords),
-	.count = 2,
-	.normalized = false
-};
 
 // vertex data
 dm_list* vertices = NULL;
@@ -104,7 +59,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 
 	// camera
 	dm_camera_init(
-		&r_data.camera, (dm_vec3) { 0, 0, 2 },
+		&r_data.camera, (dm_vec3) { 0, 0, 0 },
 		70.0f,
 		platform_data->window_width,
 		platform_data->window_height,
@@ -304,9 +259,6 @@ bool dm_renderer_init_object_data()
 	r_data.object_pipeline->raster_desc.shader->vertex_desc = vs_desc;
 	r_data.object_pipeline->raster_desc.shader->pixel_desc = ps_desc;
 
-	// TODO should just be a palceholder for now!
-	// likely need to reed in files here in the future
-
 	// buffers
 	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = vertices->count * vertices->element_size, .elem_size=vertices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT };
 	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = indices->count * indices->element_size, .elem_size=indices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT };
@@ -396,10 +348,20 @@ bool dm_renderer_submit_textures(dm_image_desc* image_descs, uint32_t num_desc)
 	return true;
 }
 
+void dm_renderer_set_camera_pos(dm_vec3 pos)
+{
+	dm_camera_set_pos(&r_data.camera, pos);
+}
+
 void dm_renderer_update_camera_pos(dm_vec3 delta_pos)
 {
 	dm_vec3 pos = dm_vec3_add_vec3(r_data.camera.pos, delta_pos);
 	dm_camera_set_pos(&r_data.camera, pos);
+}
+
+void dm_renderer_set_camera_forward(dm_vec3 forward)
+{
+	dm_camera_set_forward(&r_data.camera, forward);
 }
 
 void dm_renderer_update_camera_forward(dm_vec3 delta_forward)
