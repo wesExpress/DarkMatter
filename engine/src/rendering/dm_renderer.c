@@ -367,5 +367,8 @@ void dm_renderer_set_camera_forward(dm_vec3 forward)
 void dm_renderer_update_camera_forward(dm_vec3 delta_forward)
 {
 	dm_vec3 forward = dm_vec3_add_vec3(r_data.camera.forward, delta_forward);
+	forward.x = DM_CLAMP(forward.x, -89, 89);
+	forward.y = DM_CLAMP(forward.y, -89, 89);
+	forward.z = DM_CLAMP(forward.z, -89, 89);
 	dm_camera_set_forward(&r_data.camera, forward);
 }

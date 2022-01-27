@@ -1,6 +1,7 @@
 #include "application.h"
 
-static float velocity = 2.0f;
+static float move_vel = 2.5f;
+static float look_vel = 1.5f;
 
 bool dm_application_init(dm_application* app)
 {
@@ -69,36 +70,61 @@ bool dm_application_update(dm_application* app, float delta_time)
 	dm_vec3 pos_delta = { 0 };
 	dm_vec3 forward_delta = { 0 };
 	
-	if (dm_input_key_just_pressed(DM_KEY_A))
+	// camera position
+	if (dm_input_is_key_pressed(DM_KEY_A))
 	{
 		pos_delta.x = -1;
 	}
-	else if (dm_input_key_just_pressed(DM_KEY_D))
+	else if (dm_input_is_key_pressed(DM_KEY_D))
 	{
 		pos_delta.x = 1;
 	}
 
-	if (dm_input_key_just_pressed(DM_KEY_W))
+	if (dm_input_is_key_pressed(DM_KEY_W))
 	{
 		pos_delta.z = -1;
 	}
-	else if (dm_input_key_just_pressed(DM_KEY_S))
+	else if (dm_input_is_key_pressed(DM_KEY_S))
 	{
 		pos_delta.z = 1;
 	}
 
-	if (dm_input_key_just_pressed(DM_KEY_Q))
+	if (dm_input_is_key_pressed(DM_KEY_Z))
+	{
+		pos_delta.y = 1;
+	}
+	else if (dm_input_is_key_pressed(DM_KEY_X))
+	{
+		pos_delta.y = -1;
+	}
+
+	// camera direction
+	if (dm_input_is_key_pressed(DM_KEY_Q))
 	{
 		forward_delta.x = -1;
 	}
-	else if (dm_input_key_just_pressed(DM_KEY_E))
+	else if (dm_input_is_key_pressed(DM_KEY_E))
 	{
 		forward_delta.x = 1;
 	}
 
-	pos_delta = dm_vec3_scale(pos_delta, velocity * delta_time);
-	forward_delta = dm_vec3_scale(forward_delta, velocity * delta_time);
+	if (dm_input_is_key_pressed(DM_KEY_R))
+	{
+		forward_delta.y = 1;
+	}
+	else if (dm_input_is_key_pressed(DM_KEY_F))
+	{
+		forward_delta.y = -1;
+	}
 
+	// norm and scale the deltas
+	pos_delta = dm_vec3_norm(pos_delta);
+	forward_delta = dm_vec3_norm(forward_delta);
+
+	pos_delta = dm_vec3_scale(pos_delta, move_vel * delta_time);
+	forward_delta = dm_vec3_scale(forward_delta, look_vel * delta_time);
+
+	// update the camera
 	dm_renderer_api_update_camera_pos(pos_delta);
 	dm_renderer_api_update_camera_forward(forward_delta);
 

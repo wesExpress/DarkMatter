@@ -141,7 +141,7 @@ bool dm_engine_on_event(dm_event_type type, void* data)
         dm_key_code key = (dm_key_code)(intptr_t)data;
         dm_input_set_key_released(key);
 
-        DM_LOG_DEBUG("Key up event received: %c", key);
+        //DM_LOG_DEBUG("Key up event received: %c", key);
     } break;
     case DM_KEY_DOWN_EVENT:
     {
@@ -151,7 +151,7 @@ bool dm_engine_on_event(dm_event_type type, void* data)
         // TODO: need to remove this eventaully
         if(key == DM_KEY_ESCAPE) dm_event_dispatch((dm_event){ DM_WINDOW_CLOSE_EVENT, NULL, NULL });
 
-        DM_LOG_DEBUG("Key down event received: %c", key);
+        //DM_LOG_DEBUG("Key down event received: %c", key);
     } break;
     case DM_KEY_TYPE_EVENT:
     {
@@ -162,14 +162,14 @@ bool dm_engine_on_event(dm_event_type type, void* data)
         dm_mousebutton_code button = (dm_mousebutton_code)(intptr_t)data;
         dm_input_set_mousebutton_released(button);
 
-        DM_LOG_DEBUG("Mousebutton up event received");
+        //DM_LOG_DEBUG("Mousebutton up event received");
     } break;
     case DM_MOUSEBUTTON_DOWN_EVENT:
     {
         dm_mousebutton_code button = (dm_mousebutton_code)(intptr_t)data;
         dm_input_set_mousebutton_pressed(button);
 
-        DM_LOG_DEBUG("Mousebutton down event received");
+        //DM_LOG_DEBUG("Mousebutton down event received");
     } break;
     case DM_MOUSE_MOVED_EVENT:
     {
@@ -182,7 +182,7 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     case DM_MOUSE_SCROLLED_EVENT:
     {
         int8_t scroll = (intptr_t)data;
-        DM_LOG_DEBUG("Scroll: %d", scroll);
+        //DM_LOG_DEBUG("Scroll: %d", scroll);
         // TODO 
     } break;
     case DM_WINDOW_RESIZE_EVENT:
