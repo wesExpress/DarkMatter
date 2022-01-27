@@ -1,0 +1,26 @@
+Determining if the include file pthread.h exists failed with the following output:
+Change Dir: C:/Users/wcp/source/c_projects/CEngine/out/build/x64-Debug/CMakeFiles/CMakeTmp
+
+Run Build Command(s):C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe cmTC_97568 && [1/2] Building C object CMakeFiles\cmTC_97568.dir\CheckIncludeFile.c.obj
+FAILED: CMakeFiles/cmTC_97568.dir/CheckIncludeFile.c.obj 
+C:\PROGRA~2\MICROS~4\2019\COMMUN~1\VC\Tools\MSVC\1428~1.299\bin\Hostx64\x64\cl.exe  /nologo   /DWIN32 /D_WINDOWS  /Zi /Ob0 /Od /RTC1 -MDd /showIncludes /FoCMakeFiles\cmTC_97568.dir\CheckIncludeFile.c.obj /FdCMakeFiles\cmTC_97568.dir\ /FS -c CheckIncludeFile.c
+CheckIncludeFile.c(1): fatal error C1083: Cannot open include file: 'pthread.h': No such file or directory
+ninja: build stopped: subcommand failed.
+
+
+
+Performing C++ SOURCE FILE Test COMPILER_HAS_DEPRECATED_ATTR failed with the following output:
+Change Dir: C:/Users/wcp/source/c_projects/CEngine/out/build/x64-Debug/CMakeFiles/CMakeTmp
+
+Run Build Command(s):C:/Program Files (x86)/Microsoft Visual Studio/2019/Community/Common7/IDE/CommonExtensions/Microsoft/CMake/Ninja/ninja.exe cmTC_3a982 && [1/2] Building CXX object CMakeFiles\cmTC_3a982.dir\src.cxx.obj
+FAILED: CMakeFiles/cmTC_3a982.dir/src.cxx.obj 
+C:\PROGRA~2\MICROS~4\2019\COMMUN~1\VC\Tools\MSVC\1428~1.299\bin\Hostx64\x64\cl.exe  /nologo /TP -DCOMPILER_HAS_DEPRECATED_ATTR  /DWIN32 /D_WINDOWS /GR /EHsc  /Zi /Ob0 /Od /RTC1 -MDd /showIncludes /FoCMakeFiles\cmTC_3a982.dir\src.cxx.obj /FdCMakeFiles\cmTC_3a982.dir\ /FS -c src.cxx
+src.cxx(1): error C2065: '__deprecated__': undeclared identifier
+src.cxx(1): error C4430: missing type specifier - int assumed. Note: C++ does not support default-int
+src.cxx(1): error C2448: '__attribute__': function-style initializer appears to be a function definition
+ninja: build stopped: subcommand failed.
+
+
+Source file was:
+__attribute__((__deprecated__)) int somefunc() { return 0; }
+    int main() { return somefunc();}
