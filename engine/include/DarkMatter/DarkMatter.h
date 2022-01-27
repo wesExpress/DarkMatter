@@ -1,6 +1,10 @@
 #ifndef __DarkMatter_H__
 #define __DarkMatter_H__
 
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+
 #include "core/dm_math.h"
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
@@ -10,8 +14,7 @@
 
 #include "rendering/dm_renderer_api.h"
 
-#include <stdbool.h>
-#include <stdint.h>
-#include <stdlib.h>
+#include "structures/dm_list.h"
+#include "structures/dm_map.h"
 
 #endif

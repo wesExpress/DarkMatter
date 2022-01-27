@@ -6,6 +6,11 @@ void dm_renderer_api_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* in
 	dm_renderer_submit_vertex_data(vertex_data, index_data, num_vertices, num_indices);
 }
 
+bool dm_renderer_api_submit_textures(dm_image_desc* image_descs, uint32_t num_desc)
+{
+	return dm_renderer_submit_textures(image_descs, num_desc);
+}
+
 void dm_renderer_api_update_camera_pos(dm_vec3 delta_pos)
 {
 	dm_renderer_update_camera_pos(delta_pos);

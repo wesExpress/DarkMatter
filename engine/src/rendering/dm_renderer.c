@@ -394,33 +394,7 @@ bool dm_renderer_init_object_data()
 	cb.desc.count = 3;
 	cb.desc.data = &offset;
 	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &cb);
-
-	// texture initialization
-	dm_image_desc image_desc1 = { 0 };
-	image_desc1.path = "assets/container.jpg";
-	image_desc1.name = "uTexture1";
-	image_desc1.format = DM_TEXTURE_FORMAT_RGB;
-	image_desc1.internal_format = DM_TEXTURE_FORMAT_RGB;
-
-	dm_image_desc image_desc2 = { 0 };
-	image_desc2.path = "assets/awesomeface.png";
-	image_desc2.name = "uTexture2";
-	image_desc2.format = DM_TEXTURE_FORMAT_RGBA;
-	image_desc2.internal_format = DM_TEXTURE_FORMAT_RGB;
-	image_desc2.flip = true;
-
-	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
-
-	if(!dm_textures_load(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
 	
-	for(uint32_t i=0; i<sizeof(image_descs)/sizeof(dm_image_desc);i++)
-	{
-		dm_string str = {0};
-		str.string = dm_strdup(image_descs[i].path);
-		str.len = strlen(str.string);
-		dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &str);
-	}
-
 	return dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, v_layout, r_data.object_pipeline);
 }
 
@@ -435,6 +409,21 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 	{
 		dm_list_append(indices, &index_data[i]);
 	}
+}
+
+bool dm_renderer_submit_textures(dm_image_desc* image_descs, uint32_t num_desc)
+{
+	if (!dm_textures_load(image_descs, num_desc)) return false;
+
+	for (uint32_t i = 0; i < num_desc; i++)
+	{
+		dm_string str = { 0 };
+		str.string = dm_strdup(image_descs[i].path);
+		str.len = strlen(str.string);
+		dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &str);
+	}
+
+	return true;
 }
 
 void dm_renderer_update_camera_pos(dm_vec3 delta_pos)

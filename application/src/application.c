@@ -6,6 +6,8 @@ static float velocity = 1.0f;
 bool dm_application_init(dm_application* app)
 {
 	DM_LOG_TRACE("Hellow from the application!\n");
+
+	// vertex data
 	DM_LOG_DEBUG("Submitting test vertex data from app...");
 
 	dm_vertex_t vertices[] = {
@@ -31,6 +33,26 @@ bool dm_application_init(dm_application* app)
 	uint32_t num_indices = sizeof(indices) / sizeof(dm_index_t);
 
 	dm_renderer_api_submit_vertex_data(vertices, indices, num_vertices, num_indices);
+
+	// textures
+	DM_LOG_DEBUG("Submitting texture data from app...");
+
+	dm_image_desc image_desc1 = { 0 };
+	image_desc1.path = "assets/container.jpg";
+	image_desc1.name = "uTexture1";
+	image_desc1.format = DM_TEXTURE_FORMAT_RGB;
+	image_desc1.internal_format = DM_TEXTURE_FORMAT_RGB;
+
+	dm_image_desc image_desc2 = { 0 };
+	image_desc2.path = "assets/awesomeface.png";
+	image_desc2.name = "uTexture2";
+	image_desc2.format = DM_TEXTURE_FORMAT_RGBA;
+	image_desc2.internal_format = DM_TEXTURE_FORMAT_RGB;
+	image_desc2.flip = true;
+
+	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
+
+	if (!dm_renderer_api_submit_textures(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
 
 	return true;
 }
