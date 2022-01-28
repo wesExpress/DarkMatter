@@ -3,6 +3,19 @@
 static float move_vel = 2.5f;
 static float look_vel = 1.5f;
 
+dm_transform object_transforms[] = {
+	{0,0,0},
+	{2,5,-15},
+	{-1.5,-2.2,-2.5},
+	{-3.8,-2,-12.3},
+	{2.4,-0.4,-3.5},
+	{-1.7,3,-7.5},
+	{1.3,-2,-2.5},
+	{1.5,2,-2.5},
+	{1.5,0.2,-1.5},
+	{-1.3,1,-1.5}
+};
+
 bool dm_application_init(dm_application* app)
 {
 	DM_LOG_TRACE("Hellow from the application!\n");
@@ -80,6 +93,8 @@ bool dm_application_init(dm_application* app)
 	// camera
 	dm_renderer_api_set_camera_pos((dm_vec3) { 0, 0, 2 });
 
+	dm_renderer_api_submit_object_transforms(object_transforms, sizeof(object_transforms) / sizeof(dm_transform));
+
 	return true;
 }
 
@@ -150,6 +165,9 @@ bool dm_application_update(dm_application* app, float delta_time)
 	// update the camera
 	dm_renderer_api_update_camera_pos(pos_delta);
 	dm_renderer_api_update_camera_forward(forward_delta);
+
+	// object transforms
+	
 
 	return true;
 }

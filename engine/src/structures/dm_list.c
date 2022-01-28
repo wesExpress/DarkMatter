@@ -78,6 +78,26 @@ void dm_list_insert(dm_list* list, void* value, uint32_t index)
     }
 }
 
+void dm_list_set(dm_list* list, void* value, uint32_t index)
+{
+    if (list)
+    {
+        if (index < list->count)
+        {
+            void* dest = (char*)list->data + index * list->element_size;
+            dm_memcpy(dest, value, list->element_size);
+        }
+        else
+        {
+            DM_LOG_ERROR("Trying to set a value in a list with count: %d at invalid index: %d", list->count, index);
+        }
+    }
+    else
+    {
+        DM_LOG_ERROR("Trying to set a value in a NULL list!");
+    }
+}
+
 void dm_list_pop(dm_list* list)
 {
     if(list)

@@ -33,6 +33,9 @@ bool dm_renderer_update_buffer(dm_buffer* cb, void* data, size_t data_size);
 dm_list* vertices = NULL;
 dm_list* indices = NULL;
 
+// transforms
+dm_list* object_transforms = NULL;
+
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	r_data.clear_color = clear_color;
@@ -49,6 +52,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	// vertex data
 	vertices = dm_list_create(sizeof(dm_vertex_t), 0);
 	indices = dm_list_create(sizeof(dm_index_t), 0);
+	object_transforms = dm_list_create(sizeof(dm_transform), 0);
 
 	// maps
 	dm_texture_map_init();
@@ -79,6 +83,9 @@ void dm_renderer_shutdown()
 	dm_list_destroy(vertices);
 	dm_list_destroy(indices);
 
+	// transforms
+	dm_list_destroy(object_transforms);
+
 	// cleanup
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
 	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
@@ -108,13 +115,6 @@ bool dm_renderer_resize(int new_width, int new_height)
 
 bool dm_renderer_begin_scene()
 {
-	dm_mat4 mvp = dm_mat4_identity();
-	mvp = dm_mat4_mul_mat4(mvp, r_data.camera.view_proj);
-#ifdef DM_DIRECTX
-	mvp = dm_mat4_transpose(mvp);
-#endif
-	if (!dm_renderer_update_buffer(r_data.object_pipeline->render_packet.mvp, &mvp, sizeof(dm_mat4))) return false;
-
 	dm_renderer_begin_scene_impl(&r_data);
 
 	// commands for object pipeline
@@ -126,7 +126,23 @@ bool dm_renderer_begin_scene()
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, r_data.object_pipeline->render_commands);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, r_data.object_pipeline->render_commands);
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, r_data.object_pipeline, r_data.object_pipeline->render_commands);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, r_data.object_pipeline->render_commands);
+	
+	for (uint32_t i = 0; i < object_transforms->count; i++)
+	{
+		dm_mat4 mvp = dm_mat4_identity();
+
+		dm_vec3 pos = *(dm_vec3*)dm_list_at(object_transforms, i);
+		mvp = dm_mat_translate(mvp, pos);
+
+		mvp = dm_mat4_mul_mat4(mvp, r_data.camera.view_proj);
+#ifdef DM_DIRECTX
+		mvp = dm_mat4_transpose(mvp);
+#endif
+		if (!dm_renderer_update_buffer(r_data.object_pipeline->render_packet.mvp, &mvp, sizeof(dm_mat4))) return false;
+		
+		dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, r_data.object_pipeline->render_commands);
+	}
+	
 	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, r_data.object_pipeline->render_commands);
 
 	return true;
@@ -315,6 +331,22 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 	for (uint32_t i = 0; i < num_indices; i++)
 	{
 		dm_list_append(indices, &index_data[i]);
+	}
+}
+
+void dm_renderer_submit_object_transforms(dm_transform* transforms, uint32_t num_transforms)
+{
+	for (uint32_t i = 0; i < num_transforms; i++)
+	{
+		dm_list_append(object_transforms, &transforms[i]);
+	}
+}
+
+void dm_renderer_update_object_transforms(dm_transform* transforms, uint32_t num_transforms)
+{
+	for (uint32_t i = 0; i < num_transforms; i++)
+	{
+		dm_list_set(object_transforms, &transforms[i], i);
 	}
 }
 

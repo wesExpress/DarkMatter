@@ -11,6 +11,16 @@ bool dm_renderer_api_submit_textures(dm_image_desc* image_descs, uint32_t num_de
 	return dm_renderer_submit_textures(image_descs, num_desc);
 }
 
+void dm_renderer_api_submit_object_transforms(dm_transform* transforms, uint32_t num_transforms)
+{
+	dm_renderer_submit_object_transforms(transforms, num_transforms);
+}
+
+void dm_renderer_api_update_object_transforms(dm_transform* transforms, uint32_t num_transforms)
+{
+	dm_renderer_update_object_transforms(transforms, num_transforms);
+}
+
 void dm_renderer_api_set_camera_pos(dm_vec3 pos)
 {
 	dm_renderer_set_camera_pos(pos);

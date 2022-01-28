@@ -3,6 +3,7 @@
 
 #include <stdbool.h>
 #include "core/dm_engine_types.h"
+#include "ecs/dm_components.h"
 #include "dm_render_types.h"
 #include "dm_colors.h"
 #include "dm_camera.h"
@@ -58,12 +59,12 @@ bool dm_renderer_init_object_data();
 // API functions
 
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices);
+void dm_renderer_submit_object_transforms(dm_transform* transforms, uint32_t num_transforms);
+void dm_renderer_update_object_transforms(dm_transform* transforms, uint32_t num_transforms);
 bool dm_renderer_submit_textures(dm_image_desc* image_descs, uint32_t num_desc);
 void dm_renderer_set_camera_pos(dm_vec3 pos);
 void dm_renderer_update_camera_pos(dm_vec3 delta_pos);
 void dm_renderer_set_camera_forward(dm_vec3 forward);
 void dm_renderer_update_camera_forward(dm_vec3 delta_forward);
-void dm_renderer_set_camera_euler(dm_vec3 delta_euler);
-void dm_renderer_update_camera_euler(dm_vec3 delta_euler);
 
 #endif

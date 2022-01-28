@@ -27,6 +27,11 @@ insert a value into list at specified index
 void dm_list_insert(dm_list* list, void* value, uint32_t index);
 
 /*
+set a value at a specific index
+*/
+void dm_list_set(dm_list* list, void* value, uint32_t index);
+
+/*
 delete an element from end of list
 */
 void dm_list_pop(dm_list* list);

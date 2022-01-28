@@ -19,4 +19,6 @@
 #include "structures/dm_list.h"
 #include "structures/dm_map.h"
 
+#include "ecs/dm_components.h"
+
 #endif
