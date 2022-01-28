@@ -269,7 +269,6 @@ bool dm_renderer_init_object_data()
 
 	dm_vertex_attrib_desc v_attribs[] = {
 		pos_attrib_desc,
-		color_attrib_desc,
 		tex_coord_desc
 	};
 
@@ -326,6 +325,17 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 	{
 		dm_list_append(vertices, &vertex_data[i]);
 	}
+
+#ifdef DM_DIRECTX
+	for (uint32_t i = 0; i < sizeof(indices) / sizeof(dm_index_t); )
+	{
+		dm_index_t swap = indices[i + 2];
+		indices[i + 2] = indices[i + 1];
+		indices[i + 1] = swap;
+
+		i += 3;
+	}
+#endif
 
 	for (uint32_t i = 0; i < num_indices; i++)
 	{

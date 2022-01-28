@@ -13,7 +13,6 @@ typedef dm_vec4 dm_color;
 typedef struct dm_vertex
 {
     dm_vec3 position;
-    dm_color color;
     dm_vec2 tex_coords;
 } dm_vertex;
 
