@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <string.h>
 
+#define DM_MAP_DEFAULT_CAPACITY 16
 #define DM_MAP_RESIZE_FACTOR 2
 #define DM_MAP_LOAD_FACTOR 0.75
 
@@ -42,6 +43,7 @@ dm_map_t* dm_map_create(size_t type_size, size_t capacity)
 {
 	dm_map_t* map = dm_alloc(sizeof(dm_map_t), DM_MEM_MAP);
 
+	if (capacity == 0)capacity = DM_MAP_DEFAULT_CAPACITY;
 	map->capacity = capacity;
 	map->type_size = type_size;
 

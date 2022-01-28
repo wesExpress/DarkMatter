@@ -1,8 +1,6 @@
 #ifndef __DM_MAP_H__
 #define __DM_MAP_H__
 
-#define DM_MAP_DEFAULT_SIZE 16
-
 #include <stdlib.h>
 #include <stdbool.h>
 

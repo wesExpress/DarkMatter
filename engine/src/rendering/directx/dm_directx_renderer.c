@@ -17,6 +17,7 @@
 #include "core/dm_mem.h"
 #include "platform/dm_platform.h"
 #include "structures/dm_list.h"
+#include "structures/dm_map.h"
 #include <stdio.h>
 #include <stdlib.h>
 
@@ -38,7 +39,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 {
 	DM_LOG_DEBUG("Initializing Directx11 Backend...");
 
-	renderer_data->object_pipeline->interal_pipeline = (dm_internal_pipeline*)dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+	renderer_data->object_pipeline->interal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 	windows_internal_data* internal_data = (windows_internal_data*)platform_data->internal_data;
 	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)renderer_data->object_pipeline->interal_pipeline;
 	directx_renderer = (dm_internal_renderer*)dm_alloc(sizeof(dm_internal_renderer), DM_MEM_RENDERER);
@@ -239,9 +240,9 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	// constant buffers
 	for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
 	{
-		dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
+		dm_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
 	
-		dm_directx_delete_buffer(&cb->desc.buffer, pipeline->interal_pipeline);
+		dm_directx_delete_buffer(cb, pipeline->interal_pipeline);
 	}
 
 	/*
@@ -269,9 +270,9 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_map_t* cb_data, dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+	dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
 	/*
 	// shader
@@ -291,9 +292,9 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
 	*/
 	for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
 	{
-		dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
+		dm_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
 
-		if (!dm_directx_create_buffer(&cb->desc.buffer, cb->desc.data, directx_renderer, internal_pipe)) return false;
+		if (!dm_directx_create_buffer(cb, dm_map_get(cb_data, cb->desc.name), directx_renderer, internal_pipe)) return false;
 	}
 
 	/*
@@ -310,8 +311,19 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
 	return true;
 }
 
-bool dm_renderer_update_constant_buffer(dm_constant_buffer* cb, void* data)
+bool dm_renderer_update_buffer(dm_buffer* buffer, void* data, size_t data_size)
 {
+	HRESULT hr;
+
+	dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
+
+	D3D11_MAPPED_SUBRESOURCE msr;
+	ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
+
+	DX_ERROR_CHECK(directx_renderer->context->lpVtbl->Map(directx_renderer->context, (ID3D11Resource*)internal_buffer->buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr), "ID3D11DeviceContext::Map failed!");
+	dm_memcpy(msr.pData, data, data_size);
+	directx_renderer->context->lpVtbl->Unmap(directx_renderer->context, (ID3D11Resource*)internal_buffer->buffer, 0);
+
 	return true;
 }
 
@@ -381,8 +393,8 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	*/
 	for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
 	{
-		dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
-		dm_directx_bind_buffer(&cb->desc.buffer, directx_renderer, internal_pipe);
+		dm_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
+		dm_directx_bind_buffer(cb, directx_renderer, internal_pipe);
 	}
 
 	/*

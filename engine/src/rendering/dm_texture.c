@@ -8,7 +8,7 @@ dm_map_t* texture_map = NULL;
 
 void dm_texture_map_init()
 {
-	texture_map = dm_map_create(sizeof(dm_texture), DM_MAP_DEFAULT_SIZE);
+	texture_map = dm_map_create(sizeof(dm_texture), 0);
 }
 
 void dm_texture_map_destroy()

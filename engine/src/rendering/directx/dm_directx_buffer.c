@@ -11,7 +11,7 @@ bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_rendere
 	HRESULT hr;
 
 	buffer->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
+	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
 
 	ID3D11Device* device = renderer->device;
 	ID3D11DeviceContext* context = renderer->context;

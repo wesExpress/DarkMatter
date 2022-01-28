@@ -25,17 +25,17 @@ bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
-bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_map_t* cb_data, dm_render_pipeline* pipeline);
 
-bool dm_renderer_update_constant_buffer(dm_constant_buffer* cb, void* data);
+bool dm_renderer_update_buffer(dm_buffer* cb, void* data, size_t data_size);
 
 // vertex data
 dm_list* vertices = NULL;
 dm_list* indices = NULL;
 
 // view projection constant buffer
-dm_constant_buffer vp_cb = { 0 };
-dm_constant_buffer model_cb = { 0 };
+dm_buffer view_proj_buffer = { 0 };
+dm_buffer model_cb_buffer = { 0 };
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -79,10 +79,6 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 
 void dm_renderer_shutdown()
 {
-	// constant buffer data
-	dm_free(model_cb.desc.data, sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
-	dm_free(vp_cb.desc.data, sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
-
 	// vertex data
 	dm_list_destroy(vertices);
 	dm_list_destroy(indices);
@@ -116,8 +112,8 @@ bool dm_renderer_resize(int new_width, int new_height)
 
 bool dm_renderer_begin_scene()
 {
-	dm_memcpy(vp_cb.desc.data, &r_data.camera.view_proj, sizeof(dm_mat4));
-	if (!dm_renderer_update_constant_buffer(&vp_cb, &r_data.camera.view_proj)) return false;
+	//dm_memcpy(vp_cb.desc.data, &r_data.camera.view_proj, sizeof(dm_mat4));
+	if (!dm_renderer_update_buffer(&view_proj_buffer, &r_data.camera.view_proj, sizeof(dm_mat4))) return false;
 
 	dm_renderer_begin_scene_impl(&r_data);
 
@@ -154,7 +150,7 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	// render packet
 	pipeline->render_packet.vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->render_packet.constant_buffers = dm_list_create(sizeof(dm_constant_buffer), 0);
+	pipeline->render_packet.constant_buffers = dm_list_create(sizeof(dm_buffer), 0);
 	pipeline->render_packet.texture_paths = dm_list_create(sizeof(dm_string), 0);
 
 	pipeline->render_packet.count = 0;
@@ -282,41 +278,35 @@ bool dm_renderer_init_object_data()
 	*/
 	// view projection constant buffer
 	// we append this and model so we can access them
-	dm_buffer vp_cb_buffer = { 0 };
-	vp_cb_buffer.desc.type = DM_BUFFER_TYPE_CONSTANT;
-	vp_cb_buffer.desc.usage = DM_BUFFER_USAGE_DYNAMIC;
-	vp_cb_buffer.desc.elem_size = sizeof(float);
-	vp_cb_buffer.desc.buffer_size = ((sizeof(dm_mat4) + 15) / 16) * 16;
-	vp_cb_buffer.desc.cpu_access = DM_BUFFER_CPU_WRITE;
+	view_proj_buffer.desc.type = DM_BUFFER_TYPE_CONSTANT;
+	view_proj_buffer.desc.usage = DM_BUFFER_USAGE_DYNAMIC;
+	view_proj_buffer.desc.cpu_access = DM_BUFFER_CPU_WRITE;
+	view_proj_buffer.desc.data_t = DM_BUFFER_DATA_T_MATRIX;
+	view_proj_buffer.desc.elem_size = sizeof(float);
+	view_proj_buffer.desc.count = 4;
+	view_proj_buffer.desc.buffer_size = ((sizeof(dm_mat4) + 15) / 16) * 16;
+	view_proj_buffer.desc.name = "view_proj";
 
-	vp_cb.desc.buffer = vp_cb_buffer;
-	vp_cb.desc.name = "view_proj";
-	vp_cb.desc.count = 4;
-	vp_cb.desc.data_t = DM_CONST_BUFFER_T_MATRIX;
-	vp_cb.desc.data = dm_alloc(sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
-	dm_memcpy(vp_cb.desc.data, &r_data.camera.view_proj, sizeof(dm_mat4));
-
-	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &vp_cb);
-
-	dm_buffer model_cb_buffer = { 0 };
 	model_cb_buffer.desc.type = DM_BUFFER_TYPE_CONSTANT;
 	model_cb_buffer.desc.usage = DM_BUFFER_USAGE_DYNAMIC;
-	model_cb_buffer.desc.elem_size = sizeof(float);
-	model_cb_buffer.desc.buffer_size = ((sizeof(dm_mat4) + 15) / 16) * 16;
 	model_cb_buffer.desc.cpu_access = DM_BUFFER_CPU_WRITE;
-
-	model_cb.desc.buffer = model_cb_buffer;
-	model_cb.desc.name = "model";
-	model_cb.desc.count = 4;
-	model_cb.desc.data_t = DM_CONST_BUFFER_T_MATRIX;
-
+	model_cb_buffer.desc.data_t = DM_BUFFER_DATA_T_MATRIX;
+	model_cb_buffer.desc.elem_size = sizeof(float);
+	model_cb_buffer.desc.count = 4;
+	model_cb_buffer.desc.buffer_size = ((sizeof(dm_mat4) + 15) / 16) * 16;
+	model_cb_buffer.desc.name = "model";
 	dm_mat4 model = dm_mat4_identity();
-	model_cb.desc.data = dm_alloc(sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
-	dm_memcpy(model_cb.desc.data, &model, sizeof(dm_mat4));
 
-	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &model_cb);
-	
-	return dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, v_layout, r_data.object_pipeline);
+	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &view_proj_buffer);
+	dm_list_append(r_data.object_pipeline->render_packet.constant_buffers, &model_cb_buffer);
+
+	dm_map_t* cb_data = dm_map_create(sizeof(void*), 0);
+	dm_map_insert(cb_data, view_proj_buffer.desc.name, &r_data.camera.view_proj);
+	dm_map_insert(cb_data, model_cb_buffer.desc.name, &model);
+
+	return dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, v_layout, cb_data, r_data.object_pipeline);
+
+	dm_map_destroy(cb_data);
 }
 
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices)

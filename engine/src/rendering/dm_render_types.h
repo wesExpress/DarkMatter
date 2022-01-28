@@ -19,6 +19,10 @@ typedef struct dm_vertex
 typedef uint32_t  dm_index_t;
 typedef dm_vertex dm_vertex_t;
 
+/***********
+    ENUMS
+************/
+
 typedef enum dm_comparison
 {
     DM_COMPARISON_ALWAYS,
@@ -54,14 +58,15 @@ typedef enum dm_buffer_cpu_access
     DM_BUFFER_CPU_READ
 } dm_buffer_cpu_access;
 
-typedef struct dm_buffer_desc
+typedef enum dm_buffer_data_t
 {
-    dm_buffer_type type;
-    dm_buffer_usage usage;
-    dm_buffer_cpu_access cpu_access;
-    size_t buffer_size;
-    size_t elem_size;
-} dm_buffer_desc;
+    DM_BUFFER_DATA_T_BOOL,
+    DM_BUFFER_DATA_T_INT,
+    DM_BUFFER_DATA_T_UINT,
+    DM_BUFFER_DATA_T_FLOAT,
+    DM_BUFFER_DATA_T_MATRIX,
+    DM_BUFFER_DATA_T_UNKNOWN
+} dm_buffer_data_t;
 
 typedef enum dm_shader_type
 {
@@ -69,26 +74,6 @@ typedef enum dm_shader_type
     DM_SHADER_TYPE_PIXEL,
     DM_SHADER_TYPE_UNKNOWN
 } dm_shader_type;
-
-typedef struct dm_shader_desc
-{
-    dm_shader_type type;
-    const char* path;
-} dm_shader_desc;
-
-typedef struct dm_buffer
-{
-    dm_buffer_desc desc;
-    void* internal_buffer;
-} dm_buffer;
-
-typedef struct dm_shader
-{
-    dm_shader_desc vertex_desc;
-    dm_shader_desc pixel_desc;
-
-    void* internal_shader;
-} dm_shader;
 
 typedef enum dm_texture_format
 {
@@ -118,59 +103,6 @@ typedef enum dm_texture_mode
     DM_TEXTURE_MODE_UNKNOWN
 } dm_texture_mode;
 
-typedef struct dm_image_desc
-{
-    const char* path;
-    const char* name;
-    dm_texture_format format;
-    dm_texture_format internal_format;
-    int width, height, n_channels;
-    bool flip;
-} dm_image_desc;
-
-typedef struct dm_sampler_desc
-{
-    dm_filter filter;
-    dm_texture_mode u;
-    dm_texture_mode v;
-    dm_texture_mode w;
-    dm_comparison comparison;
-    float min_lod, max_lod;
-    dm_vec4 border_color;
-} dm_sampler_desc;
-
-typedef struct dm_texture
-{
-    dm_image_desc desc;   
-    void* data;
-    void* internal_texture;
-} dm_texture;
-
-typedef enum dm_const_buffer_data_t
-{
-    DM_CONST_BUFFER_T_BOOL,
-    DM_CONST_BUFFER_T_INT,
-    DM_CONST_BUFFER_T_UINT,
-    DM_CONST_BUFFER_T_FLOAT,
-    DM_CONST_BUFFER_T_MATRIX,
-    DM_CONST_BUFFER_T_UNKNOWN
-} dm_const_buffer_data_t;
-
-typedef struct dm_constant_buffer_desc
-{
-    dm_buffer buffer;
-    const char* name;
-    dm_const_buffer_data_t data_t;
-    int count;
-    void* data;
-} dm_constant_buffer_desc;
-
-typedef struct dm_constant_buffer
-{
-    dm_constant_buffer_desc desc;
-    void* internal_buffer;
-} dm_constant_buffer;
-
 typedef enum dm_vertex_data_t
 {
     DM_VERTEX_DATA_T_BYTE,
@@ -181,10 +113,9 @@ typedef enum dm_vertex_data_t
     DM_VERTEX_DATA_T_UINT,
     DM_VERTEX_DATA_T_FLOAT,
     DM_VERTEX_DATA_T_DOUBLE,
-    DM_VERTEX_DATA_T_UNKNOWN 
+    DM_VERTEX_DATA_T_UNKNOWN
 } dm_vertex_data_t;
 
-// pipeline stuff
 typedef enum dm_cull_mode
 {
     DM_CULL_FRONT,
@@ -229,8 +160,6 @@ typedef enum dm_blend_func
     DM_BLEND_FUNC_UNKNOWN
 } dm_blend_func;
 
-
-
 typedef enum dm_primitive_topology
 {
     DM_TOPOLOGY_POINT_LIST,
@@ -240,6 +169,82 @@ typedef enum dm_primitive_topology
     DM_TOPOLOGY_TRIANGLE_STRIP,
     DM_TOPOLOGY_UNKNOWN
 } dm_primitive_topology;
+
+typedef enum dm_render_command_type
+{
+    DM_RENDER_COMMAND_BEGIN_RENDER_PASS,
+    DM_RENDER_COMMAND_END_RENDER_PASS,
+    DM_RENDER_COMMAND_SET_VIEWPORT,
+    DM_RENDER_COMMAND_CLEAR,
+    DM_RENDER_COMMAND_BIND_PIPELINE,
+    DM_RENDER_COMMAND_DRAW_INDEXED,
+    DM_RENDER_COMMAND_DRAW_INSTANCED,
+    DM_RENDER_COMMAND_UNKNOWN
+} dm_render_command_type;
+
+/***********
+ STRUCTURES
+************/
+
+typedef struct dm_buffer_desc
+{
+    dm_buffer_type type;
+    dm_buffer_usage usage;
+    dm_buffer_cpu_access cpu_access;
+    dm_buffer_data_t data_t;
+    size_t elem_size;
+    size_t buffer_size;
+    const char* name;
+    uint32_t count;
+} dm_buffer_desc;
+
+typedef struct dm_shader_desc
+{
+    dm_shader_type type;
+    const char* path;
+} dm_shader_desc;
+
+typedef struct dm_buffer
+{
+    dm_buffer_desc desc;
+    void* internal_buffer;
+} dm_buffer;
+
+typedef struct dm_shader
+{
+    dm_shader_desc vertex_desc;
+    dm_shader_desc pixel_desc;
+
+    void* internal_shader;
+} dm_shader;
+
+typedef struct dm_image_desc
+{
+    const char* path;
+    const char* name;
+    dm_texture_format format;
+    dm_texture_format internal_format;
+    int width, height, n_channels;
+    bool flip;
+} dm_image_desc;
+
+typedef struct dm_sampler_desc
+{
+    dm_filter filter;
+    dm_texture_mode u;
+    dm_texture_mode v;
+    dm_texture_mode w;
+    dm_comparison comparison;
+    float min_lod, max_lod;
+    dm_vec4 border_color;
+} dm_sampler_desc;
+
+typedef struct dm_texture
+{
+    dm_image_desc desc;   
+    void* data;
+    void* internal_texture;
+} dm_texture;
 
 typedef struct dm_viewport
 {
@@ -300,19 +305,6 @@ typedef struct dm_render_packet
     size_t count;
     size_t offset;
 } dm_render_packet;
-
-// command buffer
-typedef enum dm_render_command_type
-{
-    DM_RENDER_COMMAND_BEGIN_RENDER_PASS,
-    DM_RENDER_COMMAND_END_RENDER_PASS,
-    DM_RENDER_COMMAND_SET_VIEWPORT,
-    DM_RENDER_COMMAND_CLEAR,
-    DM_RENDER_COMMAND_BIND_PIPELINE,
-    DM_RENDER_COMMAND_DRAW_INDEXED,
-    DM_RENDER_COMMAND_DRAW_INSTANCED,
-    DM_RENDER_COMMAND_UNKNOWN
-} dm_render_command_type;
 
 typedef struct dm_render_command
 {
