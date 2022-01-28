@@ -5,11 +5,10 @@ layout (location = 1) in vec2 aTexCoords;
 
 out vec2 texCoords;
 
-uniform mat4 model;
-uniform mat4 view_proj;
+uniform mat4 mvp;
 
 void main()
 {
-    gl_Position = view_proj * model * vec4(aPos, 1.0);
+    gl_Position = mvp * vec4(aPos, 1.0);
     texCoords = aTexCoords;
 }

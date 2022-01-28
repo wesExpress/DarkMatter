@@ -18,6 +18,7 @@ typedef struct dm_internal_buffer
 typedef struct dm_internal_constant_buffer
 {
 	GLint location;
+	void* data;
 } dm_internal_constant_buffer;
 
 typedef struct dm_internal_shader

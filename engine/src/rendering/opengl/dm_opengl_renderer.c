@@ -68,7 +68,7 @@ void dm_renderer_draw_arrays_impl(int first, size_t count)
 
 void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
 {
-    dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
     glDrawElements(internal_pipe->primitive, pipeline->render_packet.count, GL_UNSIGNED_INT, (void*)(uintptr_t)pipeline->render_packet.offset);
     glCheckError();
@@ -76,8 +76,8 @@ void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
 
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-    pipeline->interal_pipeline = (dm_internal_pipeline*)dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
-    dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+    pipeline->interal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
     glGenVertexArrays(1, &internal_pipe->vao);
     glCheckErrorReturn();
@@ -141,20 +141,16 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-    dm_internal_pipeline* interanl_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+    dm_internal_pipeline* interanl_pipe = pipeline->interal_pipeline;
     glDeleteVertexArrays(1, &interanl_pipe->vao);
     glCheckError();
 
+    dm_free(pipeline->render_packet.mvp->internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+
     dm_opengl_delete_buffer(pipeline->render_packet.vertex_buffer);
     dm_opengl_delete_buffer(pipeline->render_packet.index_buffer);
+    dm_opengl_delete_buffer(pipeline->render_packet.mvp);
     dm_opengl_delete_shader(pipeline->raster_desc.shader);
-
-    // constant buffers
-    for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
-    {
-        dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
-        dm_free(cb->internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
-    }
 
     // textures
     for (uint32_t i = 0; i < pipeline->render_packet.texture_paths->count; i++)
@@ -167,9 +163,9 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
 {
-    dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
     glBindVertexArray(internal_pipe->vao);
     glCheckErrorReturn();
@@ -207,15 +203,11 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
     glBindVertexArray(0);
 
     // constant buffers
-    dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
-    for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
-    {
-        dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
-        cb->internal_buffer = dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
-        dm_internal_constant_buffer* internal_buffer = (dm_internal_constant_buffer*)cb->internal_buffer;
-   
-        if (!dm_opengl_find_uniform_loc(internal_shader->id, cb->desc.name, &internal_buffer->location)) return false;
-    }
+    dm_internal_shader* internal_shader = pipeline->raster_desc.shader->internal_shader;
+    pipeline->render_packet.mvp->internal_buffer = dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+    dm_internal_constant_buffer* internal_cb = pipeline->render_packet.mvp->internal_buffer;
+    if (!dm_opengl_find_uniform_loc(internal_shader->id, pipeline->render_packet.mvp->desc.name, &internal_cb->location)) return false;
+    dm_memcpy(internal_cb->data, mvp_data, sizeof(dm_mat4));
 
     // textures
 
@@ -322,11 +314,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
 
     // constant buffers
-    for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
-    {
-        dm_constant_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
-        dm_opengl_bind_uniform(cb);
-    }
+    dm_opengl_bind_uniform(pipeline->render_packet.mvp->internal_buffer);
 
     // TODO: need to change this eventually, this won't work with multiple textures per draw call
     // textures
@@ -341,8 +329,14 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     return true;
 }
 
-bool dm_renderer_update_constant_buffer(dm_constant_buffer* cb, void* data)
+bool dm_renderer_update_buffer(dm_buffer* cb, void* data, size_t size)
 {
+    if (cb->desc.type == DM_BUFFER_TYPE_CONSTANT)
+    {
+        dm_internal_constant_buffer* internal_cb = cb->internal_buffer;
+        dm_memcpy(internal_cb->data, data, size);
+    }
+
     return true;
 }
 

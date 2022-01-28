@@ -13,8 +13,8 @@ bool dm_opengl_validate_program(GLuint program);
 
 bool dm_opengl_create_shader(dm_shader* shader)
 {
-    shader->internal_shader = (dm_internal_shader*)dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
-    dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
+    shader->internal_shader = dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
+    dm_internal_shader* internal_shader = shader->internal_shader;
 
     GLuint vertex_shader = dm_opengl_compile_shader(shader->vertex_desc);
     GLuint frag_shader = dm_opengl_compile_shader(shader->pixel_desc);
@@ -49,7 +49,7 @@ bool dm_opengl_create_shader(dm_shader* shader)
 
 void dm_opengl_delete_shader(dm_shader* shader)
 {
-    dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
+    dm_internal_shader* internal_shader = shader->internal_shader;
 
     glDeleteProgram(internal_shader->id);
     glCheckError();
@@ -58,40 +58,40 @@ void dm_opengl_delete_shader(dm_shader* shader)
 
 void dm_opengl_bind_shader(dm_shader* shader)
 {
-    dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
+    dm_internal_shader* internal_shader = shader->internal_shader;
 
     glUseProgram(internal_shader->id);
     glCheckError();
 }
 
-bool dm_opengl_bind_uniform(dm_constant_buffer* cb)
+bool dm_opengl_bind_uniform(dm_buffer* cb)
 {
-    dm_internal_constant_buffer* internal_buffer = (dm_internal_constant_buffer*)cb->internal_buffer;
+    dm_internal_constant_buffer* internal_buffer = cb->internal_buffer;
 
     switch (cb->desc.data_t)
     {
-    case DM_CONST_BUFFER_T_INT:
+    case DM_BUFFER_DATA_T_INT:
     {
         switch (cb->desc.count)
         {
         case 1:
         {
-            int data = *(int*)cb->desc.data;
+            int data = *(int*)internal_buffer->data;
             glUniform1i(internal_buffer->location, data);
         } break;
         case 2:
         {
-            dm_vec2 data = *(dm_vec2*)cb->desc.data;
+            dm_vec2 data = *(dm_vec2*)internal_buffer->data;
             glUniform2i(internal_buffer->location, data.x, data.y);
         } break;
         case 3:
         {
-            dm_vec3 data = *(dm_vec3*)cb->desc.data;
+            dm_vec3 data = *(dm_vec3*)internal_buffer->data;
             glUniform3i(internal_buffer->location, data.x, data.y, data.z);
         } break;
         case 4:
         {
-            dm_vec4 data = *(dm_vec4*)cb->desc.data;
+            dm_vec4 data = *(dm_vec4*)internal_buffer->data;
             glUniform4i(internal_buffer->location, data.x, data.y, data.z, data.w);
         } break;
         default:
@@ -100,29 +100,29 @@ bool dm_opengl_bind_uniform(dm_constant_buffer* cb)
         }
     } break;
 
-    case DM_CONST_BUFFER_T_BOOL:
-    case DM_CONST_BUFFER_T_UINT:
+    case DM_BUFFER_DATA_T_BOOL:
+    case DM_BUFFER_DATA_T_UINT:
     {
         switch (cb->desc.count)
         {
         case 1:
         {
-            uint32_t data = *(uint32_t*)cb->desc.data;
+            uint32_t data = *(uint32_t*)internal_buffer->data;
             glUniform1ui(internal_buffer->location, data);
         } break;
         case 2:
         {
-            dm_vec2 data = *(dm_vec2*)cb->desc.data;
+            dm_vec2 data = *(dm_vec2*)internal_buffer->data;
             glUniform2ui(internal_buffer->location, data.x, data.y);
         } break;
         case 3:
         {
-            dm_vec3 data = *(dm_vec3*)cb->desc.data;
+            dm_vec3 data = *(dm_vec3*)internal_buffer->data;
             glUniform3ui(internal_buffer->location, data.x, data.y, data.z);
         } break;
         case 4:
         {
-            dm_vec4 data = *(dm_vec4*)cb->desc.data;
+            dm_vec4 data = *(dm_vec4*)internal_buffer->data;
             glUniform4ui(internal_buffer->location, data.x, data.y, data.z, data.w);
         } break;
         default:
@@ -131,28 +131,28 @@ bool dm_opengl_bind_uniform(dm_constant_buffer* cb)
         }
     } break;
 
-    case DM_CONST_BUFFER_T_FLOAT:
+    case DM_BUFFER_DATA_T_FLOAT:
     {
         switch (cb->desc.count)
         {
         case 1:
         {
-            float data = *(float*)cb->desc.data;
+            float data = *(float*)internal_buffer->data;
             glUniform1f(internal_buffer->location, data);
         } break;
         case 2:
         {
-            dm_vec2 data = *(dm_vec2*)cb->desc.data;
+            dm_vec2 data = *(dm_vec2*)internal_buffer->data;
             glUniform2f(internal_buffer->location, data.x, data.y);
         } break;
         case 3:
         {
-            dm_vec3* data = (dm_vec3*)cb->desc.data;
+            dm_vec3* data = (dm_vec3*)internal_buffer->data;
             glUniform3f(internal_buffer->location, data->x, data->y, data->z);
         } break;
         case 4:
         {
-            dm_vec4 data = *(dm_vec4*)cb->desc.data;
+            dm_vec4 data = *(dm_vec4*)internal_buffer->data;
             glUniform4f(internal_buffer->location, data.x, data.y, data.z, data.w);
         } break;
         default:
@@ -161,23 +161,23 @@ bool dm_opengl_bind_uniform(dm_constant_buffer* cb)
         }
     } break;
 
-    case DM_CONST_BUFFER_T_MATRIX:
+    case DM_BUFFER_DATA_T_MATRIX:
     {
         switch (cb->desc.count)
         {
         case 2:
         {
-            dm_mat2 data = *(dm_mat2*)cb->desc.data;
+            dm_mat2 data = *(dm_mat2*)internal_buffer->data;
             glUniformMatrix2fv(internal_buffer->location, 1, GL_FALSE, data.m);
         } break;
         case 3:
         {
-            dm_mat3 data = *(dm_mat3*)cb->desc.data;
+            dm_mat3 data = *(dm_mat3*)internal_buffer->data;
             glUniformMatrix3fv(internal_buffer->location, 1, GL_FALSE, data.m);
         } break;
         case 4:
         {
-            dm_mat4 data = *(dm_mat4*)cb->desc.data;
+            dm_mat4 data = *(dm_mat4*)internal_buffer->data;
             glUniformMatrix4fv(internal_buffer->location, 1, GL_FALSE, data.m);
         } break;
         default:
