@@ -1,6 +1,7 @@
 #include "dm_list.h"
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
+#include <math.h>
 
 #define DM_LIST_DEFAULT_CAPACITY 16
 #define DM_LIST_LOAD_FACTOR 0.75
@@ -10,7 +11,7 @@ bool dm_list_should_grow(dm_list* list);
 bool dm_list_should_shrink(dm_list* list);
 void dm_list_grow(dm_list* list);
 void dm_list_shrink(dm_list* list);
-void dm_list_resize(dm_list* list, size_t new_size);
+void dm_list_resize(dm_list* list, size_t new_capacity, dm_mem_adjust_func adjust_func);
 
 dm_list* dm_list_create(size_t element_size, size_t capacity)
 {
@@ -134,25 +135,23 @@ bool dm_list_should_shrink(dm_list* list)
 
 void dm_list_grow(dm_list* list)
 {
-    size_t new_capacity = list->capacity * DM_LIST_RESIZE_FACTOR;
-    size_t new_size = sizeof(dm_list) + new_capacity * list->element_size;
-    dm_list_resize(list, new_size);
-    list->capacity = new_capacity;
+    dm_list_resize(list, (list->capacity * DM_LIST_RESIZE_FACTOR), DM_MEM_ADJUST_ADD);
 }
 
 void dm_list_shrink(dm_list* list)
 {
-    size_t new_capacity = list->capacity / DM_LIST_RESIZE_FACTOR;
-    size_t new_size = sizeof(dm_list) + new_capacity * list->element_size;
-    dm_list_resize(list, new_size);
-    list->capacity = new_capacity;
+    dm_list_resize(list, (list->capacity / DM_LIST_RESIZE_FACTOR), DM_MEM_ADJUST_SUBTRACT);
 }
 
-void dm_list_resize(dm_list* list, size_t new_size)
+void dm_list_resize(dm_list* list, size_t new_capacity, dm_mem_adjust_func adjust_func)
 {
-    int64_t block_size = (list->capacity - new_size) * list->element_size;
-    dm_mem_db_adjust(llabs(block_size), DM_MEM_LIST, DM_MEM_ADJUST_ADD);
+    size_t new_size = new_capacity * list->element_size;
+    int64_t block_size = abs(list->capacity - new_capacity) * list->element_size;
+
+    dm_mem_db_adjust(llabs(block_size), DM_MEM_LIST, adjust_func);
     list->data = dm_realloc(list->data, new_size);
+
+    list->capacity = new_capacity;
 }
 
 void* dm_list_at(dm_list* list, uint32_t index)
