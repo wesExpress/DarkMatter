@@ -235,15 +235,9 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 	dm_directx_delete_buffer(pipeline->render_packet.vertex_buffer, pipeline->interal_pipeline);
 	dm_directx_delete_buffer(pipeline->render_packet.index_buffer, pipeline->interal_pipeline);
+	dm_directx_delete_buffer(pipeline->render_packet.view_proj, pipeline->interal_pipeline);
+	dm_directx_delete_buffer(pipeline->render_packet.model, pipeline->interal_pipeline);
 	dm_directx_delete_shader(pipeline->raster_desc.shader, pipeline->interal_pipeline);
-
-	// constant buffers
-	for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
-	{
-		dm_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
-	
-		dm_directx_delete_buffer(cb, pipeline->interal_pipeline);
-	}
 
 	/*
 	texture
@@ -290,12 +284,8 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
 	/*
 	// constant buffer(s)
 	*/
-	for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
-	{
-		dm_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
-
-		if (!dm_directx_create_buffer(cb, dm_map_get(cb_data, cb->desc.name), directx_renderer, internal_pipe)) return false;
-	}
+	if (!dm_directx_create_buffer(pipeline->render_packet.view_proj, dm_map_get(cb_data, pipeline->render_packet.view_proj->desc.name), directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_buffer(pipeline->render_packet.model, dm_map_get(cb_data, pipeline->render_packet.model->desc.name), directx_renderer, internal_pipe)) return false;
 
 	/*
 	textures
@@ -315,7 +305,7 @@ bool dm_renderer_update_buffer(dm_buffer* buffer, void* data, size_t data_size)
 {
 	HRESULT hr;
 
-	dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
+	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
 
 	D3D11_MAPPED_SUBRESOURCE msr;
 	ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
@@ -391,11 +381,8 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// constant buffers
 	*/
-	for(uint32_t i=0; i<pipeline->render_packet.constant_buffers->count; i++)
-	{
-		dm_buffer* cb = dm_list_at(pipeline->render_packet.constant_buffers, i);
-		dm_directx_bind_buffer(cb, directx_renderer, internal_pipe);
-	}
+	dm_directx_bind_buffer(pipeline->render_packet.view_proj, directx_renderer, internal_pipe);
+	dm_directx_bind_buffer(pipeline->render_packet.model, directx_renderer, internal_pipe);
 
 	/*
 	textures

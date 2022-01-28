@@ -300,7 +300,8 @@ typedef struct dm_render_packet
 {
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
-    dm_list* constant_buffers;
+    dm_buffer* view_proj;
+    dm_buffer* model;
     dm_list* texture_paths;
     size_t count;
     size_t offset;
