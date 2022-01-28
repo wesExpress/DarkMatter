@@ -59,7 +59,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		70.0f,
 		platform_data->window_width,
 		platform_data->window_height,
-		0, 1,
+		0.01, 10000,
 		DM_CAMERA_PERSPECTIVE
 	);
 
@@ -196,7 +196,7 @@ bool dm_renderer_create_object_pipeline()
 
 	// depth
 	dm_depth_state_desc depth = { 0 };
-	depth.is_enabled = false;
+	depth.is_enabled = true;
 	depth.comparison = DM_COMPARISON_LESS;
 
 	// stencil
