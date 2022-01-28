@@ -236,13 +236,15 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
     
 }
 
-void dm_renderer_end_rederpass_impl()
+void dm_renderer_end_rederpass_impl(dm_render_pipeline* pipeline)
 {
+    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
     //glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindVertexArray(0);
     glBindBuffer(GL_ARRAY_BUFFER, 0);
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-    //glDisable(GL_DEPTH_TEST);
+
+    if(pipeline->depth_desc.is_enabled) glDisable(GL_DEPTH_TEST);
     //glDisable(GL_STENCIL_TEST);
     //glDisable(GL_BLEND);
 }
@@ -269,7 +271,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     if (pipeline->depth_desc.is_enabled)
     {
         glEnable(GL_DEPTH_TEST);
-        glDepthFunc(internal_pipe->depth_func);
+       // glDepthFunc(internal_pipe->depth_func);
         glCheckErrorReturn();
     }
     else
@@ -354,7 +356,9 @@ void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 {
     glClearColor(clear_color->x, clear_color->y, clear_color->z, clear_color->w);
     glCheckError();
-    //glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+    GLint clear_bit = GL_COLOR_BUFFER_BIT;
+    if(pipeline->depth_desc.is_enabled) clear_bit|= GL_DEPTH_BUFFER_BIT;
     glClear(GL_COLOR_BUFFER_BIT);
 }
 

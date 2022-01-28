@@ -310,6 +310,11 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex
 	return true;
 }
 
+bool dm_renderer_update_constant_buffer(dm_constant_buffer* cb, void* data)
+{
+	return true;
+}
+
 void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 {
 

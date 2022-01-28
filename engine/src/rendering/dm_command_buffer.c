@@ -2,7 +2,7 @@
 #include "core/dm_logger.h"
 
 void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline);
-void dm_renderer_end_rederpass_impl();
+void dm_renderer_end_rederpass_impl(dm_render_pipeline* pipeline);
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline);
 void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline);
@@ -35,7 +35,7 @@ bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipel
 		} break;
 		case DM_RENDER_COMMAND_END_RENDER_PASS:
 		{
-			dm_renderer_end_rederpass_impl();
+			dm_renderer_end_rederpass_impl(pipeline);
 		} break;
 		case DM_RENDER_COMMAND_SET_VIEWPORT:
 		{

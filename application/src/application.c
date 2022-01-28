@@ -11,12 +11,12 @@ bool dm_application_init(dm_application* app)
 	DM_LOG_DEBUG("Submitting test vertex data from app...");
 
 	dm_vertex_t vertices[] = {
-		// back face
+	// front face
 	{ {-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f} }, // 0
 	{ { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f} },
 	{ { 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f} },
 	{ {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f} },
-	// front face
+	// back face
 	{ {-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f} }, // 4
 	{ { 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f} },
 	{ { 0.5f,  0.5f,  0.5f}, {1.0f, 1.0f} },
@@ -37,10 +37,10 @@ bool dm_application_init(dm_application* app)
 	{ { 0.5f,  0.5f,  0.5f}, {1.0f, 1.0f} },
 	{ {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f} },
 	// right face
-	{ { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f} }, // 20
-	{ { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f} },
-	{ { 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f} },
-	{ { 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f} }
+	{ {-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f} }, // 20
+	{ {-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f} },
+	{ { 0.5f,  0.5f,  0.5f}, {1.0f, 1.0f} },
+	{ {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f} }
 	};
 
 	dm_index_t indices[] = {

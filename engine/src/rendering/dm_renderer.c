@@ -327,11 +327,11 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 	}
 
 #ifdef DM_DIRECTX
-	for (uint32_t i = 0; i < sizeof(indices) / sizeof(dm_index_t); )
+	for (uint32_t i = 0; i < num_indices; )
 	{
-		dm_index_t swap = indices[i + 2];
-		indices[i + 2] = indices[i + 1];
-		indices[i + 1] = swap;
+		dm_index_t swap = index_data[i + 2];
+		index_data[i + 2] = index_data[i + 1];
+		index_data[i + 1] = swap;
 
 		i += 3;
 	}

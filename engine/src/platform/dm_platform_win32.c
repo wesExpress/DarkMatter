@@ -18,6 +18,10 @@ typedef struct dm_internal_data
 LRESULT CALLBACK window_callback(HWND h_wnd, UINT u_msg, WPARAM w_param, LPARAM l_param);
 LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
+static double clock_frequency;
+static float start_time;
+static float end_time;
+
 bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y)
 {
 	e_data->platform_data = (dm_platform_data*)dm_alloc(sizeof(dm_platform_data), DM_MEM_PLATFORM);
@@ -89,6 +93,12 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
 	DM_LOG_DEBUG("Window created...");
 
 	ShowWindow(internal_data->hwnd, SW_SHOW);
+
+	// clock
+	LARGE_INTEGER frequency;
+	QueryPerformanceFrequency(&frequency);
+	clock_frequency = 1.0f / frequency.QuadPart;
+	QueryPerformanceCounter(&start_time);
 
 	return true;
 }
@@ -174,6 +184,14 @@ void* dm_platform_memset(void* dest, int value, size_t size)
 void dm_platform_memmove(void* dest, const void* src, size_t size)
 {
 	memmove(dest, src, size);
+}
+
+float dm_platform_get_time()
+{
+	LARGE_INTEGER time;
+	QueryPerformanceCounter(&time);
+
+	return time.QuadPart * clock_frequency;
 }
 
 void dm_platform_write(const char* message, uint8_t color)
