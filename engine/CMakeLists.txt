@@ -174,8 +174,9 @@ add_custom_command(
     TARGET CEngine POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/engine/shaders
-            ${CMAKE_CURRENT_BINARY_DIR}/engine/shaders
+            ${CMAKE_CURRENT_BINARY_DIR}/../shaders
 )
+message(STATUS ${CMAKE_CURRENT_BINARY_DIR})
 
 if(BUILD_SHARED_LIBS)
     add_definitions(-DDM_EXPORT)

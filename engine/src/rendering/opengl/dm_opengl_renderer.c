@@ -145,11 +145,12 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     glDeleteVertexArrays(1, &interanl_pipe->vao);
     glCheckError();
 
-    dm_free(pipeline->render_packet.mvp->internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
-
+    dm_internal_constant_buffer* internal_cb = pipeline->render_packet.mvp->internal_buffer;
+    dm_free(internal_cb->data, sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
+    
     dm_opengl_delete_buffer(pipeline->render_packet.vertex_buffer);
     dm_opengl_delete_buffer(pipeline->render_packet.index_buffer);
-    dm_opengl_delete_buffer(pipeline->render_packet.mvp);
+    dm_free(pipeline->render_packet.mvp->internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
     dm_opengl_delete_shader(pipeline->raster_desc.shader);
 
     // textures
@@ -207,6 +208,7 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
     pipeline->render_packet.mvp->internal_buffer = dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
     dm_internal_constant_buffer* internal_cb = pipeline->render_packet.mvp->internal_buffer;
     if (!dm_opengl_find_uniform_loc(internal_shader->id, pipeline->render_packet.mvp->desc.name, &internal_cb->location)) return false;
+    internal_cb->data = dm_alloc(sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
     dm_memcpy(internal_cb->data, mvp_data, sizeof(dm_mat4));
 
     // textures
@@ -314,7 +316,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
 
     // constant buffers
-    dm_opengl_bind_uniform(pipeline->render_packet.mvp->internal_buffer);
+    dm_opengl_bind_uniform(pipeline->render_packet.mvp);
 
     // TODO: need to change this eventually, this won't work with multiple textures per draw call
     // textures

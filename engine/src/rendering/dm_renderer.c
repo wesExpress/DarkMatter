@@ -110,8 +110,9 @@ bool dm_renderer_begin_scene()
 {
 	dm_mat4 mvp = dm_mat4_identity();
 	mvp = dm_mat4_mul_mat4(mvp, r_data.camera.view_proj);
+#ifdef DM_DIRECTX
 	mvp = dm_mat4_transpose(mvp);
-
+#endif
 	if (!dm_renderer_update_buffer(r_data.object_pipeline->render_packet.mvp, &mvp, sizeof(dm_mat4))) return false;
 
 	dm_renderer_begin_scene_impl(&r_data);
