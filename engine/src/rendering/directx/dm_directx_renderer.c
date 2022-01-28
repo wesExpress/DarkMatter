@@ -235,8 +235,7 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 	dm_directx_delete_buffer(pipeline->render_packet.vertex_buffer, pipeline->interal_pipeline);
 	dm_directx_delete_buffer(pipeline->render_packet.index_buffer, pipeline->interal_pipeline);
-	dm_directx_delete_buffer(pipeline->render_packet.view_proj, pipeline->interal_pipeline);
-	dm_directx_delete_buffer(pipeline->render_packet.model, pipeline->interal_pipeline);
+	dm_directx_delete_buffer(pipeline->render_packet.mvp, pipeline->interal_pipeline);
 	dm_directx_delete_shader(pipeline->raster_desc.shader, pipeline->interal_pipeline);
 
 	/*
@@ -264,28 +263,25 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_map_t* cb_data, dm_render_pipeline* pipeline)
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
 {
 	dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
 	/*
 	// shader
 	*/
-
 	if (!dm_directx_create_shader(pipeline->raster_desc.shader, v_layout, directx_renderer, pipeline)) return false;
 
 	/*
 	// buffers
 	*/
-
 	if (!dm_directx_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, directx_renderer, internal_pipe)) return false;
 	if (!dm_directx_create_buffer(pipeline->render_packet.index_buffer, ib_data, directx_renderer, internal_pipe)) return false;
 
 	/*
 	// constant buffer(s)
 	*/
-	if (!dm_directx_create_buffer(pipeline->render_packet.view_proj, dm_map_get(cb_data, pipeline->render_packet.view_proj->desc.name), directx_renderer, internal_pipe)) return false;
-	if (!dm_directx_create_buffer(pipeline->render_packet.model, dm_map_get(cb_data, pipeline->render_packet.model->desc.name), directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_buffer(pipeline->render_packet.mvp, mvp_data, directx_renderer, internal_pipe)) return false;
 
 	/*
 	textures
@@ -381,8 +377,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// constant buffers
 	*/
-	dm_directx_bind_buffer(pipeline->render_packet.view_proj, directx_renderer, internal_pipe);
-	dm_directx_bind_buffer(pipeline->render_packet.model, directx_renderer, internal_pipe);
+	dm_directx_bind_buffer(pipeline->render_packet.mvp, directx_renderer, internal_pipe);
 
 	/*
 	textures
