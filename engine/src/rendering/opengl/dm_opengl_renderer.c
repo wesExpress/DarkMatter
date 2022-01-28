@@ -19,10 +19,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 {
     DM_LOG_DEBUG("Initializing OpenGL render backend...");
 
-    if (!dm_platform_init_opengl())
-    {
-        return false;
-    }
+    if (!dm_platform_init_opengl()) return false;
 
     DM_LOG_INFO("OpenGL Info:");
     DM_LOG_INFO("       Vendor  : %s", glGetString(GL_VENDOR));
@@ -125,6 +122,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, mag_filter);
     glCheckErrorReturn();
 
+    // Rasterizer info
     // face culling
     internal_pipe->cull = dm_cull_to_opengl_cull(pipeline->raster_desc.cull_mode);
     if (internal_pipe->cull == DM_CULL_UNKNOWN) return false;
@@ -285,9 +283,9 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     }
 
     // face culling
-    //glEnable(GL_CULL_FACE);
-    //glCullFace(internal_pipe->cull);
-    //glCheckErrorReturn();
+    glEnable(GL_CULL_FACE);
+    glCullFace(internal_pipe->cull);
+    glCheckErrorReturn();
 
     //glFrontFace(internal_pipe->winding);
    // glCheckErrorReturn();
@@ -353,9 +351,8 @@ void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
     glClearColor(clear_color->x, clear_color->y, clear_color->z, clear_color->w);
     glCheckError();
 
-    GLint clear_bit = GL_COLOR_BUFFER_BIT;
-    if(pipeline->depth_desc.is_enabled) clear_bit|= GL_DEPTH_BUFFER_BIT;
     glClear(GL_COLOR_BUFFER_BIT);
+    if(pipeline->depth_desc.is_enabled) glClear(GL_DEPTH_BUFFER_BIT);
 }
 
 GLenum glCheckError_(const char *file, int line)
