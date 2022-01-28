@@ -314,7 +314,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
 
     // constant buffers
-    dm_opengl_bind_uniform(pipeline->render_packet.mvp);
+    //dm_opengl_bind_uniform(pipeline->render_packet.mvp);
 
     // TODO: need to change this eventually, this won't work with multiple textures per draw call
     // textures
@@ -374,6 +374,11 @@ GLenum glCheckError_(const char *file, int line)
         DM_LOG_ERROR("%s | %s (%d)", error, file, line);
     }
     return errorCode;
+}
+
+bool dm_renderer_bind_constant_buffer(dm_buffer* buffer)
+{
+    return dm_opengl_bind_uniform(buffer);
 }
 
 #endif

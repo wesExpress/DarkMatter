@@ -78,21 +78,25 @@ bool dm_opengl_bind_uniform(dm_buffer* cb)
         {
             int data = *(int*)internal_buffer->data;
             glUniform1i(internal_buffer->location, data);
+            glCheckErrorReturn();
         } break;
         case 2:
         {
             dm_vec2 data = *(dm_vec2*)internal_buffer->data;
             glUniform2i(internal_buffer->location, data.x, data.y);
+            glCheckErrorReturn();
         } break;
         case 3:
         {
             dm_vec3 data = *(dm_vec3*)internal_buffer->data;
             glUniform3i(internal_buffer->location, data.x, data.y, data.z);
+            glCheckErrorReturn();
         } break;
         case 4:
         {
             dm_vec4 data = *(dm_vec4*)internal_buffer->data;
             glUniform4i(internal_buffer->location, data.x, data.y, data.z, data.w);
+            glCheckErrorReturn();
         } break;
         default:
             DM_LOG_FATAL("Trying to upload to uniform with wrong size of ints");
@@ -109,21 +113,25 @@ bool dm_opengl_bind_uniform(dm_buffer* cb)
         {
             uint32_t data = *(uint32_t*)internal_buffer->data;
             glUniform1ui(internal_buffer->location, data);
+            glCheckErrorReturn();
         } break;
         case 2:
         {
             dm_vec2 data = *(dm_vec2*)internal_buffer->data;
             glUniform2ui(internal_buffer->location, data.x, data.y);
+            glCheckErrorReturn();
         } break;
         case 3:
         {
             dm_vec3 data = *(dm_vec3*)internal_buffer->data;
             glUniform3ui(internal_buffer->location, data.x, data.y, data.z);
+            glCheckErrorReturn();
         } break;
         case 4:
         {
             dm_vec4 data = *(dm_vec4*)internal_buffer->data;
             glUniform4ui(internal_buffer->location, data.x, data.y, data.z, data.w);
+            glCheckErrorReturn();
         } break;
         default:
             DM_LOG_FATAL("Trying to upload to uniform with wrong size of uints");
@@ -139,21 +147,25 @@ bool dm_opengl_bind_uniform(dm_buffer* cb)
         {
             float data = *(float*)internal_buffer->data;
             glUniform1f(internal_buffer->location, data);
+            glCheckErrorReturn();
         } break;
         case 2:
         {
             dm_vec2 data = *(dm_vec2*)internal_buffer->data;
             glUniform2f(internal_buffer->location, data.x, data.y);
+            glCheckErrorReturn();
         } break;
         case 3:
         {
             dm_vec3* data = (dm_vec3*)internal_buffer->data;
             glUniform3f(internal_buffer->location, data->x, data->y, data->z);
+            glCheckErrorReturn();
         } break;
         case 4:
         {
             dm_vec4 data = *(dm_vec4*)internal_buffer->data;
             glUniform4f(internal_buffer->location, data.x, data.y, data.z, data.w);
+            glCheckErrorReturn();
         } break;
         default:
             DM_LOG_FATAL("Trying to upload to uniform with wrong size of floats");
@@ -169,16 +181,19 @@ bool dm_opengl_bind_uniform(dm_buffer* cb)
         {
             dm_mat2 data = *(dm_mat2*)internal_buffer->data;
             glUniformMatrix2fv(internal_buffer->location, 1, GL_FALSE, data.m);
+            glCheckErrorReturn();
         } break;
         case 3:
         {
             dm_mat3 data = *(dm_mat3*)internal_buffer->data;
             glUniformMatrix3fv(internal_buffer->location, 1, GL_FALSE, data.m);
+            glCheckErrorReturn();
         } break;
         case 4:
         {
             dm_mat4 data = *(dm_mat4*)internal_buffer->data;
             glUniformMatrix4fv(internal_buffer->location, 1, GL_FALSE, data.m);
+            glCheckErrorReturn();
         } break;
         default:
             DM_LOG_FATAL("Trying to upload to uniform with wrong size of matrices");
@@ -191,7 +206,6 @@ bool dm_opengl_bind_uniform(dm_buffer* cb)
         return false;
     } 
 
-    glCheckErrorReturn();
     return true;
 }
 

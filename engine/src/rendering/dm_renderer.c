@@ -29,6 +29,10 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 
 bool dm_renderer_update_buffer(dm_buffer* cb, void* data, size_t data_size);
 
+// TODO: REMOVE
+// hack for now to bind constant buffers from here
+bool dm_renderer_bind_constant_buffer(dm_buffer* buffer);
+
 // vertex data
 dm_list* vertices = NULL;
 dm_list* indices = NULL;
@@ -140,6 +144,8 @@ bool dm_renderer_begin_scene()
 #endif
 		if (!dm_renderer_update_buffer(r_data.object_pipeline->render_packet.mvp, &mvp, sizeof(dm_mat4))) return false;
 		
+		if (!dm_renderer_bind_constant_buffer(r_data.object_pipeline->render_packet.mvp)) return false;
+
 		dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, r_data.object_pipeline->render_commands);
 	}
 	
