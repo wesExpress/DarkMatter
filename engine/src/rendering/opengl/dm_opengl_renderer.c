@@ -335,7 +335,7 @@ void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
     if(pipeline->depth_desc.is_enabled) glClear(GL_DEPTH_BUFFER_BIT);
 }
 
-void dm_renderer_draw_arrays_impl(int first, size_t count)
+void dm_renderer_draw_arrays_impl(dm_render_pipeline* pipeline, int first, size_t count)
 {
     glDrawArrays(GL_TRIANGLES, (GLint)first, (GLsizei)count);
     glCheckError();
