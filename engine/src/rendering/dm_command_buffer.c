@@ -7,6 +7,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline);
 void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline);
 
+void dm_renderer_draw_arrays_impl(dm_render_pipeline* pipeline, int first, size_t count);
 void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline);
 
 void dm_renderer_submit_command(dm_render_command_type command_type, void* data, dm_list* render_commands)
@@ -49,6 +50,10 @@ bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipel
 		{
 			if (!dm_renderer_bind_pipeline_impl((dm_render_pipeline*)command->data)) return false;
 		} break;
+		case DM_RENDER_COMMAND_DRAW_ARRAYS:
+		{
+			dm_renderer_draw_arrays_impl(pipeline, 0, 36);
+		}
 		case DM_RENDER_COMMAND_DRAW_INDEXED:
 		{
 			dm_renderer_draw_indexed_impl(pipeline);

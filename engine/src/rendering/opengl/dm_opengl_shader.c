@@ -180,19 +180,19 @@ bool dm_opengl_bind_uniform(dm_buffer* cb)
         case 2:
         {
             dm_mat2 data = *(dm_mat2*)internal_buffer->data;
-            glUniformMatrix2fv(internal_buffer->location, 1, GL_FALSE, data.m);
+            glUniformMatrix2fv(internal_buffer->location, 1, GL_FALSE, &data.m[0]);
             glCheckErrorReturn();
         } break;
         case 3:
         {
             dm_mat3 data = *(dm_mat3*)internal_buffer->data;
-            glUniformMatrix3fv(internal_buffer->location, 1, GL_FALSE, data.m);
+            glUniformMatrix3fv(internal_buffer->location, 1, GL_FALSE, &data.m[0]);
             glCheckErrorReturn();
         } break;
         case 4:
         {
             dm_mat4 data = *(dm_mat4*)internal_buffer->data;
-            glUniformMatrix4fv(internal_buffer->location, 1, GL_FALSE, data.m);
+            glUniformMatrix4fv(internal_buffer->location, 1, GL_FALSE, &data.m[0]);
             glCheckErrorReturn();
         } break;
         default:

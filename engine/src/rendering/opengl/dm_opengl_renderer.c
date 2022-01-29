@@ -57,20 +57,6 @@ bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
     return true;
 }
 
-void dm_renderer_draw_arrays_impl(int first, size_t count)
-{
-    glDrawArrays(GL_TRIANGLES, (GLint)first, (GLsizei)count);
-    glCheckError();
-}
-
-void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
-{
-    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
-
-    glDrawElements(internal_pipe->primitive, pipeline->render_packet.count, GL_UNSIGNED_INT, (void*)(uintptr_t)pipeline->render_packet.offset);
-    glCheckError();
-}
-
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
     pipeline->interal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
@@ -263,7 +249,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     if (pipeline->depth_desc.is_enabled)
     {
         glEnable(GL_DEPTH_TEST);
-       // glDepthFunc(internal_pipe->depth_func);
+        glDepthFunc(internal_pipe->depth_func);
         glCheckErrorReturn();
     }
     else
@@ -302,9 +288,6 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
     // shader
     dm_opengl_bind_shader(pipeline->raster_desc.shader);
-    
-    //int loc = glGetUniformLocation(program, "uColor");
-    //glUniform4f(loc, 0.0f, green, 0.0f, 1.0f);
 
     // vao
     glBindVertexArray(internal_pipe->vao);
@@ -312,9 +295,6 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
     dm_opengl_bind_buffer(pipeline->render_packet.vertex_buffer);
     dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
-
-    // constant buffers
-    //dm_opengl_bind_uniform(pipeline->render_packet.mvp);
 
     // TODO: need to change this eventually, this won't work with multiple textures per draw call
     // textures
@@ -353,6 +333,20 @@ void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 
     glClear(GL_COLOR_BUFFER_BIT);
     if(pipeline->depth_desc.is_enabled) glClear(GL_DEPTH_BUFFER_BIT);
+}
+
+void dm_renderer_draw_arrays_impl(int first, size_t count)
+{
+    glDrawArrays(GL_TRIANGLES, (GLint)first, (GLsizei)count);
+    glCheckError();
+}
+
+void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
+{
+    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
+
+    glDrawElements(internal_pipe->primitive, pipeline->render_packet.count, GL_UNSIGNED_INT, (void*)(uintptr_t)pipeline->render_packet.offset);
+    glCheckError();
 }
 
 GLenum glCheckError_(const char *file, int line)
