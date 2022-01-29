@@ -1,8 +1,10 @@
 #include "dm_math_mat3.h"
 #include "dm_math_vec3.h"
+#include "dm_math_mat2.h"
+#include "dm_math_misc.h"
 #include "core/dm_logger.h"
+#include <math.h>
 
-float dm_mat3_det(dm_mat3 mat);
 dm_mat3 dm_mat3_cofactors(dm_mat3 mat);
 dm_mat3 dm_mat3_inverse(dm_mat3 mat);
 dm_mat2 dm_mat3_minor(dm_mat3 mat, dm_vec2 cols, dm_vec2 rows);

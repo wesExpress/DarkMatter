@@ -13,6 +13,8 @@ dm_mat3 dm_mat3_sub_mat3(dm_mat3 left, dm_mat3 right);
 dm_mat3 dm_mat3_rotation(float radians, dm_vec3 axis);
 dm_mat3 dm_mat3_rotation_degrees(float degrees, dm_vec3 axis);
 
+float dm_mat3_det(dm_mat3 mat);
+
 void dm_mat3_identity_inpl(dm_mat3* out);
 void dm_mat3_transpose_inpl(dm_mat3 mat, dm_mat3* out);
 void dm_mat3_mul_mat3_inpl(dm_mat3 left, dm_mat3 right, dm_mat3* out);

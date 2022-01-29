@@ -1,8 +1,10 @@
+#include "dm_math_mat3.h"
 #include "dm_math_mat4.h"
 #include "dm_math_vec2.h"
 #include "dm_math_vec3.h"
 #include "dm_math_vec4.h"
 #include "core/dm_logger.h"
+#include <math.h>
 
 dm_mat3 dm_mat4_minor(dm_mat4 mat, dm_vec3 cols, dm_vec3 rows);
 float dm_mat4_det(dm_mat4 mat);

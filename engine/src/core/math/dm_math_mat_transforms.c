@@ -3,6 +3,7 @@
 #include "dm_math_vec4.h"
 #include "dm_math_mat3.h"
 #include "dm_math_mat4.h"
+#include "dm_math_misc.h"
 #include <math.h>
 
 dm_mat4 dm_mat_scale_make(dm_vec3 scale)

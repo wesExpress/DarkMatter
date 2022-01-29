@@ -3,6 +3,7 @@
 
 #include "core/dm_defines.h"
 #include "dm_render_types.h"
+#include <stddef.h>
 
 // position
 dm_vertex_attrib_desc pos_attrib_desc = {
