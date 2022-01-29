@@ -166,7 +166,7 @@ void dm_list_shrink(dm_list* list)
 void dm_list_resize(dm_list* list, size_t new_capacity, dm_mem_adjust_func adjust_func)
 {
     size_t new_size = new_capacity * list->element_size;
-    int64_t block_size = abs(list->capacity - new_capacity) * list->element_size;
+    int64_t block_size = (list->capacity - new_capacity) * list->element_size;
 
     dm_mem_db_adjust(llabs(block_size), DM_MEM_LIST, adjust_func);
     list->data = dm_realloc(list->data, new_size);
