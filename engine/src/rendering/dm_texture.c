@@ -36,10 +36,10 @@ bool dm_textures_load(dm_image_desc* image_descs, int num_descs)
 			DM_LOG_DEBUG("Loading texture: %s", texture.desc.path);
 
 			stbi_set_flip_vertically_on_load(texture.desc.flip);
-#ifdef DM_OPENGL
+
 			int num_channels = 0;
-#elif defined DM_DIRECTX
-			int num_channels = STBI_rgb_alpha;
+#if defined DM_DIRECTX
+			num_channels = STBI_rgb_alpha;
 #endif
 			unsigned char* data = stbi_load(texture.desc.path, &texture.desc.width, &texture.desc.height, &texture.desc.n_channels, num_channels);
 			if(!data)

@@ -13,6 +13,7 @@
 #include <string.h>
 
 #import <Cocoa/Cocoa.h>
+#include <mach/mach_time.h>
 
 dm_key_code dm_translate_key_code(uint32_t cocoa_key);
 
@@ -263,6 +264,14 @@ void* dm_platform_alloc(size_t size)
 	return temp;
 }
 
+void* dm_platform_calloc(size_t count, size_t size)
+{
+    void* temp = calloc(count, size);
+    DM_ASSERT_MSG(temp, "Calloc return null pointer!");
+    if (!temp) return NULL;
+    return temp;
+}
+
 void* dm_platform_realloc(void* block, size_t size)
 {
     void* temp = realloc(block, size);
@@ -342,6 +351,11 @@ void dm_platform_write_error(const char* message, uint8_t color)
 void dm_platform_swap_buffers()
 {
 
+}
+
+float dm_platform_get_time()
+{
+    return mach_absolute_time();
 }
 
 dm_key_code dm_translate_key_code(uint32_t cocoa_key)

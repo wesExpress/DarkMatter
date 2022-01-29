@@ -1,12 +1,12 @@
 #ifndef __DM_METAL_RENDERER_H__
 #define __DM_METAL_RENDERER_H__
 
-#include "dm_defines.h"
+#include "core/dm_defines.h"
 
 #ifdef DM_METAL
 
-#include "../dm_renderer.h"
-#include "dm_logger.h"
+#include "rendering/dm_renderer.h"
+#include "core/dm_logger.h"
 
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
