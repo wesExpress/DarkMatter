@@ -49,16 +49,16 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
         NSRect rect = [internal_data->window frame];
 
         metal_renderer->view = [[dm_metal_view alloc] initWithFrame: CGRectMake(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height)];
-    
+
         CAMetalLayer* metal_layer = (CAMetalLayer*)metal_renderer->view.layer;
         id<CAMetalDrawable> drawable = [metal_layer nextDrawable];
         id<MTLTexture> texture = drawable.texture;
 
-        MTLRenderPassDescriptor *passDescriptor = [MTLRenderPassDescriptor renderPassDescriptor];
+        MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
         passDescriptor.colorAttachments[0].texture = texture;
         passDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
         passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-        passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(1, 0, 0, 1);
+        passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(renderer_data->clear_color.x, renderer_data->clear_color.y, renderer_data->clear_color.z, renderer_data->clear_color.w);
 
         id<MTLCommandQueue> commandQueue = [metal_renderer->view.device newCommandQueue];
 

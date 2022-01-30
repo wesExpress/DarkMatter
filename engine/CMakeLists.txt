@@ -82,12 +82,14 @@ set(
 
 # objective c files if using metal
 if(APPLE AND NOT DM_RENDER_OPENGL)
-    set(SOURCES ${SOURCES} 
+    set(OBJC_SOURCES  
         src/platform/dm_platform_apple.m
 
         src/rendering/metal/dm_metal_renderer.m
         src/rendering/metal/dm_metal_view.m
     )
+
+    set(SOURCES ${SOURCES} ${OBJC_SOURCES})
 endif()
 
 if(WIN32 AND NOT DM_RENDER_OPENGL)
