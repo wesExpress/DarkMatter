@@ -8,50 +8,23 @@
 #include "core/dm_mem.h"
 #include "core/math/dm_math.h"
 
-#include "platform/dm_platform.h"
+#include "platform/dm_platform_apple.h"
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-@class dm_app_delegate;
-@class dm_window_delegate;
-@class dm_input_view;
-
-typedef struct dm_internal_data
-{
-    NSWindow* window;
-    dm_app_delegate* app_delegate;
-    dm_window_delegate* window_delegate;
-    dm_input_view* input_view;
-} dm_internal_data;
-
-typedef struct dm_metal_renderer
-{
-    dm_metal_view* view;
-} dm_metal_renderer;
-
-dm_metal_renderer* metal_renderer = NULL;
-
-/*
-// render functions
-*/
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
     DM_LOG_DEBUG("Initializing Metal render backend...");
 
-    dm_internal_data* internal_data = platform_data->internal_data;
-    
     @autoreleasepool
     {
-        metal_renderer = dm_alloc(sizeof(dm_metal_renderer), DM_MEM_RENDERER);
+        dm_internal_data* internal_data = platform_data->internal_data;
 
-        NSRect rect = [internal_data->window frame];
+        if(![internal_data->view initMetalDevice]) return false;
 
-        metal_renderer->view = [[dm_metal_view alloc] initWithFrame: CGRectMake(rect.origin.x, rect.origin.y, rect.size.width, rect.size.height)];
-
-        CAMetalLayer* metal_layer = (CAMetalLayer*)metal_renderer->view.layer;
-        id<CAMetalDrawable> drawable = [metal_layer nextDrawable];
+        id<CAMetalDrawable> drawable = [internal_data->view.layer nextDrawable];
         id<MTLTexture> texture = drawable.texture;
 
         MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
@@ -60,7 +33,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
         passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
         passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(renderer_data->clear_color.x, renderer_data->clear_color.y, renderer_data->clear_color.z, renderer_data->clear_color.w);
 
-        id<MTLCommandQueue> commandQueue = [metal_renderer->view.device newCommandQueue];
+        id<MTLCommandQueue> commandQueue = [internal_data->view.device newCommandQueue];
 
         id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
 
@@ -76,7 +49,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
 {
-    dm_free(metal_renderer, sizeof(dm_metal_renderer), DM_MEM_RENDERER);
+    
 }
 
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)

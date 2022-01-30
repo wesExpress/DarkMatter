@@ -2,23 +2,15 @@
 
 #ifdef DM_PLATFORM_APPLE
 
+#include "dm_platform_apple.h"
 #include "core/dm_assert.h"
 #include "core/dm_logger.h"
 #include "core/dm_mem.h"
 #include "core/dm_event.h"
-#include "input/dm_input.h"
 
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-#import <Cocoa/Cocoa.h>
-#include <mach/mach_time.h>
-
-dm_key_code dm_translate_key_code(uint32_t cocoa_key);
-
-@interface dm_window_delegate : NSObject <NSWindowDelegate>
-@end
 
 // handles window events and management
 // bound to window with setDelegate message
@@ -40,16 +32,7 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key);
 
 @end
 
-// for mouse and keyboard input
-@interface dm_input_view : NSView <NSTextInputClient>
-{
-    NSWindow* window;
-}
-
-- (instancetype)initWithWindow: (NSWindow*)window_in;
-@end
-
-@implementation dm_input_view
+@implementation dm_content_view
 
 - (instancetype)initWithWindow: (NSWindow*)window_in
 {
@@ -121,6 +104,32 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key);
     dm_event_dispatch((dm_event){ DM_MOUSE_SCROLLED_EVENT, NULL, (void*)(intptr_t)(int8_t)[event scrollingDeltaY]});
 }
 
+// metal functions
+- (BOOL) initMetalDevice
+{
+    _device = MTLCreateSystemDefaultDevice();
+    if(!_device)
+    {
+        DM_LOG_FATAL("Could not create metal device!");
+        return NO;
+    }
+
+    _metal_layer = [CAMetalLayer layer];
+    if(!_metal_layer)
+    {
+        DM_LOG_FATAL("Could not create metal layer!");
+        return NO;
+    }
+
+    _metal_layer.device = _device;
+    _metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+
+    [self setWantsLayer:YES];
+    [self setLayer:_metal_layer];
+
+    return YES;
+}
+
 // must be implemented for the protocol to shut up in the compiler
 - (NSRange) markedRange { return (NSRange) { NSNotFound, 0 }; }
 - (NSRange) selectedRange { return (NSRange) { NSNotFound, 0 }; }
@@ -133,9 +142,6 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key);
 - (void)setMarkedText:(id)string selectedRange:(NSRange)selectedRange replacementRange:(NSRange)replacementRange {}
 - (void)unmarkText {}
 
-@end
-
-@interface dm_app_delegate : NSObject<NSApplicationDelegate>
 @end
 
 @implementation dm_app_delegate
@@ -164,14 +170,6 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key);
 }
 
 @end
-
-typedef struct dm_internal_data
-{
-    NSWindow* window;
-    dm_app_delegate* app_delegate;
-    dm_window_delegate* window_delegate;
-    dm_input_view* input_view;
-} dm_internal_data;
 
 bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y)
 {
@@ -204,7 +202,7 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
         ];
 
         // input view
-        internal_data->input_view = [[dm_input_view alloc] initWithWindow: internal_data->window];
+        internal_data->view = [[dm_content_view alloc] initWithWindow: internal_data->window];
 
         // metal view
         //internal_data->metal_view = [[dm_metal_view alloc] initWithFrame: CGRectMake(start_x, start_y, window_width, window_height)];
@@ -212,8 +210,8 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
         // window memebers
         [internal_data->window setAcceptsMouseMovedEvents: YES];
         [internal_data->window setDelegate: internal_data->window_delegate];
-        [internal_data->window setContentView: internal_data->input_view];
-        [internal_data->window makeFirstResponder: internal_data->input_view];
+        [internal_data->window setContentView: internal_data->view];
+        [internal_data->window makeFirstResponder: internal_data->view];
         [internal_data->window setAcceptsMouseMovedEvents:YES];
         [internal_data->window setLevel:NSNormalWindowLevel];
         [internal_data->window setTitle: @(window_title)];
