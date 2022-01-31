@@ -17,20 +17,11 @@
     NSWindow* window;
 }
 
-- (id) initWithView: (dm_content_view*)view_in;
+@property (nonatomic, strong) CAMetalLayer* metal_layer;
 
-- (void) makeDevice;
-- (void) makeBuffers;
-- (void) makePipeline;
-- (void) redrawWithColor:(dm_vec4)color;
+- (id) init;
 
 @end
-
-typedef struct demo_vertex
-{
-    dm_vec4 position;
-    dm_vec4 color;
-} demo_vertex;
 
 #endif
 
