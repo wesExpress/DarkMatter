@@ -8,3 +8,5 @@ out/*
 .DS_STORE
 
 *.cod
+*.air
+*.metallib
