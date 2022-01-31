@@ -2,8 +2,6 @@
 
 #ifdef DM_METAL
 
-#include "dm_metal_view.h"
-
 #include "core/dm_assert.h"
 #include "core/dm_mem.h"
 #include "core/math/dm_math.h"
@@ -14,6 +12,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+dm_metal_renderer* metal_renderer = NULL;
+
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
     DM_LOG_DEBUG("Initializing Metal render backend...");
@@ -21,10 +21,17 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
     @autoreleasepool
     {
         dm_internal_data* internal_data = platform_data->internal_data;
+        metal_renderer = dm_alloc(sizeof(dm_metal_renderer), DM_MEM_RENDERER);
 
-        if(![internal_data->view initMetalDevice]) return false;
+        if(![internal_data->content_view initMetalDevice]) return false;
+        //if(![])
+        //metal_renderer->metal_view = [[dm_metal_view alloc] init];
+        //if(!metal_renderer->metal_view) return false;
 
-        id<CAMetalDrawable> drawable = [internal_data->view.layer nextDrawable];
+        //[internal_data->content_view addSubview:metal_renderer->metal_view];
+
+        id<CAMetalDrawable> drawable = [internal_data->content_view.layer nextDrawable];
+        //id<CAMetalDrawable> drawable = [metal_renderer->metal_view.metal_layer nextDrawable];
         id<MTLTexture> texture = drawable.texture;
 
         MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
@@ -33,7 +40,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
         passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
         passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(renderer_data->clear_color.x, renderer_data->clear_color.y, renderer_data->clear_color.z, renderer_data->clear_color.w);
 
-        id<MTLCommandQueue> commandQueue = [internal_data->view.device newCommandQueue];
+        id<MTLCommandQueue> commandQueue = [internal_data->content_view.device newCommandQueue];
 
         id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
 
@@ -49,7 +56,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
 {
-    
+    dm_free(metal_renderer, sizeof(dm_metal_renderer), DM_MEM_RENDERER);
 }
 
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)

@@ -11,20 +11,19 @@
     return [CAMetalLayer class];
 }
 
-- (id) initWithFrame:(CGRect)frame
+- (id) init
 {
-    self = [super initWithFrame:frame];
+    self = [super init];
     
     if(self)
     {
         self.wantsLayer = true;
 
-        self.layer = [CAMetalLayer layer];
-        _device = MTLCreateSystemDefaultDevice();
+        _metal_layer = [CAMetalLayer layer];
+        _metal_device = MTLCreateSystemDefaultDevice();
 
-        CAMetalLayer* metal_layer = (CAMetalLayer*)self.layer;
-        metal_layer.device = _device;
-        metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+        _metal_layer.device = _metal_device;
+        _metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
     }
 
     return self;

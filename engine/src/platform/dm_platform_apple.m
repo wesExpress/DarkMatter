@@ -202,7 +202,7 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
         ];
 
         // input view
-        internal_data->view = [[dm_content_view alloc] initWithWindow: internal_data->window];
+        internal_data->content_view = [[dm_content_view alloc] initWithWindow: internal_data->window];
 
         // metal view
         //internal_data->metal_view = [[dm_metal_view alloc] initWithFrame: CGRectMake(start_x, start_y, window_width, window_height)];
@@ -210,8 +210,8 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
         // window memebers
         [internal_data->window setAcceptsMouseMovedEvents: YES];
         [internal_data->window setDelegate: internal_data->window_delegate];
-        [internal_data->window setContentView: internal_data->view];
-        [internal_data->window makeFirstResponder: internal_data->view];
+        [internal_data->window setContentView: internal_data->content_view];
+        [internal_data->window makeFirstResponder: internal_data->content_view];
         [internal_data->window setAcceptsMouseMovedEvents:YES];
         [internal_data->window setLevel:NSNormalWindowLevel];
         [internal_data->window setTitle: @(window_title)];

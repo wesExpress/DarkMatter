@@ -10,6 +10,12 @@
 #import <QuartzCore/CAMetalLayer.h>
 
 #include "rendering/dm_renderer.h"
+#include "dm_metal_view.h"
+
+typedef struct dm_metal_renderer
+{
+    dm_metal_view* metal_view;
+} dm_metal_renderer;
 
 #endif
 

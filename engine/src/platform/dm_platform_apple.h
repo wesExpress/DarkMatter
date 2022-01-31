@@ -5,8 +5,8 @@
 
 #ifdef DM_METAL
 
-
 #include "input/dm_input.h"
+#include "rendering/metal/dm_metal_view.h"
 
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
@@ -40,7 +40,8 @@ typedef struct dm_internal_data
     NSWindow* window;
     dm_app_delegate* app_delegate;
     dm_window_delegate* window_delegate;
-    dm_content_view* view;
+    dm_content_view* content_view;
+    dm_metal_view* metal_view;
 } dm_internal_data;
 
 #endif
