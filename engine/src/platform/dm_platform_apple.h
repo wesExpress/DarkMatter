@@ -25,11 +25,7 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key);
     NSWindow* window;
 }
 
-@property (readonly) id<MTLDevice> device;
-@property (readonly) CAMetalLayer* metal_layer;
-
 - (instancetype)initWithWindow: (NSWindow*)window_in;
-- (BOOL) initMetalDevice;
 @end
 
 @interface dm_app_delegate : NSObject<NSApplicationDelegate>
@@ -41,7 +37,6 @@ typedef struct dm_internal_data
     dm_app_delegate* app_delegate;
     dm_window_delegate* window_delegate;
     dm_content_view* content_view;
-    dm_metal_view* metal_view;
 } dm_internal_data;
 
 #endif

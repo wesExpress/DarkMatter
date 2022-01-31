@@ -104,32 +104,6 @@
     dm_event_dispatch((dm_event){ DM_MOUSE_SCROLLED_EVENT, NULL, (void*)(intptr_t)(int8_t)[event scrollingDeltaY]});
 }
 
-// metal functions
-- (BOOL) initMetalDevice
-{
-    _device = MTLCreateSystemDefaultDevice();
-    if(!_device)
-    {
-        DM_LOG_FATAL("Could not create metal device!");
-        return NO;
-    }
-
-    _metal_layer = [CAMetalLayer layer];
-    if(!_metal_layer)
-    {
-        DM_LOG_FATAL("Could not create metal layer!");
-        return NO;
-    }
-
-    _metal_layer.device = _device;
-    _metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
-
-    [self setWantsLayer:YES];
-    [self setLayer:_metal_layer];
-
-    return YES;
-}
-
 // must be implemented for the protocol to shut up in the compiler
 - (NSRange) markedRange { return (NSRange) { NSNotFound, 0 }; }
 - (NSRange) selectedRange { return (NSRange) { NSNotFound, 0 }; }
