@@ -103,9 +103,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
         pipeline->interal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
         dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
-        //internal_pipe->pipeline_state = 
-
-        id<MTLLibrary> library = [metal_renderer->device newLibraryWithFile:@"shaders/metal/shaders.metallib" error:NULL];
+        id<MTLLibrary> library = [metal_renderer->device newLibraryWithFile:@"shaders/metal/object_shader.metallib" error:NULL];
 
         id<MTLFunction> vertexFunc = [library newFunctionWithName:@"vertex_main"];
         id<MTLFunction> fragFunc = [library newFunctionWithName:@"fragment_main"];
@@ -118,6 +116,12 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
         internal_pipe->pipeline_state = [metal_renderer->device newRenderPipelineStateWithDescriptor:pipe_desc error:NULL];
 
         metal_renderer->command_queue = [metal_renderer->device newCommandQueue];
+
+        // depth stencil
+        MTLDepthStencilDescriptor* depth_stencil_desc = [MTLDepthStencilDescriptor new];
+        depth_stencil_desc.depthCompareFunction = MTLCompareFunctionLess;
+        depth_stencil_desc.depthWriteEnabled = YES;
+        internal_pipe->depth_stencil = [metal_renderer->device newDepthStencilStateWithDescriptor:depth_stencil_desc];
     }
 
     return true;
@@ -138,9 +142,9 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 {
     @autoreleasepool
     {
-        // buffers
         dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
+        // buffers
         internal_pipe->vertex_buffer = [metal_renderer->device newBufferWithBytes:test_vertices
                                                                length:sizeof(test_vertices)
                                                                options:MTLResourceOptionCPUCacheModeDefault];
@@ -148,6 +152,10 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         internal_pipe->index_buffer = [metal_renderer->device newBufferWithBytes:test_indices
                                                               length:sizeof(test_indices)
                                                               options:MTLResourceOptionCPUCacheModeDefault];
+
+        internal_pipe->uniform_buffer = [metal_renderer->device newBufferWithBytes:mvp_data
+                                                                length:pipeline->render_packet.mvp->desc.buffer_size
+                                                                options:MTLResourceOptionCPUCacheModeDefault];
 
         //if(!dm_metal_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, metal_renderer)) return false;
         //if(!dm_metal_create_buffer(pipeline->render_packet.index_buffer, ib_data, metal_renderer)) return false;
@@ -177,8 +185,21 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
         id <MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:passDescriptor];
 
         [commandEncoder setRenderPipelineState:internal_pipe->pipeline_state];
+        [commandEncoder setDepthStencilState:internal_pipe->depth_stencil]; 
+        [commandEncoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
+        [commandEncoder setCullMode:MTLCullModeBack];
+
         [commandEncoder setVertexBuffer:internal_pipe->vertex_buffer offset:0 atIndex:0];
-        [commandEncoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
+
+        NSUInteger uniform_offset = 0;
+        [commandEncoder setVertexBuffer:internal_pipe->uniform_buffer offset:uniform_offset atIndex:1];
+
+        [commandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle 
+                        indexCount: [internal_pipe->index_buffer length] / sizeof(dm_index_t)
+                        indexType: MTLIndexTypeUInt32
+                        indexBuffer: internal_pipe->index_buffer
+                        indexBufferOffset: 0];
+
         [commandEncoder endEncoding];
 
         [commandBuffer presentDrawable:drawable];

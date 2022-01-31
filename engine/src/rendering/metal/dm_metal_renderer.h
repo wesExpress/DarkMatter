@@ -25,8 +25,10 @@ typedef struct dm_metal_renderer
 typedef struct dm_internal_pipeline
 {
     id<MTLRenderPipelineState> pipeline_state;
+    id<MTLDepthStencilState> depth_stencil;
     id<MTLBuffer> vertex_buffer;
     id<MTLBuffer> index_buffer;
+    id<MTLBuffer> uniform_buffer;
 } dm_internal_pipeline;
 
 typedef struct dm_internal_buffer

@@ -85,6 +85,7 @@ if(APPLE AND NOT DM_RENDER_OPENGL)
         src/platform/dm_platform_apple.m
 
         src/rendering/metal/dm_metal_renderer.m
+        src/rendering/metal/dm_metal_buffer.m
         src/rendering/metal/dm_metal_view.m
     )
 
@@ -97,12 +98,12 @@ if(WIN32 AND NOT DM_RENDER_OPENGL)
     )
     set(PIXEL_SHADERS
         shaders/hlsl/object_pixel.hlsl
-    )
+    )    
 
     set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
 elseif(APPLE AND NOT DM_RENDER_OPENGL)
-    set(SHADERS 
-        shaders/metal/shaders.metal
+    set(SHADERS
+        shaders/metal/object_shader.metal
     )
 else()
     set(VERTEX_SHADERS
@@ -181,23 +182,23 @@ elseif(APPLE AND NOT DM_RENDER_OPENGL)
 
     foreach(shader ${SHADERS})
         get_filename_component(file_we ${shader} NAME_WE)
-        set(shader_intermediate ${current_output_path}/${file_we}.air)
-        set(shader_out ${current_output_path}/${file_we}.metallib)
+        set(shader_intermediate ${CMAKE_CURRENT_SOURCE_DIR}/shaders/metal/${file_we}.air)
+        set(shader_out ${CMAKE_CURRENT_SOURCE_DIR}/shaders/metal/${file_we}.metallib)
 
         add_custom_command(
             OUTPUT ${shader_intermediate}
             COMMAND xcrun -sdk macosx metal ${CMAKE_CURRENT_SOURCE_DIR}/${shader} -c -o ${shader_intermediate}
             MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shader}
             COMMENT "Compiling intermediate metal shader: ${shader}..."
-            VERBATIM
         )
+        
         add_custom_command(
             OUTPUT ${shader_out}
-            COMMAND xcrun -sdk macosx metallib ${shader_intermediate} -o ${shader_out}
+            COMMAND xcrun -sdk macosx metallib ${shader_intermediate} -c -o ${shader_out}
             MAIN_DEPENDENCY ${shader_intermediate}
             COMMENT "Compiling metal shader lib: ${shader_intermediate}"
-            VERBATIM
         )
+
     endforeach()
 endif()
 
