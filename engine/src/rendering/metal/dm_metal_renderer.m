@@ -2,41 +2,24 @@
 
 #ifdef DM_METAL
 
+#include "dm_metal_view.h"
+#include "dm_metal_buffer.h"
+
+#include "rendering/dm_texture.h"
+
 #include "core/dm_assert.h"
 #include "core/dm_mem.h"
+#include "core/dm_string.h"
 
 #include "platform/dm_platform_apple.h"
 
-#include "dm_metal_view.h"
-
-#include "dm_metal_view.h"
-#include "dm_metal_buffer.h"
+#include "structures/dm_list.h"
 
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 dm_metal_renderer* metal_renderer = NULL;
-
-demo_vertex test_vertices[] = {
-    {.position={-1, 1, 1,1}, .color={0,1,1,1}}, 
-    {.position={-1,-1, 1,1}, .color={0,0,1,1}}, 
-    {.position={ 1,-1, 1,1}, .color={1,0,1,1}}, 
-    {.position={ 1, 1, 1,1}, .color={1,1,1,1}}, 
-    {.position={-1, 1,-1,1}, .color={0,1,0,1}}, 
-    {.position={-1,-1,-1,1}, .color={0,0,0,1}}, 
-    {.position={ 1,-1,-1,1}, .color={1,0,0,1}}, 
-    {.position={ 1, 1,-1,1}, .color={1,1,0,1}}
-};
-
-dm_index_t test_indices[] = {
-    3,2,6,6,7,3, 
-    4,5,1,1,0,4, 
-    4,0,3,3,7,4,
-    1,5,6,6,2,1, 
-    0,1,2,2,3,0, 
-    7,6,5,5,4,7
-};
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
@@ -103,25 +86,37 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
         pipeline->interal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
         dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
-        id<MTLLibrary> library = [metal_renderer->device newLibraryWithFile:@"shaders/metal/object_shader.metallib" error:NULL];
-
-        id<MTLFunction> vertexFunc = [library newFunctionWithName:@"vertex_main"];
-        id<MTLFunction> fragFunc = [library newFunctionWithName:@"fragment_main"];
-
-        MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
-        pipe_desc.vertexFunction = vertexFunc;
-        pipe_desc.fragmentFunction = fragFunc;
-        pipe_desc.colorAttachments[0].pixelFormat = metal_renderer->view.metal_layer.pixelFormat;
-
-        internal_pipe->pipeline_state = [metal_renderer->device newRenderPipelineStateWithDescriptor:pipe_desc error:NULL];
-
         metal_renderer->command_queue = [metal_renderer->device newCommandQueue];
+        if(!metal_renderer->command_queue)
+        {
+            DM_LOG_FATAL("Could not create metal command queue!");
+            return false;
+        }
 
         // depth stencil
         MTLDepthStencilDescriptor* depth_stencil_desc = [MTLDepthStencilDescriptor new];
         depth_stencil_desc.depthCompareFunction = MTLCompareFunctionLess;
         depth_stencil_desc.depthWriteEnabled = YES;
         internal_pipe->depth_stencil = [metal_renderer->device newDepthStencilStateWithDescriptor:depth_stencil_desc];
+        if(!internal_pipe->depth_stencil)
+        {
+            DM_LOG_FATAL("Could not create metal depth stencil state!");
+            return false;
+        }
+
+        // sampler
+        MTLSamplerDescriptor* sampler_desc = [MTLSamplerDescriptor new];
+        sampler_desc.minFilter = MTLSamplerMinMagFilterNearest;
+        sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+        sampler_desc.sAddressMode = MTLSamplerAddressModeClampToEdge;
+        sampler_desc.tAddressMode = MTLSamplerAddressModeClampToEdge;
+
+        internal_pipe->sampler_state = [metal_renderer->device newSamplerStateWithDescriptor:sampler_desc];
+        if(!internal_pipe->sampler_state)
+        {
+            DM_LOG_FATAL("Could not create metal sampler state!");
+            return false;
+        }
     }
 
     return true;
@@ -135,6 +130,14 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
         dm_metal_destroy_buffer(pipeline->render_packet.index_buffer);
         dm_metal_destroy_buffer(pipeline->render_packet.mvp);
 
+        for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
+        {
+            dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
+            dm_texture* texture = dm_texture_get(key->string);
+
+            dm_free(texture->internal_texture, sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
+        }
+
         dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
     }
 }
@@ -145,23 +148,60 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
     {
         dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
+        // shader
+        id<MTLLibrary> library = [metal_renderer->device newLibraryWithFile:@"shaders/metal/object_shader.metallib" error:NULL];
+
+        id<MTLFunction> vertexFunc = [library newFunctionWithName:@"vertex_main"];
+        id<MTLFunction> fragFunc = [library newFunctionWithName:@"fragment_main"];
+
+        MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
+        pipe_desc.vertexFunction = vertexFunc;
+        pipe_desc.fragmentFunction = fragFunc;
+        pipe_desc.colorAttachments[0].pixelFormat = metal_renderer->view.metal_layer.pixelFormat;
+
+        internal_pipe->pipeline_state = [metal_renderer->device newRenderPipelineStateWithDescriptor:pipe_desc error:NULL];
+        if(!internal_pipe->pipeline_state)
+        {
+            DM_LOG_FATAL("Could not create metal pipeline state");
+            return false;
+        }
+
         // buffers
-        internal_pipe->vertex_buffer = [metal_renderer->device newBufferWithBytes:vb_data
-                                                               length:sizeof(test_vertices)
-                                                               options:MTLResourceOptionCPUCacheModeDefault];
 
-        internal_pipe->index_buffer = [metal_renderer->device newBufferWithBytes:ib_data
-                                                              length:sizeof(test_indices)
-                                                              options:MTLResourceOptionCPUCacheModeDefault];
-
-        internal_pipe->uniform_buffer = [metal_renderer->device newBufferWithBytes:mvp_data
-                                                                length:pipeline->render_packet.mvp->desc.buffer_size
-                                                                options:MTLResourceOptionCPUCacheModeDefault];
-
+        // must turn positions into vec4s
         if(!dm_metal_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, metal_renderer)) return false;
         if(!dm_metal_create_buffer(pipeline->render_packet.index_buffer, ib_data, metal_renderer)) return false;
 
         if(!dm_metal_create_buffer(pipeline->render_packet.mvp, mvp_data, metal_renderer)) return false;
+
+        // textures
+        for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
+        {
+            dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
+            dm_texture* texture = dm_texture_get(key->string);
+
+            MTLTextureDescriptor* textureDescriptor = [[MTLTextureDescriptor alloc] init];
+
+            textureDescriptor.pixelFormat = MTLPixelFormatRGBA8Unorm;
+            textureDescriptor.width = texture->desc.width;
+            textureDescriptor.height = texture->desc.height;
+
+            texture->internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
+            dm_internal_texture* internal_texture = texture->internal_texture;
+            internal_texture->texture = [metal_renderer->device newTextureWithDescriptor:textureDescriptor];
+
+            MTLRegion region = {
+                {0,0,0},
+                {texture->desc.width, texture->desc.height}
+            };
+
+            NSUInteger bytesPerRow = 4 * texture->desc.width;
+
+            [internal_texture->texture replaceRegion: region
+                                       mipmapLevel: 0
+                                       withBytes: texture->data
+                                       bytesPerRow: bytesPerRow];
+        }
     }
 
     return true;
@@ -188,9 +228,12 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
         id <MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:passDescriptor];
 
         [commandEncoder setRenderPipelineState:internal_pipe->pipeline_state];
+
         [commandEncoder setDepthStencilState:internal_pipe->depth_stencil]; 
         [commandEncoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
         [commandEncoder setCullMode:MTLCullModeBack];
+
+        [commandEncoder setFragmentSamplerState:internal_pipe->sampler_state atIndex:0];
 
         dm_internal_buffer* internal_vb = pipeline->render_packet.vertex_buffer->internal_buffer;
         dm_internal_buffer* internal_ib = pipeline->render_packet.index_buffer->internal_buffer;
@@ -206,6 +249,15 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
                         indexType: MTLIndexTypeUInt32
                         indexBuffer: internal_ib->buffer
                         indexBufferOffset: 0];
+
+        for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
+        {
+            dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
+            dm_texture* texture = dm_texture_get(key->string);
+            dm_internal_texture* internal_texture = texture->internal_texture;
+
+            [commandEncoder setFragmentTexture:internal_texture->texture atIndex:i];
+        }
 
         [commandEncoder endEncoding];
 

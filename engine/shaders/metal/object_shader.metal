@@ -5,7 +5,7 @@ using namespace metal;
 struct Vertex
 {
     float4 position [[position]];
-    float4 color;
+    float2 tex_coords;
 };
 
 struct Uniform
@@ -18,12 +18,12 @@ vertex Vertex vertex_main(const device Vertex* vertices [[buffer(0)]], constant 
     Vertex v_out;
 
     v_out.position = uniforms->mvp * vertices[vid].position;
-    v_out.color = vertices[vid].color;
+    v_out.tex_coords = vertices[vid].tex_coords;
 
     return v_out;
 }
 
-fragment half4 fragment_main(Vertex v_in [[stage_in]])
+fragment float4 fragment_main(Vertex v_in [[stage_in]], texture2d<float> texture1[[texture(0)]], texture2d<float> texture2[[texture(1)]], sampler samp [[sampler(0)]])
 {
-    return half4(v_in.color);
+    return texture1.sample(samp, v_in.tex_coords);
 }

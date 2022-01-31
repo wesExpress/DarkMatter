@@ -26,6 +26,7 @@ typedef struct dm_internal_pipeline
 {
     id<MTLRenderPipelineState> pipeline_state;
     id<MTLDepthStencilState> depth_stencil;
+    id<MTLSamplerState> sampler_state;
     id<MTLBuffer> vertex_buffer;
     id<MTLBuffer> index_buffer;
     id<MTLBuffer> uniform_buffer;
@@ -35,6 +36,11 @@ typedef struct dm_internal_buffer
 {
     id<MTLBuffer> buffer;
 } dm_internal_buffer;
+
+typedef struct dm_internal_texture
+{
+    id<MTLTexture> texture;
+} dm_internal_texture;
 
 typedef struct demo_vertex
 {
