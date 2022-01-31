@@ -25,13 +25,13 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 
         //if(![internal_data->content_view initMetalDevice]) return false;
         //if(![])
-        metal_renderer->metal_view = [[dm_metal_view alloc] init];
+        metal_renderer->metal_view = [[dm_metal_view alloc] initWithWindow:internal_data->window];
         if(!metal_renderer->metal_view) return false;
 
         [internal_data->content_view addSubview:metal_renderer->metal_view];
         NSRect frame = internal_data->window.frame;
         [metal_renderer->metal_view setFrame:NSMakeRect(frame.origin.x, frame.origin.y, frame.size.width, frame.size.height)];
-
+        
         //id<CAMetalDrawable> drawable = [internal_data->content_view.layer nextDrawable];
         id<CAMetalDrawable> drawable = [metal_renderer->metal_view.metal_layer nextDrawable];
         id<MTLTexture> texture = drawable.texture;

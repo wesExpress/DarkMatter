@@ -29,6 +29,26 @@
     return self;
 }
 
+- (id) initWithWindow: (NSWindow*)window_in
+{
+    self = [super init];
+    
+    if(self)
+    {
+        window = window_in;
+
+        self.wantsLayer = true;
+
+        _metal_layer = [CAMetalLayer layer];
+        _metal_device = MTLCreateSystemDefaultDevice();
+
+        _metal_layer.device = _metal_device;
+        _metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+    }
+
+    return self;
+}
+
 @end
 
 #endif

@@ -10,8 +10,14 @@
 #import <QuartzCore/CAMetalLayer.h>
 
 @interface dm_metal_view : NSView
+{
+    NSWindow* window;
+}
     @property (readonly) id<MTLDevice> metal_device;
     @property (readonly) CAMetalLayer* metal_layer;
+
+- (id) initWithWindow: (NSWindow*)window_in;
+
 @end
 
 #endif
