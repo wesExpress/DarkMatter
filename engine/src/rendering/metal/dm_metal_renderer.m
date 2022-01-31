@@ -30,7 +30,11 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
         // content view is the main view for our NSWindow
         // any subsequent views must be added as subviews to this view
         [internal_data->content_view addSubview:metal_renderer->metal_view];
-        
+
+        // must set the content view's layer to our metal layer
+        [internal_data->content_view setWantsLayer:YES];
+        [internal_data->content_view setLayer:metal_renderer->metal_view.metal_layer];
+
         id<CAMetalDrawable> drawable = [metal_renderer->metal_view.metal_layer nextDrawable];
         id<MTLTexture> texture = drawable.texture;
 
@@ -40,7 +44,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
         passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
         passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(renderer_data->clear_color.x, renderer_data->clear_color.y, renderer_data->clear_color.z, renderer_data->clear_color.w);
 
-        id<MTLCommandQueue> commandQueue = [internal_data->content_view.device newCommandQueue];
+        id<MTLCommandQueue> commandQueue = [metal_renderer->metal_view.metal_device newCommandQueue];
 
         id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
 
