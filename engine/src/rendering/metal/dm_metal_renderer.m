@@ -131,8 +131,9 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
     @autoreleasepool
     {
-        //dm_metal_destroy_buffer(pipeline->render_packet.vertex_buffer);
-        //dm_metal_destroy_buffer(pipeline->render_packet.index_buffer);
+        dm_metal_destroy_buffer(pipeline->render_packet.vertex_buffer);
+        dm_metal_destroy_buffer(pipeline->render_packet.index_buffer);
+        dm_metal_destroy_buffer(pipeline->render_packet.mvp);
 
         dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
     }
@@ -145,11 +146,11 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
         // buffers
-        internal_pipe->vertex_buffer = [metal_renderer->device newBufferWithBytes:test_vertices
+        internal_pipe->vertex_buffer = [metal_renderer->device newBufferWithBytes:vb_data
                                                                length:sizeof(test_vertices)
                                                                options:MTLResourceOptionCPUCacheModeDefault];
 
-        internal_pipe->index_buffer = [metal_renderer->device newBufferWithBytes:test_indices
+        internal_pipe->index_buffer = [metal_renderer->device newBufferWithBytes:ib_data
                                                               length:sizeof(test_indices)
                                                               options:MTLResourceOptionCPUCacheModeDefault];
 
@@ -157,8 +158,10 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
                                                                 length:pipeline->render_packet.mvp->desc.buffer_size
                                                                 options:MTLResourceOptionCPUCacheModeDefault];
 
-        //if(!dm_metal_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, metal_renderer)) return false;
-        //if(!dm_metal_create_buffer(pipeline->render_packet.index_buffer, ib_data, metal_renderer)) return false;
+        if(!dm_metal_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, metal_renderer)) return false;
+        if(!dm_metal_create_buffer(pipeline->render_packet.index_buffer, ib_data, metal_renderer)) return false;
+
+        if(!dm_metal_create_buffer(pipeline->render_packet.mvp, mvp_data, metal_renderer)) return false;
     }
 
     return true;
@@ -189,15 +192,19 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
         [commandEncoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
         [commandEncoder setCullMode:MTLCullModeBack];
 
-        [commandEncoder setVertexBuffer:internal_pipe->vertex_buffer offset:0 atIndex:0];
+        dm_internal_buffer* internal_vb = pipeline->render_packet.vertex_buffer->internal_buffer;
+        dm_internal_buffer* internal_ib = pipeline->render_packet.index_buffer->internal_buffer;
+        dm_internal_buffer* internal_mvp = pipeline->render_packet.mvp->internal_buffer;
+
+        [commandEncoder setVertexBuffer:internal_vb->buffer offset:0 atIndex:0];
 
         NSUInteger uniform_offset = 0;
-        [commandEncoder setVertexBuffer:internal_pipe->uniform_buffer offset:uniform_offset atIndex:1];
+        [commandEncoder setVertexBuffer:internal_mvp->buffer offset:uniform_offset atIndex:1];
 
         [commandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle 
-                        indexCount: [internal_pipe->index_buffer length] / sizeof(dm_index_t)
+                        indexCount: [internal_ib->buffer length] / sizeof(dm_index_t)
                         indexType: MTLIndexTypeUInt32
-                        indexBuffer: internal_pipe->index_buffer
+                        indexBuffer: internal_ib->buffer
                         indexBufferOffset: 0];
 
         [commandEncoder endEncoding];

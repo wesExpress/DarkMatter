@@ -20,7 +20,7 @@ vertex Vertex vertex_main(const device Vertex* vertices [[buffer(0)]], constant 
     v_out.position = uniforms->mvp * vertices[vid].position;
     v_out.color = vertices[vid].color;
 
-    return vertices[vid];
+    return v_out;
 }
 
 fragment half4 fragment_main(Vertex v_in [[stage_in]])
