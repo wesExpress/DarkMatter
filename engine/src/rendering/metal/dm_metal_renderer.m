@@ -23,16 +23,14 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
         dm_internal_data* internal_data = platform_data->internal_data;
         metal_renderer = dm_alloc(sizeof(dm_metal_renderer), DM_MEM_RENDERER);
 
-        //if(![internal_data->content_view initMetalDevice]) return false;
-        //if(![])
+        // use our initWithWindow to get frame information for our metal layer
         metal_renderer->metal_view = [[dm_metal_view alloc] initWithWindow:internal_data->window];
         if(!metal_renderer->metal_view) return false;
 
+        // content view is the main view for our NSWindow
+        // any subsequent views must be added as subviews to this view
         [internal_data->content_view addSubview:metal_renderer->metal_view];
-        NSRect frame = internal_data->window.frame;
-        [metal_renderer->metal_view setFrame:NSMakeRect(frame.origin.x, frame.origin.y, frame.size.width, frame.size.height)];
         
-        //id<CAMetalDrawable> drawable = [internal_data->content_view.layer nextDrawable];
         id<CAMetalDrawable> drawable = [metal_renderer->metal_view.metal_layer nextDrawable];
         id<MTLTexture> texture = drawable.texture;
 
