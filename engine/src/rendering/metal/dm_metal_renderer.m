@@ -23,15 +23,17 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
         dm_internal_data* internal_data = platform_data->internal_data;
         metal_renderer = dm_alloc(sizeof(dm_metal_renderer), DM_MEM_RENDERER);
 
-        if(![internal_data->content_view initMetalDevice]) return false;
+        //if(![internal_data->content_view initMetalDevice]) return false;
         //if(![])
-        //metal_renderer->metal_view = [[dm_metal_view alloc] init];
-        //if(!metal_renderer->metal_view) return false;
+        metal_renderer->metal_view = [[dm_metal_view alloc] init];
+        if(!metal_renderer->metal_view) return false;
 
-        //[internal_data->content_view addSubview:metal_renderer->metal_view];
+        [internal_data->content_view addSubview:metal_renderer->metal_view];
+        NSRect frame = internal_data->window.frame;
+        [metal_renderer->metal_view setFrame:NSMakeRect(frame.origin.x, frame.origin.y, frame.size.width, frame.size.height)];
 
-        id<CAMetalDrawable> drawable = [internal_data->content_view.layer nextDrawable];
-        //id<CAMetalDrawable> drawable = [metal_renderer->metal_view.metal_layer nextDrawable];
+        //id<CAMetalDrawable> drawable = [internal_data->content_view.layer nextDrawable];
+        id<CAMetalDrawable> drawable = [metal_renderer->metal_view.metal_layer nextDrawable];
         id<MTLTexture> texture = drawable.texture;
 
         MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
