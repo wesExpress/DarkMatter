@@ -24,35 +24,8 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
         metal_renderer = dm_alloc(sizeof(dm_metal_renderer), DM_MEM_RENDERER);
 
         // use our initWithWindow to get frame information for our metal layer
-        metal_renderer->metal_view = [[dm_metal_view alloc] initWithWindow:internal_data->window];
+        metal_renderer->metal_view = [[dm_metal_view alloc] initWithView:internal_data->content_view];
         if(!metal_renderer->metal_view) return false;
-
-        // content view is the main view for our NSWindow
-        // any subsequent views must be added as subviews to this view
-        [internal_data->content_view addSubview:metal_renderer->metal_view];
-
-        // must set the content view's layer to our metal layer
-        [internal_data->content_view setWantsLayer:YES];
-        [internal_data->content_view setLayer:metal_renderer->metal_view.metal_layer];
-
-        id<CAMetalDrawable> drawable = [metal_renderer->metal_view.metal_layer nextDrawable];
-        id<MTLTexture> texture = drawable.texture;
-
-        MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
-        passDescriptor.colorAttachments[0].texture = texture;
-        passDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
-        passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-        passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(renderer_data->clear_color.x, renderer_data->clear_color.y, renderer_data->clear_color.z, renderer_data->clear_color.w);
-
-        id<MTLCommandQueue> commandQueue = [metal_renderer->metal_view.metal_device newCommandQueue];
-
-        id<MTLCommandBuffer> commandBuffer = [commandQueue commandBuffer];
-
-        id <MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:passDescriptor];
-        [commandEncoder endEncoding];
-
-        [commandBuffer presentDrawable:drawable];
-        [commandBuffer commit];
     }
 
     return true;
@@ -65,7 +38,10 @@ void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
 
 void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
 {
-
+    @autoreleasepool
+    {
+        [metal_renderer->metal_view redrawWithColor:renderer_data->clear_color];
+    }
 }
 
 bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)

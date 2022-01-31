@@ -2,7 +2,7 @@ set( GLFW_BUILD_DOCS OFF CACHE BOOL "" FORCE )
 set( GLFW_BUILD_TESTS OFF CACHE BOOL "" FORCE )
 set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 
-project( CEngine )
+project( DarkMatter )
 
 if(WIN32)
     if(DM_RENDER_OPENGL)
@@ -20,7 +20,6 @@ if(DM_RENDER_OPENGL)
     add_subdirectory(lib/glfw)
     add_subdirectory(lib/glad)
 endif()
-
 
 if(MSVC)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS on)
@@ -99,6 +98,12 @@ if(WIN32 AND NOT DM_RENDER_OPENGL)
     set(PIXEL_SHADERS
         shaders/hlsl/object_pixel.hlsl
     )
+
+    set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
+elseif(APPLE AND NOT DM_RENDER_OPENGL)
+    set(SHADERS 
+        shaders/metal/shaders.metal
+    )
 else()
     set(VERTEX_SHADERS
         shaders/glsl/object_vertex.glsl
@@ -106,9 +111,9 @@ else()
     set(PIXEL_SHADERS
         shaders/glsl/object_pixel.glsl
     )
-endif()
 
-set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
+    set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
+endif()
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES} ${SHADERS})
 
@@ -170,16 +175,40 @@ if(WIN32 AND NOT DM_RENDER_OPENGL)
 
     # pixel shaders
     compile_hlsl(${PIXEL_SHADERS} p_main ps_5_0)
+# metal shaders
+elseif(APPLE AND NOT DM_RENDER_OPENGL)    
+    set(current_output_path ${CMAKE_BINARY_DIR}/shaders/metal)
+
+    foreach(shader ${SHADERS})
+        get_filename_component(file_we ${shader} NAME_WE)
+        set(shader_intermediate ${current_output_path}/${file_we}.air)
+        set(shader_out ${current_output_path}/${file_we}.metallib)
+
+        add_custom_command(
+            OUTPUT ${shader_intermediate}
+            COMMAND xcrun -sdk macosx metal ${CMAKE_CURRENT_SOURCE_DIR}/${shader} -c -o ${shader_intermediate}
+            MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shader}
+            COMMENT "Compiling intermediate metal shader: ${shader}..."
+            VERBATIM
+        )
+        add_custom_command(
+            OUTPUT ${shader_out}
+            COMMAND xcrun -sdk macosx metallib ${shader_intermediate} -o ${shader_out}
+            MAIN_DEPENDENCY ${shader_intermediate}
+            COMMENT "Compiling metal shader lib: ${shader_intermediate}"
+            VERBATIM
+        )
+    endforeach()
 endif()
 
 # move shaders to binary dir for now
 add_custom_command(
-    TARGET CEngine POST_BUILD
+    TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/engine/shaders
             ${CMAKE_CURRENT_BINARY_DIR}/../shaders
+    COMMENT "Moving shaders..."
 )
-message(STATUS ${CMAKE_CURRENT_BINARY_DIR})
 
 if(BUILD_SHARED_LIBS)
     add_definitions(-DDM_EXPORT)

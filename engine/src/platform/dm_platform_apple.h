@@ -6,7 +6,6 @@
 #ifdef DM_METAL
 
 #include "input/dm_input.h"
-#include "rendering/metal/dm_metal_view.h"
 
 #import <Cocoa/Cocoa.h>
 #import <Metal/Metal.h>
@@ -26,6 +25,7 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key);
 }
 
 - (instancetype)initWithWindow: (NSWindow*)window_in;
+- (NSRect) getWindowFrame;
 @end
 
 @interface dm_app_delegate : NSObject<NSApplicationDelegate>

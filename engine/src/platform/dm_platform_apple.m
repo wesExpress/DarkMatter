@@ -43,6 +43,11 @@
     return self;
 }
 
+- (NSRect) getWindowFrame
+{
+    return window.frame;
+}
+
 // needed but not sure why
 - (BOOL)canBecomeKeyView { return YES; }
 - (BOOL)acceptsFirstResponder { return YES; }
