@@ -325,13 +325,7 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 {
 	for (uint32_t i = 0; i < num_vertices; i++)
 	{
-#ifdef DM_METAL
-		dm_vertex_t metal_vertex = vertex_data[i];
-		metal_vertex.position.w = 1;
-		dm_list_append(vertices, &metal_vertex);
-#else
 		dm_list_append(vertices, &vertex_data[i]);
-#endif
 	}
 
 #ifdef DM_DIRECTX

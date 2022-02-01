@@ -2,9 +2,15 @@
 
 using namespace metal;
 
-struct Vertex
+struct vertex_in
 {
-    float4 position [[position]];
+    packed_float3 position;
+    packed_float2 tex_coords;
+};
+
+struct vertex_out
+{
+    float4 position[[position]];
     float2 tex_coords;
 };
 
@@ -13,17 +19,17 @@ struct Uniform
     float4x4 mvp;
 };
 
-vertex Vertex vertex_main(const device Vertex* vertices [[buffer(0)]], constant Uniform* uniforms [[buffer(1)]], uint vid[[vertex_id]])
+vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], constant Uniform* uniforms [[buffer(1)]], uint vid[[vertex_id]])
 {
-    Vertex v_out;
+    vertex_out v_out;
 
-    v_out.position = uniforms->mvp * vertices[vid].position;
+    v_out.position = uniforms->mvp * float4(vertices[vid].position, 1);
     v_out.tex_coords = vertices[vid].tex_coords;
 
     return v_out;
 }
 
-fragment float4 fragment_main(Vertex v_in [[stage_in]], texture2d<float> texture1[[texture(0)]], texture2d<float> texture2[[texture(1)]], sampler samp [[sampler(0)]])
+fragment float4 fragment_main(vertex_out v_in [[stage_in]], texture2d<float> texture1[[texture(0)]], texture2d<float> texture2[[texture(1)]], sampler samp [[sampler(0)]])
 {
     return texture1.sample(samp, v_in.tex_coords);
 }

@@ -1,5 +1,5 @@
-#ifndef __DEFINES_H__
-#define __DEFINES_H__
+#ifndef __DM_DEFINES_H__
+#define __DM_DEFINES_H__
 
 #ifdef __APPLE__
 #ifdef DM_APPLE_OPENGL
@@ -43,7 +43,5 @@
 #define DM_API
 #endif
 #endif
-
-#define DM_MATH_IMPLEMENTATION
 
 #endif

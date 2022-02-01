@@ -1,7 +1,6 @@
 #ifndef __DM_RENDER_TYPES_H__
 #define __DM_RENDER_TYPES_H__
 
-#include "core/dm_defines.h"
 #include "core/math/dm_math_types.h"
 #include "core/dm_string.h"
 #include "structures/dm_list.h"
@@ -13,11 +12,7 @@ typedef dm_vec4 dm_color;
 
 typedef struct dm_vertex
 {
-#ifdef DM_METAL
-    dm_vec4 position;
-#else
     dm_vec3 position;
-#endif
     dm_vec2 tex_coords;
 } dm_vertex;
 
