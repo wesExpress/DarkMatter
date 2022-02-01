@@ -311,7 +311,7 @@ bool dm_renderer_update_buffer(dm_buffer* cb, void* data, size_t data_size)
     dm_internal_buffer* internal_buffer = cb->internal_buffer;
 
     dm_memcpy([internal_buffer->buffer contents], data, dm_metal_align(data_size, DM_METAL_BUFFER_ALIGNMENT));
-    
+
     return true;
 }
 

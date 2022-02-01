@@ -24,7 +24,6 @@ vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], co
     vertex_out v_out;
 
     v_out.position = uniforms.mvp * float4(vertices[vid].position, 1);
-    //v_out.position = float4(vertices[vid].position, 1);
     v_out.tex_coords = vertices[vid].tex_coords;
 
     return v_out;

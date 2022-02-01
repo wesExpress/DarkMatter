@@ -335,7 +335,17 @@ void dm_platform_swap_buffers()
 
 float dm_platform_get_time()
 {
-    return mach_absolute_time();
+    const uint64_t factor = 1000000;
+    static mach_timebase_info_data_t s_timebase_info;
+    static dispatch_once_t once_token;
+
+    dispatch_once(&once_token, ^{
+        (void) mach_timebase_info(&s_timebase_info);
+    });
+
+    float mili = (float)((mach_absolute_time() * s_timebase_info.numer) / (factor * s_timebase_info.denom));
+
+    return mili / 1000.0f;
 }
 
 dm_key_code dm_translate_key_code(uint32_t cocoa_key)
