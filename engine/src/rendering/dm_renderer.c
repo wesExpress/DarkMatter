@@ -146,8 +146,8 @@ bool dm_renderer_begin_scene()
 		
 		if (!dm_renderer_bind_constant_buffer(r_data.object_pipeline->render_packet.mvp)) return false;
 
-		//dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, r_data.object_pipeline->render_commands);
-		dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_ARRAYS, NULL, r_data.object_pipeline->render_commands);
+		dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, r_data.object_pipeline->render_commands);
+		//dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_ARRAYS, NULL, r_data.object_pipeline->render_commands);
 	}
 	
 	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, r_data.object_pipeline->render_commands);

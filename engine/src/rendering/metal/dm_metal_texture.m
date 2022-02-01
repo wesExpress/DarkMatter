@@ -25,17 +25,14 @@ bool dm_metal_create_texture(dm_image* image, dm_metal_renderer* renderer)
             return false;
         }
 
-        MTLRegion region = {
-            {0,0,0},
-            {image->desc.width, image->desc.height}
-        };
+        MTLRegion region = MTLRegionMake2D(0, 0, image->desc.width, image->desc.height);
 
         NSUInteger bytes_per_row = 4 * image->desc.width;
 
         [internal_texture->texture replaceRegion: region
-                                    mipmapLevel: 0
-                                    withBytes: image->data
-                                    bytesPerRow: bytes_per_row];
+                                   mipmapLevel: 0
+                                   withBytes: image->data
+                                   bytesPerRow: bytes_per_row];
     }
 
     return true;

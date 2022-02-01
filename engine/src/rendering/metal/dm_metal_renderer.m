@@ -158,11 +158,6 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         // shader
         if(!dm_metal_create_shader_library(pipeline->raster_desc.shader, @"shaders/metal/object_shader.metallib", metal_renderer)) return false;
 
-        //id<MTLLibrary> library = [metal_renderer->device newLibraryWithFile:@"shaders/metal/object_shader.metallib" error:NULL];
-
-        //id<MTLFunction> vertexFunc = [library newFunctionWithName:@"vertex_main"];
-        //id<MTLFunction> fragFunc = [library newFunctionWithName:@"fragment_main"];
-
         /// pipeline state
         dm_internal_shader* internal_shader = pipeline->raster_desc.shader->internal_shader;
 
