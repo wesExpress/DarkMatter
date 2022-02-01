@@ -10,7 +10,7 @@
 
 bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_renderer* renderer, dm_internal_pipeline* pipeline);
 void dm_directx_delete_buffer(dm_buffer* buffer, dm_internal_pipeline* pipeline);
-void dm_directx_bind_buffer(dm_buffer* buffer, dm_internal_renderer* renderer, dm_internal_pipeline* pipeline);
+void dm_directx_bind_buffer(dm_buffer* buffer, dm_internal_renderer* renderer);
 
 #endif
 

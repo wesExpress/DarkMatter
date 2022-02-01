@@ -10,7 +10,7 @@
 #include "dm_directx_shader.h"
 #include "dm_directx_texture.h"
 #include "dm_directx_enum_conversion.h"
-#include "rendering/dm_texture.h"
+#include "rendering/dm_image.h"
 
 #include "core/dm_logger.h"
 #include "core/dm_assert.h"
@@ -87,6 +87,11 @@ bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
 	}
 
 	return true;
+}
+
+void dm_renderer_draw_arrays_impl(dm_render_pipeline* pipeline, int first, size_t count)
+{
+	directx_renderer->context->lpVtbl->Draw(directx_renderer->context, count, first);
 }
 
 void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
@@ -241,12 +246,12 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	texture
 	*/
-	for (uint32_t i = 0; i < pipeline->render_packet.texture_paths->count; i++)
+	for (uint32_t i = 0; i < pipeline->render_packet.image_paths->count; i++)
 	{
-		dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
-		dm_texture* texture = dm_texture_get(key->string);
+		dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
+		dm_image* image = dm_image_get(key->string);
 
-		dm_directx_destroy_texture(texture);
+		dm_directx_destroy_texture(image);
 	}
 
 	//DX_RELEASE(internal_pipe->rasterizer_state);
@@ -286,12 +291,12 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 	/*
 	textures
 	*/
-	for (uint32_t i = 0; i < pipeline->render_packet.texture_paths->count; i++ )
+	for (uint32_t i = 0; i < pipeline->render_packet.image_paths->count; i++ )
 	{
-		dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
-		dm_texture* texture = dm_texture_get(key->string);
+		dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
+		dm_image* image = dm_image_get(key->string);
 
-		if(!dm_directx_create_texture(texture, directx_renderer)) return false;
+		if(!dm_directx_create_texture(image, directx_renderer)) return false;
 	}
 
 	return true;
@@ -309,6 +314,13 @@ bool dm_renderer_update_buffer(dm_buffer* buffer, void* data, size_t data_size)
 	DX_ERROR_CHECK(directx_renderer->context->lpVtbl->Map(directx_renderer->context, (ID3D11Resource*)internal_buffer->buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr), "ID3D11DeviceContext::Map failed!");
 	dm_memcpy(msr.pData, data, data_size);
 	directx_renderer->context->lpVtbl->Unmap(directx_renderer->context, (ID3D11Resource*)internal_buffer->buffer, 0);
+
+	return true;
+}
+
+bool dm_renderer_bind_constant_buffer(dm_buffer* buffer)
+{
+	dm_directx_bind_buffer(buffer, directx_renderer);
 
 	return true;
 }
@@ -371,22 +383,22 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// buffers
 	*/
-	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, directx_renderer, internal_pipe);
-	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, directx_renderer, internal_pipe);
+	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, directx_renderer);
+	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, directx_renderer);
 
 	/*
 	// constant buffers
 	*/
-	dm_directx_bind_buffer(pipeline->render_packet.mvp, directx_renderer, internal_pipe);
+	dm_directx_bind_buffer(pipeline->render_packet.mvp, directx_renderer);
 
 	/*
 	textures
 	*/
-	for (uint32_t i = 0; i < pipeline->render_packet.texture_paths->count; i++)
+	for (uint32_t i = 0; i < pipeline->render_packet.image_paths->count; i++)
 	{
-		dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
-		dm_texture* texture = dm_texture_get(key->string);
-		dm_directx_bind_texture(texture, i, directx_renderer);
+		dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
+		dm_image* image = dm_image_get(key->string);
+		dm_directx_bind_texture(image, i, directx_renderer);
 	}
 
 	return true;

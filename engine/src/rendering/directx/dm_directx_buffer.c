@@ -50,7 +50,7 @@ void dm_directx_delete_buffer(dm_buffer* buffer, dm_internal_pipeline* pipeline)
 	dm_free(buffer->internal_buffer, sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
 }
 
-void dm_directx_bind_buffer(dm_buffer* buffer, dm_internal_renderer* renderer, dm_internal_pipeline* pipeline)
+void dm_directx_bind_buffer(dm_buffer* buffer, dm_internal_renderer* renderer)
 {
 	ID3D11DeviceContext* context = renderer->context;
 	dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
