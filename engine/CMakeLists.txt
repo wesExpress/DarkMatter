@@ -86,6 +86,7 @@ if(APPLE AND NOT DM_RENDER_OPENGL)
 
         src/rendering/metal/dm_metal_renderer.m
         src/rendering/metal/dm_metal_buffer.m
+        src/rendering/metal/dm_metal_texture.m
         src/rendering/metal/dm_metal_view.m
     )
 

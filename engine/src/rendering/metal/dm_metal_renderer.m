@@ -4,6 +4,7 @@
 
 #include "dm_metal_view.h"
 #include "dm_metal_buffer.h"
+#include "dm_metal_texture.h"
 
 #include "rendering/dm_image.h"
 
@@ -135,7 +136,7 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
             dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
             dm_image* image = dm_image_get(key->string);
 
-            dm_free(image->internal_texture, sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
+            dm_metal_destroy_texture(image);
         }
 
         dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
@@ -167,8 +168,6 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         }
 
         // buffers
-
-        // must turn positions into vec4s
         if(!dm_metal_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, metal_renderer)) return false;
         if(!dm_metal_create_buffer(pipeline->render_packet.index_buffer, ib_data, metal_renderer)) return false;
 
@@ -180,27 +179,7 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
             dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
             dm_image* image = dm_image_get(key->string);
 
-            MTLTextureDescriptor* textureDescriptor = [[MTLTextureDescriptor alloc] init];
-
-            textureDescriptor.pixelFormat = MTLPixelFormatRGBA8Unorm;
-            textureDescriptor.width = image->desc.width;
-            textureDescriptor.height = image->desc.height;
-
-            image->internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
-            dm_internal_texture* internal_texture = image->internal_texture;
-            internal_texture->texture = [metal_renderer->device newTextureWithDescriptor:textureDescriptor];
-
-            MTLRegion region = {
-                {0,0,0},
-                {image->desc.width, image->desc.height}
-            };
-
-            NSUInteger bytesPerRow = 4 * image->desc.width;
-
-            [internal_texture->texture replaceRegion: region
-                                       mipmapLevel: 0
-                                       withBytes: image->data
-                                       bytesPerRow: bytesPerRow];
+            if(!dm_metal_create_texture(image, metal_renderer)) return false;
         }
     }
 
