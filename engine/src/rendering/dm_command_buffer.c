@@ -10,6 +10,9 @@ void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 void dm_renderer_draw_arrays_impl(dm_render_pipeline* pipeline, int first, size_t count);
 void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline);
 
+bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_size);
+bool dm_renderer_bind_buffer_impl(dm_buffer* buffer);
+
 void dm_renderer_submit_command(dm_render_command_type command_type, void* data, dm_list* render_commands)
 {
 	dm_render_command command = { .command = command_type, .data = data };
@@ -49,6 +52,15 @@ bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipel
 		case DM_RENDER_COMMAND_BIND_PIPELINE:
 		{
 			if (!dm_renderer_bind_pipeline_impl((dm_render_pipeline*)command->data)) return false;
+		} break;
+		case DM_RENDER_COMMAND_UPDATE_BUFFER:
+		{
+			dm_buffer_update_packet* update_packet = command->data;
+			if (!dm_renderer_update_buffer_impl(update_packet->buffer, update_packet->data, update_packet->data_size)) return false;
+		}
+		case DM_RENDER_COMMAND_BIND_BUFFER:
+		{
+			if (!dm_renderer_bind_buffer_impl((dm_buffer*)command->data)) return false;
 		} break;
 		case DM_RENDER_COMMAND_DRAW_ARRAYS:
 		{

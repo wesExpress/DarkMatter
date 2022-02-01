@@ -177,6 +177,8 @@ typedef enum dm_render_command_type
     DM_RENDER_COMMAND_SET_VIEWPORT,
     DM_RENDER_COMMAND_CLEAR,
     DM_RENDER_COMMAND_BIND_PIPELINE,
+    DM_RENDER_COMMAND_UPDATE_BUFFER,
+    DM_RENDER_COMMAND_BIND_BUFFER,
     DM_RENDER_COMMAND_DRAW_ARRAYS,
     DM_RENDER_COMMAND_DRAW_INDEXED,
     DM_RENDER_COMMAND_DRAW_INSTANCED,
@@ -211,6 +213,13 @@ typedef struct dm_buffer
     void* internal_buffer;
 } dm_buffer;
 
+typedef struct dm_buffer_update_packet
+{
+    dm_buffer* buffer;
+    size_t data_size;
+    void* data;
+} dm_buffer_update_packet;
+
 typedef struct dm_shader
 {
     dm_shader_desc vertex_desc;
@@ -240,7 +249,7 @@ typedef struct dm_sampler_desc
     dm_vec4 border_color;
 } dm_sampler_desc;
 
-typedef struct dm_iamge
+typedef struct dm_image
 {
     dm_image_desc desc;   
     void* data;

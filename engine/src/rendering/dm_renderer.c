@@ -142,12 +142,11 @@ bool dm_renderer_begin_scene()
 #ifdef DM_DIRECTX
 		mvp = dm_mat4_transpose(mvp);
 #endif
-		if (!dm_renderer_update_buffer(r_data.object_pipeline->render_packet.mvp, &mvp, sizeof(dm_mat4))) return false;
-		
-		if (!dm_renderer_bind_constant_buffer(r_data.object_pipeline->render_packet.mvp)) return false;
 
+		dm_buffer_update_packet buffer_update = { r_data.object_pipeline->render_packet.mvp, sizeof(dm_mat4), &mvp };
+		dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_BUFFER, &buffer_update, r_data.object_pipeline->render_commands);
+		dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, r_data.object_pipeline->render_packet.mvp, r_data.object_pipeline->render_commands);
 		dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, r_data.object_pipeline->render_commands);
-		//dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_ARRAYS, NULL, r_data.object_pipeline->render_commands);
 	}
 	
 	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, r_data.object_pipeline->render_commands);
