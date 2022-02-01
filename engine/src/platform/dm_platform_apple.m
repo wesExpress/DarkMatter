@@ -104,6 +104,12 @@
     dm_event_dispatch((dm_event){ DM_KEY_DOWN_EVENT, NULL, (void*)(intptr_t)key });
 }
 
+- (void) keyUp: (NSEvent*) event
+{
+    dm_key_code key = dm_translate_key_code((uint32_t)[event keyCode]);
+    dm_event_dispatch((dm_event){ DM_KEY_UP_EVENT, NULL, (void*)(intptr_t)key});
+}
+
 - (void) scrollWheel: (NSEvent*) event
 {
     dm_event_dispatch((dm_event){ DM_MOUSE_SCROLLED_EVENT, NULL, (void*)(intptr_t)(int8_t)[event scrollingDeltaY]});
