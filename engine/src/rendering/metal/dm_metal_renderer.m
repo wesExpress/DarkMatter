@@ -23,6 +23,13 @@
 
 dm_metal_renderer* metal_renderer = NULL;
 
+#define DM_METAL_BUFFER_ALIGNMENT 256
+
+size_t dm_metal_align(size_t n, uint32_t alignment) 
+{
+    return ((n+alignment-1)/alignment)*alignment;
+}
+
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
     DM_LOG_DEBUG("Initializing Metal render backend...");
@@ -110,6 +117,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
         MTLSamplerDescriptor* sampler_desc = [MTLSamplerDescriptor new];
         sampler_desc.minFilter = MTLSamplerMinMagFilterNearest;
         sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+        sampler_desc.mipFilter = MTLSamplerMipFilterLinear;
         sampler_desc.sAddressMode = MTLSamplerAddressModeClampToEdge;
         sampler_desc.tAddressMode = MTLSamplerAddressModeClampToEdge;
 
@@ -177,7 +185,15 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         if(!dm_metal_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, metal_renderer)) return false;
         if(!dm_metal_create_buffer(pipeline->render_packet.index_buffer, ib_data, metal_renderer)) return false;
 
-        if(!dm_metal_create_buffer(pipeline->render_packet.mvp, mvp_data, metal_renderer)) return false;
+        // mvp uniform
+        pipeline->render_packet.mvp->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
+        dm_internal_buffer* internal_buffer = pipeline->render_packet.mvp->internal_buffer;
+
+        dm_mat4* test = (dm_mat4*)mvp_data;
+        internal_buffer->buffer = [metal_renderer->device newBufferWithLength: dm_metal_align(sizeof(dm_mat4), DM_METAL_BUFFER_ALIGNMENT)
+                                                          options: MTLResourceOptionCPUCacheModeDefault];
+
+        //if(!dm_metal_create_buffer(pipeline->render_packet.mvp, mvp_data, metal_renderer)) return false;
 
         // textures
         for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)

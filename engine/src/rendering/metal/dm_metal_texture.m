@@ -17,6 +17,7 @@ bool dm_metal_create_texture(dm_image* image, dm_metal_renderer* renderer)
         texture_desc.pixelFormat = MTLPixelFormatRGBA8Unorm;
         texture_desc.width = image->desc.width;
         texture_desc.height = image->desc.height;
+        texture_desc.usage = MTLTextureUsageShaderRead;
 
         internal_texture->texture = [renderer->device newTextureWithDescriptor:texture_desc];
         if(!internal_texture)
@@ -33,6 +34,12 @@ bool dm_metal_create_texture(dm_image* image, dm_metal_renderer* renderer)
                                    mipmapLevel: 0
                                    withBytes: image->data
                                    bytesPerRow: bytes_per_row];
+
+        id <MTLCommandBuffer> command_buffer = [renderer->command_queue commandBuffer];
+        id <MTLBlitCommandEncoder> blit_encoder = [command_buffer blitCommandEncoder];
+        [blit_encoder generateMipmapsForTexture: internal_texture->texture];
+        [blit_encoder endEncoding];
+        [command_buffer commit];
     }
 
     return true;

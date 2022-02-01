@@ -10,7 +10,7 @@
 #include "dm_opengl_shader.h"
 #include "dm_opengl_buffer.h"
 #include "dm_opengl_texture.h"
-#include "rendering/dm_texture.h"
+#include "rendering/dm_image.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
@@ -138,11 +138,11 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_delete_shader(pipeline->raster_desc.shader);
 
     // textures
-    for (uint32_t i = 0; i < pipeline->render_packet.texture_paths->count; i++)
+    for (uint32_t i = 0; i < pipeline->render_packet.image_paths->count; i++)
     {
-        dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
-        dm_texture* texture = dm_texture_get(key->string);
-        dm_opengl_destroy_texture(texture);
+        dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
+        dm_image* image = dm_image_get(key->string);
+        dm_opengl_destroy_texture(image);
     }
 
     dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
@@ -197,11 +197,11 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 
     // textures
 
-    for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
+    for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
     {
-        dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
-        dm_texture* texture = dm_texture_get(key->string);
-        if (!dm_opengl_create_texture(texture, i, internal_shader->id)) return false;
+        dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
+        dm_image* image = dm_image_get(key->string);
+        if (!dm_opengl_create_texture(image, i, internal_shader->id)) return false;
     }
 
     return true;
@@ -298,12 +298,12 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
     // TODO: need to change this eventually, this won't work with multiple textures per draw call
     // textures
-    for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
+    for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
     {
-        dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
-        dm_texture* texture = dm_texture_get(key->string);
+        dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
+        dm_image* image = dm_image_get(key->string);
 
-        if (!dm_opengl_bind_texture(texture)) return false;
+        if (!dm_opengl_bind_texture(image)) return false;
     }
 
     return true;
