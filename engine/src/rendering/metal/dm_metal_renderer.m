@@ -173,6 +173,7 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         pipe_desc.vertexFunction = internal_shader->vertex_func;
         pipe_desc.fragmentFunction = internal_shader->fragment_func;
         pipe_desc.colorAttachments[0].pixelFormat = metal_renderer->view.metal_layer.pixelFormat;
+        pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
 
         internal_pipe->pipeline_state = [metal_renderer->device newRenderPipelineStateWithDescriptor:pipe_desc error:NULL];
         if(!internal_pipe->pipeline_state)
@@ -192,8 +193,6 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         dm_mat4* test = (dm_mat4*)mvp_data;
         internal_buffer->buffer = [metal_renderer->device newBufferWithLength: dm_metal_align(sizeof(dm_mat4), DM_METAL_BUFFER_ALIGNMENT)
                                                           options: MTLResourceOptionCPUCacheModeDefault];
-
-        //if(!dm_metal_create_buffer(pipeline->render_packet.mvp, mvp_data, metal_renderer)) return false;
 
         // textures
         for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
@@ -236,9 +235,6 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
         [commandEncoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
         [commandEncoder setCullMode:MTLCullModeBack];
 
-        // sampler
-        [commandEncoder setFragmentSamplerState:internal_pipe->sampler_state atIndex:0];
-
         // buffers
         dm_internal_buffer* internal_vb = pipeline->render_packet.vertex_buffer->internal_buffer;
         dm_internal_buffer* internal_ib = pipeline->render_packet.index_buffer->internal_buffer;
@@ -248,6 +244,7 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 
         NSUInteger uniform_offset = 0;
         [commandEncoder setVertexBuffer:internal_mvp->buffer offset:uniform_offset atIndex:1];
+        dm_mat4* test = [internal_mvp->buffer contents];
 
         // textures
         for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
@@ -258,6 +255,9 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 
             [commandEncoder setFragmentTexture:internal_texture->texture atIndex:i];
         }
+
+        // sampler
+        [commandEncoder setFragmentSamplerState:internal_pipe->sampler_state atIndex:0];
 
         // draw call
         [commandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle 
@@ -309,6 +309,10 @@ void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
 
 bool dm_renderer_update_buffer(dm_buffer* cb, void* data, size_t data_size)
 {
+    dm_internal_buffer* internal_buffer = cb->internal_buffer;
+
+    dm_memcpy([internal_buffer->buffer contents], &data, data_size);
+
     return true;
 }
 

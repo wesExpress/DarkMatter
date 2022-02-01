@@ -3,7 +3,7 @@
 static float move_vel = 2.5f;
 static float look_vel = 1.5f;
 
-dm_transform object_transforms[] = {
+dm_transform transforms[] = {
 	{0,0,0},
 	//{2,5,-15},
 	//{-1.5,-2.2,-2.5},
@@ -94,7 +94,7 @@ bool dm_application_init(dm_application* app)
 	dm_renderer_api_set_camera_pos((dm_vec3) { 0, 0, 4 });
 
 	DM_LOG_DEBUG("Submitting object transforms...");
-	dm_renderer_api_submit_object_transforms(object_transforms, sizeof(object_transforms) / sizeof(dm_transform));
+	dm_renderer_api_submit_object_transforms(transforms, sizeof(transforms) / sizeof(dm_transform));
 
 	return true;
 }
