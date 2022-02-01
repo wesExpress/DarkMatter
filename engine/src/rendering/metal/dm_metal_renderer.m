@@ -4,6 +4,7 @@
 
 #include "dm_metal_view.h"
 #include "dm_metal_buffer.h"
+#include "dm_metal_shader.h"
 #include "dm_metal_texture.h"
 
 #include "rendering/dm_image.h"
@@ -127,10 +128,15 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
     @autoreleasepool
     {
+        // shader
+        dm_metal_destroy_shader_library(pipeline->raster_desc.shader);
+        
+        // buffers
         dm_metal_destroy_buffer(pipeline->render_packet.vertex_buffer);
         dm_metal_destroy_buffer(pipeline->render_packet.index_buffer);
         dm_metal_destroy_buffer(pipeline->render_packet.mvp);
 
+        // textures
         for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
         {
             dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
@@ -150,14 +156,19 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
         // shader
-        id<MTLLibrary> library = [metal_renderer->device newLibraryWithFile:@"shaders/metal/object_shader.metallib" error:NULL];
+        if(!dm_metal_create_shader_library(pipeline->raster_desc.shader, @"shaders/metal/object_shader.metallib", metal_renderer)) return false;
 
-        id<MTLFunction> vertexFunc = [library newFunctionWithName:@"vertex_main"];
-        id<MTLFunction> fragFunc = [library newFunctionWithName:@"fragment_main"];
+        //id<MTLLibrary> library = [metal_renderer->device newLibraryWithFile:@"shaders/metal/object_shader.metallib" error:NULL];
+
+        //id<MTLFunction> vertexFunc = [library newFunctionWithName:@"vertex_main"];
+        //id<MTLFunction> fragFunc = [library newFunctionWithName:@"fragment_main"];
+
+        /// pipeline state
+        dm_internal_shader* internal_shader = pipeline->raster_desc.shader->internal_shader;
 
         MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
-        pipe_desc.vertexFunction = vertexFunc;
-        pipe_desc.fragmentFunction = fragFunc;
+        pipe_desc.vertexFunction = internal_shader->vertex_func;
+        pipe_desc.fragmentFunction = internal_shader->fragment_func;
         pipe_desc.colorAttachments[0].pixelFormat = metal_renderer->view.metal_layer.pixelFormat;
 
         internal_pipe->pipeline_state = [metal_renderer->device newRenderPipelineStateWithDescriptor:pipe_desc error:NULL];
@@ -195,25 +206,29 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
         dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
         id<MTLTexture> texture = drawable.texture;
+        id<MTLCommandBuffer> commandBuffer = [metal_renderer->command_queue commandBuffer];
 
+        // render pass descriptor
         MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
         passDescriptor.colorAttachments[0].texture = texture;
         passDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
         passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
         passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(metal_renderer->clear_color.x, metal_renderer->clear_color.y, metal_renderer->clear_color.z, metal_renderer->clear_color.w);
 
-        id<MTLCommandBuffer> commandBuffer = [metal_renderer->command_queue commandBuffer];
-
         id <MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:passDescriptor];
 
+        // pipeline state
         [commandEncoder setRenderPipelineState:internal_pipe->pipeline_state];
 
+        // depth stencil
         [commandEncoder setDepthStencilState:internal_pipe->depth_stencil]; 
         [commandEncoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
         [commandEncoder setCullMode:MTLCullModeBack];
 
+        // sampler
         [commandEncoder setFragmentSamplerState:internal_pipe->sampler_state atIndex:0];
 
+        // buffers
         dm_internal_buffer* internal_vb = pipeline->render_packet.vertex_buffer->internal_buffer;
         dm_internal_buffer* internal_ib = pipeline->render_packet.index_buffer->internal_buffer;
         dm_internal_buffer* internal_mvp = pipeline->render_packet.mvp->internal_buffer;
@@ -233,6 +248,7 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
             [commandEncoder setFragmentTexture:internal_texture->texture atIndex:i];
         }
 
+        // draw call
         [commandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle 
                         indexCount: [internal_ib->buffer length] / sizeof(dm_index_t)
                         indexType: MTLIndexTypeUInt32

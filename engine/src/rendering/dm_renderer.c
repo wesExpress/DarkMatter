@@ -262,6 +262,8 @@ bool dm_renderer_init_object_data()
 	vs_desc.path = "shaders/glsl/object_vertex.glsl";
 #elif defined DM_DIRECTX
 	vs_desc.path = "shaders/hlsl/object_vertex.fxc";
+#elif defined DM_METAL
+	vs_desc.path = "vertex_main";
 #endif
 	vs_desc.type = DM_SHADER_TYPE_VERTEX;
 
@@ -270,6 +272,8 @@ bool dm_renderer_init_object_data()
 	ps_desc.path = "shaders/glsl/object_pixel.glsl";
 #elif defined DM_DIRECTX
 	ps_desc.path = "shaders/hlsl/object_pixel.fxc";
+#elif defined DM_METAL
+	ps_desc.path = "fragment_main";
 #endif
 	ps_desc.type = DM_SHADER_TYPE_PIXEL;
 

@@ -37,6 +37,13 @@ typedef struct dm_internal_buffer
     id<MTLBuffer> buffer;
 } dm_internal_buffer;
 
+typedef struct dm_internal_shader
+{
+    id<MTLLibrary> library;
+    id<MTLFunction> vertex_func;
+    id<MTLFunction> fragment_func;
+} dm_internal_shader;
+
 typedef struct dm_internal_texture
 {
     id<MTLTexture> texture;
