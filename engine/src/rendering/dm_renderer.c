@@ -1,7 +1,7 @@
 #include "dm_renderer.h"
 #include "dm_vertex_attribs.h"
 #include "dm_command_buffer.h"
-#include "dm_texture.h"
+#include "dm_image.h"
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
 #include "core/math/dm_math.h"
@@ -59,7 +59,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	object_transforms = dm_list_create(sizeof(dm_transform), 0);
 
 	// maps
-	dm_texture_map_init();
+	dm_image_map_init();
 
 	// camera
 	dm_camera_init(
@@ -93,7 +93,7 @@ void dm_renderer_shutdown()
 	// cleanup
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
 	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
-	dm_texture_map_destroy();
+	dm_image_map_destroy();
 
 	// backend shutdown
 	dm_renderer_shutdown_impl(&r_data);
@@ -174,7 +174,7 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	pipeline->render_packet.vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.mvp = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->render_packet.texture_paths = dm_list_create(sizeof(dm_string), 0);
+	pipeline->render_packet.image_paths = dm_list_create(sizeof(dm_string), 0);
 
 	pipeline->render_packet.count = 0;
 	pipeline->render_packet.offset = 0;
@@ -192,13 +192,13 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 	dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_free(pipeline->render_packet.mvp, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 
-	// textures
-	for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
+	// images
+	for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
 	{
-		dm_string* str = dm_list_at(pipeline->render_packet.texture_paths, i);
+		dm_string* str = dm_list_at(pipeline->render_packet.image_paths, i);
 		dm_strdel(str->string);
 	}
-	dm_list_destroy(pipeline->render_packet.texture_paths);
+	dm_list_destroy(pipeline->render_packet.image_paths);
 
 	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 }
@@ -363,16 +363,16 @@ void dm_renderer_update_object_transforms(dm_transform* transforms, uint32_t num
 	}
 }
 
-bool dm_renderer_submit_textures(dm_image_desc* image_descs, uint32_t num_desc)
+bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs)
 {
-	if (!dm_textures_load(image_descs, num_desc)) return false;
+	if (!dm_images_load(image_descs, num_descs)) return false;
 
-	for (uint32_t i = 0; i < num_desc; i++)
+	for (uint32_t i = 0; i < num_descs; i++)
 	{
 		dm_string str = { 0 };
 		str.string = dm_strdup(image_descs[i].path);
 		str.len = strlen(str.string);
-		dm_list_append(r_data.object_pipeline->render_packet.texture_paths, &str);
+		dm_list_append(r_data.object_pipeline->render_packet.image_paths, &str);
 	}
 
 	return true;

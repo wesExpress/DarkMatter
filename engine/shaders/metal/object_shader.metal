@@ -25,5 +25,5 @@ vertex Vertex vertex_main(const device Vertex* vertices [[buffer(0)]], constant 
 
 fragment float4 fragment_main(Vertex v_in [[stage_in]], texture2d<float> texture1[[texture(0)]], texture2d<float> texture2[[texture(1)]], sampler samp [[sampler(0)]])
 {
-    return texture1.sample(samp, v_in.tex_coords);
+    return float4(texture1.sample(samp, v_in.tex_coords).rgb, 1);
 }

@@ -5,7 +5,7 @@
 #include "dm_metal_view.h"
 #include "dm_metal_buffer.h"
 
-#include "rendering/dm_texture.h"
+#include "rendering/dm_image.h"
 
 #include "core/dm_assert.h"
 #include "core/dm_mem.h"
@@ -130,12 +130,12 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
         dm_metal_destroy_buffer(pipeline->render_packet.index_buffer);
         dm_metal_destroy_buffer(pipeline->render_packet.mvp);
 
-        for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
+        for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
         {
-            dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
-            dm_texture* texture = dm_texture_get(key->string);
+            dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
+            dm_image* image = dm_image_get(key->string);
 
-            dm_free(texture->internal_texture, sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
+            dm_free(image->internal_texture, sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
         }
 
         dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
@@ -175,31 +175,31 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         if(!dm_metal_create_buffer(pipeline->render_packet.mvp, mvp_data, metal_renderer)) return false;
 
         // textures
-        for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
+        for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
         {
-            dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
-            dm_texture* texture = dm_texture_get(key->string);
+            dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
+            dm_image* image = dm_image_get(key->string);
 
             MTLTextureDescriptor* textureDescriptor = [[MTLTextureDescriptor alloc] init];
 
             textureDescriptor.pixelFormat = MTLPixelFormatRGBA8Unorm;
-            textureDescriptor.width = texture->desc.width;
-            textureDescriptor.height = texture->desc.height;
+            textureDescriptor.width = image->desc.width;
+            textureDescriptor.height = image->desc.height;
 
-            texture->internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
-            dm_internal_texture* internal_texture = texture->internal_texture;
+            image->internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
+            dm_internal_texture* internal_texture = image->internal_texture;
             internal_texture->texture = [metal_renderer->device newTextureWithDescriptor:textureDescriptor];
 
             MTLRegion region = {
                 {0,0,0},
-                {texture->desc.width, texture->desc.height}
+                {image->desc.width, image->desc.height}
             };
 
-            NSUInteger bytesPerRow = 4 * texture->desc.width;
+            NSUInteger bytesPerRow = 4 * image->desc.width;
 
             [internal_texture->texture replaceRegion: region
                                        mipmapLevel: 0
-                                       withBytes: texture->data
+                                       withBytes: image->data
                                        bytesPerRow: bytesPerRow];
         }
     }
@@ -244,20 +244,21 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
         NSUInteger uniform_offset = 0;
         [commandEncoder setVertexBuffer:internal_mvp->buffer offset:uniform_offset atIndex:1];
 
+        // textures
+        for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
+        {
+            dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
+            dm_image* image = dm_image_get(key->string);
+            dm_internal_texture* internal_texture = image->internal_texture;
+
+            [commandEncoder setFragmentTexture:internal_texture->texture atIndex:i];
+        }
+
         [commandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle 
                         indexCount: [internal_ib->buffer length] / sizeof(dm_index_t)
                         indexType: MTLIndexTypeUInt32
                         indexBuffer: internal_ib->buffer
                         indexBufferOffset: 0];
-
-        for(uint32_t i=0; i<pipeline->render_packet.texture_paths->count; i++)
-        {
-            dm_string* key = dm_list_at(pipeline->render_packet.texture_paths, i);
-            dm_texture* texture = dm_texture_get(key->string);
-            dm_internal_texture* internal_texture = texture->internal_texture;
-
-            [commandEncoder setFragmentTexture:internal_texture->texture atIndex:i];
-        }
 
         [commandEncoder endEncoding];
 

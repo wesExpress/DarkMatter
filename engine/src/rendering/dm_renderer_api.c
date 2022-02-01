@@ -6,9 +6,9 @@ void dm_renderer_api_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* in
 	dm_renderer_submit_vertex_data(vertex_data, index_data, num_vertices, num_indices);
 }
 
-bool dm_renderer_api_submit_textures(dm_image_desc* image_descs, uint32_t num_desc)
+bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_desc)
 {
-	return dm_renderer_submit_textures(image_descs, num_desc);
+	return dm_renderer_submit_images(image_descs, num_desc);
 }
 
 void dm_renderer_api_submit_object_transforms(dm_transform* transforms, uint32_t num_transforms)

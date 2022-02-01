@@ -245,12 +245,12 @@ typedef struct dm_sampler_desc
     dm_vec4 border_color;
 } dm_sampler_desc;
 
-typedef struct dm_texture
+typedef struct dm_iamge
 {
     dm_image_desc desc;   
     void* data;
     void* internal_texture;
-} dm_texture;
+} dm_image;
 
 typedef struct dm_viewport
 {
@@ -307,7 +307,7 @@ typedef struct dm_render_packet
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
     dm_buffer* mvp;
-    dm_list* texture_paths;
+    dm_list* image_paths;
     size_t count;
     size_t offset;
 } dm_render_packet;

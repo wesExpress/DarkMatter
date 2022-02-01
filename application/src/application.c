@@ -5,15 +5,15 @@ static float look_vel = 1.5f;
 
 dm_transform object_transforms[] = {
 	{0,0,0},
-	{2,5,-15},
-	{-1.5,-2.2,-2.5},
-	{-3.8,-2,-12.3},
-	{2.4,-0.4,-3.5},
-	{-1.7,3,-7.5},
-	{1.3,-2,-2.5},
-	{1.5,2,-2.5},
-	{1.5,0.2,-1.5},
-	{-1.3,1,-1.5}
+	//{2,5,-15},
+	//{-1.5,-2.2,-2.5},
+	//{-3.8,-2,-12.3},
+	//{2.4,-0.4,-3.5},
+	//{-1.7,3,-7.5},
+	//{1.3,-2,-2.5},
+	//{1.5,2,-2.5},
+	//{1.5,0.2,-1.5},
+	//{-1.3,1,-1.5}
 };
 
 bool dm_application_init(dm_application* app)
@@ -88,7 +88,7 @@ bool dm_application_init(dm_application* app)
 
 	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
 
-	if (!dm_renderer_api_submit_textures(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
+	if (!dm_renderer_api_submit_images(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
 
 	// camera
 	dm_renderer_api_set_camera_pos((dm_vec3) { 0, 0, 4 });
