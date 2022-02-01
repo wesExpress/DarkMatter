@@ -1,4 +1,5 @@
 build/*
+*/out/*
 out/*
 .vs/*
 
@@ -7,3 +8,5 @@ out/*
 .DS_STORE
 
 *.cod
+*.air
+*.metallib
