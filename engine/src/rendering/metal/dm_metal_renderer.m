@@ -190,8 +190,8 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         pipeline->render_packet.mvp->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
         dm_internal_buffer* internal_buffer = pipeline->render_packet.mvp->internal_buffer;
 
-        dm_mat4* test = (dm_mat4*)mvp_data;
-        internal_buffer->buffer = [metal_renderer->device newBufferWithLength: dm_metal_align(sizeof(dm_mat4), DM_METAL_BUFFER_ALIGNMENT)
+        internal_buffer->buffer = [metal_renderer->device newBufferWithBytes: mvp_data
+                                                          length: dm_metal_align(sizeof(dm_mat4), DM_METAL_BUFFER_ALIGNMENT)
                                                           options: MTLResourceOptionCPUCacheModeDefault];
 
         // textures
@@ -244,7 +244,6 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 
         NSUInteger uniform_offset = 0;
         [commandEncoder setVertexBuffer:internal_mvp->buffer offset:uniform_offset atIndex:1];
-        dm_mat4* test = [internal_mvp->buffer contents];
 
         // textures
         for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
@@ -311,8 +310,8 @@ bool dm_renderer_update_buffer(dm_buffer* cb, void* data, size_t data_size)
 {
     dm_internal_buffer* internal_buffer = cb->internal_buffer;
 
-    dm_memcpy([internal_buffer->buffer contents], &data, data_size);
-
+    dm_memcpy([internal_buffer->buffer contents], data, dm_metal_align(data_size, DM_METAL_BUFFER_ALIGNMENT));
+    
     return true;
 }
 
