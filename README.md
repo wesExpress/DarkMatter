@@ -6,7 +6,7 @@ This is a cross-platform rendering engine for the purpose of learning. It is wri
   - GLAD to access OpenGL functions
   - stb_image to load image data
 - Objective C
-  - for OSX specific code and metal rendering
+  - for OSX specific code and metal renderer
 
 The general design philosophy is as follows:
 - Get a process of the rendering pipeline working with OpenGL
@@ -18,5 +18,6 @@ Features
 - dm_map  - dynamic sized hash table of generic type
 
 Current status:
-- Textures are rendered on quads in both opengl and directx11
-- Just starting to get a window and metal context working with Cocoa and Metal on OSX
+- Textures are rendered on quads in opengl, directx11, and metal
+- transformation of vertex position with a perspective camera working
+- multiple objects not working
