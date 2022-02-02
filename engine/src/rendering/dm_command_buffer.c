@@ -60,6 +60,7 @@ bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipel
 		}
 		case DM_RENDER_COMMAND_BIND_BUFFER:
 		{
+			dm_buffer* buffer = command->data;
 			if (!dm_renderer_bind_buffer_impl((dm_buffer*)command->data)) return false;
 		} break;
 		case DM_RENDER_COMMAND_DRAW_ARRAYS:

@@ -145,7 +145,7 @@ bool dm_renderer_begin_scene()
 
 		dm_buffer_update_packet buffer_update = { r_data.object_pipeline->render_packet.mvp, sizeof(dm_mat4), &mvp };
 		dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_BUFFER, &buffer_update, r_data.object_pipeline->render_commands);
-		dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, r_data.object_pipeline->render_packet.mvp, r_data.object_pipeline->render_commands);
+		dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, r_data.object_pipeline->render_packet.vertex_buffer, r_data.object_pipeline->render_commands);
 		dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, r_data.object_pipeline->render_commands);
 	}
 	
