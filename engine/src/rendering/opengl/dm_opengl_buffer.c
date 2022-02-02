@@ -7,8 +7,8 @@
 
 bool dm_opengl_create_buffer(dm_buffer* buffer, void* data)
 {
-    buffer->internal_buffer = (dm_internal_buffer*)dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
-    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
+    buffer->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
+    dm_internal_buffer* internal_buffer = buffer->internal_buffer;
     internal_buffer->type = dm_buffer_to_opengl_buffer(buffer->desc.type);
     if (internal_buffer->type == DM_BUFFER_TYPE_UNKNOWN) return false;
     internal_buffer->usage = dm_usage_to_opengl_draw(buffer->desc.usage);
@@ -30,7 +30,7 @@ bool dm_opengl_create_buffer(dm_buffer* buffer, void* data)
 
 void dm_opengl_delete_buffer(dm_buffer* buffer)
 {
-    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
+    dm_internal_buffer* internal_buffer = buffer->internal_buffer;
     glDeleteBuffers(1, &internal_buffer->id);
     glCheckError();
     dm_free(buffer->internal_buffer, sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
@@ -38,7 +38,7 @@ void dm_opengl_delete_buffer(dm_buffer* buffer)
 
 void dm_opengl_bind_buffer(dm_buffer* buffer)
 {
-    dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
+    dm_internal_buffer* internal_buffer = buffer->internal_buffer;
     glBindBuffer(internal_buffer->type, internal_buffer->id);
     glCheckError();
 }
