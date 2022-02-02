@@ -318,7 +318,8 @@ typedef struct dm_render_packet
 
 typedef struct dm_render_command
 {
-    dm_render_command_type command;
+    dm_render_command_type type;
+    size_t data_size;
     void* data;
 } dm_render_command;
 

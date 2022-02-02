@@ -4,7 +4,7 @@
 #include "dm_render_types.h"
 
 // render commands
-void dm_renderer_submit_command(dm_render_command_type command, void* data, dm_list* render_commands);
+void dm_renderer_submit_command(dm_render_command_type command, void* data, size_t data_size, dm_list* render_commands);
 void dm_renderer_clear_command_buffer(dm_list* render_commands);
 bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipeline* pipeline);
 
