@@ -12,11 +12,8 @@
 #define DM_INLINE
 
 #elif __WIN32__ || _WIN32 || WIN32
-#ifdef DM_WIN_OPENGL
-#define DM_PLATFORM_GLFW
-#define DM_OPENGL
-#else
 #define DM_PLATFORM_WIN32
+#ifndef DM_OPENGL
 #define DM_DIRECTX
 #endif
 #define DM_INLINE __forceinline
@@ -27,7 +24,10 @@
 #define DM_INLINE __always_inline
 
 #else
-#define DM_PLATFORM_UNSUPPORTED
+#define DM_PLATFORM_GLFW
+#define DM_OPENGL
+
+#define DM_INLINE
 #endif
 
 #ifdef DM_EXPORT

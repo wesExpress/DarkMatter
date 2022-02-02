@@ -1,6 +1,6 @@
 #include "dm_directx_device.h"
 
-#ifdef DM_PLATFORM_WIN32
+#ifdef DM_DIRECTX
 
 #include "core/dm_assert.h"
 #include "core/dm_mem.h"
