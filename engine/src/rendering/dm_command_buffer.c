@@ -73,11 +73,10 @@ bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipel
 		{
 			dm_buffer_update_packet* update_packet = command->data;
 			if (!dm_renderer_update_buffer_impl(update_packet->buffer, update_packet->data, update_packet->data_size)) return false;
-		}
+		} break;
 		case DM_RENDER_COMMAND_BIND_BUFFER:
 		{
-			dm_buffer* buffer = command->data;
-			if (!dm_renderer_bind_buffer_impl(buffer)) return false;
+			if (!dm_renderer_bind_buffer_impl((dm_buffer*)command->data)) return false;
 		} break;
 		case DM_RENDER_COMMAND_DRAW_ARRAYS:
 		{
