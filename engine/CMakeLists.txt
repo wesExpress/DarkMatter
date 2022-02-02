@@ -12,6 +12,8 @@ elseif(APPLE)
     if(DM_RENDER_OPENGL)
         add_definitions(-DDM_APPLE_OPENGL)
     endif()
+elseif(UNIX)
+    set(DM_RENDER_OPENGL on)
 endif()
 
 if(DM_RENDER_OPENGL)
@@ -117,6 +119,8 @@ else()
 endif()
 
 add_library(${PROJECT_NAME} SHARED ${SOURCES} ${SHADERS})
+
+#target_compile_definitions(${PROJECT_NAME} PUBLIC -fPIC)
 
 set(INCLUDES PUBLIC include  PRIVATE )
 
