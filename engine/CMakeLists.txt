@@ -4,21 +4,14 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 
 project( DarkMatter )
 
-if(WIN32)
-    if(DM_RENDER_OPENGL)
-       add_definitions(-DDM_WIN_OPENGL) 
-    endif()
-elseif(APPLE)
-    if(DM_RENDER_OPENGL)
-        add_definitions(-DDM_APPLE_OPENGL)
-    endif()
-elseif(UNIX)
-    set(DM_RENDER_OPENGL on)
+# set up external libraries as needed
+if(DM_RENDER_OPENGL)
+    add_definitions(-DDM_OPENGL)
+    add_subdirectory(lib/glad)
 endif()
 
-if(DM_RENDER_OPENGL)
+if(UNIX)
     add_subdirectory(lib/glfw)
-    add_subdirectory(lib/glad)
 endif()
 
 if(MSVC)
@@ -94,6 +87,52 @@ if(APPLE AND NOT DM_RENDER_OPENGL)
     set(SOURCES ${SOURCES} ${OBJC_SOURCES})
 endif()
 
+# headers
+set(PRIVATE_H lib/stb_image/include)
+set(PUBLIC_H src include)
+
+if(UNIX)
+    add_subdirectory(lib/glfw)
+    set(PRIVATE_H ${PRIVATE_H} lib/glfw/include)
+endif()
+
+if(DM_RENDER_OPENGL)
+    set(PRIVATE_H ${PRIVATE_H} lib/glad/include)
+endif()
+
+##################
+# actual library #
+##################
+add_library(${PROJECT_NAME} SHARED ${SOURCES} ${SHADERS})
+
+target_include_directories(${PROJECT_NAME} PUBLIC ${PUBLIC_H} PRIVATE ${PRIVATE_H})
+ 
+# internal libraries
+if(WIN32)
+    if(DM_RENDER_OPENGL)
+        target_link_libraries(${PROJECT_NAME} GLAD)
+    else()
+        target_link_libraries(${PROJECT_NAME} d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib)
+    endif()
+elseif(APPLE)
+    if(DM_RENDER_OPENGL)
+        target_link_libraries(${PROJECT_NAME} GLAD)
+    else()
+        find_library(CORE_FRAMEWORK CoreFoundation)
+        find_library(COCOA_LIBRARY Cocoa)
+        find_library(METAL Metal)
+        find_library(QUARTZ_CORE QuartzCore)
+        target_link_libraries(${PROJECT_NAME} ${CORE_FRAMEWORK} ${COCOA_LIBRARY} ${METAL} ${QUARTZ_CORE})
+    endif()
+else()
+    target_link_libraries(${PROJECT_NAME} glfw GLAD)
+endif()
+
+if(BUILD_SHARED_LIBS)
+    add_definitions(-DDM_EXPORT)
+endif()
+
+# shader
 if(WIN32 AND NOT DM_RENDER_OPENGL)
     set(VERTEX_SHADERS
         shaders/hlsl/object_vertex.hlsl
@@ -116,37 +155,6 @@ else()
     )
 
     set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
-endif()
-
-add_library(${PROJECT_NAME} SHARED ${SOURCES} ${SHADERS})
-
-#target_compile_definitions(${PROJECT_NAME} PUBLIC -fPIC)
-
-set(INCLUDES PUBLIC include  PRIVATE )
-
-set(PRIVATE_H lib/stb_image/include)
-set(PUBLIC_H src include)
-
-if(DM_RENDER_OPENGL)
-    set(PRIVATE_H ${PRIVATE_H} lib/glfw/include lib/glad/include)
-endif()
-
-target_include_directories(${PROJECT_NAME} PUBLIC ${PUBLIC_H} PRIVATE ${PRIVATE_H})
-
-if(DM_RENDER_OPENGL)
-    target_link_libraries(${PROJECT_NAME} glfw ${GLFW_LIBRARIES} GLAD)
-elseif(WIN32 AND NOT DM_RENDER_OPENGL)
-    target_link_libraries(${PROJECT_NAME} d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib)
-elseif(APPLE AND NOT DM_RENDER_OPENGL)
-    find_library(CORE_FRAMEWORK CoreFoundation)
-    find_library(COCOA_LIBRARY Cocoa)
-    find_library(METAL Metal)
-    find_library(QUARTZ_CORE QuartzCore)
-    target_link_libraries(${PROJECT_NAME} ${CORE_FRAMEWORK} ${COCOA_LIBRARY} ${METAL} ${QUARTZ_CORE})
-endif()
-
-if(BUILD_SHARED_LIBS)
-    add_definitions(-DDM_EXPORT)
 endif()
 
 # compile shaders for directx
