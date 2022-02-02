@@ -121,9 +121,13 @@ bool dm_renderer_begin_scene()
 		dm_renderer_clear_command_buffer(r_data.object_pipeline->render_commands);
 	}
 
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, 0, r_data.object_pipeline->render_commands);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, sizeof(dm_color), r_data.object_pipeline->render_commands);
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, NULL, 0, r_data.object_pipeline->render_commands);
+	dm_render_command_begin_renderpass(r_data.object_pipeline);
+	dm_render_command_clear(&r_data.clear_color, r_data.object_pipeline);
+	dm_render_command_bind_pipeline(r_data.object_pipeline);
+
+	//dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, 0, r_data.object_pipeline->render_commands);
+	//dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, sizeof(dm_color), r_data.object_pipeline->render_commands);
+	//dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, NULL, 0, r_data.object_pipeline->render_commands);
 	
 	for (uint32_t i = 0; i < object_transforms->count; i++)
 	{
@@ -137,17 +141,18 @@ bool dm_renderer_begin_scene()
 		mvp = dm_mat4_transpose(mvp);
 #endif
 
-		dm_buffer_update_packet buffer_update = { 
-			.buffer=r_data.object_pipeline->render_packet.mvp, 
-			.data_size=sizeof(dm_mat4), 
-			.data=&mvp 
-		};
-		dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_BUFFER, &buffer_update, sizeof(dm_buffer_update_packet), r_data.object_pipeline->render_commands);
-		dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, r_data.object_pipeline->render_packet.mvp, sizeof(dm_buffer), r_data.object_pipeline->render_commands);
-		dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, 0, r_data.object_pipeline->render_commands);
+		dm_render_command_update_buffer(r_data.object_pipeline->render_packet.mvp, &mvp, sizeof(mvp), r_data.object_pipeline);
+		dm_render_command_bind_buffer(r_data.object_pipeline->render_packet.mvp, r_data.object_pipeline);
+		dm_render_command_draw_indexed(r_data.object_pipeline);
+
+		//dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_BUFFER, &buffer_update, sizeof(dm_buffer_update_packet), r_data.object_pipeline->render_commands);
+		//dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, r_data.object_pipeline->render_packet.mvp, sizeof(dm_buffer), r_data.object_pipeline->render_commands);
+		//dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, 0, r_data.object_pipeline->render_commands);
 	}
 	
-	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, 0, r_data.object_pipeline->render_commands);
+	dm_render_command_end_renderpass(r_data.object_pipeline);
+
+	//dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, 0, r_data.object_pipeline->render_commands);
 
 	return true;
 }
@@ -181,14 +186,7 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 {
-	for(uint32_t i=0; i<pipeline->render_commands->count;i++)
-	{
-		dm_render_command* command = dm_list_at(pipeline->render_commands, i);
-		if(command->data)
-		{
-			dm_free(command->data, command->data_size, DM_MEM_RENDER_COMMAND);
-		}
-	}
+	dm_renderer_clear_command_buffer(pipeline->render_commands);
 	dm_list_destroy(pipeline->render_commands);
 
 	dm_renderer_destroy_render_pipeline_impl(pipeline);
