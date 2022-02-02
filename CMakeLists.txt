@@ -10,7 +10,7 @@ set(EXECUTABLE_OUTPUT_PATH "${CMAKE_BINARY_DIR}")
 
 project(Master)
 
-set(DM_RENDER_OPENGL on)
+set(DM_RENDER_OPENGL off)
 set(DM_BUILD_DEBUG on)
 
 if(DM_BUILD_DEBUG)

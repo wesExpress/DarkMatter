@@ -124,10 +124,6 @@ bool dm_renderer_begin_scene()
 	dm_render_command_begin_renderpass(r_data.object_pipeline);
 	dm_render_command_clear(&r_data.clear_color, r_data.object_pipeline);
 	dm_render_command_bind_pipeline(r_data.object_pipeline);
-
-	//dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, NULL, 0, r_data.object_pipeline->render_commands);
-	//dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &r_data.clear_color, sizeof(dm_color), r_data.object_pipeline->render_commands);
-	//dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, NULL, 0, r_data.object_pipeline->render_commands);
 	
 	for (uint32_t i = 0; i < object_transforms->count; i++)
 	{
@@ -145,14 +141,9 @@ bool dm_renderer_begin_scene()
 		dm_render_command_bind_buffer(r_data.object_pipeline->render_packet.mvp, r_data.object_pipeline);
 		dm_render_command_draw_indexed(r_data.object_pipeline);
 
-		//dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_BUFFER, &buffer_update, sizeof(dm_buffer_update_packet), r_data.object_pipeline->render_commands);
-		//dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, r_data.object_pipeline->render_packet.mvp, sizeof(dm_buffer), r_data.object_pipeline->render_commands);
-		//dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, NULL, 0, r_data.object_pipeline->render_commands);
 	}
 	
 	dm_render_command_end_renderpass(r_data.object_pipeline);
-
-	//dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, NULL, 0, r_data.object_pipeline->render_commands);
 
 	return true;
 }
@@ -216,7 +207,7 @@ bool dm_renderer_create_object_pipeline()
 
 	// blend
 	dm_blend_state_desc blend = { 0 };
-	blend.is_enabled = false;
+	blend.is_enabled = true;
 	blend.src = DM_BLEND_FUNC_SRC_ALPHA;
 	blend.dest = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
 
