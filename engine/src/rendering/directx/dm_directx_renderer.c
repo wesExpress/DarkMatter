@@ -355,7 +355,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// render target
 	*/
-	context->lpVtbl->OMSetRenderTargets(context, 1u, &render_target, NULL);
+	context->lpVtbl->OMSetRenderTargets(context, 1u, &render_target, depth_stencil);
 
 	/*
 	// raster state
