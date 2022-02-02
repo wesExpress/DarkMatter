@@ -311,10 +311,16 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
 bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t size)
 {
-    if (buffer->desc.type == DM_BUFFER_TYPE_CONSTANT)
+    switch(buffer->desc.type)
+    {
+    case DM_BUFFER_TYPE_CONSTANT:
     {
         dm_internal_constant_buffer* internal_cb = buffer->internal_buffer;
         dm_memcpy(internal_cb->data, data, size);
+    } break;
+    default:
+        DM_LOG_ERROR("Haven't implemented this buffer update type!");
+        return false;
     }
 
     return true;
@@ -325,7 +331,9 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer)
     switch (buffer->desc.type)
     {
     case DM_BUFFER_TYPE_CONSTANT: return dm_opengl_bind_uniform(buffer);
-    default: DM_LOG_WARN("Haven't implemented this buffer update type yet!");
+    default: 
+        DM_LOG_ERROR("Haven't implemented this bind buffer type yet!");
+        return false;
     }
 
     return true;
@@ -380,11 +388,6 @@ GLenum glCheckError_(const char *file, int line)
         DM_LOG_ERROR("%s | %s (%d)", error, file, line);
     }
     return errorCode;
-}
-
-bool dm_renderer_bind_constant_buffer(dm_buffer* buffer)
-{
-    return dm_opengl_bind_uniform(buffer);
 }
 
 #endif

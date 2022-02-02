@@ -1,5 +1,6 @@
 #include "dm_command_buffer.h"
 #include "core/dm_logger.h"
+#include "core/dm_mem.h"
 
 void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline);
 void dm_renderer_end_rederpass_impl(dm_render_pipeline* pipeline);
@@ -13,14 +14,29 @@ void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline);
 bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_size);
 bool dm_renderer_bind_buffer_impl(dm_buffer* buffer);
 
-void dm_renderer_submit_command(dm_render_command_type command_type, void* data, dm_list* render_commands)
+void dm_renderer_submit_command(dm_render_command_type command_type, void* data, size_t data_size, dm_list* render_commands)
 {
-	dm_render_command command = { .command = command_type, .data = data };
+	dm_render_command command = { 0 };
+	command.type = command_type;
+	if(data)
+	{
+		command.data_size = data_size;
+		command.data = dm_alloc(data_size, DM_MEM_RENDER_COMMAND);
+		dm_memcpy(command.data, data, data_size);
+	}
 	dm_list_append(render_commands, &command);
 }
 
 void dm_renderer_clear_command_buffer(dm_list* render_commands)
 {
+	for(uint32_t i=0; i<render_commands->count;i++)
+	{
+		dm_render_command* command = dm_list_at(render_commands, i);
+		if(command->data)
+		{
+			dm_free(command->data, command->data_size, DM_MEM_RENDER_COMMAND);
+		}
+	}
 	dm_list_clear(render_commands, 0);
 }
 
@@ -30,7 +46,7 @@ bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipel
 	{
 		dm_render_command* command = dm_list_at(render_commands, i);
 
-		switch (command->command)
+		switch (command->type)
 		{
 		// TODO flesh out
 		case DM_RENDER_COMMAND_BEGIN_RENDER_PASS:
@@ -51,7 +67,7 @@ bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipel
 		} break;
 		case DM_RENDER_COMMAND_BIND_PIPELINE:
 		{
-			if (!dm_renderer_bind_pipeline_impl((dm_render_pipeline*)command->data)) return false;
+			if (!dm_renderer_bind_pipeline_impl(pipeline)) return false;
 		} break;
 		case DM_RENDER_COMMAND_UPDATE_BUFFER:
 		{
@@ -60,7 +76,8 @@ bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipel
 		}
 		case DM_RENDER_COMMAND_BIND_BUFFER:
 		{
-			if (!dm_renderer_bind_buffer_impl((dm_buffer*)command->data)) return false;
+			dm_buffer* buffer = command->data;
+			if (!dm_renderer_bind_buffer_impl(buffer)) return false;
 		} break;
 		case DM_RENDER_COMMAND_DRAW_ARRAYS:
 		{
