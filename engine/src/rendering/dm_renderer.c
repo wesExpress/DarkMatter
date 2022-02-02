@@ -106,7 +106,7 @@ bool dm_renderer_resize(int new_width, int new_height)
 		.max_depth = 1.0f
 	};
 	r_data.object_pipeline->viewport = viewport;
-	dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, NULL, 0, r_data.object_pipeline->render_commands);
+	dm_render_command_set_viewport(r_data.object_pipeline);
 
 	return true;
 }
