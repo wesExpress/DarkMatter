@@ -6,7 +6,7 @@ if(WIN32)
 	set(SOURCES ${SOURCES} src/glad_wgl.c)
 endif()
 
-add_library( ${PROJECT_NAME} STATIC 
+add_library( ${PROJECT_NAME} SHARED 
 	${SOURCES}
 )
 

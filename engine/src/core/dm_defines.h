@@ -21,7 +21,6 @@
 
 #elif __linux__ || __gnu_linux__
 #define DM_PLATFORM_GLFW
-#define DM_OPENGL
 #define DM_INLINE __always_inline
 
 #else

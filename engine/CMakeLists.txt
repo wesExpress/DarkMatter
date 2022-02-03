@@ -4,6 +4,10 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 
 project( DarkMatter )
 
+if(UNIX AND NOT APPLE)
+    set(DM_RENDER_OPENGL on)
+endif()
+
 # set up external libraries as needed
 # we do not use opengl on mac
 if(DM_RENDER_OPENGL)
@@ -100,7 +104,6 @@ set(PRIVATE_H lib/stb_image/include)
 set(PUBLIC_H src include)
 
 if(UNIX AND NOT APPLE)
-    add_subdirectory(lib/glfw)
     set(PRIVATE_H ${PRIVATE_H} lib/glfw/include)
 endif()
 
@@ -129,7 +132,6 @@ elseif(APPLE)
     find_library(QUARTZ_CORE QuartzCore)
     target_link_libraries(${PROJECT_NAME} ${CORE_FRAMEWORK} ${COCOA_LIBRARY} ${METAL} ${QUARTZ_CORE})
 else()
-    add_subdirectory(lib/glad)
     target_link_libraries(${PROJECT_NAME} glfw GLAD)
 endif()
 
