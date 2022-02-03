@@ -161,7 +161,11 @@ else()
     set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
 endif()
 
-# compile shaders for directx
+######################
+# shader compilation #
+######################
+
+# HLSL
 if(WIN32 AND NOT DM_RENDER_OPENGL)
     find_program(FXC fxc DOC "fx shader compiler")
     if(NOT FXC)
@@ -169,13 +173,12 @@ if(WIN32 AND NOT DM_RENDER_OPENGL)
     endif()
     set(FXC_FLAGS "/Fc" "/Od" "/Zi")
     
-    set(current_output_path ${CMAKE_BINARY_DIR}/shaders/hlsl/)
+    set(current_output_path ${CMAKE_BINARY_DIR}/shaders/hlsl)
 
     function(compile_hlsl shaders shader_entry shader_version)
         foreach(shader ${shaders})
             get_filename_component(file_we ${shader} NAME_WE)
             set(shader_out ${current_output_path}/${file_we}.fxc)
-        
             add_custom_command(
                 OUTPUT ${shader_out}
                 COMMAND ${FXC} ${FXC_FLAGS} /E ${shader_entry} /T ${shader_version} ${CMAKE_CURRENT_SOURCE_DIR}/${shader} /Fo ${shader_out} 
@@ -183,7 +186,7 @@ if(WIN32 AND NOT DM_RENDER_OPENGL)
                 COMMENT "Compiling ${shader}..."
                 VERBATIM
             )
-            add_custom_target(fx_${file_we} ALL DEPENDS ${SHADER_OUT})
+            add_custom_target(fx_${file_we} ALL DEPENDS ${shader_out})
         endforeach()
     endfunction()
 
@@ -192,6 +195,7 @@ if(WIN32 AND NOT DM_RENDER_OPENGL)
 
     # pixel shaders
     compile_hlsl(${PIXEL_SHADERS} p_main ps_5_0)
+
 # metal shaders
 elseif(APPLE AND NOT DM_RENDER_OPENGL)    
     set(current_output_path ${CMAKE_BINARY_DIR}/shaders/metal)
@@ -207,6 +211,7 @@ elseif(APPLE AND NOT DM_RENDER_OPENGL)
             MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shader}
             COMMENT "Compiling intermediate metal shader: ${shader}..."
         )
+        add_custom_target(metal_first ALL DEPENDS ${shader_intermediate})
         
         add_custom_command(
             OUTPUT ${shader_out}
@@ -214,6 +219,7 @@ elseif(APPLE AND NOT DM_RENDER_OPENGL)
             MAIN_DEPENDENCY ${shader_intermediate}
             COMMENT "Compiling metal shader lib: ${shader_intermediate}"
         )
+        add_custom_target(metal_second ALL DEPENDS ${shader_out})
 
     endforeach()
 endif()

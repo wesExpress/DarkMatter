@@ -14,16 +14,6 @@
 #include <glad/glad_wgl.h>
 #endif
 
-typedef struct dm_internal_windows_data
-{
-	HINSTANCE h_instance;
-	HWND hwnd;
-#ifdef DM_OPENGL
-	HDC hdc;
-	HGLRC hrc;
-#endif
-} dm_internal_windows_data;
-
 LRESULT CALLBACK window_callback(HWND h_wnd, UINT u_msg, WPARAM w_param, LPARAM l_param);
 LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
@@ -47,8 +37,12 @@ HWND fake_wnd;
 bool dm_platform_init(dm_platform_data* platform_data, const char* window_name)
 {
 	windows_data = dm_alloc(sizeof(dm_internal_windows_data), DM_MEM_PLATFORM);
+	platform_data->internal_data = windows_data;
 	windows_data->h_instance = GetModuleHandleA(0);
 
+	const char* window_class_name = "dm_window_class";
+
+#ifdef DM_OPENGL
 	WNDCLASSEX wcex = { 0 };
 	wcex.cbSize = sizeof(wcex);
 	wcex.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
@@ -57,14 +51,24 @@ bool dm_platform_init(dm_platform_data* platform_data, const char* window_name)
 	wcex.hIcon = LoadIcon(windows_data->h_instance, IDI_APPLICATION);
 	wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-	wcex.lpszClassName = "dm_window_class";
+	wcex.lpszClassName = window_class_name;
 
-#ifdef DM_OPENGL
 	if (!dm_wind32_load_opengl_functions(wcex)) return false;
 #endif
 
 #ifndef DM_OPENGL
-	if (!RegisterClassA(&wcex))
+	HICON icon = LoadIcon(windows_data->h_instance, IDI_APPLICATION);
+	WNDCLASSA wc = { 0 };
+	wc.style = CS_DBLCLKS | CS_HREDRAW | CS_OWNDC | CS_VREDRAW;
+	wc.lpfnWndProc = window_callback;
+	wc.hInstance = windows_data->h_instance;
+	wc.hIcon = icon;
+	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+	wc.hbrBackground = NULL;
+	wc.lpszClassName = window_class_name;
+	wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+
+	if (!RegisterClassA(&wc))
 	{
 		DM_LOG_FATAL("Window registration failed!");
 		return false;
@@ -96,7 +100,7 @@ bool dm_platform_init(dm_platform_data* platform_data, const char* window_name)
 	// create the window
 	windows_data->hwnd = CreateWindowExA(
 		window_ex_style, 
-		wcex.lpszClassName, window_name, 
+		window_class_name, window_name,
 		window_style,
 		window_x, window_y, 
 		window_width, window_height,
