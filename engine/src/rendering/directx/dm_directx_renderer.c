@@ -1,6 +1,6 @@
 #include "dm_directx_renderer.h"
 
-#ifdef DM_PLATFORM_WIN32
+#ifdef DM_DIRECTX
 
 #include "dm_directx_device.h"
 #include "dm_directx_swapchain.h"
@@ -11,6 +11,8 @@
 #include "dm_directx_texture.h"
 #include "dm_directx_enum_conversion.h"
 #include "rendering/dm_image.h"
+
+#include "platform/dm_platform_win32.h"
 
 #include "core/dm_logger.h"
 #include "core/dm_assert.h"
@@ -27,12 +29,6 @@ const char* dm_directx_decode_category(D3D11_MESSAGE_CATEGORY category);
 const char* dm_directx_decode_severity(D3D11_MESSAGE_SEVERITY severity);
 #endif
 
-typedef struct windows_internal_data
-{
-	HINSTANCE h_instance;
-	HWND hwnd;
-} windows_internal_data;
-
 static dm_internal_renderer* directx_renderer = NULL;
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
@@ -40,9 +36,9 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 	DM_LOG_DEBUG("Initializing Directx11 Backend...");
 
 	renderer_data->object_pipeline->interal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
-	windows_internal_data* internal_data = (windows_internal_data*)platform_data->internal_data;
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)renderer_data->object_pipeline->interal_pipeline;
-	directx_renderer = (dm_internal_renderer*)dm_alloc(sizeof(dm_internal_renderer), DM_MEM_RENDERER);
+	dm_internal_windows_data* internal_data = platform_data->internal_data;
+	dm_internal_pipeline* internal_pipe = renderer_data->object_pipeline->interal_pipeline;
+	directx_renderer = dm_alloc(sizeof(dm_internal_renderer), DM_MEM_RENDERER);
 
 	directx_renderer->hwnd = internal_data->hwnd;
 	directx_renderer->h_instance = internal_data->h_instance;

@@ -36,7 +36,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 
     @autoreleasepool
     {
-        dm_internal_data* internal_data = platform_data->internal_data;
+        dm_internal_apple_data* internal_data = platform_data->internal_data;
         metal_renderer = dm_alloc(sizeof(dm_metal_renderer), DM_MEM_RENDERER);
         
         metal_renderer->device =  MTLCreateSystemDefaultDevice();
@@ -306,7 +306,7 @@ void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
 
 }
 
-bool dm_renderer_update_buffer(dm_buffer* cb, void* data, size_t data_size)
+bool dm_renderer_update_buffer_impl(dm_buffer* cb, void* data, size_t data_size)
 {
     dm_internal_buffer* internal_buffer = cb->internal_buffer;
 
@@ -315,7 +315,7 @@ bool dm_renderer_update_buffer(dm_buffer* cb, void* data, size_t data_size)
     return true;
 }
 
-bool dm_renderer_bind_constant_buffer(dm_buffer* buffer)
+bool dm_renderer_bind_buffer_impl(dm_buffer* buffer)
 {
     return true;
 }

@@ -22,13 +22,17 @@ bool dm_engine_create(dm_application* app)
 
     e_data = dm_alloc(sizeof(dm_engine_data), DM_MEM_ENGINE);
     e_data->application = app;
+    e_data->platform_data = dm_alloc(sizeof(dm_platform_data), DM_MEM_PLATFORM);
+    e_data->platform_data->window_width = app->engine_config.start_width;
+    e_data->platform_data->window_height = app->engine_config.start_height;
+    e_data->platform_data->x = app->engine_config.start_x;
+    e_data->platform_data->y = app->engine_config.start_y;
+
+    dm_input_init();
 
     dm_event_set_callback(dm_engine_on_event);
 
-    if(!dm_platform_startup(e_data, 
-        app->engine_config.start_width, app->engine_config.start_height, 
-        app->engine_config.name, 
-        app->engine_config.start_x, app->engine_config.start_y))
+    if(!dm_platform_init(e_data->platform_data, app->engine_config.name))
     {
         DM_LOG_FATAL("Platform could not be initialized!");
         return false;
@@ -64,6 +68,7 @@ void dm_engine_shutdown()
 {
     e_data->application->dm_application_shutdown(e_data->application);
 
+    dm_free(e_data->platform_data, sizeof(dm_platform_data), DM_MEM_PLATFORM);
     dm_free(e_data, sizeof(dm_engine_data), DM_MEM_ENGINE);
 
     dm_mem_track();
@@ -112,7 +117,7 @@ bool dm_engine_run()
                 break;
             }
 
-
+            dm_input_update_state();
 
             end_time = start_time;
         }
@@ -120,6 +125,7 @@ bool dm_engine_run()
     
     e_data->is_running = false;
 
+    dm_input_shutdown();
     dm_renderer_shutdown();
     dm_platform_shutdown(e_data);
 
@@ -138,18 +144,19 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     } break;
     case DM_KEY_UP_EVENT:
     {
-        dm_key_code key = (dm_key_code)(intptr_t)data;
+        dm_key_code key = *(dm_key_code*)data;
         dm_input_set_key_released(key);
 
         //DM_LOG_DEBUG("Key up event received: %c", key);
     } break;
     case DM_KEY_DOWN_EVENT:
     {
-        dm_key_code key = (dm_key_code)(intptr_t)data;
+        dm_key_code key = *(dm_key_code*)data;
         dm_input_set_key_pressed(key);
 
         // TODO: need to remove this eventaully
-        if(key == DM_KEY_ESCAPE) dm_event_dispatch((dm_event){ DM_WINDOW_CLOSE_EVENT, NULL, NULL });
+        dm_event esc_event = { DM_WINDOW_CLOSE_EVENT, NULL, NULL };
+        if(key == DM_KEY_ESCAPE) dm_event_dispatch(esc_event);
 
         //DM_LOG_DEBUG("Key down event received: %c", key);
     } break;
@@ -159,14 +166,14 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     } break;
     case DM_MOUSEBUTTON_UP_EVENT:
     {
-        dm_mousebutton_code button = (dm_mousebutton_code)(intptr_t)data;
+        dm_mousebutton_code button = *(dm_mousebutton_code*)data;
         dm_input_set_mousebutton_released(button);
 
         //DM_LOG_DEBUG("Mousebutton up event received");
     } break;
     case DM_MOUSEBUTTON_DOWN_EVENT:
     {
-        dm_mousebutton_code button = (dm_mousebutton_code)(intptr_t)data;
+        dm_mousebutton_code button = *(dm_mousebutton_code*)data;
         dm_input_set_mousebutton_pressed(button);
 
         //DM_LOG_DEBUG("Mousebutton down event received");

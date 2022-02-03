@@ -15,6 +15,7 @@
 	 "ENGINE         ",
 	 "PLATFORM       ",
 	 "APPLICATION    ",
+	 "INPUT          ",
 	 "STRING         ",
 	 "LIST           ",
 	 "MAP            ",

@@ -5,12 +5,19 @@
 
 #ifdef DM_PLATFORM_WIN32
 
-#define WIN32_LEAN_AND_MEAN
 #include <windows.h>
 #include <windowsx.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <dxgi.h>
+
+typedef struct dm_internal_windows_data
+{
+	HINSTANCE h_instance;
+	HWND hwnd;
+	HDC hdc;
+	HGLRC hrc;
+} dm_internal_windows_data;
 
 const char* dm_get_win32_error_msg(HRESULT hr);
 const char* dm_get_win32_last_error();

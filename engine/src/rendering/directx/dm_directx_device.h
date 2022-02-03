@@ -3,7 +3,7 @@
 
 #include "core/dm_defines.h"
 
-#ifdef DM_PLATFORM_WIN32
+#ifdef DM_DIRECTX
 
 #include "dm_directx_renderer.h"
 

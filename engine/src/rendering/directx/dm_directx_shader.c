@@ -11,10 +11,10 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_int
 {
 	HRESULT hr;
 
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+	dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
 	shader->internal_shader = dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
-	dm_internal_shader* internal_shader = (dm_internal_shader*)shader->internal_shader;
+	dm_internal_shader* internal_shader = shader->internal_shader;
 
 	ID3D11Device* device = renderer->device;
 	ID3D11DeviceContext* context = renderer->context;

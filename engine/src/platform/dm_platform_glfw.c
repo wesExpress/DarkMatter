@@ -13,12 +13,12 @@
 #include "core/dm_assert.h"
 #include "input/dm_input.h"
 
-typedef struct dm_internal_data
+typedef struct dm_internal_glfw_data
 {
     GLFWwindow* internal_window;
-} dm_internal_data;
+} dm_internal_glfw_data;
 
-dm_internal_data* glfw_data = NULL;
+dm_internal_glfw_data* glfw_data = NULL;
 
 // forward declaration of glfw callbacks
 void dm_platform_glfw_key_callback(GLFWwindow* window, int key, int scancode, int action, int mods);
@@ -31,7 +31,7 @@ void dm_platform_glfw_mouse_scroll_callback(GLFWwindow* window, double xOffset, 
 
 dm_key_code dm_translate_key_code(uint32_t glfw_key_code);
 
-bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y)
+bool dm_platform_init(dm_platform_data* platform_data, const char* window_name)
 {
     if(!glfwInit())
     {
@@ -39,33 +39,20 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
         return false;
     }
 
-    // setting the opengl version. apple has stopped supporting past 4.1
-#ifdef __APPLE__
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 1);
-
-    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
-#else
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
-    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
-#endif
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, DM_OPENGL_MAJOR);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, DM_OPENGL_MINOR);
 
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     glfwWindowHint(GLFW_RESIZABLE, GLFW_TRUE);
     glfwWindowHint(GLFW_SAMPLES, 4);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
 
-    e_data->platform_data = (dm_platform_data*)dm_alloc(sizeof(dm_platform_data), DM_MEM_PLATFORM);
-    e_data->platform_data->window_width = window_width;
-    e_data->platform_data->window_height = window_height;
-    e_data->platform_data->window_title = window_title;
-
-    e_data->platform_data->internal_data = (dm_internal_data*)dm_alloc(sizeof(dm_internal_data), DM_MEM_PLATFORM);
-    glfw_data = (dm_internal_data*)e_data->platform_data->internal_data;
+    glfw_data = dm_alloc(sizeof(dm_internal_glfw_data), DM_MEM_PLATFORM);
+    platform_data->internal_data = glfw_data;
 
     glfw_data->internal_window = glfwCreateWindow(
-        e_data->platform_data->window_width, e_data->platform_data->window_height, 
-        e_data->platform_data->window_title, 
+        platform_data->window_width, platform_data->window_height, 
+        window_name, 
         NULL, NULL
     );
     if(!glfw_data->internal_window)
@@ -85,16 +72,14 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
     glfwSetKeyCallback(glfw_data->internal_window, dm_platform_glfw_key_callback);
     glfwSetCharCallback(glfw_data->internal_window, dm_platform_glfw_char_callback);
     glfwSetWindowCloseCallback(glfw_data->internal_window, dm_platform_glfw_window_close_callback);
-#ifdef __APPLE__
-    glfwSetFramebufferSizeCallback(glfw_data->internal_window, dm_platform_glfw_window_resize_callback);
-#else
+
     glfwSetWindowSizeCallback(glfw_data->internal_window, dm_platform_glfw_window_resize_callback);
-#endif
+
     glfwSetMouseButtonCallback(glfw_data->internal_window, dm_platform_glfw_mouse_button_callback);
     glfwSetCursorPosCallback(glfw_data->internal_window, dm_platform_glfw_mouse_move_callback);
     glfwSetScrollCallback(glfw_data->internal_window, dm_platform_glfw_mouse_scroll_callback);
 
-    glfwSetWindowPos(glfw_data->internal_window, start_x, start_y);
+    glfwSetWindowPos(glfw_data->internal_window, platform_data->x, platform_data->y);
     glfwShowWindow(glfw_data->internal_window);
 
     return true;
@@ -106,11 +91,9 @@ void dm_platform_shutdown(dm_engine_data* e_data)
 
     DM_LOG_WARN("Destroying GLFW window...");
     glfwDestroyWindow(glfw_data->internal_window);
-    dm_free(e_data->platform_data->internal_data, sizeof(dm_internal_data), DM_MEM_PLATFORM);
+    dm_free(glfw_data, sizeof(dm_internal_glfw_data), DM_MEM_PLATFORM);
     DM_LOG_WARN("Terminating GLFW...");
     glfwTerminate();
-
-    dm_free(e_data->platform_data, sizeof(dm_platform_data), DM_MEM_PLATFORM);
 }
 
 bool dm_platform_pump_messages(dm_engine_data* e_data)

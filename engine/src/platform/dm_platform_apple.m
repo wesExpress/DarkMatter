@@ -58,61 +58,61 @@
 - (void) mouseDown: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_L;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 }
 
 - (void) mouseUp: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_L;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 }
 
 - (void) rightMouseDown: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_R;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 }
 
 - (void) rightMouseUp: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_R;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 }
 
 - (void) otherMouseDown: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_M;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 }
 
 - (void) otherMouseUp: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_M;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 }
 
 - (void) mouseMoved: (NSEvent*) event
 {
     const NSPoint point = [event locationInWindow];
     uint32_t pos[2] = { point.x, point.y };
-    dm_event_dispatch((dm_event){ DM_MOUSE_MOVED_EVENT, NULL, (void*)(intptr_t)pos });
+    dm_event_dispatch((dm_event){ DM_MOUSE_MOVED_EVENT, NULL, &pos });
 }
 
 - (void) keyDown: (NSEvent*) event
 {
     dm_key_code key = dm_translate_key_code((uint32_t)[event keyCode]);
-    dm_event_dispatch((dm_event){ DM_KEY_DOWN_EVENT, NULL, (void*)(intptr_t)key });
+    dm_event_dispatch((dm_event){ DM_KEY_DOWN_EVENT, NULL, &key });
 }
 
 - (void) keyUp: (NSEvent*) event
 {
     dm_key_code key = dm_translate_key_code((uint32_t)[event keyCode]);
-    dm_event_dispatch((dm_event){ DM_KEY_UP_EVENT, NULL, (void*)(intptr_t)key});
+    dm_event_dispatch((dm_event){ DM_KEY_UP_EVENT, NULL, &key});
 }
 
 - (void) scrollWheel: (NSEvent*) event
 {
-    dm_event_dispatch((dm_event){ DM_MOUSE_SCROLLED_EVENT, NULL, (void*)(intptr_t)(int8_t)[event scrollingDeltaY]});
+    dm_event_dispatch((dm_event){ DM_MOUSE_SCROLLED_EVENT, NULL, &(int8_t)[event scrollingDeltaY]});
 }
 
 // must be implemented for the protocol to shut up in the compiler
@@ -156,15 +156,17 @@
 
 @end
 
-bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y)
-{
-    e_data->platform_data = (dm_platform_data*)dm_alloc(sizeof(dm_platform_data), DM_MEM_PLATFORM);
-    e_data->platform_data->window_width = window_width;
-    e_data->platform_data->window_height = window_height;
-    e_data->platform_data->window_title = window_title;
-    
-    e_data->platform_data->internal_data = (dm_internal_data*)dm_alloc(sizeof(dm_internal_data), DM_MEM_PLATFORM);
-    dm_internal_data* internal_data = (dm_internal_data*)e_data->platform_data->internal_data;
+dm_internal_apple_data* apple_data = NULL;
+
+bool dm_platform_init(dm_platform_data* platform_data, const char* window_name)
+{    
+    apple_data = dm_alloc(sizeof(dm_internal_apple_data), DM_MEM_PLATFORM);
+    platform_data->internal_data = apple_data;
+
+    uint32_t start_x = platform_data->x;
+    uint32_t start_y = platform_data->y;
+    uint32_t window_width = platform_data->window_width;
+    uint32_t window_height = platform_data->window_height;
 
     @autoreleasepool
     {
@@ -172,14 +174,14 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
         [NSApplication sharedApplication];
 
         // app delegate
-        internal_data->app_delegate = [[dm_app_delegate alloc] init];
-        [NSApp setDelegate: internal_data->app_delegate];
+        apple_data->app_delegate = [[dm_app_delegate alloc] init];
+        [NSApp setDelegate: apple_data->app_delegate];
 
         // window delegate
-        internal_data->window_delegate = [[dm_window_delegate alloc] init];
+        apple_data->window_delegate = [[dm_window_delegate alloc] init];
 
         // window creation
-        internal_data->window = [[NSWindow alloc] 
+        apple_data->window = [[NSWindow alloc] 
             initWithContentRect: NSMakeRect(start_x, start_y, window_width, window_height)
             styleMask: NSWindowStyleMaskTitled | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable
             backing: NSBackingStoreBuffered
@@ -187,19 +189,16 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
         ];
 
         // input view
-        internal_data->content_view = [[dm_content_view alloc] initWithWindow: internal_data->window];
-
-        // metal view
-        //internal_data->metal_view = [[dm_metal_view alloc] initWithFrame: CGRectMake(start_x, start_y, window_width, window_height)];
+        apple_data->content_view = [[dm_content_view alloc] initWithWindow: apple_data->window];
 
         // window memebers
-        [internal_data->window setAcceptsMouseMovedEvents: YES];
-        [internal_data->window setDelegate: internal_data->window_delegate];
-        [internal_data->window setContentView: internal_data->content_view];
-        [internal_data->window makeFirstResponder: internal_data->content_view];
-        [internal_data->window setAcceptsMouseMovedEvents:YES];
-        [internal_data->window setLevel:NSNormalWindowLevel];
-        [internal_data->window setTitle: @(window_title)];
+        [apple_data->window setAcceptsMouseMovedEvents: YES];
+        [apple_data->window setDelegate: apple_data->window_delegate];
+        [apple_data->window setContentView: apple_data->content_view];
+        [apple_data->window makeFirstResponder: apple_data->content_view];
+        [apple_data->window setAcceptsMouseMovedEvents:YES];
+        [apple_data->window setLevel:NSNormalWindowLevel];
+        [apple_data->window setTitle: @(window_name)];
 
         if (![[NSRunningApplication currentApplication] isFinishedLaunching]) [NSApp run];
 
@@ -207,7 +206,7 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
         [NSApp setActivationPolicy:NSApplicationActivationPolicyRegular];
 
         [NSApp activateIgnoringOtherApps:YES];
-        [internal_data->window makeKeyAndOrderFront:nil];
+        [apple_data->window makeKeyAndOrderFront:nil];
     }
     return true;
 }
@@ -216,10 +215,7 @@ void dm_platform_shutdown(dm_engine_data* e_data)
 {
     DM_LOG_WARN("Platform shutdown called...");
 
-    dm_internal_data* internal_data = (dm_internal_data*)e_data->platform_data->internal_data;
-
-    dm_free(e_data->platform_data->internal_data, sizeof(dm_internal_data), DM_MEM_PLATFORM);
-    dm_free(e_data->platform_data, sizeof(dm_platform_data), DM_MEM_PLATFORM);
+    dm_free(apple_data, sizeof(dm_internal_apple_data), DM_MEM_PLATFORM);
 }
 
 bool dm_platform_pump_messages(dm_engine_data* e_data)

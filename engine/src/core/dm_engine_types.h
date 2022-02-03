@@ -27,7 +27,7 @@ typedef struct dm_application
 
 typedef struct dm_platform_data
 {
-	int window_width, window_height;
+	uint32_t window_width, window_height, x, y;
 	const char* window_title;
 	void* internal_data;
 } dm_platform_data;

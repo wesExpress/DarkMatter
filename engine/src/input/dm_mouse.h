@@ -7,7 +7,8 @@ typedef enum dm_mousebutton_code
 {
     DM_MOUSEBUTTON_L,
     DM_MOUSEBUTTON_R,
-    DM_MOUSEBUTTON_M
+    DM_MOUSEBUTTON_M,
+    DM_MOUSEBUTTON_UNKNOWN
 } dm_mousebutton_code;
 
 typedef struct dm_mouse_state

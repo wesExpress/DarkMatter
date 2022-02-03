@@ -3,17 +3,16 @@
 #ifdef DM_PLATFORM_WIN32
 
 #include "dm_platform_win32.h"
+
 #include "core/dm_logger.h"
 #include "core/dm_assert.h"
 #include "core/dm_event.h"
 #include "core/dm_mem.h"
 #include "input/dm_input.h"
 
-typedef struct dm_internal_data
-{
-	HINSTANCE h_instance;
-	HWND hwnd;
-} dm_internal_data;
+#ifdef DM_OPENGL
+#include <glad/glad_wgl.h>
+#endif
 
 LRESULT CALLBACK window_callback(HWND h_wnd, UINT u_msg, WPARAM w_param, LPARAM l_param);
 LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -22,43 +21,70 @@ static double clock_frequency;
 static float start_time;
 static float end_time;
 
-bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y)
+dm_internal_windows_data* windows_data = NULL;
+
+#ifdef DM_OPENGL
+bool dm_wind32_load_opengl_functions(WNDCLASSEX window_class);
+
+typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int* attribList);
+
+HDC fake_dc;
+HGLRC fake_rc;
+HWND fake_wnd;
+#endif
+
+//bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y)
+bool dm_platform_init(dm_platform_data* platform_data, const char* window_name)
 {
-	e_data->platform_data = (dm_platform_data*)dm_alloc(sizeof(dm_platform_data), DM_MEM_PLATFORM);
-	e_data->platform_data->window_width = window_width;
-	e_data->platform_data->window_height = window_height;
-	e_data->platform_data->window_title = window_title;
+	windows_data = dm_alloc(sizeof(dm_internal_windows_data), DM_MEM_PLATFORM);
+	platform_data->internal_data = windows_data;
+	windows_data->h_instance = GetModuleHandleA(0);
 
-	e_data->platform_data->internal_data = (dm_internal_data*)dm_alloc(sizeof(dm_internal_data), DM_MEM_PLATFORM);
-	dm_internal_data* internal_data = (dm_internal_data*)e_data->platform_data->internal_data;
+	const char* window_class_name = "dm_window_class";
 
-	HICON icon = LoadIcon(internal_data->h_instance, IDI_APPLICATION);
+#ifdef DM_OPENGL
+	WNDCLASSEX wcex = { 0 };
+	wcex.cbSize = sizeof(wcex);
+	wcex.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
+	wcex.lpfnWndProc = window_callback;
+	wcex.hInstance = windows_data->h_instance;
+	wcex.hIcon = LoadIcon(windows_data->h_instance, IDI_APPLICATION);
+	wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
+	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
+	wcex.lpszClassName = window_class_name;
+
+	if (!dm_wind32_load_opengl_functions(wcex)) return false;
+#endif
+
+#ifndef DM_OPENGL
+	HICON icon = LoadIcon(windows_data->h_instance, IDI_APPLICATION);
 	WNDCLASSA wc = { 0 };
 	wc.style = CS_DBLCLKS | CS_HREDRAW | CS_OWNDC | CS_VREDRAW;
 	wc.lpfnWndProc = window_callback;
-	wc.hInstance = internal_data->h_instance;
+	wc.hInstance = windows_data->h_instance;
 	wc.hIcon = icon;
 	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wc.hbrBackground = NULL;
-	wc.lpszClassName = "dm_window_class";
+	wc.lpszClassName = window_class_name;
 	wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
 
 	if (!RegisterClassA(&wc))
 	{
-		MessageBoxA(0, "Window registration failed!", "Error", MB_ICONEXCLAMATION | MB_OK);
+		DM_LOG_FATAL("Window registration failed!");
 		return false;
 	}
+#endif
 
 	// Adjust client window to be appropriate
-	uint32_t client_x = start_x;
-	uint32_t client_y = start_y;
-	uint32_t client_width = window_width;
-	uint32_t client_height = window_height;
+	uint32_t client_x = platform_data->x;
+	uint32_t client_y = platform_data->y;
+	uint32_t client_width = platform_data->window_width;
+	uint32_t client_height = platform_data->window_height;
 
 	uint32_t window_x = client_x;
 	uint32_t window_y = client_y;
-	uint32_t window_w = client_width;
-	uint32_t window_h = client_height;
+	uint32_t window_width = client_width;
+	uint32_t window_height = client_height;
 
 	uint32_t window_style = WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME;
 	uint32_t window_ex_style = WS_EX_APPWINDOW;
@@ -72,27 +98,28 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
 	window_height += (border_rect.bottom - border_rect.top);
 
 	// create the window
-	HWND wnd_handle = CreateWindowExA(
-		window_ex_style, wc.lpszClassName, window_title, window_style,
-		window_x, window_y, window_w, window_h,
-		0, 0, internal_data->h_instance, 0
+	windows_data->hwnd = CreateWindowExA(
+		window_ex_style, 
+		window_class_name, window_name,
+		window_style,
+		window_x, window_y, 
+		window_width, window_height,
+		NULL, NULL, 
+		windows_data->h_instance, 
+		NULL
 	);
 
-	if (!wnd_handle)
+	if (!windows_data->hwnd)
 	{
-		MessageBoxA(NULL, "Window creation failed!", "Error", MB_ICONEXCLAMATION | MB_OK);
 		DM_LOG_FATAL("Window creation failed!");
 		return false;
 	}
-	internal_data->hwnd = wnd_handle;
-
-#if DM_OPENGL
-	if (!dm_platform_create_context(plat_state)) return false;
-#endif
 
 	DM_LOG_DEBUG("Window created...");
 
-	ShowWindow(internal_data->hwnd, SW_SHOW);
+#ifndef DM_OPENGL
+	ShowWindow(windows_data->hwnd, SW_SHOW);
+#endif
 
 	// clock
 	LARGE_INTEGER frequency;
@@ -106,27 +133,21 @@ bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_he
 void dm_platform_shutdown(dm_engine_data* e_data)
 {
 	DM_LOG_WARN("Platform shutdown called...");
-
-	dm_internal_data* internal_data = (dm_internal_data*)e_data->platform_data->internal_data;
-
 	DM_LOG_WARN("Destroying window...");
 
-	if (internal_data->hwnd)
+	if (windows_data->hwnd)
 	{
-		DestroyWindow(internal_data->hwnd);
-		internal_data->hwnd = 0;
+		DestroyWindow(windows_data->hwnd);
+		windows_data->hwnd = 0;
 	}
 	
-	dm_free(e_data->platform_data->internal_data, sizeof(dm_internal_data), DM_MEM_PLATFORM);
-	dm_free(e_data->platform_data, sizeof(dm_platform_data), DM_MEM_PLATFORM);
+	dm_free(windows_data, sizeof(dm_internal_windows_data), DM_MEM_PLATFORM);
 }
 
 bool dm_platform_pump_messages(dm_engine_data* e_data)
 {
-	dm_internal_data* internal_data = (dm_internal_data*)e_data->platform_data->internal_data;
-
 	MSG message;
-	while (PeekMessageA(&message, internal_data->hwnd, 0, 0, PM_REMOVE))
+	while (PeekMessageA(&message, windows_data->hwnd, 0, 0, PM_REMOVE))
 	{
 		TranslateMessage(&message);
 		DispatchMessageA(&message);
@@ -244,21 +265,21 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 		uint32_t height = rect.bottom - rect.top;
 		uint32_t new_rect[2] = { width, height };
 
-		dm_event_dispatch((dm_event) { DM_WINDOW_RESIZE_EVENT, NULL, (void*)new_rect });
+		dm_event_dispatch((dm_event) { DM_WINDOW_RESIZE_EVENT, NULL, &new_rect });
 	} break;
 
 	case WM_KEYDOWN:
 	case WM_SYSKEYDOWN:
 	{
 		dm_key_code key = (dm_key_code)wparam;
-		dm_event_dispatch((dm_event) { DM_KEY_DOWN_EVENT, NULL, (void*)key });
+		dm_event_dispatch((dm_event) { DM_KEY_DOWN_EVENT, NULL, &key });
 
 	} break;
 	case WM_KEYUP:
 	case WM_SYSKEYUP:
 	{
 		dm_key_code key = (dm_key_code)wparam;
-		dm_event_dispatch((dm_event) { DM_KEY_UP_EVENT, NULL, (void*)key });
+		dm_event_dispatch((dm_event) { DM_KEY_UP_EVENT, NULL, &key });
 	} break;
 
 	case WM_MOUSEMOVE:
@@ -266,7 +287,7 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 		int32_t x = GET_X_LPARAM(lparam);
 		int32_t y = GET_Y_LPARAM(lparam);
 		int32_t coords[2] = { x, y };
-		dm_event_dispatch((dm_event) { DM_MOUSE_MOVED_EVENT, NULL, (void*)coords });
+		dm_event_dispatch((dm_event) { DM_MOUSE_MOVED_EVENT, NULL, &coords });
 	} break;
 
 	case WM_MOUSEWHEEL:
@@ -276,39 +297,39 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 		{
 			delta = (delta < 0) ? -1 : 1;
 		}
-		dm_event_dispatch((dm_event) { DM_MOUSE_SCROLLED_EVENT, NULL, (void*)(size_t)delta });
+		dm_event_dispatch((dm_event) { DM_MOUSE_SCROLLED_EVENT, NULL, &delta });
 	} break;
 
 	case WM_LBUTTONDOWN:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_L;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 	} break;
 	case WM_RBUTTONDOWN:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_R;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 	} break;
 	case WM_MBUTTONDOWN:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_M;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 	} break;
 
 	case WM_LBUTTONUP:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_L;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 	} break;
 	case WM_RBUTTONUP:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_R;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 	} break;
 	case WM_MBUTTONUP:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_M;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 	} break;
 
 	}
@@ -321,7 +342,9 @@ LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	switch (message)
 	{
 	case WM_CREATE:
+	{
 		return 0;
+	} 
 	case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
@@ -360,5 +383,156 @@ const char* dm_get_win32_last_error()
 	return message;
 
 }
+
+#ifdef DM_OPENGL
+bool dm_wind32_load_opengl_functions(WNDCLASSEX window_class)
+{
+	// fake window
+	if (!RegisterClassEx(&window_class))
+	{
+		DM_LOG_FATAL("Registering window class failed!");
+		return false;
+	}
+
+	fake_wnd = CreateWindow(
+		"dm_window_class",
+		"Fake Window",
+		WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+		0, 0,
+		1, 1,
+		NULL, NULL,
+		windows_data->h_instance, NULL
+	);
+
+	// rendering context
+	fake_dc = GetDC(fake_wnd);
+
+	PIXELFORMATDESCRIPTOR fake_pfd = { 0 };
+	fake_pfd.nSize = sizeof(fake_pfd);
+	fake_pfd.nVersion = 1;
+	fake_pfd.dwFlags = PFD_DOUBLEBUFFER | PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW;
+	fake_pfd.iPixelType = PFD_TYPE_RGBA;
+	fake_pfd.cColorBits = 32;
+	fake_pfd.cDepthBits = 24;
+	fake_pfd.cAlphaBits = 8;
+
+	int format = ChoosePixelFormat(fake_dc, &fake_pfd);
+	if (format == 0)
+	{
+		DM_LOG_FATAL("ChoosePixelFormat() failed!");
+		return false;
+	}
+	if (!SetPixelFormat(fake_dc, format, &fake_pfd))
+	{
+		DM_LOG_FATAL("SetPixelFormat() failed!");
+		return false;
+	}
+
+	fake_rc = wglCreateContext(fake_dc);
+	if (!fake_rc)
+	{
+		DM_LOG_FATAL("Failed to create render context!");
+		return false;
+	}
+
+	if (!wglMakeCurrent(fake_dc, fake_rc))
+	{
+		DM_LOG_FATAL("Failed to make context current!");
+		return false;
+	}
+
+	// load opengl functions with glad
+	if (!gladLoadWGL(fake_dc))
+	{
+		DM_LOG_FATAL("Could not initialize WGL GLAD functions!");
+		return false;
+	}
+
+	return true;
+}
+
+bool dm_platform_init_opengl()
+{
+	windows_data->hdc = GetDC(windows_data->hwnd);
+
+	const int pixel_attribs[] = {
+		WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
+		WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
+		WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
+		WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
+		WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
+		WGL_COLOR_BITS_ARB, 32,
+		WGL_ALPHA_BITS_ARB, 8,
+		WGL_DEPTH_BITS_ARB, 24,
+		WGL_STENCIL_BITS_ARB, 8,
+		WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
+		0
+	};
+
+	int pixel_format_id;
+	uint32_t num_formats;
+
+	bool status = wglChoosePixelFormatARB(windows_data->hdc, pixel_attribs, NULL, 1, &pixel_format_id, &num_formats);
+	if (!status || (num_formats == 0))
+	{
+		DM_LOG_FATAL("wglChoosePixelFormatsARB failed!");
+		return false;
+	}
+
+	PIXELFORMATDESCRIPTOR PFD;
+	DescribePixelFormat(windows_data->hdc, pixel_format_id, sizeof(PFD), &PFD);
+	SetPixelFormat(windows_data->hdc, pixel_format_id, &PFD);
+
+	// opengl context
+	const int context_attribs[] = {
+		WGL_CONTEXT_MAJOR_VERSION_ARB, DM_OPENGL_MAJOR,
+		WGL_CONTEXT_MINOR_VERSION_ARB, DM_OPENGL_MINOR,
+		WGL_CONTEXT_FLAGS_ARB, 0,
+		WGL_CONTEXT_PROFILE_MASK_ARB,
+		WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0,
+	};
+
+	windows_data->hrc = wglCreateContextAttribsARB(windows_data->hdc, 0, context_attribs);
+	if (!windows_data->hrc)
+	{
+		DM_LOG_FATAL("wglCreateContextAttribsARB failed!");
+		return false;
+	}
+
+	wglMakeCurrent(NULL, NULL);
+	wglDeleteContext(fake_rc);
+	ReleaseDC(fake_wnd, fake_dc);
+	DestroyWindow(fake_wnd);
+
+	if (!wglMakeCurrent(windows_data->hdc, windows_data->hrc))
+	{
+		DM_LOG_FATAL("Could not make context current!");
+		return false;
+	}
+
+	// load opengl functions with glad
+	if (!gladLoadGL())
+	{
+		DM_LOG_FATAL("Could not initialize GLAD!");
+		return false;
+	}
+
+	ShowWindow(windows_data->hwnd, SW_SHOW);
+
+	return true;
+}
+
+void dm_platform_shutdown_opengl()
+{
+	wglMakeCurrent(NULL, NULL);
+	wglDeleteContext(windows_data->hrc);
+}
+
+void dm_platform_swap_buffers()
+{
+	SwapBuffers(windows_data->hdc);
+}
+
+#endif
 
 #endif
