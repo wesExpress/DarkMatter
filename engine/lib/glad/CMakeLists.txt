@@ -14,3 +14,7 @@ target_include_directories(GLAD
 	PUBLIC 
 		include/ 
 )
+
+if(UNIX AND NOT APPLE)
+	target_link_libraries(${PROJECT_NAME} ${CMAKE_DL_LIBS})
+endif()

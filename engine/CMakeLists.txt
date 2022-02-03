@@ -19,7 +19,7 @@ if(DM_RENDER_OPENGL)
     endif()
 endif()
 
-if(UNIX AND NOT APPLE)
+if((NOT WIN32) AND (NOT UNIX) AND (NOT APPLE))
     add_subdirectory(lib/glfw)
 endif()
 
@@ -54,6 +54,7 @@ set(
 
     src/platform/dm_platform_glfw.c
     src/platform/dm_platform_win32.c
+    src/platform/dm_platform_linux.c
 
     src/structures/dm_list.c
     src/structures/dm_map.c
@@ -103,7 +104,7 @@ endif()
 set(PRIVATE_H lib/stb_image/include)
 set(PUBLIC_H src include)
 
-if(UNIX AND NOT APPLE)
+if((NOT WIN32) AND (NOT UNIX) AND (NOT APPLE))
     set(PRIVATE_H ${PRIVATE_H} lib/glfw/include)
 endif()
 
@@ -131,6 +132,31 @@ elseif(APPLE)
     find_library(METAL Metal)
     find_library(QUARTZ_CORE QuartzCore)
     target_link_libraries(${PROJECT_NAME} ${CORE_FRAMEWORK} ${COCOA_LIBRARY} ${METAL} ${QUARTZ_CORE})
+elseif(UNIX AND NOT APPLE)
+    find_package(PkgConfig)
+    PKG_CHECK_MODULES(PKG_X11_XCB QUIET x11-xcb)
+
+    set(X11_XCB_DEFINITIONS ${PKG_X11_XCB_CFLAGS})
+
+    find_path(X11_XCB_INCLUDE_DIR NAMES X11/Xlib-xcb.h HINTS ${PKG_X11_XCB_INCLUDE_DIRS})
+    find_library(X11_XCB_LIBRARIES NAMES X11-xcb HINTS ${PKG_X11_XCB_LIBRARY_DIRS})
+    
+    include(FindPackageHandleStandardArgs)
+    FIND_PACKAGE_HANDLE_STANDARD_ARGS(X11_XCB DEFAULT_MSG X11_XCB_LIBRARIES X11_XCB_INCLUDE_DIR)
+
+    mark_as_advanced(X11_XCB_INCLUDE_DIR X11_XCB_LIBRARIES)
+
+    find_package(X11 REQUIRED)
+    target_link_libraries(${PROJECT_NAME} ${X11_LIBRARIES} ${X11_XCB_LIBRARIES})
+    target_include_directories(${PROJECT_NAME} PRIVATE ${X11_INCLUDE_DIRS} ${X11_XCB_INCLUDE_DIR})
+
+    target_link_libraries(${PROJECT_NAME} m)
+
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(${PROJECT_NAME} ${OPENGL_LIBRARIES})
+    include_directories(${OPENGL_INCLUDE_DIR})
+
+    target_link_libraries(${PROJECT_NAME} GLAD)
 else()
     target_link_libraries(${PROJECT_NAME} glfw GLAD)
 endif()
@@ -140,7 +166,16 @@ if(BUILD_SHARED_LIBS)
 endif()
 
 # shader
-if(WIN32 AND NOT DM_RENDER_OPENGL)
+if(DM_RENDER_OPENGL)
+    set(VERTEX_SHADERS
+        shaders/glsl/object_vertex.glsl
+    )
+    set(PIXEL_SHADERS
+        shaders/glsl/object_pixel.glsl
+    )
+
+    set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
+elseif(WIN32)
     set(VERTEX_SHADERS
         shaders/hlsl/object_vertex.hlsl
     )
@@ -153,15 +188,6 @@ elseif(APPLE)
     set(SHADERS
         shaders/metal/object_shader.metal
     )
-else()
-    set(VERTEX_SHADERS
-        shaders/glsl/object_vertex.glsl
-    )
-    set(PIXEL_SHADERS
-        shaders/glsl/object_pixel.glsl
-    )
-
-    set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
 endif()
 
 ######################
