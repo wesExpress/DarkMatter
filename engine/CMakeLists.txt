@@ -5,12 +5,17 @@ set( GLFW_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE )
 project( DarkMatter )
 
 # set up external libraries as needed
+# we do not use opengl on mac
 if(DM_RENDER_OPENGL)
-    add_definitions(-DDM_OPENGL)
-    add_subdirectory(lib/glad)
+    if(APPLE)
+        set(DM_RENDER_OPENGL off)
+    else()
+        add_definitions(-DDM_OPENGL)
+        add_subdirectory(lib/glad)
+    endif()
 endif()
 
-if(UNIX)
+if(UNIX AND NOT APPLE)
     add_subdirectory(lib/glfw)
 endif()
 
@@ -19,6 +24,9 @@ if(MSVC)
     set(BUILD_SHARED_LIBS on)
 endif()
 
+# source files
+# we include opengl and directx without bothering to check which renderer
+# because there are checks that block off the entire file if not needed
 set(
     SOURCES
     
@@ -72,11 +80,11 @@ set(
     lib/stb_image/include/stb_image/stb_image.c
 )
 
-# objective c files if using metal
-if(APPLE AND NOT DM_RENDER_OPENGL)
-    set(OBJC_SOURCES  
+# objective c files
+# can't include these on windows because it has no idea what they are
+if(APPLE)
+    set(OBJC_SOURCES 
         src/platform/dm_platform_apple.m
-
         src/rendering/metal/dm_metal_renderer.m
         src/rendering/metal/dm_metal_buffer.m
         src/rendering/metal/dm_metal_texture.m
@@ -91,16 +99,13 @@ endif()
 set(PRIVATE_H lib/stb_image/include)
 set(PUBLIC_H src include)
 
-if(UNIX)
+if(UNIX AND NOT APPLE)
     add_subdirectory(lib/glfw)
     set(PRIVATE_H ${PRIVATE_H} lib/glfw/include)
 endif()
 
 if(DM_RENDER_OPENGL)
     set(PRIVATE_H ${PRIVATE_H} lib/glad/include)
-    if(WIN32)
-        set(PRIVATE_H ${PRIVATE_H} lib/opengl/include)
-    endif()
 endif()
 
 ##################
@@ -118,15 +123,11 @@ if(WIN32)
         target_link_libraries(${PROJECT_NAME} d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib)
     endif()
 elseif(APPLE)
-    if(DM_RENDER_OPENGL)
-        target_link_libraries(${PROJECT_NAME} GLAD)
-    else()
-        find_library(CORE_FRAMEWORK CoreFoundation)
-        find_library(COCOA_LIBRARY Cocoa)
-        find_library(METAL Metal)
-        find_library(QUARTZ_CORE QuartzCore)
-        target_link_libraries(${PROJECT_NAME} ${CORE_FRAMEWORK} ${COCOA_LIBRARY} ${METAL} ${QUARTZ_CORE})
-    endif()
+    find_library(CORE_FRAMEWORK CoreFoundation)
+    find_library(COCOA_LIBRARY Cocoa)
+    find_library(METAL Metal)
+    find_library(QUARTZ_CORE QuartzCore)
+    target_link_libraries(${PROJECT_NAME} ${CORE_FRAMEWORK} ${COCOA_LIBRARY} ${METAL} ${QUARTZ_CORE})
 else()
     add_subdirectory(lib/glad)
     target_link_libraries(${PROJECT_NAME} glfw GLAD)
@@ -146,7 +147,7 @@ if(WIN32 AND NOT DM_RENDER_OPENGL)
     )    
 
     set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
-elseif(APPLE AND NOT DM_RENDER_OPENGL)
+elseif(APPLE)
     set(SHADERS
         shaders/metal/object_shader.metal
     )
@@ -197,7 +198,7 @@ if(WIN32 AND NOT DM_RENDER_OPENGL)
     compile_hlsl(${PIXEL_SHADERS} p_main ps_5_0)
 
 # metal shaders
-elseif(APPLE AND NOT DM_RENDER_OPENGL)    
+elseif(APPLE)    
     set(current_output_path ${CMAKE_BINARY_DIR}/shaders/metal)
 
     foreach(shader ${SHADERS})

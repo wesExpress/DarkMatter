@@ -1,22 +1,20 @@
 #ifndef __DM_DEFINES_H__
 #define __DM_DEFINES_H__
 
+#ifdef DM_OPENGL
+#define DM_OPENGL_MAJOR 4
+#define DM_OPENGL_MINOR 6
+#endif
+
+// OpenGL is deprecated, so we just use Metal on Mac
 #ifdef __APPLE__
-#ifdef DM_APPLE_OPENGL
-#define DM_PLATFORM_GLFW
-#define DM_OPENGL
-#else
 #define DM_PLATFORM_APPLE
 #define DM_METAL
-#endif
 #define DM_INLINE
 
 #elif __WIN32__ || _WIN32 || WIN32
 #define DM_PLATFORM_WIN32
-#ifdef DM_OPENGL
-#define DM_OPENGL_MAJOR 4
-#define DM_OPENGL_MINOR 6
-#else
+#ifndef DM_OPENGL
 #define DM_DIRECTX
 #endif
 #define DM_INLINE __forceinline
@@ -29,7 +27,6 @@
 #else
 #define DM_PLATFORM_GLFW
 #define DM_OPENGL
-
 #define DM_INLINE
 #endif
 

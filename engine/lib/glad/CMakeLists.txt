@@ -1,8 +1,13 @@
 project ( GLAD )
 
+set(SOURCES src/glad.c)
+
+if(WIN32)
+	set(SOURCES ${SOURCES} src/glad_wgl.c)
+endif()
+
 add_library( ${PROJECT_NAME} STATIC 
-	src/glad.c
-	src/glad_wgl.c 
+	${SOURCES}
 )
 
 target_include_directories(GLAD 
