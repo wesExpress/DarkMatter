@@ -98,6 +98,9 @@ endif()
 
 if(DM_RENDER_OPENGL)
     set(PRIVATE_H ${PRIVATE_H} lib/glad/include)
+    if(WIN32)
+        set(PRIVATE_H ${PRIVATE_H} lib/opengl/include)
+    endif()
 endif()
 
 ##################
@@ -110,7 +113,7 @@ target_include_directories(${PROJECT_NAME} PUBLIC ${PUBLIC_H} PRIVATE ${PRIVATE_
 # internal libraries
 if(WIN32)
     if(DM_RENDER_OPENGL)
-        target_link_libraries(${PROJECT_NAME} GLAD)
+        target_link_libraries(${PROJECT_NAME} GLAD Opengl32.lib)
     else()
         target_link_libraries(${PROJECT_NAME} d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib)
     endif()
@@ -125,6 +128,7 @@ elseif(APPLE)
         target_link_libraries(${PROJECT_NAME} ${CORE_FRAMEWORK} ${COCOA_LIBRARY} ${METAL} ${QUARTZ_CORE})
     endif()
 else()
+    add_subdirectory(lib/glad)
     target_link_libraries(${PROJECT_NAME} glfw GLAD)
 endif()
 

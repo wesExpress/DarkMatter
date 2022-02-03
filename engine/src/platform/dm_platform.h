@@ -18,8 +18,8 @@ Sets up the platform specific data.
 @param start_x - pixel x start of window
 @param start_y - pixel y start of window
 */
-bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y);
-
+//bool dm_platform_startup(dm_engine_data* e_data, int window_width, int window_height, const char* window_title, int start_x, int start_y);
+bool dm_platform_init(dm_platform_data* platform_data, const char* window_name);
 /*
 frees up all allocated memory for the platform
 

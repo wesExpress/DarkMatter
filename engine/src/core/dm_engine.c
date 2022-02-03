@@ -22,13 +22,15 @@ bool dm_engine_create(dm_application* app)
 
     e_data = dm_alloc(sizeof(dm_engine_data), DM_MEM_ENGINE);
     e_data->application = app;
+    e_data->platform_data = dm_alloc(sizeof(dm_platform_data), DM_MEM_PLATFORM);
+    e_data->platform_data->window_width = app->engine_config.start_width;
+    e_data->platform_data->window_height = app->engine_config.start_height;
+    e_data->platform_data->x = app->engine_config.start_x;
+    e_data->platform_data->y = app->engine_config.start_y;
 
     dm_event_set_callback(dm_engine_on_event);
 
-    if(!dm_platform_startup(e_data, 
-        app->engine_config.start_width, app->engine_config.start_height, 
-        app->engine_config.name, 
-        app->engine_config.start_x, app->engine_config.start_y))
+    if(!dm_platform_init(e_data->platform_data, app->engine_config.name))
     {
         DM_LOG_FATAL("Platform could not be initialized!");
         return false;
@@ -64,6 +66,7 @@ void dm_engine_shutdown()
 {
     e_data->application->dm_application_shutdown(e_data->application);
 
+    dm_free(e_data->platform_data, sizeof(dm_platform_data), DM_MEM_PLATFORM);
     dm_free(e_data, sizeof(dm_engine_data), DM_MEM_ENGINE);
 
     dm_mem_track();

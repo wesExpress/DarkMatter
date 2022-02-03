@@ -13,7 +13,10 @@
 
 #elif __WIN32__ || _WIN32 || WIN32
 #define DM_PLATFORM_WIN32
-#ifndef DM_OPENGL
+#ifdef DM_OPENGL
+#define DM_OPENGL_MAJOR 4
+#define DM_OPENGL_MINOR 6
+#else
 #define DM_DIRECTX
 #endif
 #define DM_INLINE __forceinline
