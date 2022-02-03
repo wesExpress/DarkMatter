@@ -27,7 +27,6 @@ void dm_input_shutdown()
 void dm_input_update_state()
 {
 	dm_platform_memcpy(dm_prev_input, dm_current_input, sizeof(dm_input_state));
-	dm_platform_memzero(dm_current_input, sizeof(dm_input_state));
 }
 
 bool dm_input_is_key_pressed(dm_key_code key)

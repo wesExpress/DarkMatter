@@ -297,7 +297,7 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 		{
 			delta = (delta < 0) ? -1 : 1;
 		}
-		dm_event_dispatch((dm_event) { DM_MOUSE_SCROLLED_EVENT, NULL, &(size_t)delta });
+		dm_event_dispatch((dm_event) { DM_MOUSE_SCROLLED_EVENT, NULL, &delta });
 	} break;
 
 	case WM_LBUTTONDOWN:
