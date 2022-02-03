@@ -6,6 +6,9 @@
 #include "dm_mouse.h"
 #include "core/dm_defines.h"
 
+void dm_input_init();
+void dm_input_shutdown();
+
 // keyboard
 DM_API bool dm_input_is_key_pressed(dm_key_code key);
 DM_API bool dm_input_is_mousebutton_pressed(dm_mousebutton_code button);

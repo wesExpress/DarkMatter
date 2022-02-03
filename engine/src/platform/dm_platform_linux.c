@@ -84,9 +84,9 @@ bool dm_platform_init(dm_platform_data* platform_data, const char* window_name)
     uint32_t event_mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
 
     uint32_t event_values = XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE |
-    XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE |
-    XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_POINTER_MOTION |
-    XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+                            XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE |
+                            XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_POINTER_MOTION |
+                            XCB_EVENT_MASK_STRUCTURE_NOTIFY;
 
     uint32_t value_list[] = {linux_data->screen->black_pixel, event_values};
 
@@ -186,12 +186,12 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
 
             KeySym key_sym = XkbKeycodeToKeysym(
                 linux_data->display,
-                code,
+                (KeyCode)code,
                 0,
                 code & ShiftMask ? 1 : 0
             );
 
-            dm_key_code key = translate_key_code(code);
+            dm_key_code key = translate_key_code(key_sym);
             dm_event_dispatch((dm_event) {DM_KEY_DOWN_EVENT, NULL, &key});
 
         } break;
@@ -202,12 +202,12 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
 
             KeySym key_sym = XkbKeycodeToKeysym(
                 linux_data->display,
-                code,
+                (KeyCode)code,
                 0,
                 code & ShiftMask ? 1 : 0
             );
 
-            dm_key_code key = translate_key_code(code);
+            dm_key_code key = translate_key_code(key_sym);
             dm_event_dispatch((dm_event) {DM_KEY_UP_EVENT, NULL, &key});
 
         } break;
@@ -215,7 +215,7 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
         {
             xcb_button_press_event_t* m_event = (xcb_button_press_event_t*)event;
             
-            dm_mousebutton_code button = 0;
+            dm_mousebutton_code button = DM_MOUSEBUTTON_UNKNOWN;
 
             switch (m_event->detail)
             {
@@ -230,13 +230,13 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
                     break;
             }
 
-            if (button!=0) dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
+            if (button!=DM_MOUSEBUTTON_UNKNOWN) dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
         } break;
         case XCB_BUTTON_RELEASE:
         {
             xcb_button_release_event_t* m_event = (xcb_button_release_event_t*)event;
             
-            dm_mousebutton_code button = 0;
+            dm_mousebutton_code button = DM_MOUSEBUTTON_UNKNOWN;
 
             switch (m_event->detail)
             {
@@ -251,7 +251,7 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
                     break;
             }
 
-            if (button!=0) dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
+            if (button!=DM_MOUSEBUTTON_UNKNOWN) dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
         } break;
         case XCB_MOTION_NOTIFY:
         {
@@ -278,6 +278,8 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
         default:
             break;
         }
+
+        free(event);
     }
 
     return true;
@@ -439,6 +441,8 @@ bool dm_platform_init_opengl()
         DM_LOG_FATAL("Failed to initialize GLAD!");
         return false;
     }
+
+    XFree(fbc);
 
     return true;
 }

@@ -28,6 +28,8 @@ bool dm_engine_create(dm_application* app)
     e_data->platform_data->x = app->engine_config.start_x;
     e_data->platform_data->y = app->engine_config.start_y;
 
+    dm_input_init();
+
     dm_event_set_callback(dm_engine_on_event);
 
     if(!dm_platform_init(e_data->platform_data, app->engine_config.name))
@@ -123,6 +125,7 @@ bool dm_engine_run()
     
     e_data->is_running = false;
 
+    dm_input_shutdown();
     dm_renderer_shutdown();
     dm_platform_shutdown(e_data);
 
@@ -141,14 +144,14 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     } break;
     case DM_KEY_UP_EVENT:
     {
-        dm_key_code key = (dm_key_code)(intptr_t)data;
+        dm_key_code key = *(dm_key_code*)data;
         dm_input_set_key_released(key);
 
         //DM_LOG_DEBUG("Key up event received: %c", key);
     } break;
     case DM_KEY_DOWN_EVENT:
     {
-        dm_key_code key = (dm_key_code)(intptr_t)data;
+        dm_key_code key = *(dm_key_code*)data;
         dm_input_set_key_pressed(key);
 
         // TODO: need to remove this eventaully
@@ -163,14 +166,14 @@ bool dm_engine_on_event(dm_event_type type, void* data)
     } break;
     case DM_MOUSEBUTTON_UP_EVENT:
     {
-        dm_mousebutton_code button = (dm_mousebutton_code)(intptr_t)data;
+        dm_mousebutton_code button = *(dm_mousebutton_code*)data;
         dm_input_set_mousebutton_released(button);
 
         //DM_LOG_DEBUG("Mousebutton up event received");
     } break;
     case DM_MOUSEBUTTON_DOWN_EVENT:
     {
-        dm_mousebutton_code button = (dm_mousebutton_code)(intptr_t)data;
+        dm_mousebutton_code button = *(dm_mousebutton_code*)data;
         dm_input_set_mousebutton_pressed(button);
 
         //DM_LOG_DEBUG("Mousebutton down event received");
