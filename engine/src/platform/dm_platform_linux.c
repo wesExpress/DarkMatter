@@ -192,8 +192,7 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
             );
 
             dm_key_code key = translate_key_code(code);
-            DM_LOG_DEBUG("%d", key);
-            dm_event_dispatch((dm_event){DM_KEY_DOWN_EVENT, NULL, &key});
+            dm_event_dispatch((dm_event) {DM_KEY_DOWN_EVENT, NULL, &key});
 
         } break;
         case XCB_KEY_RELEASE:
@@ -209,7 +208,7 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
             );
 
             dm_key_code key = translate_key_code(code);
-            dm_event_dispatch((dm_event){DM_KEY_UP_EVENT, NULL, &key});
+            dm_event_dispatch((dm_event) {DM_KEY_UP_EVENT, NULL, &key});
 
         } break;
         case XCB_BUTTON_PRESS:
@@ -231,7 +230,7 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
                     break;
             }
 
-            if (button!=0) dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
+            if (button!=0) dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
         } break;
         case XCB_BUTTON_RELEASE:
         {
@@ -252,29 +251,28 @@ bool dm_platform_pump_messages(dm_engine_data* e_data)
                     break;
             }
 
-            if (button!=0) dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
+            if (button!=0) dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
         } break;
         case XCB_MOTION_NOTIFY:
         {
             xcb_motion_notify_event_t* m_event = (xcb_motion_notify_event_t*)event;
             int32_t coords[2] = { m_event->event_x, m_event->event_y };
-            dm_event_dispatch((dm_event) { DM_MOUSE_MOVED_EVENT, NULL,  &coords});
+
+            dm_event_dispatch((dm_event){ DM_MOUSE_MOVED_EVENT, NULL,  &coords});
         } break;
         case XCB_CONFIGURE_NOTIFY:
         {
             xcb_configure_notify_event_t* c_event = (xcb_configure_notify_event_t*)event;
 
             uint32_t new_rect[2] = { c_event->width, c_event->height };
-            dm_event_dispatch((dm_event) { DM_WINDOW_RESIZE_EVENT, NULL, &new_rect });
+
+            dm_event_dispatch((dm_event){ DM_WINDOW_RESIZE_EVENT, NULL, &new_rect });
         } break;
         case XCB_CLIENT_MESSAGE:
         {
             cm = (xcb_client_message_event_t*)event;
 
-            if(cm->data.data32[0]==linux_data->wm_delete_win)
-            {
-                dm_event_dispatch((dm_event){DM_WINDOW_CLOSE_EVENT, NULL, NULL});
-            }
+            if(cm->data.data32[0]==linux_data->wm_delete_win) dm_event_dispatch((dm_event){ DM_WINDOW_CLOSE_EVENT, NULL, NULL });
         } break;
 
         default:

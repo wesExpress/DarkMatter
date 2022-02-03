@@ -1,5 +1,6 @@
 #include "dm_input.h"
 #include "platform/dm_platform.h"
+#include "core/dm_logger.h"
 
 typedef struct dm_input_state
 {
