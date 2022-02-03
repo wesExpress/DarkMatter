@@ -58,61 +58,61 @@
 - (void) mouseDown: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_L;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 }
 
 - (void) mouseUp: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_L;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 }
 
 - (void) rightMouseDown: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_R;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 }
 
 - (void) rightMouseUp: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_R;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 }
 
 - (void) otherMouseDown: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_M;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 }
 
 - (void) otherMouseUp: (NSEvent*) event
 {
     dm_mousebutton_code button = DM_MOUSEBUTTON_M;
-    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+    dm_event_dispatch((dm_event){ DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 }
 
 - (void) mouseMoved: (NSEvent*) event
 {
     const NSPoint point = [event locationInWindow];
     uint32_t pos[2] = { point.x, point.y };
-    dm_event_dispatch((dm_event){ DM_MOUSE_MOVED_EVENT, NULL, (void*)(intptr_t)pos });
+    dm_event_dispatch((dm_event){ DM_MOUSE_MOVED_EVENT, NULL, &pos });
 }
 
 - (void) keyDown: (NSEvent*) event
 {
     dm_key_code key = dm_translate_key_code((uint32_t)[event keyCode]);
-    dm_event_dispatch((dm_event){ DM_KEY_DOWN_EVENT, NULL, (void*)(intptr_t)key });
+    dm_event_dispatch((dm_event){ DM_KEY_DOWN_EVENT, NULL, &key });
 }
 
 - (void) keyUp: (NSEvent*) event
 {
     dm_key_code key = dm_translate_key_code((uint32_t)[event keyCode]);
-    dm_event_dispatch((dm_event){ DM_KEY_UP_EVENT, NULL, (void*)(intptr_t)key});
+    dm_event_dispatch((dm_event){ DM_KEY_UP_EVENT, NULL, &key});
 }
 
 - (void) scrollWheel: (NSEvent*) event
 {
-    dm_event_dispatch((dm_event){ DM_MOUSE_SCROLLED_EVENT, NULL, (void*)(intptr_t)(int8_t)[event scrollingDeltaY]});
+    dm_event_dispatch((dm_event){ DM_MOUSE_SCROLLED_EVENT, NULL, &(int8_t)[event scrollingDeltaY]});
 }
 
 // must be implemented for the protocol to shut up in the compiler

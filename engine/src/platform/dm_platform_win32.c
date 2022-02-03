@@ -265,21 +265,21 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 		uint32_t height = rect.bottom - rect.top;
 		uint32_t new_rect[2] = { width, height };
 
-		dm_event_dispatch((dm_event) { DM_WINDOW_RESIZE_EVENT, NULL, (void*)new_rect });
+		dm_event_dispatch((dm_event) { DM_WINDOW_RESIZE_EVENT, NULL, &new_rect });
 	} break;
 
 	case WM_KEYDOWN:
 	case WM_SYSKEYDOWN:
 	{
 		dm_key_code key = (dm_key_code)wparam;
-		dm_event_dispatch((dm_event) { DM_KEY_DOWN_EVENT, NULL, (void*)key });
+		dm_event_dispatch((dm_event) { DM_KEY_DOWN_EVENT, NULL, &key });
 
 	} break;
 	case WM_KEYUP:
 	case WM_SYSKEYUP:
 	{
 		dm_key_code key = (dm_key_code)wparam;
-		dm_event_dispatch((dm_event) { DM_KEY_UP_EVENT, NULL, (void*)key });
+		dm_event_dispatch((dm_event) { DM_KEY_UP_EVENT, NULL, &key });
 	} break;
 
 	case WM_MOUSEMOVE:
@@ -287,7 +287,7 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 		int32_t x = GET_X_LPARAM(lparam);
 		int32_t y = GET_Y_LPARAM(lparam);
 		int32_t coords[2] = { x, y };
-		dm_event_dispatch((dm_event) { DM_MOUSE_MOVED_EVENT, NULL, (void*)coords });
+		dm_event_dispatch((dm_event) { DM_MOUSE_MOVED_EVENT, NULL, &coords });
 	} break;
 
 	case WM_MOUSEWHEEL:
@@ -297,39 +297,39 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 		{
 			delta = (delta < 0) ? -1 : 1;
 		}
-		dm_event_dispatch((dm_event) { DM_MOUSE_SCROLLED_EVENT, NULL, (void*)(size_t)delta });
+		dm_event_dispatch((dm_event) { DM_MOUSE_SCROLLED_EVENT, NULL, &(size_t)delta });
 	} break;
 
 	case WM_LBUTTONDOWN:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_L;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 	} break;
 	case WM_RBUTTONDOWN:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_R;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 	} break;
 	case WM_MBUTTONDOWN:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_M;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, &button });
 	} break;
 
 	case WM_LBUTTONUP:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_L;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 	} break;
 	case WM_RBUTTONUP:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_R;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 	} break;
 	case WM_MBUTTONUP:
 	{
 		dm_mousebutton_code button = DM_MOUSEBUTTON_M;
-		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)button });
+		dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, &button });
 	} break;
 
 	}
