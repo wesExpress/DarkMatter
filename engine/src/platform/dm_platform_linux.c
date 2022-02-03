@@ -58,7 +58,7 @@ bool dm_platform_init(dm_platform_data* platform_data, const char* window_name)
 
     linux_data->display = XOpenDisplay(NULL);
 
-    XAutoRepeatOff(linux_data->display);
+    //XAutoRepeatOff(linux_data->display);
 
     int screen_p = 0;
     linux_data->connection = XGetXCBConnection(linux_data->display);
@@ -164,7 +164,7 @@ bool dm_platform_init(dm_platform_data* platform_data, const char* window_name)
 
 void dm_platform_shutdown(dm_engine_data* e_data)
 {
-    XAutoRepeatOn(linux_data->display);
+    //XAutoRepeatOn(linux_data->display);
     xcb_destroy_window(linux_data->connection, linux_data->window);
 
     dm_free(linux_data, sizeof(dm_internal_linux_data), DM_MEM_PLATFORM);
