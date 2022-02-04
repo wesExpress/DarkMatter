@@ -1,7 +1,10 @@
 #include "application.h"
 
-static float move_vel = 2.5f;
-static float look_vel = 1.5f;
+static dm_editor_camera camera = {
+	.pitch = 0, .yaw=-90, .roll=0,
+	.move_velocity = 2.5f,
+	.look_sens = 0.1f
+};
 
 dm_transform transforms[] = {
 	{0,0,0},
@@ -92,7 +95,9 @@ bool dm_application_init(dm_application* app)
 
 	// camera
 	dm_renderer_api_set_camera_pos((dm_vec3) { 0, 0, 4 });
+	dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
 
+	// transforms
 	DM_LOG_DEBUG("Submitting object transforms...");
 	dm_renderer_api_submit_object_transforms(transforms, sizeof(transforms) / sizeof(dm_transform));
 
@@ -106,69 +111,60 @@ void dm_application_shutdown(dm_application* app)
 
 bool dm_application_update(dm_application* app, float delta_time)
 {
-	dm_vec3 pos_delta = { 0 };
-	dm_vec3 forward_delta = { 0 };
-	
+	dm_vec3 forward = { 0 };
+
+	// camera direction
+	if (dm_input_is_key_pressed(DM_KEY_SHIFT))
+	{
+		camera.yaw += dm_input_get_mouse_delta_x() * camera.look_sens;
+		camera.pitch -= dm_input_get_mouse_delta_y() * camera.look_sens;
+
+		DM_CLAMP(camera.pitch, -89, 89);
+	}
+
+	forward.x = dm_cos(dm_deg_to_rad(camera.yaw)) * dm_cos(dm_deg_to_rad(camera.pitch));
+	forward.y = dm_sin(dm_deg_to_rad(camera.pitch));
+	forward.z = dm_sin(dm_deg_to_rad(camera.yaw)) * dm_cos(dm_deg_to_rad(camera.pitch));
+	forward = dm_vec3_norm(forward);
+
 	// camera position
 	if (dm_input_is_key_pressed(DM_KEY_A))
 	{
-		pos_delta.x = -1;
+		dm_vec3 delta_pos = dm_vec3_cross(dm_renderer_api_get_camera_forward(), dm_renderer_api_get_camera_up());
+		delta_pos = dm_vec3_norm(delta_pos);
+		delta_pos = dm_vec3_scale(delta_pos, -camera.move_velocity * delta_time);
+		dm_renderer_api_update_camera_pos(delta_pos);
 	}
 	else if (dm_input_is_key_pressed(DM_KEY_D))
 	{
-		pos_delta.x = 1;
+		dm_vec3 delta_pos = dm_vec3_cross(dm_renderer_api_get_camera_forward(), dm_renderer_api_get_camera_up());
+		delta_pos = dm_vec3_norm(delta_pos);
+		delta_pos = dm_vec3_scale(delta_pos, camera.move_velocity * delta_time);
+		dm_renderer_api_update_camera_pos(delta_pos);
 	}
 
 	if (dm_input_is_key_pressed(DM_KEY_W))
 	{
-		pos_delta.z = -1;
+		dm_vec3 delta_pos = dm_vec3_scale(dm_renderer_api_get_camera_forward(), camera.move_velocity * delta_time);
+		dm_renderer_api_update_camera_pos(delta_pos);
 	}
 	else if (dm_input_is_key_pressed(DM_KEY_S))
 	{
-		pos_delta.z = 1;
+		dm_vec3 delta_pos = dm_vec3_scale(dm_renderer_api_get_camera_forward(), -camera.move_velocity * delta_time);
+		dm_renderer_api_update_camera_pos(delta_pos);
 	}
 
 	if (dm_input_is_key_pressed(DM_KEY_Z))
 	{
-		pos_delta.y = 1;
+		dm_renderer_api_update_camera_pos((dm_vec3) { 0, -camera.move_velocity * delta_time, 0 });
 	}
 	else if (dm_input_is_key_pressed(DM_KEY_X))
 	{
-		pos_delta.y = -1;
+		dm_renderer_api_update_camera_pos((dm_vec3) { 0, camera.move_velocity * delta_time, 0 });
 	}
-
-	// camera direction
-	if (dm_input_is_key_pressed(DM_KEY_Q))
-	{
-		forward_delta.x = -1;
-	}
-	else if (dm_input_is_key_pressed(DM_KEY_E))
-	{
-		forward_delta.x = 1;
-	}
-
-	if (dm_input_is_key_pressed(DM_KEY_R))
-	{
-		forward_delta.y = 1;
-	}
-	else if (dm_input_is_key_pressed(DM_KEY_F))
-	{
-		forward_delta.y = -1;
-	}
-
-	// norm and scale the deltas
-	pos_delta = dm_vec3_norm(pos_delta);
-	forward_delta = dm_vec3_norm(forward_delta);
-
-	pos_delta = dm_vec3_scale(pos_delta, move_vel * delta_time);
-	forward_delta = dm_vec3_scale(forward_delta, look_vel * delta_time);
 
 	// update the camera
-	dm_renderer_api_update_camera_pos(pos_delta);
-	dm_renderer_api_update_camera_forward(forward_delta);
-
-	// object transforms
-	
+	dm_renderer_api_set_camera_forward(forward);
 
 	return true;
 }

@@ -394,3 +394,18 @@ void dm_renderer_update_camera_forward(dm_vec3 delta_forward)
 	forward.z = DM_CLAMP(forward.z, -89, 89);
 	dm_camera_set_forward(&r_data.camera, forward);
 }
+
+dm_vec3 dm_renderer_get_camera_forward()
+{
+	return r_data.camera.forward;
+}
+
+dm_vec3 dm_renderer_get_camera_up()
+{
+	return r_data.camera.up;
+}
+
+dm_vec3 dm_renderer_get_camera_pos()
+{
+	return r_data.camera.pos;
+}

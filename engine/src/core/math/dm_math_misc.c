@@ -24,3 +24,18 @@ float dm_math_angle_xy(float x, float y)
 
 	return theta;
 }
+
+float dm_sin(float angle)
+{
+	return sinf(angle);
+}
+
+float dm_cos(float angle)
+{
+	return cosf(angle);
+}
+
+float dm_tan(float angle)
+{
+	return tanf(angle);
+}

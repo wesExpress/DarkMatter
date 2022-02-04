@@ -12,4 +12,9 @@ float dm_deg_to_rad(float degrees);
 
 float dm_math_angle_xy(float x, float y);
 
+// c math functions
+float dm_sin(float angle);
+float dm_cos(float angle);
+float dm_tan(float angle);
+
 #endif

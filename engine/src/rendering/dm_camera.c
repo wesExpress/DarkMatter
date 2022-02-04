@@ -51,6 +51,9 @@ void dm_camera_set_forward(dm_camera* camera, dm_vec3 forward)
 {
 	camera->forward = forward;
 
+	dm_vec3 camera_right = dm_vec3_norm(dm_vec3_cross((dm_vec3) { 0, 1, 0 }, camera->forward));
+	camera->up = dm_vec3_cross(camera->forward, camera_right);
+
 	dm_camera_set_view(
 		camera,
 		camera->pos,

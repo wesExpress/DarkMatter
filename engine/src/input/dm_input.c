@@ -64,20 +64,36 @@ bool dm_input_mouse_has_moved()
 	return ((dm_current_input->mouse.x != dm_prev_input->mouse.x) || (dm_current_input->mouse.y != dm_prev_input->mouse.y));
 }
 
-int dm_input_get_mouse_x()
+uint32_t dm_input_get_mouse_x()
 {
 	return dm_current_input->mouse.x;
 }
 
-int dm_input_get_mouse_y()
+uint32_t dm_input_get_mouse_y()
 {
 	return dm_current_input->mouse.y;
 }
 
-void dm_input_get_mouse_pos(int* x, int* y)
+void dm_input_get_mouse_pos(uint32_t* x, uint32_t* y)
 {
 	*x = dm_current_input->mouse.x;
 	*y = dm_current_input->mouse.y;
+}
+
+void dm_input_get_mouse_delta(int* x, int* y)
+{
+	*x = dm_input_get_mouse_delta_x();
+	*y = dm_input_get_mouse_delta_y();
+}
+
+int dm_input_get_mouse_delta_x()
+{
+	return dm_current_input->mouse.x - dm_prev_input->mouse.x;
+}
+
+int dm_input_get_mouse_delta_y()
+{
+	return dm_current_input->mouse.y - dm_prev_input->mouse.y;
 }
 
 int dm_input_get_prev_mouse_x()

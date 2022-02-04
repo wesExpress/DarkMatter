@@ -50,3 +50,18 @@ void dm_renderer_api_update_camera_euler(dm_vec3 delta_euler)
 {
 
 }
+
+dm_vec3 dm_renderer_api_get_camera_forward()
+{
+	return dm_renderer_get_camera_forward();
+}
+
+dm_vec3 dm_renderer_api_get_camera_up()
+{
+	return dm_renderer_get_camera_up();
+}
+
+dm_vec3 dm_renderer_api_get_camera_pos()
+{
+	return dm_renderer_get_camera_pos();
+}

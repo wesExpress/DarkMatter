@@ -14,7 +14,7 @@ typedef enum dm_mousebutton_code
 typedef struct dm_mouse_state
 {
     bool buttons[3];
-    int x, y;
+    uint32_t x, y;
     int scroll;
 } dm_mouse_state;
 

@@ -29,4 +29,10 @@ DM_API void dm_renderer_api_update_camera_forward(dm_vec3 delta_forward);
 DM_API void dm_renderer_api_set_camera_euler(dm_vec3 delta_euler);
 DM_API void dm_renderer_api_update_camera_euler(dm_vec3 delta_euler);
 
+// getting functions
+
+DM_API dm_vec3 dm_renderer_api_get_camera_forward();
+DM_API dm_vec3 dm_renderer_api_get_camera_up();
+DM_API dm_vec3 dm_renderer_api_get_camera_pos();
+
 #endif
