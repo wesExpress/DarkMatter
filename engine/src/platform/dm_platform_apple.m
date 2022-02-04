@@ -112,7 +112,8 @@
 
 - (void) scrollWheel: (NSEvent*) event
 {
-    dm_event_dispatch((dm_event){ DM_MOUSE_SCROLLED_EVENT, NULL, &(int8_t)[event scrollingDeltaY]});
+    float scroll = [event scrollingDeltaY];
+    dm_event_dispatch((dm_event){ DM_MOUSE_SCROLLED_EVENT, NULL, &scroll});
 }
 
 // must be implemented for the protocol to shut up in the compiler
