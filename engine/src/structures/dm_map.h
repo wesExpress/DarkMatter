@@ -8,7 +8,6 @@ typedef struct dm_map_item
 {
 	char* key;
 	void* value;
-	struct dm_map_item* next;
 } dm_map_item;
 
 typedef struct dm_map_t
@@ -16,7 +15,6 @@ typedef struct dm_map_t
 	size_t capacity, count, type_size;
 	dm_map_item** items;
 	bool* tombstones;
-	dm_map_item* head;
 } dm_map_t;
 
 dm_map_t* dm_map_create(size_t type_size, size_t capacity);

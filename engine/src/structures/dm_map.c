@@ -101,25 +101,6 @@ void dm_map_insert(dm_map_t* map, const char* key, void* value)
 		map->count++;
 		if(index==hash) map->tombstones[index] = false;
 		if(( (float)map->count / (float)map->capacity) >= DM_MAP_LOAD_FACTOR) dm_map_resize(map);
-		
-		// attach its next node
-		uint32_t runner = index + 1;
-		while (runner++)
-		{
-			if (map->items[runner])
-			{
-				map->items[index]->next = map->items[runner];
-			}
-			if (runner > map->capacity) break;
-		}
-
-		// deal with the head
-		runner = 0;
-		while (runner++)
-		{
-			if (map->items[runner] == map->head) break;
-		}
-		if (index < runner)map->head = map->items[index];
 	}
 	else DM_LOG_ERROR("Trying to insert into NULL map!");
 }

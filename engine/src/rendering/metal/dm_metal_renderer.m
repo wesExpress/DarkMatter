@@ -140,9 +140,9 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
         dm_metal_destroy_shader_library(pipeline->raster_desc.shader);
         
         // buffers
-        dm_metal_destroy_buffer(pipeline->render_packet.vertex_buffer);
-        dm_metal_destroy_buffer(pipeline->render_packet.index_buffer);
-        dm_metal_destroy_buffer(pipeline->render_packet.mvp);
+        dm_metal_destroy_buffer(pipeline->vertex_buffer);
+        dm_metal_destroy_buffer(pipeline->index_buffer);
+        dm_metal_destroy_buffer(pipeline->view_proj);
 
         // textures
         for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
@@ -183,12 +183,12 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         }
 
         // buffers
-        if(!dm_metal_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, metal_renderer)) return false;
-        if(!dm_metal_create_buffer(pipeline->render_packet.index_buffer, ib_data, metal_renderer)) return false;
+        if(!dm_metal_create_buffer(pipeline->vertex_buffer, vb_data, metal_renderer)) return false;
+        if(!dm_metal_create_buffer(pipeline->index_buffer, ib_data, metal_renderer)) return false;
 
-        // mvp uniform
-        pipeline->render_packet.mvp->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
-        dm_internal_buffer* internal_buffer = pipeline->render_packet.mvp->internal_buffer;
+        // view_proj uniform
+        pipeline->view_proj->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
+        dm_internal_buffer* internal_buffer = pipeline->view_proj->internal_buffer;
 
         internal_buffer->buffer = [metal_renderer->device newBufferWithBytes: mvp_data
                                                           length: dm_metal_align(sizeof(dm_mat4), DM_METAL_BUFFER_ALIGNMENT)
@@ -236,9 +236,9 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
         [commandEncoder setCullMode:MTLCullModeBack];
 
         // buffers
-        dm_internal_buffer* internal_vb = pipeline->render_packet.vertex_buffer->internal_buffer;
-        dm_internal_buffer* internal_ib = pipeline->render_packet.index_buffer->internal_buffer;
-        dm_internal_buffer* internal_mvp = pipeline->render_packet.mvp->internal_buffer;
+        dm_internal_buffer* internal_vb = pipeline->vertex_buffer->internal_buffer;
+        dm_internal_buffer* internal_ib = pipeline->index_buffer->internal_buffer;
+        dm_internal_buffer* internal_mvp = pipeline->view_proj->internal_buffer;
 
         [commandEncoder setVertexBuffer:internal_vb->buffer offset:0 atIndex:0];
 
@@ -301,10 +301,16 @@ void dm_renderer_draw_arrays_impl(dm_render_pipeline* pipeline, int first, size_
 
 }
 
-void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
+void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pipeline* pipeline)
 {
 
 }
+
+void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pipeline* pipeline)
+{
+
+}
+
 
 bool dm_renderer_update_buffer_impl(dm_buffer* cb, void* data, size_t data_size)
 {

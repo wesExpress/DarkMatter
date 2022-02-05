@@ -34,6 +34,7 @@ dm_list* indices = NULL;
 // instances
 dm_map_t* inst_map = NULL;
 dm_map_t* inst_transforms = NULL;
+dm_list* object_tags = NULL;
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -54,6 +55,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 
 	inst_map = dm_map_create(sizeof(dm_inst_data), 0);
 	inst_transforms = dm_map_create(sizeof(dm_list), 0);
+	object_tags = dm_list_create(sizeof(dm_string), 0);
 
 	// maps
 	dm_image_map_init();
@@ -85,14 +87,8 @@ void dm_renderer_shutdown()
 	dm_list_destroy(indices);
 
 	dm_map_destroy(inst_map);
-	dm_map_item* iter = inst_transforms->head;
-	while(iter)
-	{
-		dm_list* list = dm_map_get(inst_transforms, iter->key);
-		dm_list_destroy(list);
-		iter = iter->next;
-	}
-	//dm_map_destroy(inst_transforms);
+	dm_map_destroy(inst_transforms);
+	dm_list_destroy(object_tags);
 
 	// cleanup
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
@@ -135,11 +131,11 @@ bool dm_renderer_begin_scene()
 	dm_render_command_update_buffer(r_data.object_pipeline->view_proj, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj), r_data.object_pipeline);
 	dm_render_command_bind_pipeline(r_data.object_pipeline);
 
-	dm_map_item* iter = inst_transforms->head;
-	while (iter)
+	for(uint32_t i=0; i<object_tags->count;i++)
 	{
-		dm_inst_data* inst_data = dm_map_get(inst_map, iter->key);
-		dm_list* inst_ts = dm_map_get(inst_transforms, iter->key);
+		dm_string* key = dm_list_at(object_tags, i);
+		dm_inst_data* inst_data = dm_map_get(inst_map, key->string);
+		dm_list* inst_ts = dm_map_get(inst_transforms, key->string);
 		dm_list* inst_buffer = dm_list_create(sizeof(dm_inst_data), 0);
 
 		for (uint32_t j = 0; j < inst_ts->count; j++)
@@ -148,6 +144,9 @@ bool dm_renderer_begin_scene()
 
 			dm_mat4 model = dm_mat4_identity();
 			model = dm_mat_translate(model, transform->position);
+#ifdef DM_DIRECTX
+			model = dm_mat4_transpose(model);
+#endif
 
 			dm_list_append(inst_buffer, &model);
 		}
@@ -159,7 +158,6 @@ bool dm_renderer_begin_scene()
 		dm_render_command_end_renderpass(r_data.object_pipeline);
 
 		dm_list_destroy(inst_buffer);
-		iter = iter->next;
 	}
 	
 	return true;
@@ -335,6 +333,11 @@ bool dm_renderer_init_object_data()
 
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag)
 {
+	dm_string* obj_tag = dm_alloc(sizeof(dm_string), DM_MEM_STRING);
+	obj_tag->string = tag;
+	obj_tag->len = strlen(tag)+1;
+	dm_list_append(object_tags, obj_tag);
+	
 	dm_inst_data inst_data = { 0 };
 	inst_data.index_count = num_indices;
 	inst_data.index_offset = indices->count;
