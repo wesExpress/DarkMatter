@@ -31,8 +31,9 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 dm_list* vertices = NULL;
 dm_list* indices = NULL;
 
-// transforms
-dm_list* object_transforms = NULL;
+// instances
+dm_map_t* inst_map = NULL;
+dm_map_t* inst_transforms = NULL;
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -50,7 +51,9 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	// vertex data
 	vertices = dm_list_create(sizeof(dm_vertex_t), 0);
 	indices = dm_list_create(sizeof(dm_index_t), 0);
-	object_transforms = dm_list_create(sizeof(dm_transform), 0);
+
+	inst_map = dm_map_create(sizeof(dm_inst_data), 0);
+	inst_transforms = dm_map_create(sizeof(dm_list), 0);
 
 	// maps
 	dm_image_map_init();
@@ -81,8 +84,15 @@ void dm_renderer_shutdown()
 	dm_list_destroy(vertices);
 	dm_list_destroy(indices);
 
-	// transforms
-	dm_list_destroy(object_transforms);
+	dm_map_destroy(inst_map);
+	dm_map_item* iter = inst_transforms->head;
+	while(iter)
+	{
+		dm_list* list = dm_map_get(inst_transforms, iter->key);
+		dm_list_destroy(list);
+		iter = iter->next;
+	}
+	//dm_map_destroy(inst_transforms);
 
 	// cleanup
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
@@ -121,30 +131,37 @@ bool dm_renderer_begin_scene()
 		dm_renderer_clear_command_buffer(r_data.object_pipeline->render_commands);
 	}
 
-	dm_render_command_begin_renderpass(r_data.object_pipeline);
 	dm_render_command_clear(&r_data.clear_color, r_data.object_pipeline);
+	dm_render_command_update_buffer(r_data.object_pipeline->view_proj, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj), r_data.object_pipeline);
 	dm_render_command_bind_pipeline(r_data.object_pipeline);
-	
-	for (uint32_t i = 0; i < object_transforms->count; i++)
+
+	dm_map_item* iter = inst_transforms->head;
+	while (iter)
 	{
-		dm_mat4 mvp = dm_mat4_identity();
+		dm_inst_data* inst_data = dm_map_get(inst_map, iter->key);
+		dm_list* inst_ts = dm_map_get(inst_transforms, iter->key);
+		dm_list* inst_buffer = dm_list_create(sizeof(dm_inst_data), 0);
 
-		dm_vec3* pos = dm_list_at(object_transforms, i);
-		mvp = dm_mat_translate(mvp, *pos);
+		for (uint32_t j = 0; j < inst_ts->count; j++)
+		{
+			dm_transform* transform = dm_list_at(inst_ts, j);
 
-		mvp = dm_mat4_mul_mat4(mvp, r_data.camera.view_proj);
-#ifdef DM_DIRECTX
-		mvp = dm_mat4_transpose(mvp);
-#endif
+			dm_mat4 model = dm_mat4_identity();
+			model = dm_mat_translate(model, transform->position);
 
-		dm_render_command_update_buffer(r_data.object_pipeline->render_packet.mvp, &mvp, sizeof(mvp), r_data.object_pipeline);
-		dm_render_command_bind_buffer(r_data.object_pipeline->render_packet.mvp, r_data.object_pipeline);
-		dm_render_command_draw_indexed(r_data.object_pipeline);
+			dm_list_append(inst_buffer, &model);
+		}
 
+		dm_render_command_begin_renderpass(r_data.object_pipeline);
+		dm_render_command_update_buffer(r_data.object_pipeline->inst_buffer, inst_buffer->data, inst_buffer->count * inst_buffer->element_size, r_data.object_pipeline);
+		dm_render_command_bind_buffer(r_data.object_pipeline->inst_buffer, 1, r_data.object_pipeline);
+		dm_render_command_draw_instanced(inst_data->index_count, inst_ts->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.object_pipeline);
+		dm_render_command_end_renderpass(r_data.object_pipeline);
+
+		dm_list_destroy(inst_buffer);
+		iter = iter->next;
 	}
 	
-	dm_render_command_end_renderpass(r_data.object_pipeline);
-
 	return true;
 }
 
@@ -164,13 +181,11 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	pipeline->raster_desc.shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 
 	// render packet
-	pipeline->render_packet.vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->render_packet.index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->render_packet.mvp = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->inst_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->view_proj = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->render_packet.image_paths = dm_list_create(sizeof(dm_string), 0);
-
-	pipeline->render_packet.count = 0;
-	pipeline->render_packet.offset = 0;
 
 	return dm_renderer_create_render_pipeline_impl(pipeline);
 }
@@ -182,9 +197,10 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 
 	dm_renderer_destroy_render_pipeline_impl(pipeline);
 
-	dm_free(pipeline->render_packet.vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_free(pipeline->render_packet.index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_free(pipeline->render_packet.mvp, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_free(pipeline->vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_free(pipeline->index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_free(pipeline->inst_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_free(pipeline->view_proj, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 
 	// images
 	for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
@@ -275,16 +291,18 @@ bool dm_renderer_init_object_data()
 	r_data.object_pipeline->raster_desc.shader->pixel_desc = ps_desc;
 
 	// buffers
-	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .buffer_size = vertices->count * vertices->element_size, .elem_size=vertices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT };
-	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .buffer_size = indices->count * indices->element_size, .elem_size=indices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT };
+	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = vertices->count * vertices->element_size, .elem_size=vertices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT , .name = "vertex"};
+	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .data_t = DM_BUFFER_DATA_T_UINT, .buffer_size = indices->count * indices->element_size, .elem_size=indices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT, .name = "index"};
+	dm_buffer_desc inst_desc = { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = sizeof(dm_inst_data) * DM_MAX_INSTANCES, .elem_size=sizeof(dm_vertex_inst), .usage = DM_BUFFER_USAGE_DYNAMIC, .cpu_access = DM_BUFFER_CPU_WRITE, .name = "instance" };
 
-	r_data.object_pipeline->render_packet.vertex_buffer->desc = vb_desc;
-	r_data.object_pipeline->render_packet.index_buffer->desc = ib_desc;
-	r_data.object_pipeline->render_packet.count = ib_desc.buffer_size / ib_desc.elem_size;
+	r_data.object_pipeline->vertex_buffer->desc = vb_desc;
+	r_data.object_pipeline->index_buffer->desc = ib_desc;
+	r_data.object_pipeline->inst_buffer->desc = inst_desc;
 
 	dm_vertex_attrib_desc v_attribs[] = {
 		pos_attrib_desc,
-		tex_coord_desc
+		tex_coord_desc,
+		model_attrib_desc
 	};
 
 	dm_vertex_layout v_layout = {
@@ -303,9 +321,9 @@ bool dm_renderer_init_object_data()
 	vp_desc.elem_size = sizeof(float);
 	vp_desc.count = 4;
 	vp_desc.buffer_size = ((sizeof(dm_mat4) + 15) / 16) * 16;
-	vp_desc.name = "mvp";
+	vp_desc.name = "view_proj";
 
-	r_data.object_pipeline->render_packet.mvp->desc = vp_desc;
+	r_data.object_pipeline->view_proj->desc = vp_desc;
 
 	dm_mat4 model = dm_mat4_identity();
 	model = dm_mat4_mul_mat4(model, r_data.camera.view_proj);
@@ -315,8 +333,14 @@ bool dm_renderer_init_object_data()
 	return true;
 }
 
-void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices)
+void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag)
 {
+	dm_inst_data inst_data = { 0 };
+	inst_data.index_count = num_indices;
+	inst_data.index_offset = indices->count;
+	inst_data.vertex_offset = vertices->count;
+	dm_map_insert(inst_map, tag, &inst_data);
+
 	for (uint32_t i = 0; i < num_vertices; i++)
 	{
 		dm_list_append(vertices, &vertex_data[i]);
@@ -339,19 +363,26 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 	}
 }
 
-void dm_renderer_submit_object_transforms(dm_transform* transforms, uint32_t num_transforms)
+void dm_renderer_submit_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms)
 {
+	dm_list* inst_ts = dm_list_create(sizeof(dm_transform), 0);
+
 	for (uint32_t i = 0; i < num_transforms; i++)
 	{
-		dm_list_append(object_transforms, &transforms[i]);
+		dm_list_append(inst_ts, &transforms[i]);
 	}
+
+	dm_map_insert(inst_transforms, tag, inst_ts);
 }
 
-void dm_renderer_update_object_transforms(dm_transform* transforms, uint32_t num_transforms)
+void dm_renderer_update_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms)
 {
+	dm_list* inst_ts = dm_map_get(inst_transforms, tag);
+	dm_list_clear(inst_ts, 0);
+
 	for (uint32_t i = 0; i < num_transforms; i++)
 	{
-		dm_list_set(object_transforms, &transforms[i], i);
+		dm_list_append(inst_ts, &transforms[i]);
 	}
 }
 

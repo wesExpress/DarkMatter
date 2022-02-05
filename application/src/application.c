@@ -19,6 +19,8 @@ dm_transform transforms[] = {
 	{-1.3,1,-1.5}
 };
 
+dm_map_t* object_map = NULL;
+
 bool dm_application_init(dm_application* app)
 {
 	DM_LOG_TRACE("Hellow from the application!\n");
@@ -71,7 +73,7 @@ bool dm_application_init(dm_application* app)
 	uint32_t num_vertices = sizeof(vertices) / sizeof(dm_vertex_t);
 	uint32_t num_indices = sizeof(indices) / sizeof(dm_index_t);
 
-	dm_renderer_api_submit_vertex_data(vertices, indices, num_vertices, num_indices);
+	dm_renderer_api_submit_vertex_data("cube", vertices, indices, num_vertices, num_indices);
 
 	// textures
 	DM_LOG_DEBUG("Submitting texture data from app...");
@@ -98,8 +100,7 @@ bool dm_application_init(dm_application* app)
 	dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
 
 	// transforms
-	DM_LOG_DEBUG("Submitting object transforms...");
-	dm_renderer_api_submit_object_transforms(transforms, sizeof(transforms) / sizeof(dm_transform));
+	dm_renderer_api_submit_object_transforms("cube", transforms, sizeof(transforms) / sizeof(transforms[0]));
 
 	return true;
 }

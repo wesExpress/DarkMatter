@@ -90,13 +90,14 @@ void dm_renderer_draw_arrays_impl(dm_render_pipeline* pipeline, int first, size_
 	directx_renderer->context->lpVtbl->Draw(directx_renderer->context, count, first);
 }
 
-void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
+void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pipeline* pipeline)
 {
-	dm_render_packet render_packet = pipeline->render_packet;
+	directx_renderer->context->lpVtbl->DrawIndexed(directx_renderer->context, num_indices, index_offset, vertex_offset);
+}
 
-	// index count, start index, base index
-	// base index is the value added to each index before reading a vertex from the buffer
-	directx_renderer->context->lpVtbl->DrawIndexed(directx_renderer->context, render_packet.count, 0, render_packet.offset);
+void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pipeline* pipeline)
+{
+	directx_renderer->context->lpVtbl->DrawIndexedInstanced(directx_renderer->context, num_indices, num_insts, index_offset, vertex_offset, inst_offset);
 }
 
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
@@ -232,12 +233,13 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+	dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
-	dm_directx_delete_buffer(pipeline->render_packet.vertex_buffer, pipeline->interal_pipeline);
-	dm_directx_delete_buffer(pipeline->render_packet.index_buffer, pipeline->interal_pipeline);
-	dm_directx_delete_buffer(pipeline->render_packet.mvp, pipeline->interal_pipeline);
-	dm_directx_delete_shader(pipeline->raster_desc.shader, pipeline->interal_pipeline);
+	dm_directx_delete_buffer(pipeline->vertex_buffer, internal_pipe);
+	dm_directx_delete_buffer(pipeline->index_buffer, internal_pipe);
+	dm_directx_delete_buffer(pipeline->inst_buffer, internal_pipe);
+	dm_directx_delete_buffer(pipeline->view_proj, internal_pipe);
+	dm_directx_delete_shader(pipeline->raster_desc.shader, internal_pipe);
 
 	/*
 	texture
@@ -276,13 +278,14 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 	/*
 	// buffers
 	*/
-	if (!dm_directx_create_buffer(pipeline->render_packet.vertex_buffer, vb_data, directx_renderer, internal_pipe)) return false;
-	if (!dm_directx_create_buffer(pipeline->render_packet.index_buffer, ib_data, directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_buffer(pipeline->vertex_buffer, vb_data, directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_buffer(pipeline->index_buffer, ib_data, directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_buffer(pipeline->inst_buffer, 0, directx_renderer, internal_pipe)) return false;
 
 	/*
 	// constant buffer(s)
 	*/
-	if (!dm_directx_create_buffer(pipeline->render_packet.mvp, mvp_data, directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_buffer(pipeline->view_proj, mvp_data, directx_renderer, internal_pipe)) return false;
 
 	/*
 	textures
@@ -314,9 +317,9 @@ bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_s
 	return true;
 }
 
-bool dm_renderer_bind_buffer_impl(dm_buffer* buffer)
+bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
 {
-	dm_directx_bind_buffer(buffer, directx_renderer);
+	dm_directx_bind_buffer(buffer, slot, directx_renderer);
 
 	return true;
 }
@@ -379,8 +382,10 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// buffers
 	*/
-	dm_directx_bind_buffer(pipeline->render_packet.vertex_buffer, directx_renderer);
-	dm_directx_bind_buffer(pipeline->render_packet.index_buffer, directx_renderer);
+	dm_directx_bind_buffer(pipeline->vertex_buffer, 0, directx_renderer);
+	dm_directx_bind_buffer(pipeline->index_buffer, 0, directx_renderer);
+
+	dm_directx_bind_buffer(pipeline->view_proj, 0, directx_renderer);
 
 	/*
 	textures

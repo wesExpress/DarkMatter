@@ -61,7 +61,6 @@ void dm_map_destroy(dm_map_t* map)
 		{
 			// items
 			if (map->items[i]) dm_map_destroy_item(map->items[i], map->type_size);
-
 		}
 		dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
 		dm_free(map->tombstones, sizeof(bool) * map->capacity, DM_MEM_MAP);
@@ -102,6 +101,25 @@ void dm_map_insert(dm_map_t* map, const char* key, void* value)
 		map->count++;
 		if(index==hash) map->tombstones[index] = false;
 		if(( (float)map->count / (float)map->capacity) >= DM_MAP_LOAD_FACTOR) dm_map_resize(map);
+		
+		// attach its next node
+		uint32_t runner = index + 1;
+		while (runner++)
+		{
+			if (map->items[runner])
+			{
+				map->items[index]->next = map->items[runner];
+			}
+			if (runner > map->capacity) break;
+		}
+
+		// deal with the head
+		runner = 0;
+		while (runner++)
+		{
+			if (map->items[runner] == map->head) break;
+		}
+		if (index < runner)map->head = map->items[index];
 	}
 	else DM_LOG_ERROR("Trying to insert into NULL map!");
 }
