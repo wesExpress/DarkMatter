@@ -63,20 +63,30 @@ void dm_render_command_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_render_p
 
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_render_pipeline* pipeline)
 {
-	uint32_t draw_commands[] = { start, count };
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_ARRAYS, &draw_commands, sizeof(draw_commands), pipeline->render_commands);
+	uint32_t* draw_commands = dm_alloc(sizeof(uint32_t)*2, DM_MEM_RENDER_COMMAND);
+	draw_commands[0] = start;
+	draw_commands[1] = count;
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_ARRAYS, draw_commands, sizeof(uint32_t) * 2, pipeline->render_commands);
 }
 
 void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pipeline* pipeline)
 {
-	uint32_t draw_commands[] = { num_indices, index_offset, vertex_offset };
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, &draw_commands, sizeof(draw_commands), pipeline->render_commands);
+	uint32_t* draw_commands = dm_alloc(sizeof(uint32_t) * 3, DM_MEM_RENDER_COMMAND);
+	draw_commands[0] = num_indices;
+	draw_commands[1] = index_offset;
+	draw_commands[2] = vertex_offset;
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, draw_commands, sizeof(uint32_t) * 3, pipeline->render_commands);
 }
 
 void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pipeline* pipeline)
 {
-	uint32_t draw_commands[] = { num_indices, num_insts, index_offset, vertex_offset, inst_offset };
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INSTANCED, &draw_commands, sizeof(draw_commands), pipeline->render_commands);
+	uint32_t* draw_commands = dm_alloc(sizeof(uint32_t) * 5, DM_MEM_RENDER_COMMAND);
+	draw_commands[0] = num_indices;
+	draw_commands[1] = num_insts;
+	draw_commands[2] = index_offset;
+	draw_commands[3] = vertex_offset;
+	draw_commands[4] = inst_offset;
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INSTANCED, draw_commands, sizeof(uint32_t) * 5, pipeline->render_commands);
 }
 
 void dm_renderer_submit_command(dm_render_command_type command_type, void* data, size_t data_size, dm_list* render_commands)
@@ -103,6 +113,18 @@ void dm_renderer_clear_command_buffer(dm_list* render_commands)
 			dm_buffer_update_packet* update_packet = command->data;
 			dm_free(update_packet->data, update_packet->data_size, DM_MEM_RENDER_COMMAND);
 			dm_free(update_packet, sizeof(dm_buffer_update_packet), DM_MEM_RENDER_COMMAND);
+		} break;
+		case DM_RENDER_COMMAND_DRAW_ARRAYS:
+		{
+			dm_free(command->data, sizeof(uint32_t) * 2, DM_MEM_RENDER_COMMAND);
+		} break;
+		case DM_RENDER_COMMAND_DRAW_INDEXED:
+		{
+			dm_free(command->data, sizeof(uint32_t) * 3, DM_MEM_RENDER_COMMAND);
+		} break;
+		case DM_RENDER_COMMAND_DRAW_INSTANCED:
+		{
+			dm_free(command->data, sizeof(uint32_t) * 5, DM_MEM_RENDER_COMMAND);
 		} break;
 		default:
 			break;
