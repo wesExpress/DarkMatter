@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <stdbool.h>
+#include "dm_list.h"
 
 typedef struct dm_map_item
 {
@@ -21,9 +22,20 @@ dm_map_t* dm_map_create(size_t type_size, size_t capacity);
 void dm_map_destroy(dm_map_t* map);
 
 /*
+special function to specifically destroy a map with list items
+*/
+void dm_map_list_destroy(dm_map_t* map);
+
+/*
 Insert an element using linear probing
 */
 void dm_map_insert(dm_map_t* map, const char* key, void* value);
+
+/*
+Special function to specifically insert lists into a map
+*/
+void dm_map_insert_list(dm_map_t* map, const char* key, dm_list* list);
+
 void dm_map_delete_elem(dm_map_t* map, const char* key);
 /*
 It is the user's responsibility to cast this to whatever it actually is! Returns NULL if not found
