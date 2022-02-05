@@ -333,10 +333,11 @@ bool dm_renderer_init_object_data()
 
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag)
 {
-	dm_string* obj_tag = dm_alloc(sizeof(dm_string), DM_MEM_STRING);
-	obj_tag->string = tag;
-	obj_tag->len = strlen(tag)+1;
-	dm_list_append(object_tags, obj_tag);
+	dm_string obj_tag = {
+		.string = tag,
+		.len = strlen(tag)
+	};
+	dm_list_append(object_tags, &obj_tag);
 	
 	dm_inst_data inst_data = { 0 };
 	inst_data.index_count = num_indices;
