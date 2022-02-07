@@ -263,6 +263,8 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 	DX_RELEASE(internal_pipe->sample_state);
 	dm_mem_db_adjust(sizeof(ID3D11SamplerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
 
+	dm_list_destroy(internal_pipe->vertex_buffers);
+
 	dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
@@ -281,6 +283,10 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 	if (!dm_directx_create_buffer(pipeline->vertex_buffer, vb_data, directx_renderer, internal_pipe)) return false;
 	if (!dm_directx_create_buffer(pipeline->index_buffer, ib_data, directx_renderer, internal_pipe)) return false;
 	if (!dm_directx_create_buffer(pipeline->inst_buffer, 0, directx_renderer, internal_pipe)) return false;
+
+	internal_pipe->vertex_buffers = dm_list_create(sizeof(dm_buffer), 0);
+	dm_list_append(internal_pipe->vertex_buffers, pipeline->vertex_buffer);
+	dm_list_append(internal_pipe->vertex_buffers, pipeline->inst_buffer);
 
 	/*
 	// constant buffer(s)
@@ -383,11 +389,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	// buffers
 	*/
 	dm_directx_bind_buffer(pipeline->index_buffer, 0, directx_renderer);
-	dm_list* buffers = dm_list_create(sizeof(dm_buffer), 0);
-	dm_list_append(buffers, pipeline->vertex_buffer);
-	dm_list_append(buffers, pipeline->inst_buffer);
-	dm_directx_bind_vertex_buffers(buffers, directx_renderer);
-	dm_list_destroy(buffers);
+	dm_directx_bind_vertex_buffers(internal_pipe->vertex_buffers, directx_renderer);
 
 	dm_directx_bind_buffer(pipeline->view_proj, 0, directx_renderer);
 

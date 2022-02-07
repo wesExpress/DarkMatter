@@ -59,6 +59,7 @@ typedef struct dm_internal_pipeline
 	ID3D11SamplerState* sample_state;
 	D3D11_PRIMITIVE_TOPOLOGY topology;
 	D3D11_VIEWPORT viewport;
+	dm_list* vertex_buffers;
 } dm_internal_pipeline;
 
 #endif
