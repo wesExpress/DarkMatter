@@ -14,6 +14,13 @@
 
 @class dm_metal_view;
 
+typedef struct dm_metal_render_pass
+{
+    id<CAMetalDrawable> drawable;
+    id<MTLCommandBuffer> command_buffer;
+    id <MTLRenderCommandEncoder> command_encoder;
+} dm_metal_render_pass;
+
 typedef struct dm_metal_renderer
 {
     id<MTLDevice> device;
@@ -27,9 +34,7 @@ typedef struct dm_internal_pipeline
     id<MTLRenderPipelineState> pipeline_state;
     id<MTLDepthStencilState> depth_stencil;
     id<MTLSamplerState> sampler_state;
-    id<MTLBuffer> vertex_buffer;
-    id<MTLBuffer> index_buffer;
-    id<MTLBuffer> uniform_buffer;
+    dm_metal_render_pass* render_pass;
 } dm_internal_pipeline;
 
 typedef struct dm_internal_buffer

@@ -159,7 +159,8 @@ bool dm_renderer_begin_scene()
 
 		dm_render_command_begin_renderpass(r_data.object_pipeline);
 		dm_render_command_update_buffer(r_data.object_pipeline->inst_buffer, buffer->data, buffer->count * buffer->element_size, r_data.object_pipeline);
-		dm_render_command_draw_instanced(inst_data->index_count, inst_ts->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.object_pipeline);
+		dm_render_command_draw_indexed(inst_data->index_count, inst_data->index_offset, inst_data->vertex_offset, r_data.object_pipeline);
+		//dm_render_command_draw_instanced(inst_data->index_count, inst_ts->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.object_pipeline);
 		dm_render_command_end_renderpass(r_data.object_pipeline);
 
 		dm_list_destroy(buffer);

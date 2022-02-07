@@ -370,7 +370,7 @@ typedef struct dm_render_pipeline
     dm_buffer* index_buffer;
     dm_buffer* inst_buffer;
     dm_buffer* view_proj;
-    void* interal_pipeline;
+    void* internal_pipeline;
 } dm_render_pipeline;
 
 #endif

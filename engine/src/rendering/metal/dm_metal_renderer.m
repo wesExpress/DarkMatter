@@ -92,8 +92,8 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
     @autoreleasepool
     {
-        pipeline->interal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
-        dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
+        pipeline->internal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+        dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
 
         metal_renderer->command_queue = [metal_renderer->device newCommandQueue];
         if(!metal_renderer->command_queue)
@@ -153,7 +153,10 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
             dm_metal_destroy_texture(image);
         }
 
-        dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+        dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
+        dm_free(internal_pipe->render_pass, sizeof(dm_metal_render_pass), DM_MEM_RENDER_PIPELINE);
+
+        dm_free(pipeline->internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
     }
 }
 
@@ -161,7 +164,7 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 {
     @autoreleasepool
     {
-        dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
+        dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
 
         // shader
         if(!dm_metal_create_shader_library(pipeline->raster_desc.shader, @"shaders/metal/object_shader.metallib", metal_renderer)) return false;
@@ -185,6 +188,7 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
         // buffers
         if(!dm_metal_create_buffer(pipeline->vertex_buffer, vb_data, metal_renderer)) return false;
         if(!dm_metal_create_buffer(pipeline->index_buffer, ib_data, metal_renderer)) return false;
+        if(!dm_metal_create_buffer(pipeline->inst_buffer, NULL, metal_renderer)) return false;
 
         // view_proj uniform
         pipeline->view_proj->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
@@ -202,6 +206,9 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 
             if(!dm_metal_create_texture(image, metal_renderer)) return false;
         }
+
+        // render pass
+        internal_pipe->render_pass = dm_alloc(sizeof(dm_metal_render_pass), DM_MEM_RENDER_PIPELINE);
     }
 
     return true;
@@ -209,14 +216,14 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 
 void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 {
-    id<CAMetalDrawable> drawable = [metal_renderer->view.metal_layer nextDrawable];
+    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
 
-    if(drawable)
+   internal_pipe->render_pass->drawable = [metal_renderer->view.metal_layer nextDrawable];
+
+    if(internal_pipe->render_pass->drawable)
     {
-        dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
-
-        id<MTLTexture> texture = drawable.texture;
-        id<MTLCommandBuffer> commandBuffer = [metal_renderer->command_queue commandBuffer];
+        id<MTLTexture> texture = internal_pipe->render_pass->drawable.texture;
+        internal_pipe->render_pass->command_buffer = [metal_renderer->command_queue commandBuffer];
 
         // render pass descriptor
         MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
@@ -225,50 +232,7 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
         passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
         passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(metal_renderer->clear_color.x, metal_renderer->clear_color.y, metal_renderer->clear_color.z, metal_renderer->clear_color.w);
 
-        id <MTLRenderCommandEncoder> commandEncoder = [commandBuffer renderCommandEncoderWithDescriptor:passDescriptor];
-
-        // pipeline state
-        [commandEncoder setRenderPipelineState:internal_pipe->pipeline_state];
-
-        // depth stencil
-        [commandEncoder setDepthStencilState:internal_pipe->depth_stencil]; 
-        [commandEncoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
-        [commandEncoder setCullMode:MTLCullModeBack];
-
-        // buffers
-        dm_internal_buffer* internal_vb = pipeline->vertex_buffer->internal_buffer;
-        dm_internal_buffer* internal_ib = pipeline->index_buffer->internal_buffer;
-        dm_internal_buffer* internal_mvp = pipeline->view_proj->internal_buffer;
-
-        [commandEncoder setVertexBuffer:internal_vb->buffer offset:0 atIndex:0];
-
-        NSUInteger uniform_offset = 0;
-        [commandEncoder setVertexBuffer:internal_mvp->buffer offset:uniform_offset atIndex:1];
-
-        // textures
-        for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
-        {
-            dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
-            dm_image* image = dm_image_get(key->string);
-            dm_internal_texture* internal_texture = image->internal_texture;
-
-            [commandEncoder setFragmentTexture:internal_texture->texture atIndex:i];
-        }
-
-        // sampler
-        [commandEncoder setFragmentSamplerState:internal_pipe->sampler_state atIndex:0];
-
-        // draw call
-        [commandEncoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle 
-                        indexCount: [internal_ib->buffer length] / sizeof(dm_index_t)
-                        indexType: MTLIndexTypeUInt32
-                        indexBuffer: internal_ib->buffer
-                        indexBufferOffset: 0];
-
-        [commandEncoder endEncoding];
-
-        [commandBuffer presentDrawable:drawable];
-        [commandBuffer commit];
+        internal_pipe->render_pass->command_encoder = [internal_pipe->render_pass->command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
     }
     else
     {
@@ -276,13 +240,55 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
     }
 }
 
-void dm_renderer_end_rederpass_impl()
+void dm_renderer_end_rederpass_impl(dm_render_pipeline* pipeline)
 {
-        
+    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
+
+    [internal_pipe->render_pass->command_encoder endEncoding];
+
+    [internal_pipe->render_pass->command_buffer presentDrawable:internal_pipe->render_pass->drawable];
+    [internal_pipe->render_pass->command_buffer commit];
+
+    [internal_pipe->render_pass->command_encoder release];
+    [internal_pipe->render_pass->command_buffer release];
 }
 
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 {
+    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
+
+     // pipeline state
+    [internal_pipe->render_pass->command_encoder setRenderPipelineState:internal_pipe->pipeline_state];
+
+    // depth stencil
+    [internal_pipe->render_pass->command_encoder setDepthStencilState:internal_pipe->depth_stencil]; 
+    [internal_pipe->render_pass->command_encoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
+    [internal_pipe->render_pass->command_encoder setCullMode:MTLCullModeBack];
+
+    // sampler
+    [internal_pipe->render_pass->command_encoder setFragmentSamplerState:internal_pipe->sampler_state atIndex:0];
+
+    // buffers
+    dm_internal_buffer* internal_vb = pipeline->vertex_buffer->internal_buffer;
+    dm_internal_buffer* internal_mvp = pipeline->view_proj->internal_buffer;
+    dm_internal_buffer* internal_inst = pipeline->inst_buffer->internal_buffer;
+
+    [internal_pipe->render_pass->command_encoder setVertexBuffer:internal_vb->buffer offset:0 atIndex:0];
+    [internal_pipe->render_pass->command_encoder setVertexBuffer:internal_inst->buffer offset:0 atIndex:1];
+
+    NSUInteger uniform_offset = 0;
+    [internal_pipe->render_pass->command_encoder setVertexBuffer:internal_mvp->buffer offset:uniform_offset atIndex:2];
+
+    // textures
+    for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
+    {
+        dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
+        dm_image* image = dm_image_get(key->string);
+        dm_internal_texture* internal_texture = image->internal_texture;
+
+        [internal_pipe->render_pass->command_encoder setFragmentTexture:internal_texture->texture atIndex:i];
+    }
+
     return true;
 }
 
@@ -303,14 +309,30 @@ void dm_renderer_draw_arrays_impl(dm_render_pipeline* pipeline, int first, size_
 
 void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pipeline* pipeline)
 {
+    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
+    dm_internal_buffer* internal_ib = pipeline->index_buffer->internal_buffer;
 
+    // draw call
+    [internal_pipe->render_pass->command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle 
+                        indexCount: num_indices
+                        indexType: MTLIndexTypeUInt32
+                        indexBuffer: internal_ib->buffer
+                        indexBufferOffset: index_offset];
 }
 
 void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pipeline* pipeline)
 {
+    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
+    dm_internal_buffer* internal_ib = pipeline->index_buffer->internal_buffer;
 
+    // draw call
+    [internal_pipe->render_pass->command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle 
+                        indexCount: num_indices
+                        indexType: MTLIndexTypeUInt32
+                        indexBuffer: internal_ib->buffer
+                        indexBufferOffset: index_offset
+                        instanceCount: num_insts];
 }
-
 
 bool dm_renderer_update_buffer_impl(dm_buffer* cb, void* data, size_t data_size)
 {
