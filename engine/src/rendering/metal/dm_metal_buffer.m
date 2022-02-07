@@ -5,16 +5,25 @@
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
 
-bool dm_metal_create_buffer(dm_buffer* buffer, void* data, dm_metal_renderer* metal_renderer)
+bool dm_metal_create_buffer(dm_buffer* buffer, void* data, dm_metal_renderer* renderer)
 {
     @autoreleasepool
     {
         buffer->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
         dm_internal_buffer* internal_buffer = buffer->internal_buffer;
 
-        internal_buffer->buffer = [metal_renderer->device newBufferWithBytes:data
-                                                          length:buffer->desc.buffer_size
-                                                          options:MTLResourceOptionCPUCacheModeDefault];
+        if(data)
+        {
+            internal_buffer->buffer = [renderer->device newBufferWithBytes:data
+                                                        length:buffer->desc.buffer_size
+                                                        options:MTLResourceOptionCPUCacheModeDefault];
+        }
+        else
+        {
+            internal_buffer->buffer = [renderer->device newBufferWithLength:buffer->desc.buffer_size
+                                                        options:MTLResourceOptionCPUCacheModeDefault];
+        }
+        
         if(!internal_buffer->buffer)
         {
             DM_LOG_FATAL("Could not create metal buffer!");

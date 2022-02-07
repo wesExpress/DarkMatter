@@ -112,7 +112,7 @@
 
 - (void) scrollWheel: (NSEvent*) event
 {
-    float scroll = [event scrollingDeltaY];
+    int8_t scroll = [event scrollingDeltaY];
     dm_event_dispatch((dm_event){ DM_MOUSE_SCROLLED_EVENT, NULL, &scroll});
 }
 

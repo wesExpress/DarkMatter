@@ -10,15 +10,14 @@
 
 //submitting functions
 
-DM_API void dm_renderer_api_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices);
+DM_API void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices);
 
 DM_API bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_desc);
 
-DM_API void dm_renderer_api_submit_object_transforms(dm_transform* transforms, uint32_t num_transforms);
+DM_API void dm_renderer_api_submit_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms);
+DM_API void dm_renderer_api_update_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms);
 
 // updating functions
-
-DM_API void dm_renderer_api_update_object_transforms(dm_transform* transforms, uint32_t num_transforms);
 
 DM_API void dm_renderer_api_set_camera_pos(dm_vec3 pos);
 DM_API void dm_renderer_api_update_camera_pos(dm_vec3 delta_pos);

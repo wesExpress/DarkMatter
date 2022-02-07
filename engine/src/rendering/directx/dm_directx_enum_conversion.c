@@ -155,6 +155,7 @@ DXGI_FORMAT dm_vertex_t_to_directx_format(dm_vertex_attrib_desc desc)
 			break;
 		}
 	}
+	
 	default:
 		break;
 	}
@@ -217,6 +218,18 @@ D3D11_TEXTURE_ADDRESS_MODE dm_texture_mode_to_directx_mode(dm_texture_mode dm_mo
 	default:
 		DM_LOG_FATAL("Unknown texture mode!");
 		return D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1;
+	}
+}
+
+D3D11_INPUT_CLASSIFICATION dm_vertex_class_to_directx_class(dm_vertex_attrib_class dm_class)
+{
+	switch (dm_class)
+	{
+	case DM_VERTEX_ATTRIB_CLASS_VERTEX: return D3D11_INPUT_PER_VERTEX_DATA;
+	case DM_VERTEX_ATTRIB_CLASS_INSTANCE: return D3D11_INPUT_PER_INSTANCE_DATA;
+	default:
+		DM_LOG_FATAL("Unknown vertex attribute input class!");
+		return DM_VERTEX_ATTRIB_CLASS_UNKNOWN;
 	}
 }
 

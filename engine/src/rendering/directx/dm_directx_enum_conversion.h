@@ -18,6 +18,7 @@ D3D11_COMPARISON_FUNC dm_comp_to_directx_comp(dm_comparison dm_comp);
 DXGI_FORMAT dm_image_fmt_to_directx_fmt(dm_texture_format dm_fmt);
 D3D11_FILTER dm_image_filter_to_directx_filter(dm_filter filter);
 D3D11_TEXTURE_ADDRESS_MODE dm_texture_mode_to_directx_mode(dm_texture_mode dm_mode);
+D3D11_INPUT_CLASSIFICATION dm_vertex_class_to_directx_class(dm_vertex_attrib_class dm_class);
 
 #endif
 

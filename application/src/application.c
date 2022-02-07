@@ -7,17 +7,19 @@ static dm_editor_camera camera = {
 };
 
 dm_transform transforms[] = {
-	{0,0,0},
-	{2,5,-15},
-	{-1.5,-2.2,-2.5},
-	{-3.8,-2,-12.3},
-	{2.4,-0.4,-3.5},
-	{-1.7,3,-7.5},
-	{1.3,-2,-2.5},
-	{1.5,2,-2.5},
-	{1.5,0.2,-1.5},
-	{-1.3,1,-1.5}
+	{0, 0, 0},
+	{2, 5, -15},
+	{-1.5, -2.2, -2.5},
+	{-3.8, -2, -12.3},
+	{2.4, -0.4, -3.5},
+	{-1.7, 3, -7.5},
+	{1.3, -2, -2.5},
+	{1.5, 2, -2.5},
+	{1.5, 0.2, -1.5},
+	{-1.3, 1, -1.5}
 };
+
+dm_map_t* object_map = NULL;
 
 bool dm_application_init(dm_application* app)
 {
@@ -71,7 +73,7 @@ bool dm_application_init(dm_application* app)
 	uint32_t num_vertices = sizeof(vertices) / sizeof(dm_vertex_t);
 	uint32_t num_indices = sizeof(indices) / sizeof(dm_index_t);
 
-	dm_renderer_api_submit_vertex_data(vertices, indices, num_vertices, num_indices);
+	dm_renderer_api_submit_vertex_data("cube", vertices, indices, num_vertices, num_indices);
 
 	// textures
 	DM_LOG_DEBUG("Submitting texture data from app...");
@@ -98,8 +100,7 @@ bool dm_application_init(dm_application* app)
 	dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
 
 	// transforms
-	DM_LOG_DEBUG("Submitting object transforms...");
-	dm_renderer_api_submit_object_transforms(transforms, sizeof(transforms) / sizeof(dm_transform));
+	dm_renderer_api_submit_object_transforms("cube", transforms, sizeof(transforms) / sizeof(transforms[0]));
 
 	return true;
 }

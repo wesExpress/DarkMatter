@@ -16,8 +16,23 @@ typedef struct dm_vertex
     dm_vec2 tex_coords;
 } dm_vertex;
 
-typedef uint32_t  dm_index_t;
-typedef dm_vertex dm_vertex_t;
+typedef struct dm_vertex_inst
+{
+    dm_mat4 model;
+} dm_vertex_inst;
+
+typedef uint32_t       dm_index_t;
+typedef dm_vertex      dm_vertex_t;
+typedef dm_vertex_inst dm_vertex_inst_t;
+
+typedef struct dm_inst_data
+{
+    uint32_t index_offset;
+    uint32_t vertex_offset;
+    uint32_t index_count;
+} dm_inst_data;
+
+#define DM_MAX_INSTANCES 100000
 
 /***********
     ENUMS
@@ -113,8 +128,17 @@ typedef enum dm_vertex_data_t
     DM_VERTEX_DATA_T_UINT,
     DM_VERTEX_DATA_T_FLOAT,
     DM_VERTEX_DATA_T_DOUBLE,
+    DM_VERTEX_DATA_T_MATRIX_INT,
+    DM_VERTEX_DATA_T_MATRIX_FLOAT,
     DM_VERTEX_DATA_T_UNKNOWN
 } dm_vertex_data_t;
+
+typedef enum dm_vertex_attrib_class
+{
+    DM_VERTEX_ATTRIB_CLASS_VERTEX,
+    DM_VERTEX_ATTRIB_CLASS_INSTANCE,
+    DM_VERTEX_ATTRIB_CLASS_UNKNOWN
+} dm_vertex_attrib_class;
 
 typedef enum dm_cull_mode
 {
@@ -220,6 +244,12 @@ typedef struct dm_buffer_update_packet
     void* data;
 } dm_buffer_update_packet;
 
+typedef struct dm_buffer_bind_packet
+{
+    dm_buffer* buffer;
+    uint32_t slot;
+} dm_buffer_bind_packet;
+
 typedef struct dm_shader
 {
     dm_shader_desc vertex_desc;
@@ -294,6 +324,7 @@ typedef struct dm_vertex_attrib_desc
 {
     const char* name;
     dm_vertex_data_t data_t;
+    dm_vertex_attrib_class attrib_class;
     size_t stride;
     size_t offset;
     size_t count;
@@ -308,12 +339,13 @@ typedef struct dm_vertex_layout
 
 typedef struct dm_render_packet
 {
-    dm_buffer* vertex_buffer;
-    dm_buffer* index_buffer;
-    dm_buffer* mvp;
     dm_list* image_paths;
-    size_t count;
-    size_t offset;
+    uint32_t index_count;
+    uint32_t index_offset;
+    uint32_t vertex_offset;
+    uint32_t instance_count;
+    uint32_t instance_offset;
+    const char* tag;
 } dm_render_packet;
 
 typedef struct dm_render_command
@@ -334,7 +366,11 @@ typedef struct dm_render_pipeline
     dm_list* render_commands;
     dm_viewport viewport;
     bool wireframe;
-    void* interal_pipeline;
+    dm_buffer* vertex_buffer;
+    dm_buffer* index_buffer;
+    dm_buffer* inst_buffer;
+    dm_buffer* view_proj;
+    void* internal_pipeline;
 } dm_render_pipeline;
 
 #endif

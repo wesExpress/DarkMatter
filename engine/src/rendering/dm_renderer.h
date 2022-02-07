@@ -58,10 +58,11 @@ bool dm_renderer_init_object_data();
 
 // API functions
 
-void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices);
-void dm_renderer_submit_object_transforms(dm_transform* transforms, uint32_t num_transforms);
-void dm_renderer_update_object_transforms(dm_transform* transforms, uint32_t num_transforms);
+void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag);
 bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs);
+void dm_renderer_submit_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms);
+void dm_renderer_update_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms);
+
 void dm_renderer_set_camera_pos(dm_vec3 pos);
 void dm_renderer_update_camera_pos(dm_vec3 delta_pos);
 void dm_renderer_set_camera_forward(dm_vec3 forward);

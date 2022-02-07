@@ -1,9 +1,9 @@
 #include "dm_renderer_api.h"
 #include "rendering/dm_renderer.h"
 
-void dm_renderer_api_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices)
+void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices)
 {
-	dm_renderer_submit_vertex_data(vertex_data, index_data, num_vertices, num_indices);
+	dm_renderer_submit_vertex_data(vertex_data, index_data, num_vertices, num_indices, tag);
 }
 
 bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_desc)
@@ -11,14 +11,14 @@ bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_desc
 	return dm_renderer_submit_images(image_descs, num_desc);
 }
 
-void dm_renderer_api_submit_object_transforms(dm_transform* transforms, uint32_t num_transforms)
+void dm_renderer_api_submit_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms)
 {
-	dm_renderer_submit_object_transforms(transforms, num_transforms);
+	dm_renderer_submit_object_transforms(tag, transforms, num_transforms);
 }
 
-void dm_renderer_api_update_object_transforms(dm_transform* transforms, uint32_t num_transforms)
+void dm_renderer_api_update_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms)
 {
-	dm_renderer_update_object_transforms(transforms, num_transforms);
+	dm_renderer_update_object_transforms(tag, transforms, num_transforms);
 }
 
 void dm_renderer_api_set_camera_pos(dm_vec3 pos)

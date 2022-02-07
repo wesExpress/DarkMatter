@@ -61,7 +61,6 @@ void dm_map_destroy(dm_map_t* map)
 		{
 			// items
 			if (map->items[i]) dm_map_destroy_item(map->items[i], map->type_size);
-
 		}
 		dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
 		dm_free(map->tombstones, sizeof(bool) * map->capacity, DM_MEM_MAP);
@@ -73,12 +72,35 @@ void dm_map_destroy(dm_map_t* map)
 	}
 }
 
+void dm_map_list_destroy(dm_map_t* map)
+{
+	if(map)
+	{
+		for(uint32_t i=0;i<map->capacity;i++)
+		{
+			if(map->items[i])
+			{
+				dm_list* list = map->items[i]->value;
+				dm_list_destroy(list);
+
+				dm_strdel(map->items[i]->key);
+				dm_free(map->items[i], sizeof(dm_map_item), DM_MEM_MAP);
+			}
+		}
+		dm_free(map->items, sizeof(dm_map_item*) * map->capacity, DM_MEM_MAP);
+		dm_free(map->tombstones, sizeof(bool) * map->capacity, DM_MEM_MAP);
+		dm_free(map, sizeof(dm_map_t), DM_MEM_MAP);
+	}
+	else DM_LOG_ERROR("Trying to destroy NULL map!");
+}
+
 void dm_map_insert(dm_map_t* map, const char* key, void* value)
 {
 	if(map)
 	{
 		uint32_t index = dm_map_hash(key, map);
 		uint32_t hash = index;
+		bool replace = false;
 
 		while(map->items[index] || map->tombstones[index])
 		{
@@ -87,6 +109,7 @@ void dm_map_insert(dm_map_t* map, const char* key, void* value)
 				if (strcmp(map->items[index]->key, key) == 0)
 				{
 					map->items[index]->value = value;
+					replace = true;
 					break;
 				}
 			}
@@ -96,14 +119,70 @@ void dm_map_insert(dm_map_t* map, const char* key, void* value)
 				index++;
 			}
 		}
-
 		// insert element
-		map->items[index] = dm_map_create_item(key, value, map->type_size);
-		map->count++;
-		if(index==hash) map->tombstones[index] = false;
-		if(( (float)map->count / (float)map->capacity) >= DM_MAP_LOAD_FACTOR) dm_map_resize(map);
+		if(!replace)
+		{
+			map->items[index] = dm_map_create_item(key, value, map->type_size);
+			map->count++;
+			if(index==hash) map->tombstones[index] = false;
+			if(( (float)map->count / (float)map->capacity) >= DM_MAP_LOAD_FACTOR) dm_map_resize(map);
+		}
+		
 	}
 	else DM_LOG_ERROR("Trying to insert into NULL map!");
+}
+
+void dm_map_insert_list(dm_map_t* map, const char* key, dm_list* list)
+{
+	if(map)
+	{
+		if(list)
+		{
+			uint32_t index = dm_map_hash(key, map);
+			uint32_t hash = index;
+			bool replace = false;
+
+			while(map->items[index] || map->tombstones[index])
+			{
+				if(strcmp(map->items[index]->key, key) == 0)
+				{
+					dm_list* old_list = map->items[index]->value;
+					dm_list_destroy(old_list);
+					
+					map->items[index]->value = dm_list_create(list->element_size, list->capacity);
+					dm_list* new_list = map->items[index]->value;
+					new_list->count = list->count;
+					dm_memcpy(new_list->data, list->data, list->capacity * list->element_size);
+					
+					replace = true;
+
+					break;
+				}
+				else
+				{
+					if(index >= map->capacity) index=0;
+					index++;
+				}
+			}
+
+			if(!replace)
+			{
+				map->items[index] = dm_alloc(sizeof(dm_map_item), DM_MEM_MAP);
+				map->items[index]->key = dm_strdup(key);
+				map->items[index]->value = dm_list_create(list->element_size, list->capacity);
+				
+				dm_list* map_list = map->items[index]->value;
+				map_list->count = list->count;
+				dm_memcpy(map_list->data, list->data, list->capacity * list->element_size);
+			
+				map->count++;
+				if(index==hash) map->tombstones[index] = false;
+				if(( (float)map->count / (float)map->capacity) >= DM_MAP_LOAD_FACTOR) dm_map_resize(map);
+			}
+		}
+		else DM_LOG_ERROR("Trying to insert NULL list into map!");
+	}
+	else DM_LOG_ERROR("Trying to insert list into NULL map!");
 }
 
 void dm_map_delete_elem(dm_map_t* map, const char* key)
