@@ -82,4 +82,28 @@ void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_internal_render
 	}
 }
 
+void dm_directx_bind_vertex_buffers(dm_list* buffers, dm_internal_renderer* renderer)
+{
+	ID3D11DeviceContext* context = renderer->context;
+	
+	ID3D11Buffer** buffer_list = dm_alloc(sizeof(ID3D11Buffer*) * buffers->count, DM_MEM_RENDERER_BUFFER);
+	UINT* stride_list = dm_alloc(sizeof(UINT) * buffers->count, DM_MEM_RENDERER_BUFFER);
+	UINT* offset_list = dm_alloc(sizeof(UINT) * buffers->count, DM_MEM_RENDERER_BUFFER);
+
+	for (uint32_t i = 0; i < buffers->count; i++)
+	{
+		dm_buffer* buffer = dm_list_at(buffers, i);
+		dm_internal_buffer* internal_buffer = buffer->internal_buffer;
+		buffer_list[i] = internal_buffer->buffer;
+		stride_list[i] = buffer->desc.elem_size;
+		offset_list[i] = 0;
+	}
+
+	context->lpVtbl->IASetVertexBuffers(context, 0, buffers->count, buffer_list, stride_list, offset_list);
+
+	dm_free(offset_list, sizeof(UINT) * buffers->count, DM_MEM_RENDERER_BUFFER);
+	dm_free(stride_list, sizeof(UINT) * buffers->count, DM_MEM_RENDERER_BUFFER);
+	dm_free(buffer_list, sizeof(ID3D11Buffer*) * buffers->count, DM_MEM_RENDERER_BUFFER);
+}
+
 #endif

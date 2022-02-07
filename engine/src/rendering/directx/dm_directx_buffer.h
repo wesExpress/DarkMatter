@@ -5,12 +5,14 @@
 
 #ifdef DM_DIRECTX
 
+#include "structures/dm_list.h"
 #include "dm_directx_renderer.h"
 #include <stdbool.h>
 
 bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_renderer* renderer, dm_internal_pipeline* pipeline);
 void dm_directx_delete_buffer(dm_buffer* buffer, dm_internal_pipeline* pipeline);
 void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t offset, dm_internal_renderer* renderer);
+void dm_directx_bind_vertex_buffers(dm_list* buffers, dm_internal_renderer* renderer);
 
 #endif
 
