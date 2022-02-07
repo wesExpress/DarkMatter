@@ -258,9 +258,10 @@ add_custom_command(
     TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
             ${CMAKE_SOURCE_DIR}/engine/shaders
-            ${CMAKE_CURRENT_BINARY_DIR}/../shaders
+            $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders
     COMMENT "Moving shaders..."
 )
+add_custom_target(shader_move ALL DEPENDS ${CMAKE_SOURCE_DIR}/engine/shaders)
 
 if(BUILD_SHARED_LIBS)
     add_definitions(-DDM_EXPORT)

@@ -129,12 +129,13 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     glDeleteVertexArrays(1, &interanl_pipe->vao);
     glCheckError();
 
-    dm_internal_constant_buffer* internal_cb = pipeline->render_packet.mvp->internal_buffer;
+    dm_internal_constant_buffer* internal_cb = pipeline->view_proj->internal_buffer;
     dm_free(internal_cb->data, sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
     
-    dm_opengl_delete_buffer(pipeline->render_packet.vertex_buffer);
-    dm_opengl_delete_buffer(pipeline->render_packet.index_buffer);
-    dm_free(pipeline->render_packet.mvp->internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+    dm_opengl_delete_buffer(pipeline->vertex_buffer);
+    dm_opengl_delete_buffer(pipeline->index_buffer);
+    dm_opengl_delete_buffer(pipeline->inst_buffer);
+    dm_free(pipeline->view_proj->internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
     dm_opengl_delete_shader(pipeline->raster_desc.shader);
 
     // textures
@@ -163,35 +164,81 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
     /*
     // buffers
     */
-    if (!dm_opengl_create_buffer(pipeline->render_packet.vertex_buffer, vb_data)) return false;
-    if (!dm_opengl_create_buffer(pipeline->render_packet.index_buffer, ib_data)) return false;
+    if (!dm_opengl_create_buffer(pipeline->vertex_buffer, vb_data)) return false;
+    if (!dm_opengl_create_buffer(pipeline->index_buffer, ib_data)) return false;
+    if (!dm_opengl_create_buffer(pipeline->inst_buffer, NULL)) return false;
 
     /*
     // vertex attributes/layout
     */
-    dm_opengl_bind_buffer(pipeline->render_packet.vertex_buffer);
-    dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
+    uint32_t count = 0;
+    dm_opengl_bind_buffer(pipeline->index_buffer);
 
     for (int i = 0; i < v_layout.num; i++)
     {
         dm_vertex_attrib_desc attrib_desc = v_layout.attributes[i];
 
-        GLenum data_t = dm_vertex_data_t_to_opengl(attrib_desc.data_t);
-        if (data_t == DM_VERTEX_DATA_T_UNKNOWN) return false;
+        switch(attrib_desc.attrib_class)
+        {
+        case DM_VERTEX_ATTRIB_CLASS_VERTEX:
+        {
+            dm_opengl_bind_buffer(pipeline->vertex_buffer);
+        } break;
+        case DM_VERTEX_ATTRIB_CLASS_INSTANCE:
+        {
+            dm_opengl_bind_buffer(pipeline->inst_buffer);
+        } break;
+        }
 
-        glVertexAttribPointer(i, attrib_desc.count, data_t, attrib_desc.normalized, attrib_desc.stride, (void*)(uintptr_t)attrib_desc.offset);
-        glCheckErrorReturn();
-        glEnableVertexAttribArray(i);
-        glCheckErrorReturn();
+        GLenum data_t;
+        if((attrib_desc.data_t==DM_VERTEX_DATA_T_MATRIX_INT) || (attrib_desc.data_t==DM_VERTEX_DATA_T_MATRIX_FLOAT))
+        {
+            if(attrib_desc.data_t==DM_VERTEX_DATA_T_MATRIX_INT) data_t = GL_INT;
+            else if(attrib_desc.data_t==DM_VERTEX_DATA_T_MATRIX_FLOAT) data_t = GL_FLOAT;
+            else 
+            {
+                DM_LOG_FATAL("Unknown vertex data type!");
+                return false;
+            }
+
+            for(uint32_t j=0; j<attrib_desc.count; j++)
+            {
+                size_t new_offset;;
+                if(data_t==GL_INT) new_offset = j * (attrib_desc.offset + sizeof(int) * attrib_desc.count);
+                else if(data_t==GL_FLOAT) new_offset = j * (attrib_desc.offset + sizeof(float) * attrib_desc.count);
+
+                glVertexAttribPointer(count, attrib_desc.count, data_t, attrib_desc.normalized, attrib_desc.stride, (void*)(uintptr_t)new_offset);
+                glCheckErrorReturn();
+                glEnableVertexAttribArray(count);
+                glCheckErrorReturn();
+                if(attrib_desc.attrib_class == DM_VERTEX_ATTRIB_CLASS_INSTANCE)
+                {
+                    glVertexAttribDivisor(count, 1);
+                    glCheckErrorReturn();
+                }
+                count++;
+            }
+        }
+        else
+        {
+            data_t = dm_vertex_data_t_to_opengl(attrib_desc.data_t);
+            if (data_t == DM_VERTEX_DATA_T_UNKNOWN) return false;
+
+            glVertexAttribPointer(count, attrib_desc.count, data_t, attrib_desc.normalized, attrib_desc.stride, (void*)(uintptr_t)attrib_desc.offset);
+            glCheckErrorReturn();
+            glEnableVertexAttribArray(count);
+            glCheckErrorReturn();
+            count++;
+        }
     }
 
     glBindVertexArray(0);
 
     // constant buffers
     dm_internal_shader* internal_shader = pipeline->raster_desc.shader->internal_shader;
-    pipeline->render_packet.mvp->internal_buffer = dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
-    dm_internal_constant_buffer* internal_cb = pipeline->render_packet.mvp->internal_buffer;
-    if (!dm_opengl_find_uniform_loc(internal_shader->id, pipeline->render_packet.mvp->desc.name, &internal_cb->location)) return false;
+    pipeline->view_proj->internal_buffer = dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+    dm_internal_constant_buffer* internal_cb = pipeline->view_proj->internal_buffer;
+    if (!dm_opengl_find_uniform_loc(internal_shader->id, pipeline->view_proj->desc.name, &internal_cb->location)) return false;
     internal_cb->data = dm_alloc(sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
     dm_memcpy(internal_cb->data, mvp_data, sizeof(dm_mat4));
 
@@ -219,8 +266,8 @@ void dm_renderer_end_rederpass_impl(dm_render_pipeline* pipeline)
     dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
     //glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindVertexArray(0);
-    glBindBuffer(GL_ARRAY_BUFFER, 0);
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+    //glBindBuffer(GL_ARRAY_BUFFER, 0);
+    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 
     if(pipeline->depth_desc.is_enabled) glDisable(GL_DEPTH_TEST);
     //glDisable(GL_STENCIL_TEST);
@@ -274,7 +321,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     glCheckErrorReturn();
 
     //glFrontFace(internal_pipe->winding);
-   // glCheckErrorReturn();
+    //glCheckErrorReturn();
 
     // wireframe
     if (pipeline->wireframe)
@@ -293,8 +340,8 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     glBindVertexArray(internal_pipe->vao);
     glCheckErrorReturn();
 
-    dm_opengl_bind_buffer(pipeline->render_packet.vertex_buffer);
-    dm_opengl_bind_buffer(pipeline->render_packet.index_buffer);
+    // view proj
+    dm_opengl_bind_uniform(pipeline->view_proj);
 
     // TODO: need to change this eventually, this won't work with multiple textures per draw call
     // textures
@@ -313,6 +360,12 @@ bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t size)
 {
     switch(buffer->desc.type)
     {
+    case DM_BUFFER_TYPE_VERTEX:
+    {
+        dm_internal_buffer* internal_buffer = buffer->internal_buffer;
+        glBindBuffer(internal_buffer->type, internal_buffer->id);
+        glBufferSubData(internal_buffer->type, 0, size, data);
+    } break;
     case DM_BUFFER_TYPE_CONSTANT:
     {
         dm_internal_constant_buffer* internal_cb = buffer->internal_buffer;
@@ -330,6 +383,9 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer)
 {
     switch (buffer->desc.type)
     {
+    case DM_BUFFER_TYPE_VERTEX: 
+        dm_opengl_bind_buffer(buffer);
+        break;
     case DM_BUFFER_TYPE_CONSTANT: return dm_opengl_bind_uniform(buffer);
     default: 
         DM_LOG_ERROR("Haven't implemented this bind buffer type yet!");
@@ -365,7 +421,15 @@ void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
 {
     dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
 
-    glDrawElements(internal_pipe->primitive, pipeline->render_packet.count, GL_UNSIGNED_INT, (void*)(uintptr_t)pipeline->render_packet.offset);
+    //glDrawElements(internal_pipe->primitive, pipeline->render_packet.count, GL_UNSIGNED_INT, (void*)(uintptr_t)pipeline->render_packet.offset);
+    glCheckError();
+}
+
+void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pipeline* pipeline)
+{
+    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
+
+    glDrawElementsInstanced(internal_pipe->primitive, num_indices, GL_UNSIGNED_INT, 0, num_insts);
     glCheckError();
 }
 

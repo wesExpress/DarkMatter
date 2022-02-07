@@ -130,14 +130,14 @@ bool dm_renderer_begin_scene()
 	dm_render_command_clear(&r_data.clear_color, r_data.object_pipeline);
 	dm_render_command_update_buffer(r_data.object_pipeline->view_proj, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj), r_data.object_pipeline);
 	dm_render_command_bind_pipeline(r_data.object_pipeline);
-	dm_render_command_bind_buffer(r_data.object_pipeline->view_proj, 0, r_data.object_pipeline);
+	//dm_render_command_bind_buffer(r_data.object_pipeline->view_proj, 0, r_data.object_pipeline);
 
 	for(uint32_t i=0; i<object_tags->count;i++)
 	{
 		dm_string* key = dm_list_at(object_tags, i);
 		dm_inst_data* inst_data = dm_map_get(inst_map, key->string);
 		dm_list* inst_ts = dm_map_get(inst_transforms, key->string);
-		dm_list* buffer = dm_list_create(sizeof(dm_inst_data), 0);
+		dm_list* buffer = dm_list_create(sizeof(dm_vertex_inst), 0);
 
 		for (uint32_t j = 0; j < inst_ts->count; j++)
 		{
@@ -154,7 +154,7 @@ bool dm_renderer_begin_scene()
 
 		dm_render_command_begin_renderpass(r_data.object_pipeline);
 		dm_render_command_update_buffer(r_data.object_pipeline->inst_buffer, buffer->data, buffer->count * buffer->element_size, r_data.object_pipeline);
-		dm_render_command_bind_buffer(r_data.object_pipeline->inst_buffer, 1, r_data.object_pipeline);
+		//dm_render_command_bind_buffer(r_data.object_pipeline->inst_buffer, 1, r_data.object_pipeline);
 		dm_render_command_draw_instanced(inst_data->index_count, inst_ts->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.object_pipeline);
 		dm_render_command_end_renderpass(r_data.object_pipeline);
 

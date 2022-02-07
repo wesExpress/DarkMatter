@@ -2,13 +2,14 @@
 
 layout (location = 0) in vec3 aPos;
 layout (location = 1) in vec2 aTexCoords;
+layout (location = 2) in mat4 model;
 
 out vec2 texCoords;
 
-uniform mat4 mvp;
+uniform mat4 view_proj;
 
 void main()
 {
-    gl_Position = mvp * vec4(aPos, 1.0);
+    gl_Position = view_proj * model * vec4(aPos, 1.0);
     texCoords = aTexCoords;
 }

@@ -42,7 +42,7 @@ dm_vertex_attrib_desc model_attrib_desc = {
 #elif defined DM_DIRECTX
 	.name = "MODEL",
 #endif
-	.data_t = DM_VERTEX_DATA_T_MATRIX,
+	.data_t = DM_VERTEX_DATA_T_MATRIX_FLOAT,
 	.attrib_class = DM_VERTEX_ATTRIB_CLASS_INSTANCE,
 	.stride = sizeof(dm_vertex_inst_t),
 	.offset = offsetof(dm_vertex_inst_t, model),
