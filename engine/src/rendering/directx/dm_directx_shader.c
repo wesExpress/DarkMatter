@@ -36,16 +36,24 @@ bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_int
 	// input layout
 	dm_list* desc = dm_list_create(sizeof(D3D11_INPUT_ELEMENT_DESC), 0);
 	uint32_t count = 0;
+
 	for (uint32_t i = 0; i < layout.num; i++)
 	{
 		dm_vertex_attrib_desc attrib_desc = layout.attributes[i];
 
-		if (attrib_desc.data_t == DM_VERTEX_DATA_T_MATRIX)
+		if ((attrib_desc.data_t == DM_VERTEX_DATA_T_MATRIX_INT) || (attrib_desc.data_t == DM_VERTEX_DATA_T_MATRIX_FLOAT))
 		{
 			for (uint32_t j = 0; j < attrib_desc.count; j++)
 			{
 				dm_vertex_attrib_desc sub_desc = attrib_desc;
-				sub_desc.data_t = DM_VERTEX_DATA_T_FLOAT;
+				if (attrib_desc.data_t == DM_VERTEX_DATA_T_MATRIX_INT) sub_desc.data_t = DM_VERTEX_DATA_T_INT;
+				else if(attrib_desc.data_t == DM_VERTEX_DATA_T_MATRIX_FLOAT) sub_desc.data_t = DM_VERTEX_DATA_T_FLOAT;
+				else
+				{
+					DM_LOG_FATAL("Unknwon vertex data type!");
+					return false;
+				}
+				
 				sub_desc.offset = sub_desc.offset + sizeof(float) * j;
 				
 				D3D11_INPUT_ELEMENT_DESC element_desc = { 0 };

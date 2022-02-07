@@ -382,8 +382,15 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// buffers
 	*/
-	dm_directx_bind_buffer(pipeline->vertex_buffer, 0, directx_renderer);
 	dm_directx_bind_buffer(pipeline->index_buffer, 0, directx_renderer);
+	//dm_directx_bind_buffer(pipeline->vertex_buffer, 0, directx_renderer);
+	//dm_directx_bind_buffer(pipeline->inst_buffer, 0, directx_renderer);
+	dm_internal_buffer* vertex_buffer = pipeline->vertex_buffer->internal_buffer;
+	dm_internal_buffer* instance_buffer = pipeline->inst_buffer->internal_buffer;
+	ID3D11Buffer* vbs[] = { vertex_buffer->buffer, instance_buffer->buffer };
+	UINT stride[] = { sizeof(dm_vertex_t), sizeof(dm_vertex_inst_t) };
+	UINT offset[] = { 0,0 };
+	directx_renderer->context->lpVtbl->IASetVertexBuffers(directx_renderer->context, 0, 2, vbs, stride, offset);
 
 	dm_directx_bind_buffer(pipeline->view_proj, 0, directx_renderer);
 

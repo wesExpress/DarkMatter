@@ -128,9 +128,13 @@ bool dm_renderer_begin_scene()
 	}
 
 	dm_render_command_clear(&r_data.clear_color, r_data.object_pipeline);
+#ifdef DM_DIRECTX
+	dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
+	dm_render_command_update_buffer(r_data.object_pipeline->view_proj, &new_view_proj, sizeof(new_view_proj), r_data.object_pipeline);
+#else
 	dm_render_command_update_buffer(r_data.object_pipeline->view_proj, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj), r_data.object_pipeline);
+#endif
 	dm_render_command_bind_pipeline(r_data.object_pipeline);
-	//dm_render_command_bind_buffer(r_data.object_pipeline->view_proj, 0, r_data.object_pipeline);
 
 	for(uint32_t i=0; i<object_tags->count;i++)
 	{
@@ -142,19 +146,19 @@ bool dm_renderer_begin_scene()
 		for (uint32_t j = 0; j < inst_ts->count; j++)
 		{
 			dm_transform* transform = dm_list_at(inst_ts, j);
+			dm_vertex_inst inst = { 0 };
 
-			dm_mat4 model = dm_mat4_identity();
-			model = dm_mat_translate(model, transform->position);
+			inst.model = dm_mat4_identity();
+			inst.model = dm_mat_translate(inst.model, transform->position);
 #ifdef DM_DIRECTX
-			model = dm_mat4_transpose(model);
+			inst.model = dm_mat4_transpose(inst.model);
 #endif
 
-			dm_list_append(buffer, &model);
+			dm_list_append(buffer, &inst);
 		}
 
 		dm_render_command_begin_renderpass(r_data.object_pipeline);
 		dm_render_command_update_buffer(r_data.object_pipeline->inst_buffer, buffer->data, buffer->count * buffer->element_size, r_data.object_pipeline);
-		//dm_render_command_bind_buffer(r_data.object_pipeline->inst_buffer, 1, r_data.object_pipeline);
 		dm_render_command_draw_instanced(inst_data->index_count, inst_ts->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.object_pipeline);
 		dm_render_command_end_renderpass(r_data.object_pipeline);
 

@@ -60,7 +60,7 @@ void dm_directx_delete_buffer(dm_buffer* buffer, dm_internal_pipeline* pipeline)
 void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_internal_renderer* renderer)
 {
 	ID3D11DeviceContext* context = renderer->context;
-	dm_internal_buffer* internal_buffer = (dm_internal_buffer*)buffer->internal_buffer;
+	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
 
 	UINT stride = buffer->desc.elem_size;
 	UINT offset = 0;
@@ -74,7 +74,7 @@ void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_internal_render
 		context->lpVtbl->IASetIndexBuffer(context, internal_buffer->buffer, DXGI_FORMAT_R32_UINT, 0);
 		break;
 	case DM_BUFFER_TYPE_CONSTANT: 
-		context->lpVtbl->VSSetConstantBuffers(context, 0, 1, &internal_buffer->buffer);
+		context->lpVtbl->VSSetConstantBuffers(context, slot, 1, &internal_buffer->buffer);
 		break;
 	default:
 		DM_LOG_WARN("Trying to bind a buffer of unknown type! Shouldn't be here...");
