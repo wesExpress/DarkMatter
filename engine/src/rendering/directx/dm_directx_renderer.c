@@ -35,9 +35,9 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 {
 	DM_LOG_DEBUG("Initializing Directx11 Backend...");
 
-	renderer_data->object_pipeline->interal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+	renderer_data->object_pipeline->internal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 	dm_internal_windows_data* internal_data = platform_data->internal_data;
-	dm_internal_pipeline* internal_pipe = renderer_data->object_pipeline->interal_pipeline;
+	dm_internal_pipeline* internal_pipe = renderer_data->object_pipeline->internal_pipeline;
 	directx_renderer = dm_alloc(sizeof(dm_internal_renderer), DM_MEM_RENDERER);
 
 	directx_renderer->hwnd = internal_data->hwnd;
@@ -106,7 +106,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 	ID3D11Device* device = directx_renderer->device;
 	ID3D11DeviceContext* context = directx_renderer->context;
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
 	ID3D11RenderTargetView* render_view = internal_pipe->render_view;
 	ID3D11DepthStencilView* depth_view = internal_pipe->depth_stencil_view;
 
@@ -233,7 +233,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
+	dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
 
 	dm_directx_delete_buffer(pipeline->vertex_buffer, internal_pipe);
 	dm_directx_delete_buffer(pipeline->index_buffer, internal_pipe);
@@ -265,12 +265,12 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 	dm_list_destroy(internal_pipe->vertex_buffers);
 
-	dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+	dm_free(pipeline->internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
 bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
+	dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
 
 	/*
 	// shader
@@ -344,7 +344,7 @@ void dm_renderer_end_rederpass_impl()
 
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
 
 	ID3D11DeviceContext* context = directx_renderer->context;
 	ID3D11RenderTargetView* render_target = internal_pipe->render_view;
@@ -408,7 +408,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
 
 	D3D11_VIEWPORT new_viewport = { 0 };
 	new_viewport.Width = viewport.width;
@@ -419,7 +419,7 @@ void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pip
 
 void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
 
 	ID3D11DeviceContext* context = directx_renderer->context;
 	ID3D11RenderTargetView* render_target = internal_pipe->render_view;

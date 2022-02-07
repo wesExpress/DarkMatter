@@ -59,8 +59,8 @@ bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
 
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-    pipeline->interal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
-    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
+    pipeline->internal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
 
     glGenVertexArrays(1, &internal_pipe->vao);
     glCheckErrorReturn();
@@ -125,7 +125,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-    dm_internal_pipeline* interanl_pipe = pipeline->interal_pipeline;
+    dm_internal_pipeline* interanl_pipe = pipeline->internal_pipeline;
     glDeleteVertexArrays(1, &interanl_pipe->vao);
     glCheckError();
 
@@ -146,12 +146,12 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
         dm_opengl_destroy_texture(image);
     }
 
-    dm_free(pipeline->interal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+    dm_free(pipeline->internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
 bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
 {
-    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
+    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
 
     glBindVertexArray(internal_pipe->vao);
     glCheckErrorReturn();
@@ -263,7 +263,7 @@ void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_end_rederpass_impl(dm_render_pipeline* pipeline)
 {
-    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
+    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
     //glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindVertexArray(0);
     //glBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -276,7 +276,7 @@ void dm_renderer_end_rederpass_impl(dm_render_pipeline* pipeline)
 
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 {
-    dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->interal_pipeline;
+    dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
 
     // blending
     if (pipeline->blend_desc.is_enabled)
@@ -419,7 +419,7 @@ void dm_renderer_draw_arrays_impl(dm_render_pipeline* pipeline, int first, size_
 
 void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
 {
-    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
+    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
 
     //glDrawElements(internal_pipe->primitive, pipeline->render_packet.count, GL_UNSIGNED_INT, (void*)(uintptr_t)pipeline->render_packet.offset);
     glCheckError();
@@ -427,7 +427,7 @@ void dm_renderer_draw_indexed_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pipeline* pipeline)
 {
-    dm_internal_pipeline* internal_pipe = pipeline->interal_pipeline;
+    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
 
     glDrawElementsInstanced(internal_pipe->primitive, num_indices, GL_UNSIGNED_INT, 0, num_insts);
     glCheckError();
