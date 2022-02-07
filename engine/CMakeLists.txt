@@ -215,7 +215,9 @@ if(WIN32 AND NOT DM_RENDER_OPENGL)
                 COMMENT "Compiling ${shader}..."
                 VERBATIM
             )
-            add_custom_target(fx_${file_we} ALL DEPENDS ${shader_out})
+            add_custom_target(fx_${file_we} DEPENDS ${shader_out})
+            add_dependencies(${PROJECT_NAME} fx_${file_we})
+
         endforeach()
     endfunction()
 
@@ -228,27 +230,33 @@ if(WIN32 AND NOT DM_RENDER_OPENGL)
 # metal shaders
 elseif(APPLE)    
     set(current_output_path ${CMAKE_BINARY_DIR}/shaders/metal)
-
+    
     foreach(shader ${SHADERS})
         get_filename_component(file_we ${shader} NAME_WE)
-        set(shader_intermediate ${CMAKE_CURRENT_SOURCE_DIR}/shaders/metal/${file_we}.air)
-        set(shader_out ${CMAKE_CURRENT_SOURCE_DIR}/shaders/metal/${file_we}.metallib)
+
+        set(current_output_path ${CMAKE_CURRENT_SOURCE_DIR}/shaders/metal)
+        set(shader_intermediate ${current_output_path}/${file_we}.air)
+        set(shader_out ${current_output_path}/${file_we}.metallib)
 
         add_custom_command(
             OUTPUT ${shader_intermediate}
             COMMAND xcrun -sdk macosx metal ${CMAKE_CURRENT_SOURCE_DIR}/${shader} -c -o ${shader_intermediate}
-            MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/${shader}
+            MAIN_DEPENDENCY ${shader}
             COMMENT "Compiling intermediate metal shader: ${shader}..."
+            VERBATIM
         )
-        add_custom_target(metal_first ALL DEPENDS ${shader_intermediate})
-        
+        add_custom_target(metal_first DEPENDS ${shader_intermediate})
+        add_dependencies(${PROJECT_NAME} metal_first)
+
         add_custom_command(
             OUTPUT ${shader_out}
-            COMMAND xcrun -sdk macosx metallib ${shader_intermediate} -c -o ${shader_out}
+            COMMAND xcrun -sdk macosx metallib ${shader_intermediate} -o ${shader_out}
             MAIN_DEPENDENCY ${shader_intermediate}
             COMMENT "Compiling metal shader lib: ${shader_intermediate}"
+            VERBATIM
         )
-        add_custom_target(metal_second ALL DEPENDS ${shader_out})
+        add_custom_target(metal_second DEPENDS ${shader_out})
+        add_dependencies(${PROJECT_NAME} metal_second)
 
     endforeach()
 endif()
@@ -257,11 +265,10 @@ endif()
 add_custom_command(
     TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/engine/shaders
+            ${CMAKE_CURRENT_SOURCE_DIR}/shaders
             $<TARGET_FILE_DIR:${PROJECT_NAME}>/shaders
     COMMENT "Moving shaders..."
 )
-add_custom_target(shader_move ALL DEPENDS ${CMAKE_SOURCE_DIR}/engine/shaders)
 
 if(BUILD_SHARED_LIBS)
     add_definitions(-DDM_EXPORT)

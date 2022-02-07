@@ -13,7 +13,7 @@ target_link_libraries(${PROJECT_NAME} DarkMatter)
 add_custom_command(
     TARGET ${PROJECT_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory
-            ${CMAKE_SOURCE_DIR}/application/assets
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets
             ${CMAKE_CURRENT_BINARY_DIR}/../assets
     COMMENT "Moving assets..."
 )
