@@ -2,7 +2,6 @@
 
 This is a cross-platform rendering engine for the purpose of learning. It is written entirely in C and does not use external libraries, with two main exceptions:
 - Libraries
-  - GLFW for prototyping with OpenGL
   - GLAD to access OpenGL functions
   - stb_image to load image data
 - Objective C
