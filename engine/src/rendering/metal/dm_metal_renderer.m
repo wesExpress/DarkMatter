@@ -142,6 +142,7 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
         // buffers
         dm_metal_destroy_buffer(pipeline->vertex_buffer);
         dm_metal_destroy_buffer(pipeline->index_buffer);
+        dm_metal_destroy_buffer(pipeline->inst_buffer);
         dm_metal_destroy_buffer(pipeline->view_proj);
 
         // textures

@@ -6,7 +6,7 @@
 
 typedef struct dm_string
 {
-    const char* string;
+    char* string;
     size_t len;
 } dm_string;
 

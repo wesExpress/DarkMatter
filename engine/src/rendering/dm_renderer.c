@@ -134,7 +134,6 @@ bool dm_renderer_begin_scene()
 #else
 	dm_render_command_update_buffer(r_data.object_pipeline->view_proj, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj), r_data.object_pipeline);
 #endif
-	dm_render_command_bind_pipeline(r_data.object_pipeline);
 
 	for(uint32_t i=0; i<object_tags->count;i++)
 	{
@@ -158,6 +157,7 @@ bool dm_renderer_begin_scene()
 		}
 
 		dm_render_command_begin_renderpass(r_data.object_pipeline);
+		dm_render_command_bind_pipeline(r_data.object_pipeline);
 		dm_render_command_update_buffer(r_data.object_pipeline->inst_buffer, buffer->data, buffer->count * buffer->element_size, r_data.object_pipeline);
 		//dm_render_command_draw_indexed(inst_data->index_count, inst_data->index_offset, inst_data->vertex_offset, r_data.object_pipeline);
 		dm_render_command_draw_instanced(inst_data->index_count, inst_ts->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.object_pipeline);
