@@ -90,7 +90,7 @@ bool dm_application_update(dm_application* app, float delta_time)
 	dm_vec3 forward = { 0 };
 
 	// camera direction
-	if (dm_input_is_key_pressed(DM_KEY_SHIFT))
+	if (dm_input_is_key_pressed(DM_KEY_LSHIFT))
 	{
 		camera.yaw += dm_input_get_mouse_delta_x() * camera.look_sens;
 		camera.pitch -= dm_input_get_mouse_delta_y() * camera.look_sens;

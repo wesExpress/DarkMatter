@@ -83,10 +83,9 @@ bool dm_platform_init(dm_platform_data* platform_data, const char* window_name)
 
     uint32_t event_mask = XCB_CW_BACK_PIXEL | XCB_CW_EVENT_MASK;
 
-    uint32_t event_values = XCB_EVENT_MASK_BUTTON_PRESS | XCB_EVENT_MASK_BUTTON_RELEASE |
-                            XCB_EVENT_MASK_KEY_PRESS | XCB_EVENT_MASK_KEY_RELEASE |
-                            XCB_EVENT_MASK_EXPOSURE | XCB_EVENT_MASK_POINTER_MOTION |
-                            XCB_EVENT_MASK_STRUCTURE_NOTIFY;
+    uint32_t event_values = FocusChangeMask | ButtonPressMask | ButtonReleaseMask | ButtonMotionMask |
+                            PointerMotionMask | KeyPressMask | KeyReleaseMask | StructureNotifyMask |
+                            EnterWindowMask | LeaveWindowMask;
 
     uint32_t value_list[] = {linux_data->screen->black_pixel, event_values};
 

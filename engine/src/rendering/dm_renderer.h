@@ -13,8 +13,9 @@
 typedef struct dm_renderer_data
 {
 	dm_camera camera;
-	int width, height;
 	dm_color clear_color;
+	dm_list* render_commands;
+	dm_viewport viewport;
 
 	dm_render_pipeline* object_pipeline;
 } dm_renderer_data;
@@ -39,17 +40,17 @@ mainly a wrapper for the backend renderer resizing the user is not exposed to
 @param new_width - new window width
 @param new_height - new window height
 */
-bool dm_renderer_resize(int new_width, int new_height);
+void dm_renderer_resize(int new_width, int new_height);
 
 /*
 mainly a wrapper for the backend renderer begin scene the user is not exposed to
 */
-bool dm_renderer_begin_scene();
+bool dm_renderer_begin_frame();
 
 /*
 mainly a wrapper for the backend renderer end scene the user is not exposed to
 */
-bool dm_renderer_end_scene();
+bool dm_renderer_end_frame();
 
 /*
 initializes the vertex and index buffers. called after the application has submitted everything.

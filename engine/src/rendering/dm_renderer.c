@@ -21,8 +21,7 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data);
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data);
-void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data);
-bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
+bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data);
 
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
@@ -41,8 +40,16 @@ dm_list* mesh_tags = NULL;
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	r_data.clear_color = clear_color;
-	r_data.width = platform_data->window_width;
-	r_data.height = platform_data->window_height;
+
+	dm_viewport viewport = {
+		.x = platform_data->x,
+		.y = platform_data->y,
+		.width = platform_data->window_width,
+		.height = platform_data->window_height,
+		.max_depth = 1.0f
+	};
+	r_data.viewport = viewport;
+
 	r_data.object_pipeline = dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 
 	if(!dm_renderer_init_impl(platform_data, &r_data))
@@ -58,6 +65,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	inst_map = dm_map_create(sizeof(dm_inst_data), 0);
 	obj_map = dm_map_create(sizeof(dm_list), 0);
 	mesh_tags = dm_list_create(sizeof(dm_string), 0);
+	r_data.render_commands = dm_list_create(sizeof(dm_render_command), 0);
 
 	// maps
 	dm_image_map_init();
@@ -99,6 +107,9 @@ void dm_renderer_shutdown()
 	dm_map_list_destroy(obj_map);
 	dm_list_destroy(mesh_tags);
 
+	dm_renderer_clear_command_buffer(r_data.render_commands);
+	dm_list_destroy(r_data.render_commands);
+
 	// cleanup
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
 	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
@@ -108,11 +119,8 @@ void dm_renderer_shutdown()
 	dm_renderer_shutdown_impl(&r_data);
 }
 
-bool dm_renderer_resize(int new_width, int new_height)
+void dm_renderer_resize(int new_width, int new_height)
 {
-	r_data.width = new_width;
-	r_data.height = new_height;
-
 	dm_viewport viewport = {
 		.x = 0,
 		.y = new_height,
@@ -120,25 +128,16 @@ bool dm_renderer_resize(int new_width, int new_height)
 		.height = new_height,
 		.max_depth = 1.0f
 	};
-	r_data.object_pipeline->viewport = viewport;
-	dm_render_command_set_viewport(r_data.object_pipeline);
 
-	return true;
+	r_data.viewport = viewport;
 }
 
-bool dm_renderer_begin_scene()
+bool dm_renderer_begin_frame()
 {
-	dm_renderer_begin_scene_impl(&r_data);
+	dm_render_command_clear(&r_data.clear_color, r_data.render_commands);
+	dm_render_command_set_viewport(&r_data.viewport, r_data.render_commands);
 
-	// commands for object pipeline
-	if (!dm_list_is_empty(r_data.object_pipeline->render_commands))
-	{
-		dm_renderer_clear_command_buffer(r_data.object_pipeline->render_commands);
-	}
-
-	dm_render_command_clear(&r_data.clear_color, r_data.object_pipeline);
 	dm_uniform* view_proj = dm_map_get(r_data.object_pipeline->uniforms, "view_proj");
-	
 #ifdef DM_DIRECTX
 	dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
 	dm_memcpy(view_proj->data, &new_view_proj, sizeof(new_view_proj));
@@ -169,30 +168,28 @@ bool dm_renderer_begin_scene()
 			dm_list_append(buffer_data, &inst);
 		}
 
-		dm_render_command_begin_renderpass(r_data.object_pipeline);
-		dm_render_command_bind_pipeline(r_data.object_pipeline);
-		dm_render_command_update_buffer(r_data.object_pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.object_pipeline);
-		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.object_pipeline);
-		dm_render_command_end_renderpass(r_data.object_pipeline);
+		dm_render_command_begin_renderpass(r_data.render_commands);
+		dm_render_command_bind_pipeline(r_data.object_pipeline, r_data.render_commands);
+		dm_render_command_update_buffer(r_data.object_pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
+		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.render_commands);
+		dm_render_command_end_renderpass(r_data.render_commands);
 
 		dm_list_destroy(buffer_data);
 	}
+
+	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.object_pipeline)) return false;
+	dm_renderer_clear_command_buffer(r_data.render_commands);
 	
 	return true;
 }
 
-bool dm_renderer_end_scene()
+bool dm_renderer_end_frame()
 {
-	if (!dm_renderer_submit_command_buffer(r_data.object_pipeline->render_commands, r_data.object_pipeline)) return false;
-
-	return dm_renderer_end_scene_impl(&r_data);
+	return dm_renderer_end_frame_impl(&r_data);
 }
 
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 {
-	// command buffer
-	pipeline->render_commands = dm_list_create(sizeof(dm_render_command), 0);
-
 	// rasterizer
 	pipeline->raster_desc.shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 
@@ -209,9 +206,6 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 {
-	dm_renderer_clear_command_buffer(pipeline->render_commands);
-	dm_list_destroy(pipeline->render_commands);
-
 	dm_renderer_destroy_render_pipeline_impl(pipeline);
 
 	dm_free(pipeline->vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
@@ -269,20 +263,12 @@ bool dm_renderer_create_object_pipeline(dm_render_pipeline* pipeline)
 	sampler.v = DM_TEXTURE_MODE_WRAP;
 	sampler.w = DM_TEXTURE_MODE_WRAP;
 
-	// viewport
-	dm_viewport viewport = { 0 };
-	viewport.y = r_data.height;
-	viewport.width = r_data.width;
-	viewport.height = r_data.height;
-	viewport.max_depth = 1.0f;
-
 	// fill-in pipeline
 	pipeline->raster_desc = raster;
 	pipeline->blend_desc = blend;
 	pipeline->depth_desc = depth;
 	pipeline->stencil_desc = stencil;
 	pipeline->sampler_desc = sampler;
-	pipeline->viewport = viewport;
 
 	// internal pipeline
 	return dm_renderer_init_render_pipeline(pipeline);

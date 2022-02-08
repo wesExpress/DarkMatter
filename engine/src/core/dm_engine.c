@@ -96,6 +96,13 @@ bool dm_engine_run()
                 break;
             }
 
+            if (!dm_renderer_begin_frame())
+            {
+                DM_LOG_FATAL("Something went wrong in begin scene...");
+                e_data->is_running = false;
+                break;
+            }
+
             if (!e_data->application->dm_application_render(e_data->application, delta_time))
             {
                 DM_LOG_FATAL("Application rendering failed!");
@@ -103,14 +110,7 @@ bool dm_engine_run()
                 break;
             }
 
-            if (!dm_renderer_begin_scene())
-            {
-                DM_LOG_FATAL("Something went wrong in begin scene...");
-                e_data->is_running = false;
-                break;
-            }
-
-            if (!dm_renderer_end_scene())
+            if (!dm_renderer_end_frame())
             {
                 DM_LOG_FATAL("Something went wrong in end scene...");
                 e_data->is_running = false;

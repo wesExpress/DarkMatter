@@ -188,6 +188,9 @@ void dm_mem_all_freed()
 				case DM_MEM_RENDERER_SHADER:
 					strcpy(buffer, "shader");
 					break;
+				case DM_MEM_RENDERER_UNIFORM:
+					strcpy(buffer, "uniform");
+					break;
 				case DM_MEM_RENDERER_TEXTURE:
 					strcpy(buffer, "texture");
 					break;

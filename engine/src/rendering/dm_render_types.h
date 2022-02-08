@@ -403,8 +403,6 @@ typedef struct dm_render_pipeline
     dm_stencil_state_desc stencil_desc;
     dm_sampler_desc sampler_desc;
     dm_render_packet render_packet;
-    dm_list* render_commands;
-    dm_viewport viewport;
     bool wireframe;
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;

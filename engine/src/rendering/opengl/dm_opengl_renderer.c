@@ -35,7 +35,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 #endif
 #endif
 
-    glViewport(0, 0, renderer_data->width, renderer_data->height);
+    glViewport(renderer_data->viewport.x, renderer_data->viewport.y, renderer_data->viewport.width, renderer_data->viewport.height);
 
     return true;
 }
@@ -45,12 +45,7 @@ void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
     dm_platform_shutdown_opengl();
 }
 
-void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
-{
-
-}
-
-bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
+bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data)
 {
     dm_platform_swap_buffers();
 
@@ -421,7 +416,7 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer)
     return true;
 }
 
-void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline)
+void dm_renderer_set_viewport_impl(dm_viewport viewport)
 {
     glViewport(viewport.x, viewport.y, viewport.width, viewport.height);
     glCheckError();
