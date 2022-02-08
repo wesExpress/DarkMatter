@@ -59,8 +59,18 @@ bool dm_application_init(dm_application* app)
 	//dm_renderer_api_submit_object_transforms("cube", transforms_2, sizeof(transforms_2) / sizeof(transforms_2[0]));
 
 	objects = dm_list_create(sizeof(dm_game_object), 0);
-	dm_list_append(objects, &(dm_game_object){ {0, 0, 0}, { 1,1,1 }, 0, "cube"});
-	dm_list_append(objects, &(dm_game_object){ {1.2, 1, 2}, { 0.2,0.2,0.2 }, 0, "cube"});
+	dm_list_append(objects, &(dm_game_object){ 
+		.transform={{0, 0, 0}, { 1,1,1 }}, 
+		.color={1, 0.5, 0.31}, 
+		.texture=0, 
+		.mesh="cube"
+	});
+	dm_list_append(objects, &(dm_game_object){ 
+		.transform={{1.2, 1, 2}, { 0.2,0.2,0.2 }},
+		.color={1,1,1},
+		.texture= 0, 
+		.mesh = "cube"
+	});
 
 	dm_renderer_api_submit_objects(objects);
 

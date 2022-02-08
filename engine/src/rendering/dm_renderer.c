@@ -143,7 +143,8 @@ bool dm_renderer_begin_scene()
 	dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
 	dm_memcpy(view_proj->data, &new_view_proj, sizeof(new_view_proj));
 #else
-	dm_memcpy(view_proj->data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
+	//dm_memcpy(view_proj->data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
+	view_proj->data = &r_data.camera.view_proj;
 #endif
 
 	for(uint32_t i=0; i< mesh_tags->count;i++)
@@ -406,6 +407,7 @@ void dm_renderer_submit_objects(dm_list* objects)
 			obj_list = dm_list_create(sizeof(dm_game_object), 0);
 			dm_list_append(obj_list, object);
 			dm_map_insert_list(obj_map, object->mesh, obj_list);
+			dm_list_destroy(obj_list);
 		}
 		else
 		{

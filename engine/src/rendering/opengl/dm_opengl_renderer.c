@@ -234,6 +234,11 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
             glCheckErrorReturn();
             glEnableVertexAttribArray(count);
             glCheckErrorReturn();
+            if(attrib_desc.attrib_class == DM_VERTEX_ATTRIB_CLASS_INSTANCE)
+            {
+                glVertexAttribDivisor(count, 1);
+                glCheckErrorReturn();
+            }
             count++;
         }
     }
@@ -357,6 +362,13 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     // vao
     glBindVertexArray(internal_pipe->vao);
     glCheckErrorReturn();
+
+    // global uniforms
+    dm_uniform* uniform = dm_map_get(pipeline->uniforms, "view_proj");
+    if(!dm_opengl_bind_uniform(uniform)) return false;
+
+    uniform = dm_map_get(pipeline->uniforms, "global_light");
+    if(!dm_opengl_bind_uniform(uniform)) return false;
 
     // TODO: need to change this eventually, this won't work with multiple textures per draw call
     // textures
