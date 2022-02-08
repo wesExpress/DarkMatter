@@ -27,7 +27,7 @@ bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
-bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
 
 // vertex data
 dm_list* vertices = NULL;
@@ -143,8 +143,7 @@ bool dm_renderer_begin_scene()
 	dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
 	dm_memcpy(view_proj->data, &new_view_proj, sizeof(new_view_proj));
 #else
-	//dm_memcpy(view_proj->data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
-	view_proj->data = &r_data.camera.view_proj;
+	dm_memcpy(view_proj->data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
 #endif
 
 	for(uint32_t i=0; i< mesh_tags->count;i++)
@@ -226,6 +225,14 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 		dm_strdel(str->string);
 	}
 
+	for (uint32_t i = 0; i < pipeline->uniforms->capacity; i++)
+	{
+		if (pipeline->uniforms->items[i])
+		{
+			dm_uniform* uniform = pipeline->uniforms->items[i]->value;
+			dm_free(uniform->data, uniform->desc.count * uniform->desc.element_size, DM_MEM_RENDERER_UNIFORM);
+		}
+	}
 	dm_map_destroy(pipeline->uniforms);
 	dm_list_destroy(pipeline->render_packet.image_paths);
 
@@ -331,30 +338,32 @@ bool dm_renderer_init_object_data()
 	/*
 	uniforms
 	*/
-	dm_mat4 model = dm_mat4_identity();
-	model = dm_mat4_mul_mat4(model, r_data.camera.view_proj);
 
 	dm_uniform_desc desc = { 0 };
 	desc.name = "view_proj";
 	desc.data_t = DM_UNIFORM_DATA_T_MATRIX_FLOAT;
 	desc.element_size = sizeof(float);
 	desc.count = 4;
-	dm_uniform uniform = { 0 };
-	uniform.desc = desc;
-	uniform.data = &model;
+	dm_uniform uniform1 = { 0 };
+	uniform1.desc = desc;
+	uniform1.data = dm_alloc(sizeof(r_data.camera.view_proj), DM_MEM_RENDERER_UNIFORM);
+	dm_memcpy(uniform1.data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
 
-	dm_map_insert(r_data.object_pipeline->uniforms, "view_proj", &uniform);
+	dm_map_insert(r_data.object_pipeline->uniforms, "view_proj", &uniform1);
 
 	desc.name = "global_light";
 	desc.data_t = DM_UNIFORM_DATA_T_FLOAT;
 	desc.element_size = sizeof(float);
 	desc.count = 3;
-	uniform.desc = desc;
-	uniform.data = &(dm_vec3) { 1, 1, 1 };
+	dm_uniform uniform2 = { 0 };
+	uniform2.desc = desc;
+	dm_vec3 color = { 1,1,1 };
+	uniform2.data = dm_alloc(sizeof(color), DM_MEM_RENDERER_UNIFORM);
+	dm_memcpy(uniform2.data, &color, sizeof(color));
 
-	dm_map_insert(r_data.object_pipeline->uniforms, "global_light", &uniform);
+	dm_map_insert(r_data.object_pipeline->uniforms, "global_light", &uniform2);
 		
-	if(!dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, &model, v_layout, r_data.object_pipeline)) return false;
+	if(!dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, v_layout, r_data.object_pipeline)) return false;
 
 	return true;
 }
