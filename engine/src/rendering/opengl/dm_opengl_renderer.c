@@ -128,14 +128,20 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_internal_pipeline* interanl_pipe = pipeline->internal_pipeline;
     glDeleteVertexArrays(1, &interanl_pipe->vao);
     glCheckError();
-
-    dm_internal_constant_buffer* internal_cb = pipeline->view_proj->internal_buffer;
-    dm_free(internal_cb->data, sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
     
     dm_opengl_delete_buffer(pipeline->vertex_buffer);
     dm_opengl_delete_buffer(pipeline->index_buffer);
     dm_opengl_delete_buffer(pipeline->inst_buffer);
-    dm_free(pipeline->view_proj->internal_buffer, sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
+
+    for (uint32_t i = 0; i < pipeline->uniforms->capacity; i++)
+    {
+        if (pipeline->uniforms->items[i])
+        {
+            dm_uniform* uniform = pipeline->uniforms->items[i]->value;
+            dm_opengl_destroy_uniform(uniform);
+        }
+    }
+    
     dm_opengl_delete_shader(pipeline->raster_desc.shader);
 
     // textures
@@ -234,16 +240,28 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 
     glBindVertexArray(0);
 
-    // constant buffers
-    dm_internal_shader* internal_shader = pipeline->raster_desc.shader->internal_shader;
-    pipeline->view_proj->internal_buffer = dm_alloc(sizeof(dm_internal_constant_buffer), DM_MEM_RENDERER_BUFFER);
-    dm_internal_constant_buffer* internal_cb = pipeline->view_proj->internal_buffer;
-    if (!dm_opengl_find_uniform_loc(internal_shader->id, pipeline->view_proj->desc.name, &internal_cb->location)) return false;
-    internal_cb->data = dm_alloc(sizeof(dm_mat4), DM_MEM_RENDERER_BUFFER);
-    dm_memcpy(internal_cb->data, mvp_data, sizeof(dm_mat4));
+    /*
+    Global uniforms
+    */
+
+    dm_uniform* view_proj = dm_map_get(pipeline->uniforms, "view_proj");
+    if (!view_proj)
+    {
+        DM_LOG_FATAL("View projection matrix uniform has not been set!");
+        return false;
+    }
+    if (!dm_opengl_create_uniform(view_proj, pipeline->raster_desc.shader)) return false;
+
+    dm_uniform* global_light = dm_map_get(pipeline->uniforms, "global_light");
+    if (!global_light)
+    {
+        DM_LOG_FATAL("Global light uniform has not been set!");
+        return false;
+    }
+    if (!dm_opengl_create_uniform(global_light, pipeline->raster_desc.shader)) return false;
 
     // textures
-
+    dm_internal_shader* internal_shader = pipeline->raster_desc.shader->internal_shader;
     for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
     {
         dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
@@ -340,9 +358,6 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     glBindVertexArray(internal_pipe->vao);
     glCheckErrorReturn();
 
-    // view proj
-    dm_opengl_bind_uniform(pipeline->view_proj);
-
     // TODO: need to change this eventually, this won't work with multiple textures per draw call
     // textures
     for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
@@ -386,7 +401,6 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer)
     case DM_BUFFER_TYPE_VERTEX: 
         dm_opengl_bind_buffer(buffer);
         break;
-    case DM_BUFFER_TYPE_CONSTANT: return dm_opengl_bind_uniform(buffer);
     default: 
         DM_LOG_ERROR("Haven't implemented this bind buffer type yet!");
         return false;

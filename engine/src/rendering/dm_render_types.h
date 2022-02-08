@@ -4,6 +4,7 @@
 #include "core/math/dm_math_types.h"
 #include "core/dm_string.h"
 #include "structures/dm_list.h"
+#include "structures/dm_map.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -19,6 +20,7 @@ typedef struct dm_vertex
 typedef struct dm_vertex_inst
 {
     dm_mat4 model;
+    dm_vec3 color;
 } dm_vertex_inst;
 
 typedef uint32_t       dm_index_t;
@@ -82,6 +84,17 @@ typedef enum dm_buffer_data_t
     DM_BUFFER_DATA_T_MATRIX,
     DM_BUFFER_DATA_T_UNKNOWN
 } dm_buffer_data_t;
+
+typedef enum dm_uniform_data_t
+{
+    DM_UNIFORM_DATA_T_BOOL,
+    DM_UNIFORM_DATA_T_INT,
+    DM_UNIFORM_DATA_T_UINT,
+    DM_UNIFORM_DATA_T_FLOAT,
+    DM_UNIFORM_DATA_T_MATRIX_INT,
+    DM_UNIFORM_DATA_T_MATRIX_FLOAT,
+    DM_UNIFORM_DATA_T_UNKNOWN
+} dm_uniform_data_t;
 
 typedef enum dm_shader_type
 {
@@ -213,6 +226,27 @@ typedef enum dm_render_command_type
  STRUCTURES
 ************/
 
+// vertex
+
+typedef struct dm_vertex_attrib_desc
+{
+    const char* name;
+    dm_vertex_data_t data_t;
+    dm_vertex_attrib_class attrib_class;
+    size_t stride;
+    size_t offset;
+    size_t count;
+    bool normalized;
+} dm_vertex_attrib_desc;
+
+typedef struct dm_vertex_layout
+{
+    dm_vertex_attrib_desc* attributes;
+    int num;
+} dm_vertex_layout;
+
+// buffer
+
 typedef struct dm_buffer_desc
 {
     dm_buffer_type type;
@@ -224,12 +258,6 @@ typedef struct dm_buffer_desc
     const char* name;
     uint32_t count;
 } dm_buffer_desc;
-
-typedef struct dm_shader_desc
-{
-    dm_shader_type type;
-    const char* path;
-} dm_shader_desc;
 
 typedef struct dm_buffer
 {
@@ -250,6 +278,31 @@ typedef struct dm_buffer_bind_packet
     uint32_t slot;
 } dm_buffer_bind_packet;
 
+// uniform
+
+typedef struct dm_uniform_desc
+{
+    const char* name;
+    dm_uniform_data_t data_t;
+    size_t element_size;
+    uint32_t count;
+} dm_uniform_desc;
+
+typedef struct dm_unifom
+{
+    dm_uniform_desc desc;
+    void* internal_uniform;
+    void* data;
+} dm_uniform;
+
+// shader
+
+typedef struct dm_shader_desc
+{
+    dm_shader_type type;
+    const char* path;
+} dm_shader_desc;
+
 typedef struct dm_shader
 {
     dm_shader_desc vertex_desc;
@@ -257,6 +310,8 @@ typedef struct dm_shader
 
     void* internal_shader;
 } dm_shader;
+
+// image
 
 typedef struct dm_image_desc
 {
@@ -267,6 +322,13 @@ typedef struct dm_image_desc
     int width, height, n_channels;
     bool flip;
 } dm_image_desc;
+
+typedef struct dm_image
+{
+    dm_image_desc desc;
+    void* data;
+    void* internal_texture;
+} dm_image;
 
 typedef struct dm_sampler_desc
 {
@@ -279,12 +341,7 @@ typedef struct dm_sampler_desc
     dm_vec4 border_color;
 } dm_sampler_desc;
 
-typedef struct dm_image
-{
-    dm_image_desc desc;   
-    void* data;
-    void* internal_texture;
-} dm_image;
+// pipeline members
 
 typedef struct dm_viewport
 {
@@ -320,23 +377,6 @@ typedef struct dm_stencil_state_desc
     dm_comparison comparison;
 } dm_stencil_state_desc;
 
-typedef struct dm_vertex_attrib_desc
-{
-    const char* name;
-    dm_vertex_data_t data_t;
-    dm_vertex_attrib_class attrib_class;
-    size_t stride;
-    size_t offset;
-    size_t count;
-    bool normalized;
-} dm_vertex_attrib_desc;
-
-typedef struct dm_vertex_layout
-{
-    dm_vertex_attrib_desc* attributes;
-    int num;
-} dm_vertex_layout;
-
 typedef struct dm_render_packet
 {
     dm_list* image_paths;
@@ -369,7 +409,7 @@ typedef struct dm_render_pipeline
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
     dm_buffer* inst_buffer;
-    dm_buffer* view_proj;
+    dm_map_t* uniforms;
     void* internal_pipeline;
 } dm_render_pipeline;
 

@@ -63,6 +63,7 @@ set(
     src/rendering/dm_renderer_api.c
     src/rendering/dm_command_buffer.c
     src/rendering/dm_image.c
+    src/rendering/dm_geometry.c
     src/rendering/dm_camera.c
 
     src/rendering/opengl/dm_opengl_renderer.c

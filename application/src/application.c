@@ -6,74 +6,29 @@ static dm_editor_camera camera = {
 	.look_sens = 0.1f
 };
 
-dm_transform transforms[] = {
-	{0, 0, 0},
-	{2, 5, -15},
-	{-1.5, -2.2, -2.5},
-	{-3.8, -2, -12.3},
-	{2.4, -0.4, -3.5},
-	{-1.7, 3, -7.5},
-	{1.3, -2, -2.5},
-	{1.5, 2, -2.5},
-	{1.5, 0.2, -1.5},
-	{-1.3, 1, -1.5}
+dm_transform transforms_1[] = {
+	{{0, 0, 0}, {1,1,1}},
+	{{2, 5, -15}, {1,1,1}},
+	{{-1.5, -2.2, -2.5}, {1,1,1}},
+	{{-3.8, -2, -12.3}, {1,1,1}},
+	{{2.4, -0.4, -3.5}, {1,1,1}},
+	{{-1.7, 3, -7.5}, {1,1,1}},
+	{{1.3, -2, -2.5}, {1,1,1}},
+	{{1.5, 2, -2.5}, {1,1,1}},
+	{{1.5, 0.2, -1.5}, {1,1,1}},
+	{{-1.3, 1, -1.5}, {1,1,1}}
 };
 
-dm_map_t* object_map = NULL;
+dm_transform transforms_2[] = {
+	{{0,0,0}, {1,1,1}},
+	{{1.2,1,2}, {0.2,0.2,0.2}}
+};
+
+dm_list* objects = NULL;
 
 bool dm_application_init(dm_application* app)
 {
 	DM_LOG_TRACE("Hellow from the application!\n");
-
-	// vertex data
-	DM_LOG_DEBUG("Submitting test vertex data from app...");
-
-	dm_vertex_t vertices[] = {
-	// front face
-	{ {-0.5f, -0.5f,  0.5f}, {0.0f, 0.0f} }, // 0
-	{ { 0.5f, -0.5f,  0.5f}, {1.0f, 0.0f} },
-	{ { 0.5f,  0.5f,  0.5f}, {1.0f, 1.0f} },
-	{ {-0.5f,  0.5f,  0.5f}, {0.0f, 1.0f} },
-	// bacxk face
-	{ { 0.5f, -0.5f, -0.5f}, {0.0f, 0.0f} }, // 4
-	{ {-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f} },
-	{ {-0.5f,  0.5f, -0.5f}, {1.0f, 1.0f} },
-	{ { 0.5f,  0.5f, -0.5f}, {0.0f, 1.0f} },
-	// top face
-	{ {-0.5f,  0.5f,  0.5f}, {0.0f, 0.0f} }, // 8
-	{ { 0.5f,  0.5f,  0.5f}, {1.0f, 0.0f} },
-	{ { 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f} },
-	{ {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f} },
-	// bottom face
-	{ {-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f} }, // 12
-	{ { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f} },
-	{ { 0.5f, -0.5f,  0.5f}, {1.0f, 1.0f} },
-	{ {-0.5f, -0.5f,  0.5f}, {0.0f, 1.0f} },
-	// left face
-	{ {-0.5f, -0.5f, -0.5f}, {0.0f, 0.0f} }, // 16
-	{ {-0.5f, -0.5f,  0.5f}, {1.0f, 0.0f} },
-	{ {-0.5f,  0.5f,  0.5f}, {1.0f, 1.0f} },
-	{ {-0.5f,  0.5f, -0.5f}, {0.0f, 1.0f} },
-	// right face
-	{ { 0.5f, -0.5f,  0.5f}, {0.0f, 0.0f} }, // 20
-	{ { 0.5f, -0.5f, -0.5f}, {1.0f, 0.0f} },
-	{ { 0.5f,  0.5f, -0.5f}, {1.0f, 1.0f} },
-	{ { 0.5f,  0.5f,  0.5f}, {0.0f, 1.0f} }
-	};
-
-	dm_index_t indices[] = {
-		 0,  1,  2,    2,  3,  0,
-		 4,  5,  6,    6,  7,  4,
-		 8,  9, 10,   10, 11,  8,
-	    12, 13, 14,   14, 15, 12,
-		16, 17, 18,   18, 19, 16,
-		20, 21, 22,   22, 23, 20
-	};
-
-	uint32_t num_vertices = sizeof(vertices) / sizeof(dm_vertex_t);
-	uint32_t num_indices = sizeof(indices) / sizeof(dm_index_t);
-
-	dm_renderer_api_submit_vertex_data("cube", vertices, indices, num_vertices, num_indices);
 
 	// textures
 	DM_LOG_DEBUG("Submitting texture data from app...");
@@ -93,21 +48,31 @@ bool dm_application_init(dm_application* app)
 
 	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
 
-	if (!dm_renderer_api_submit_images(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
+	//if (!dm_renderer_api_submit_images(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
 
 	// camera
 	dm_renderer_api_set_camera_pos((dm_vec3) { 0, 0, 4 });
 	dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
 
 	// transforms
-	dm_renderer_api_submit_object_transforms("cube", transforms, sizeof(transforms) / sizeof(transforms[0]));
+	//dm_renderer_api_submit_object_transforms("cube", transforms_1, sizeof(transforms_1) / sizeof(transforms_1[0]));
+	//dm_renderer_api_submit_object_transforms("cube", transforms_2, sizeof(transforms_2) / sizeof(transforms_2[0]));
+
+	objects = dm_list_create(sizeof(dm_game_object), 0);
+	dm_list_append(objects, &(dm_game_object){ {0, 0, 0}, { 1,1,1 }, 0, "cube"});
+	dm_list_append(objects, &(dm_game_object){ {1.2, 1, 2}, { 0.2,0.2,0.2 }, 0, "cube"});
+
+	dm_renderer_api_submit_objects(objects);
+
+	// clear color
+	dm_renderer_api_set_clear_color((dm_vec3) { 0, 0, 0 });
 
 	return true;
 }
 
 void dm_application_shutdown(dm_application* app)
 {
-
+	dm_list_destroy(objects);
 }
 
 bool dm_application_update(dm_application* app, float delta_time)

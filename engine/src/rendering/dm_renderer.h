@@ -62,6 +62,8 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs);
 void dm_renderer_submit_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms);
 void dm_renderer_update_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms);
+void dm_renderer_submit_objects(dm_list* objects);
+void dm_renderer_set_clear_color(dm_vec3 color);
 
 void dm_renderer_set_camera_pos(dm_vec3 pos);
 void dm_renderer_update_camera_pos(dm_vec3 delta_pos);

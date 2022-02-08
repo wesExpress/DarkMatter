@@ -11,14 +11,14 @@ bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_desc
 	return dm_renderer_submit_images(image_descs, num_desc);
 }
 
-void dm_renderer_api_submit_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms)
+void dm_renderer_api_submit_objects(dm_list* objects)
 {
-	dm_renderer_submit_object_transforms(tag, transforms, num_transforms);
+	dm_renderer_submit_objects(objects);
 }
 
-void dm_renderer_api_update_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms)
+void dm_renderer_api_set_clear_color(dm_vec3 color)
 {
-	dm_renderer_update_object_transforms(tag, transforms, num_transforms);
+	dm_renderer_set_clear_color(color);
 }
 
 void dm_renderer_api_set_camera_pos(dm_vec3 pos)

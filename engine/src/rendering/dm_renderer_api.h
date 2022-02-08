@@ -14,8 +14,9 @@ DM_API void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* ver
 
 DM_API bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_desc);
 
-DM_API void dm_renderer_api_submit_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms);
-DM_API void dm_renderer_api_update_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms);
+DM_API void dm_renderer_api_submit_objects(dm_list* objects);
+
+DM_API void dm_renderer_api_set_clear_color(dm_vec3 color);
 
 // updating functions
 

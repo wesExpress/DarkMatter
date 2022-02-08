@@ -2,15 +2,17 @@
 #include "dm_vertex_attribs.h"
 #include "dm_command_buffer.h"
 #include "dm_image.h"
+#include "dm_geometry.h"
+
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
 #include "core/math/dm_math.h"
-#include "structures/dm_map.h"
+
 #include <stddef.h>
 
 static dm_renderer_data r_data = { 0 };
 
-bool dm_renderer_create_object_pipeline();
+bool dm_renderer_create_object_pipeline(dm_render_pipeline* pipeline);
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
 
@@ -33,8 +35,8 @@ dm_list* indices = NULL;
 
 // instances
 dm_map_t* inst_map = NULL;
-dm_map_t* inst_transforms = NULL;
-dm_list* object_tags = NULL;
+dm_map_t* obj_map = NULL;
+dm_list* mesh_tags = NULL;
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -54,8 +56,8 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	indices = dm_list_create(sizeof(dm_index_t), 0);
 
 	inst_map = dm_map_create(sizeof(dm_inst_data), 0);
-	inst_transforms = dm_map_create(sizeof(dm_list), 0);
-	object_tags = dm_list_create(sizeof(dm_string), 0);
+	obj_map = dm_map_create(sizeof(dm_list), 0);
+	mesh_tags = dm_list_create(sizeof(dm_string), 0);
 
 	// maps
 	dm_image_map_init();
@@ -71,12 +73,19 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	);
 
 	// object pipeline
-	if (!dm_renderer_create_object_pipeline())
+	if (!dm_renderer_create_object_pipeline(r_data.object_pipeline))
 	{
 		DM_LOG_FATAL("Failed to create object render pipeline!");
 		return false;
 	}
-	
+
+	// primitives
+	if (!dm_geometry_load_primitives())
+	{
+		DM_LOG_FATAL("Failed to initialize primitive vertex data!");
+		return false;
+	}
+
 	return true;
 }
 
@@ -87,8 +96,8 @@ void dm_renderer_shutdown()
 	dm_list_destroy(indices);
 
 	dm_map_destroy(inst_map);
-	dm_map_list_destroy(inst_transforms);
-	dm_list_destroy(object_tags);
+	dm_map_list_destroy(obj_map);
+	dm_list_destroy(mesh_tags);
 
 	// cleanup
 	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
@@ -128,42 +137,45 @@ bool dm_renderer_begin_scene()
 	}
 
 	dm_render_command_clear(&r_data.clear_color, r_data.object_pipeline);
+	dm_uniform* view_proj = dm_map_get(r_data.object_pipeline->uniforms, "view_proj");
+	
 #ifdef DM_DIRECTX
 	dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
-	dm_render_command_update_buffer(r_data.object_pipeline->view_proj, &new_view_proj, sizeof(new_view_proj), r_data.object_pipeline);
+	dm_memcpy(view_proj->data, &new_view_proj, sizeof(new_view_proj));
 #else
-	dm_render_command_update_buffer(r_data.object_pipeline->view_proj, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj), r_data.object_pipeline);
+	dm_memcpy(view_proj->data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
 #endif
 
-	for(uint32_t i=0; i<object_tags->count;i++)
+	for(uint32_t i=0; i< mesh_tags->count;i++)
 	{
-		dm_string* key = dm_list_at(object_tags, i);
+		dm_string* key = dm_list_at(mesh_tags, i);
 		dm_inst_data* inst_data = dm_map_get(inst_map, key->string);
-		dm_list* inst_ts = dm_map_get(inst_transforms, key->string);
-		dm_list* buffer = dm_list_create(sizeof(dm_vertex_inst), 0);
+		dm_list* objs = dm_map_get(obj_map, key->string);
+		dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
 
-		for (uint32_t j = 0; j < inst_ts->count; j++)
+		for (uint32_t j = 0; j < objs->count; j++)
 		{
-			dm_transform* transform = dm_list_at(inst_ts, j);
+			dm_game_object* obj = dm_list_at(objs, j);
 			dm_vertex_inst inst = { 0 };
 
 			inst.model = dm_mat4_identity();
-			inst.model = dm_mat_translate(inst.model, transform->position);
+			inst.model = dm_mat_translate(inst.model, obj->transform.position);
+			inst.model = dm_mat_scale(inst.model, obj->transform.scale);
 #ifdef DM_DIRECTX
 			inst.model = dm_mat4_transpose(inst.model);
 #endif
+			inst.color = obj->color;
 
-			dm_list_append(buffer, &inst);
+			dm_list_append(buffer_data, &inst);
 		}
 
 		dm_render_command_begin_renderpass(r_data.object_pipeline);
 		dm_render_command_bind_pipeline(r_data.object_pipeline);
-		dm_render_command_update_buffer(r_data.object_pipeline->inst_buffer, buffer->data, buffer->count * buffer->element_size, r_data.object_pipeline);
-		//dm_render_command_draw_indexed(inst_data->index_count, inst_data->index_offset, inst_data->vertex_offset, r_data.object_pipeline);
-		dm_render_command_draw_instanced(inst_data->index_count, inst_ts->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.object_pipeline);
+		dm_render_command_update_buffer(r_data.object_pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.object_pipeline);
+		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.object_pipeline);
 		dm_render_command_end_renderpass(r_data.object_pipeline);
 
-		dm_list_destroy(buffer);
+		dm_list_destroy(buffer_data);
 	}
 	
 	return true;
@@ -188,8 +200,9 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	pipeline->vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->inst_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->view_proj = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+
 	pipeline->render_packet.image_paths = dm_list_create(sizeof(dm_string), 0);
+	pipeline->uniforms = dm_map_create(sizeof(dm_uniform), 0);
 
 	return dm_renderer_create_render_pipeline_impl(pipeline);
 }
@@ -204,7 +217,6 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 	dm_free(pipeline->vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_free(pipeline->index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_free(pipeline->inst_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_free(pipeline->view_proj, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 
 	// images
 	for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
@@ -212,12 +224,14 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 		dm_string* str = dm_list_at(pipeline->render_packet.image_paths, i);
 		dm_strdel(str->string);
 	}
+
+	dm_map_destroy(pipeline->uniforms);
 	dm_list_destroy(pipeline->render_packet.image_paths);
 
 	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 }
 
-bool dm_renderer_create_object_pipeline()
+bool dm_renderer_create_object_pipeline(dm_render_pipeline* pipeline)
 {
 	// raster
 	dm_raster_state_desc raster = { 0 };
@@ -255,17 +269,15 @@ bool dm_renderer_create_object_pipeline()
 	viewport.max_depth = 1.0f;
 
 	// fill-in pipeline
-	r_data.object_pipeline->raster_desc = raster;
-	r_data.object_pipeline->blend_desc = blend;
-	r_data.object_pipeline->depth_desc = depth;
-	r_data.object_pipeline->stencil_desc = stencil;
-	r_data.object_pipeline->sampler_desc = sampler;
-	r_data.object_pipeline->viewport = viewport;
+	pipeline->raster_desc = raster;
+	pipeline->blend_desc = blend;
+	pipeline->depth_desc = depth;
+	pipeline->stencil_desc = stencil;
+	pipeline->sampler_desc = sampler;
+	pipeline->viewport = viewport;
 
 	// internal pipeline
-	dm_renderer_init_render_pipeline(r_data.object_pipeline);
-
-	return true;
+	return dm_renderer_init_render_pipeline(pipeline);
 }
 
 bool dm_renderer_init_object_data()
@@ -306,7 +318,8 @@ bool dm_renderer_init_object_data()
 	dm_vertex_attrib_desc v_attribs[] = {
 		pos_attrib_desc,
 		tex_coord_desc,
-		model_attrib_desc
+		model_attrib_desc,
+		color_attrib_desc
 	};
 
 	dm_vertex_layout v_layout = {
@@ -315,23 +328,31 @@ bool dm_renderer_init_object_data()
 	};
 
 	/*
-	// constant buffers
+	uniforms
 	*/
-	dm_buffer_desc vp_desc = { 0 };
-	vp_desc.type = DM_BUFFER_TYPE_CONSTANT;
-	vp_desc.usage = DM_BUFFER_USAGE_DYNAMIC;
-	vp_desc.cpu_access = DM_BUFFER_CPU_WRITE;
-	vp_desc.data_t = DM_BUFFER_DATA_T_MATRIX;
-	vp_desc.elem_size = sizeof(float);
-	vp_desc.count = 4;
-	vp_desc.buffer_size = ((sizeof(dm_mat4) + 15) / 16) * 16;
-	vp_desc.name = "view_proj";
-
-	r_data.object_pipeline->view_proj->desc = vp_desc;
-
 	dm_mat4 model = dm_mat4_identity();
 	model = dm_mat4_mul_mat4(model, r_data.camera.view_proj);
 
+	dm_uniform_desc desc = { 0 };
+	desc.name = "view_proj";
+	desc.data_t = DM_UNIFORM_DATA_T_MATRIX_FLOAT;
+	desc.element_size = sizeof(float);
+	desc.count = 4;
+	dm_uniform uniform = { 0 };
+	uniform.desc = desc;
+	uniform.data = &model;
+
+	dm_map_insert(r_data.object_pipeline->uniforms, "view_proj", &uniform);
+
+	desc.name = "global_light";
+	desc.data_t = DM_UNIFORM_DATA_T_FLOAT;
+	desc.element_size = sizeof(float);
+	desc.count = 3;
+	uniform.desc = desc;
+	uniform.data = &(dm_vec3) { 1, 1, 1 };
+
+	dm_map_insert(r_data.object_pipeline->uniforms, "global_light", &uniform);
+		
 	if(!dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, &model, v_layout, r_data.object_pipeline)) return false;
 
 	return true;
@@ -343,7 +364,7 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 		.string = tag,
 		.len = strlen(tag)
 	};
-	dm_list_append(object_tags, &obj_tag);
+	dm_list_append(mesh_tags, &obj_tag);
 	
 	dm_inst_data inst_data = { 0 };
 	inst_data.index_count = num_indices;
@@ -373,27 +394,23 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 	}
 }
 
-void dm_renderer_submit_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms)
+void dm_renderer_submit_objects(dm_list* objects)
 {
-	dm_list* transf_list = dm_list_create(sizeof(dm_transform), 0);
-
-	for (uint32_t i = 0; i < num_transforms; i++)
+	for (uint32_t i = 0; i < objects->count; i++)
 	{
-		dm_list_append(transf_list, &transforms[i]);
-	}
+		dm_game_object* object = dm_list_at(objects, i);
 
-	dm_map_insert_list(inst_transforms, tag, transf_list);
-	dm_list_destroy(transf_list);
-}
-
-void dm_renderer_update_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms)
-{
-	dm_list* inst_ts = dm_map_get(inst_transforms, tag);
-	dm_list_clear(inst_ts, 0);
-
-	for (uint32_t i = 0; i < num_transforms; i++)
-	{
-		dm_list_append(inst_ts, &transforms[i]);
+		dm_list* obj_list = dm_map_get(obj_map, object->mesh);
+		if (!obj_list)
+		{
+			obj_list = dm_list_create(sizeof(dm_game_object), 0);
+			dm_list_append(obj_list, object);
+			dm_map_insert_list(obj_map, object->mesh, obj_list);
+		}
+		else
+		{
+			dm_list_append(obj_list, object);
+		}
 	}
 }
 
@@ -410,6 +427,11 @@ bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs)
 	}
 
 	return true;
+}
+
+void dm_renderer_set_clear_color(dm_vec3 color)
+{
+	r_data.clear_color = dm_vec4_set_from_vec3(color);
 }
 
 void dm_renderer_set_camera_pos(dm_vec3 pos)

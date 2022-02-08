@@ -21,6 +21,11 @@ typedef struct dm_internal_constant_buffer
 	void* data;
 } dm_internal_constant_buffer;
 
+typedef struct dm_internal_uniform
+{
+	GLint location;
+} dm_internal_uniform;
+
 typedef struct dm_internal_shader
 {
 	GLuint id;
