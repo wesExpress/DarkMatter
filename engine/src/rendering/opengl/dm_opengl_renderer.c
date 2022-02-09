@@ -52,6 +52,15 @@ void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
 
 bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data)
 {
+    //glBindFramebuffer(GL_FRAMEBUFFER, 0);
+    glBindVertexArray(0);
+    //glBindBuffer(GL_ARRAY_BUFFER, 0);
+    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
+
+    glDisable(GL_DEPTH_TEST);
+    //glDisable(GL_STENCIL_TEST);
+    //glDisable(GL_BLEND);
+
     dm_platform_swap_buffers();
 
     return true;
@@ -150,14 +159,7 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 
 void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass)
 {
-    //glBindFramebuffer(GL_FRAMEBUFFER, 0);
-    glBindVertexArray(0);
-    //glBindBuffer(GL_ARRAY_BUFFER, 0);
-    //glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
-
-    glDisable(GL_DEPTH_TEST);
-    //glDisable(GL_STENCIL_TEST);
-    //glDisable(GL_BLEND);
+    
 }
 
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
