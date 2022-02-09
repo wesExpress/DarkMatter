@@ -65,6 +65,7 @@ set(
     src/rendering/dm_image.c
     src/rendering/dm_geometry.c
     src/rendering/dm_camera.c
+    src/rendering/dm_uniform.c
 
     src/rendering/opengl/dm_opengl_renderer.c
     src/rendering/opengl/dm_opengl_render_pass.c

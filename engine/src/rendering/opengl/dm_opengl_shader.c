@@ -71,10 +71,10 @@ bool dm_opengl_create_uniform(dm_uniform* uniform, dm_shader* shader)
     dm_internal_uniform* internal_uni = uniform->internal_uniform;
     dm_internal_shader* internal_shader = shader->internal_shader;
 
-    internal_uni->location = glGetUniformLocation(internal_shader->id, uniform->desc.name);
+    internal_uni->location = glGetUniformLocation(internal_shader->id, uniform->name);
     if (internal_uni->location == -1)
     {
-        DM_LOG_FATAL("Could not find uniform: '%s'", uniform->desc.name);
+        DM_LOG_FATAL("Could not find uniform: '%s'", uniform->name);
         return false;
     }
 

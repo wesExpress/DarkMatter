@@ -283,7 +283,6 @@ typedef struct dm_buffer_bind_packet
 
 typedef struct dm_uniform_desc
 {
-    const char* name;
     dm_uniform_data_t data_t;
     size_t element_size;
     uint32_t count;
@@ -293,6 +292,7 @@ typedef struct dm_uniform_desc
 typedef struct dm_unifom
 {
     dm_uniform_desc desc;
+    const char* name;
     void* internal_uniform;
     void* data;
 } dm_uniform;
