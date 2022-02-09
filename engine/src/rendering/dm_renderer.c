@@ -119,7 +119,7 @@ void dm_renderer_shutdown()
 		if(render_passes->items[i])
 		{
 			dm_render_pass* render_pass = render_passes->items[i]->value;
-			dm_renderer_destroy_render_pass_impl(render_pass);
+			dm_renderer_destroy_render_pass(render_pass);
 		}
 	}
 	dm_map_destroy(render_passes);
@@ -127,7 +127,7 @@ void dm_renderer_shutdown()
 	dm_renderer_clear_command_buffer(r_data.render_commands);
 	dm_list_destroy(r_data.render_commands);
 
-	// cleanup
+	
 	dm_renderer_destroy_render_pipeline(r_data.pipeline);
 	dm_free(r_data.pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 	dm_image_map_destroy();
@@ -297,22 +297,25 @@ bool dm_renderer_create_default_render_passes()
 	vp_desc.data_t = DM_UNIFORM_DATA_T_MATRIX_FLOAT;
 	vp_desc.element_size = sizeof(float);
 	vp_desc.count = 4;
+	vp_desc.data_size = vp_desc.element_size * vp_desc.count * 4;
 
 	dm_uniform_desc light_desc = { 0 };
 	light_desc.name = "global_light";
 	light_desc.data_t = DM_UNIFORM_DATA_T_FLOAT;
 	light_desc.element_size = sizeof(float);
 	light_desc.count = 3;
+	light_desc.data_size = light_desc.element_size * light_desc.count;
 
 	dm_uniform vp_uni = { 0 };
 	vp_uni.desc = vp_desc;
-	vp_uni.data = dm_alloc(vp_uni.desc.count * vp_uni.desc.element_size, DM_MEM_RENDERER_UNIFORM);
+	vp_uni.data = dm_alloc(vp_desc.data_size, DM_MEM_RENDERER_UNIFORM);
+	size_t test = sizeof(r_data.camera.view_proj);
 	dm_memcpy(vp_uni.data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
 	
 	dm_uniform light_uni = { 0 };
 	light_uni.desc = light_desc;
 	dm_vec3 color = { 1,1,1 };
-	light_uni.data = dm_alloc(light_uni.desc.count * light_uni.desc.element_size , DM_MEM_RENDERER_UNIFORM);
+	light_uni.data = dm_alloc(light_desc.data_size, DM_MEM_RENDERER_UNIFORM);
 	dm_memcpy(light_uni.data, &color, sizeof(color));
 
 	dm_list* uni_list = dm_list_create(sizeof(dm_uniform), 0);
@@ -393,22 +396,28 @@ bool dm_renderer_create_render_pass(const char* vertex_shader, const char* pixel
 
 	dm_map_insert(render_passes, tag, render_pass);
 
+	dm_free(render_pass, sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
+
 	return true;
 }
 
 void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
 {
+	dm_renderer_destroy_render_pass_impl(render_pass);
+
 	for (uint32_t i = 0; i < render_pass->uniforms->capacity; i++)
 	{
 		if (render_pass->uniforms->items[i])
 		{
 			dm_uniform* uniform = render_pass->uniforms->items[i]->value;
-			dm_free(uniform->data, uniform->desc.count * uniform->desc.element_size, DM_MEM_RENDERER_UNIFORM);
+			dm_free(uniform->data, uniform->desc.data_size, DM_MEM_RENDERER_UNIFORM);
 		}
 	}
 	dm_map_destroy(render_pass->uniforms);
 
-	dm_renderer_destroy_render_pass_impl(render_pass);
+	dm_free(render_pass->shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+
+	//dm_free(render_pass, sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
 }
 
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag)
