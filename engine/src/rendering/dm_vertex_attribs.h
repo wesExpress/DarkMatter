@@ -20,6 +20,20 @@ dm_vertex_attrib_desc pos_attrib_desc = {
 	.normalized = false,
 };
 
+dm_vertex_attrib_desc norm_attrib_desc = {
+#ifdef DM_OPENGL
+	.name = "aNormal",
+#else
+	.name = "NORMAL",
+#endif
+	.data_t = DM_VERTEX_DATA_T_FLOAT,
+	.attrib_class = DM_VERTEX_ATTRIB_CLASS_VERTEX,
+	.stride = sizeof(dm_vertex_t),
+	.offset = offsetof(dm_vertex_t, normal),
+	.count = 3,
+	.normalized = false
+};
+
 // texture coords
 dm_vertex_attrib_desc tex_coord_desc = {
 #ifdef DM_OPENGL

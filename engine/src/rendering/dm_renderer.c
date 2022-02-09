@@ -169,6 +169,23 @@ bool dm_renderer_begin_frame()
 	dm_memcpy(view_proj->data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
 #endif
 
+	dm_render_pass* light_pass = dm_map_get(render_passes, "light_src");
+	if (!light_pass)
+	{
+		DM_LOG_FATAL("Light source render pass is NULL!");
+		return false;
+	}
+
+	dm_list* lights = dm_map_get(light_pass->objects, "cube");
+	dm_game_object* light = dm_list_at(lights, 0);
+	if (!light)
+	{
+		DM_LOG_FATAL("Light is NULL!");
+		return false;
+	}
+	dm_uniform* lpos = dm_map_get(obj_pass->uniforms, "light_pos");
+	dm_memcpy(lpos->data, &light->transform.position, sizeof(light->transform.position));
+		
 	for(uint32_t i=0; i< mesh_tags->count;i++)
 	{
 		dm_string* key = dm_list_at(mesh_tags, i);
@@ -334,6 +351,7 @@ bool dm_renderer_create_default_render_passes()
 	// vertex attributes
 	dm_vertex_attrib_desc obj_v_attribs[] = {
 		pos_attrib_desc,
+		norm_attrib_desc,
 		tex_coord_desc,
 		model_attrib_desc,
 		color_attrib_desc
@@ -359,16 +377,23 @@ bool dm_renderer_create_default_render_passes()
 	light_desc.count = 3;
 	light_desc.data_size = light_desc.element_size * light_desc.count;
 
-	dm_uniform_desc light_str_desc = { 0 };
-	light_str_desc.name = "light_str";
-	light_str_desc.data_t = DM_UNIFORM_DATA_T_FLOAT;
-	light_str_desc.element_size = sizeof(float);
-	light_str_desc.count = 1;
-	light_str_desc.data_size = light_str_desc.element_size * light_str_desc.count;
+	dm_uniform_desc ambient_desc = { 0 };
+	ambient_desc.name = "ambient";
+	ambient_desc.data_t = DM_UNIFORM_DATA_T_FLOAT;
+	ambient_desc.element_size = sizeof(float);
+	ambient_desc.count = 1;
+	ambient_desc.data_size = ambient_desc.element_size * ambient_desc.count;
+
+	dm_uniform_desc lpos_desc = { 0 };
+	lpos_desc.name = "light_pos";
+	lpos_desc.data_t = DM_UNIFORM_DATA_T_FLOAT;
+	lpos_desc.element_size = sizeof(float);
+	lpos_desc.count = 3;
+	lpos_desc.data_size = lpos_desc.element_size * lpos_desc.count;
 
 	// uniforms
 	dm_vec3 global_light_color = { 1,1,1 };
-	float light_str = 0.1;
+	float ambient = 0.1;
 
 	// object uniforms
 	dm_uniform obj_vp_uni = { 0 };
@@ -381,10 +406,15 @@ bool dm_renderer_create_default_render_passes()
 	obj_light_uni.data = dm_alloc(light_desc.data_size, DM_MEM_RENDERER_UNIFORM);
 	dm_memcpy(obj_light_uni.data, &global_light_color, sizeof(global_light_color));
 
-	dm_uniform obj_light_str_uni = { 0 };
-	obj_light_str_uni.desc = light_str_desc;
-	obj_light_str_uni.data = dm_alloc(light_str_desc.data_size, DM_MEM_RENDERER_UNIFORM);
-	dm_memcpy(obj_light_str_uni.data, &light_str, sizeof(light_str));
+	dm_uniform ambient_uni = { 0 };
+	ambient_uni.desc = ambient_desc;
+	ambient_uni.data = dm_alloc(ambient_desc.data_size, DM_MEM_RENDERER_UNIFORM);
+	dm_memcpy(ambient_uni.data, &ambient, sizeof(ambient_uni));
+
+	dm_uniform lpos_uni = { 0 };
+	lpos_uni.desc = lpos_desc;
+	lpos_uni.data = dm_alloc(lpos_desc.data_size, DM_MEM_RENDERER_UNIFORM);
+	dm_memcpy(lpos_uni.data, &(dm_vec3){0, 0, 0}, sizeof(dm_vec3));
 
 	// light source uniforms
 	dm_uniform lsrc_vp_uni = { 0 };
@@ -426,7 +456,7 @@ bool dm_renderer_create_default_render_passes()
 	dm_list* obj_uni_list = dm_list_create(sizeof(dm_uniform), 0);
 	dm_list_append(obj_uni_list, &obj_vp_uni);
 	dm_list_append(obj_uni_list, &obj_light_uni);
-	dm_list_append(obj_uni_list, &obj_light_str_uni);
+	dm_list_append(obj_uni_list, &ambient_uni);
 
 	if (!dm_renderer_create_render_pass(object_vertex_shader, object_pixel_shader, obj_v_layout, obj_uni_list, "object"))
 	{
