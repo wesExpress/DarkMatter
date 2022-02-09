@@ -124,7 +124,7 @@ void dm_renderer_shutdown()
 	}
 	dm_map_destroy(render_passes);
 
-	dm_renderer_clear_command_buffer(r_data.render_commands);
+	if(r_data.render_commands->count>0) dm_renderer_clear_command_buffer(r_data.render_commands);
 	dm_list_destroy(r_data.render_commands);
 
 	
