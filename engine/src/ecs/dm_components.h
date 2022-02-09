@@ -22,6 +22,7 @@ typedef struct dm_game_object
 	dm_vec3 color;
 	const char* texture;
 	const char* mesh;
+	const char* render_pass;
 } dm_game_object;
 
 #endif

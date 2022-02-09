@@ -411,9 +411,11 @@ typedef struct dm_render_pass
 {
     dm_raster_state_desc raster_desc;
     dm_shader* shader;
-    dm_map_t* uniforms;
     dm_sampler_desc sampler_desc;
+    dm_map_t* uniforms;
+    dm_map_t* objects;
     bool wireframe;
+    const char* name;
     void* internal_render_pass;
 } dm_render_pass;
 

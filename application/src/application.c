@@ -54,22 +54,20 @@ bool dm_application_init(dm_application* app)
 	dm_renderer_api_set_camera_pos((dm_vec3) { 0, 0, 4 });
 	dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
 
-	// transforms
-	//dm_renderer_api_submit_object_transforms("cube", transforms_1, sizeof(transforms_1) / sizeof(transforms_1[0]));
-	//dm_renderer_api_submit_object_transforms("cube", transforms_2, sizeof(transforms_2) / sizeof(transforms_2[0]));
-
 	objects = dm_list_create(sizeof(dm_game_object), 0);
 	dm_list_append(objects, &(dm_game_object){ 
 		.transform={{0, 0, 0}, { 1,1,1 }}, 
 		.color={1, 0.5, 0.31}, 
 		.texture=0, 
-		.mesh="cube"
+		.mesh="cube",
+		.render_pass="object"
 	});
 	dm_list_append(objects, &(dm_game_object){ 
 		.transform={{1.2, 1, 2}, { 0.2,0.2,0.2 }},
 		.color={1,1,1},
 		.texture= 0, 
-		.mesh = "cube"
+		.mesh = "cube",
+		.render_pass="light_src"
 	});
 
 	dm_renderer_api_submit_objects(objects);

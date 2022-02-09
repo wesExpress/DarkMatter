@@ -69,7 +69,7 @@ bool dm_renderer_create_render_pass(const char* vertex_shader, const char* pixel
 
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag);
 bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs);
-void dm_renderer_submit_objects(dm_list* objects);
+bool dm_renderer_submit_objects(dm_list* objects);
 void dm_renderer_set_clear_color(dm_vec3 color);
 
 void dm_renderer_set_camera_pos(dm_vec3 pos);

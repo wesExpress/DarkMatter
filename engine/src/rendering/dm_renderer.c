@@ -38,12 +38,10 @@ dm_list* indices = NULL;
 
 // instances
 dm_map_t* inst_map = NULL;
-dm_map_t* obj_map = NULL;
 dm_list* mesh_tags = NULL;
 
 // render passes
 dm_map_t* render_passes = NULL;
-
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -71,7 +69,6 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	indices = dm_list_create(sizeof(dm_index_t), 0);
 
 	inst_map = dm_map_create(sizeof(dm_inst_data), 0);
-	obj_map = dm_map_create(sizeof(dm_list), 0);
 	mesh_tags = dm_list_create(sizeof(dm_string), 0);
 	r_data.render_commands = dm_list_create(sizeof(dm_render_command), 0);
 	render_passes = dm_map_create(sizeof(dm_render_pass), 0);
@@ -112,7 +109,6 @@ void dm_renderer_shutdown()
 	dm_list_destroy(indices);
 
 	dm_map_destroy(inst_map);
-	dm_map_list_destroy(obj_map);
 	dm_list_destroy(mesh_tags);
 	for(uint32_t i=0; i<render_passes->capacity;i++)
 	{
@@ -127,7 +123,6 @@ void dm_renderer_shutdown()
 	if(r_data.render_commands->count>0) dm_renderer_clear_command_buffer(r_data.render_commands);
 	dm_list_destroy(r_data.render_commands);
 
-	
 	dm_renderer_destroy_render_pipeline(r_data.pipeline);
 	dm_free(r_data.pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 	dm_image_map_destroy();
@@ -173,7 +168,7 @@ bool dm_renderer_begin_frame()
 	{
 		dm_string* key = dm_list_at(mesh_tags, i);
 		dm_inst_data* inst_data = dm_map_get(inst_map, key->string);
-		dm_list* objs = dm_map_get(obj_map, key->string);
+		dm_list* objs = dm_map_get(obj_pass->objects, key->string);
 		dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
 
 		for (uint32_t j = 0; j < objs->count; j++)
@@ -291,7 +286,7 @@ bool dm_renderer_create_default_render_passes()
 		.num = sizeof(obj_v_attribs) / sizeof(obj_v_attribs[0])
 	};
 
-	// uniforms
+	// uniform descs
 	dm_uniform_desc vp_desc = { 0 };
 	vp_desc.name = "view_proj";
 	vp_desc.data_t = DM_UNIFORM_DATA_T_MATRIX_FLOAT;
@@ -306,21 +301,43 @@ bool dm_renderer_create_default_render_passes()
 	light_desc.count = 3;
 	light_desc.data_size = light_desc.element_size * light_desc.count;
 
-	dm_uniform vp_uni = { 0 };
-	vp_uni.desc = vp_desc;
-	vp_uni.data = dm_alloc(vp_desc.data_size, DM_MEM_RENDERER_UNIFORM);
-	size_t test = sizeof(r_data.camera.view_proj);
-	dm_memcpy(vp_uni.data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
-	
-	dm_uniform light_uni = { 0 };
-	light_uni.desc = light_desc;
-	dm_vec3 color = { 1,1,1 };
-	light_uni.data = dm_alloc(light_desc.data_size, DM_MEM_RENDERER_UNIFORM);
-	dm_memcpy(light_uni.data, &color, sizeof(color));
+	dm_uniform_desc light_str_desc = { 0 };
+	light_str_desc.name = "light_str";
+	light_str_desc.data_t = DM_UNIFORM_DATA_T_FLOAT;
+	light_str_desc.element_size = sizeof(float);
+	light_str_desc.count = 1;
+	light_str_desc.data_size = light_str_desc.element_size * light_str_desc.count;
 
-	dm_list* uni_list = dm_list_create(sizeof(dm_uniform), 0);
-	dm_list_append(uni_list, &vp_uni);
-	dm_list_append(uni_list, &light_uni);
+	// uniforms
+	dm_vec3 global_light_color = { 1,1,1 };
+	float light_str = 0.1;
+
+	// object uniforms
+	dm_uniform obj_vp_uni = { 0 };
+	obj_vp_uni.desc = vp_desc;
+	obj_vp_uni.data = dm_alloc(vp_desc.data_size, DM_MEM_RENDERER_UNIFORM);
+	dm_memcpy(obj_vp_uni.data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
+
+	dm_uniform obj_light_uni = { 0 };
+	obj_light_uni.desc = light_desc;
+	obj_light_uni.data = dm_alloc(light_desc.data_size, DM_MEM_RENDERER_UNIFORM);
+	dm_memcpy(obj_light_uni.data, &global_light_color, sizeof(global_light_color));
+
+	dm_uniform obj_light_str_uni = { 0 };
+	obj_light_str_uni.desc = light_str_desc;
+	obj_light_str_uni.data = dm_alloc(light_str_desc.data_size, DM_MEM_RENDERER_UNIFORM);
+	dm_memcpy(obj_light_str_uni.data, &light_str, sizeof(light_str));
+
+	// light source uniforms
+	dm_uniform lsrc_vp_uni = { 0 };
+	lsrc_vp_uni.desc = vp_desc;
+	lsrc_vp_uni.data = dm_alloc(vp_desc.data_size, DM_MEM_RENDERER_UNIFORM);
+	dm_memcpy(lsrc_vp_uni.data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
+
+	dm_uniform lsrc_light_uni = { 0 };
+	lsrc_light_uni.desc = light_desc;
+	lsrc_light_uni.data = dm_alloc(light_desc.data_size, DM_MEM_RENDERER_UNIFORM);
+	dm_memcpy(lsrc_light_uni.data, &global_light_color, sizeof(global_light_color));
 
 	// shaders
 #ifdef DM_OPENGL
@@ -339,14 +356,40 @@ bool dm_renderer_create_default_render_passes()
 	const char* object_pixel_shader = "fragment_main";
 #endif
 
+#ifdef DM_OPENGL
+	const char* light_src_pixel_shader = "shaders/glsl/light_src_pixel.glsl";
+#elif defined DM_DIRECTX
+	const char* light_src_pixel_shader = "shaders/hlsl/light_src_pixel.fxc";
+#elif defined DM_METAL
+	const char* light_src_pixel_shader = "light_src_main";
+#endif
+
 	// object render pass
-	if (!dm_renderer_create_render_pass(object_vertex_shader, object_pixel_shader, obj_v_layout, uni_list, "object"))
+	dm_list* obj_uni_list = dm_list_create(sizeof(dm_uniform), 0);
+	dm_list_append(obj_uni_list, &obj_vp_uni);
+	dm_list_append(obj_uni_list, &obj_light_uni);
+	dm_list_append(obj_uni_list, &obj_light_str_uni);
+
+	if (!dm_renderer_create_render_pass(object_vertex_shader, object_pixel_shader, obj_v_layout, obj_uni_list, "object"))
 	{
 		DM_LOG_FATAL("Could not create default object render pass!");
 		return false;
 	}
 
-	dm_list_destroy(uni_list);
+	dm_list_destroy(obj_uni_list);
+
+	// light src render pass
+	dm_list* lsrc_uni_list = dm_list_create(sizeof(dm_uniform), 0);
+	dm_list_append(lsrc_uni_list, &lsrc_vp_uni);
+	dm_list_append(lsrc_uni_list, &lsrc_light_uni);
+
+	if (!dm_renderer_create_render_pass(object_vertex_shader, light_src_pixel_shader, obj_v_layout, lsrc_uni_list, "light_src"))
+	{
+		DM_LOG_FATAL("Could not create default light src render pass!");
+		return false;
+	}
+	
+	dm_list_destroy(lsrc_uni_list);
 
 	return true;
 }
@@ -354,6 +397,8 @@ bool dm_renderer_create_default_render_passes()
 bool dm_renderer_create_render_pass(const char* vertex_shader, const char* pixel_shader, dm_vertex_layout v_layout, dm_list* uniforms, const char* tag)
 {
 	dm_render_pass* render_pass = dm_alloc(sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
+
+	render_pass->name = tag;
 
 	// shader
 	render_pass->shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
@@ -392,6 +437,8 @@ bool dm_renderer_create_render_pass(const char* vertex_shader, const char* pixel
 		dm_map_insert(render_pass->uniforms, uniform->desc.name, uniform);
 	}
 
+	render_pass->objects = dm_map_create(sizeof(dm_list), 0);
+
 	if(!dm_renderer_create_render_pass_impl(render_pass, v_layout, r_data.pipeline)) return false;
 
 	dm_map_insert(render_passes, tag, render_pass);
@@ -410,6 +457,7 @@ void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
 		if (render_pass->uniforms->items[i])
 		{
 			dm_uniform* uniform = render_pass->uniforms->items[i]->value;
+			dm_mat4* test = uniform->data;
 			dm_free(uniform->data, uniform->desc.data_size, DM_MEM_RENDERER_UNIFORM);
 		}
 	}
@@ -417,7 +465,7 @@ void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
 
 	dm_free(render_pass->shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 
-	//dm_free(render_pass, sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
+	dm_map_list_destroy(render_pass->objects);
 }
 
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag)
@@ -456,23 +504,33 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 	}
 }
 
-void dm_renderer_submit_objects(dm_list* objects)
+bool dm_renderer_submit_objects(dm_list* objects)
 {
 	for (uint32_t i = 0; i < objects->count; i++)
 	{
 		dm_game_object* object = dm_list_at(objects, i);
+		dm_render_pass* render_pass = dm_map_get(render_passes, object->render_pass);
 
-		dm_list* obj_list = dm_map_get(obj_map, object->mesh);
-		if (!obj_list)
+		if (render_pass)
 		{
-			obj_list = dm_list_create(sizeof(dm_game_object), 0);
-			dm_list_append(obj_list, object);
-			dm_map_insert_list(obj_map, object->mesh, obj_list);
-			dm_list_destroy(obj_list);
+			dm_list* obj_list = dm_map_get(render_pass->objects, object->mesh);
+
+			if (!obj_list)
+			{
+				obj_list = dm_list_create(sizeof(dm_game_object), 0);
+				dm_list_append(obj_list, object);
+				dm_map_insert_list(render_pass->objects, object->mesh, obj_list);
+				dm_list_destroy(obj_list);
+			}
+			else
+			{
+				dm_list_append(obj_list, object);
+			}
 		}
 		else
 		{
-			dm_list_append(obj_list, object);
+			DM_LOG_FATAL("Trying to submit an object to an unknown render pass: %s", object->render_pass);
+			return false;
 		}
 	}
 }
