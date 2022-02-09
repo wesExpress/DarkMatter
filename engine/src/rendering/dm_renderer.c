@@ -23,6 +23,9 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data);
 bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data);
 
+bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass);
+void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass);
+
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
@@ -36,6 +39,9 @@ dm_list* indices = NULL;
 dm_map_t* inst_map = NULL;
 dm_map_t* obj_map = NULL;
 dm_list* mesh_tags = NULL;
+
+// render passes
+dm_map_t* render_passes = NULL;
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -66,6 +72,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	obj_map = dm_map_create(sizeof(dm_list), 0);
 	mesh_tags = dm_list_create(sizeof(dm_string), 0);
 	r_data.render_commands = dm_list_create(sizeof(dm_render_command), 0);
+	render_passes = dm_map_create(sizeof(dm_render_pass), 0);
 
 	// maps
 	dm_image_map_init();
@@ -106,6 +113,15 @@ void dm_renderer_shutdown()
 	dm_map_destroy(inst_map);
 	dm_map_list_destroy(obj_map);
 	dm_list_destroy(mesh_tags);
+	for(uint32_t i=0; i<render_passes->capacity;i++)
+	{
+		if(render_passes->items[i])
+		{
+			dm_render_pass* render_pass = render_passes->items[i]->value;
+			dm_renderer_destroy_render_pass_impl(render_pass);
+		}
+	}
+	dm_map_destroy(render_passes);
 
 	dm_renderer_clear_command_buffer(r_data.render_commands);
 	dm_list_destroy(r_data.render_commands);
@@ -350,6 +366,33 @@ bool dm_renderer_init_object_data()
 	dm_map_insert(r_data.object_pipeline->uniforms, "global_light", &uniform2);
 		
 	if(!dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, v_layout, r_data.object_pipeline)) return false;
+
+	return true;
+}
+
+bool dm_renderer_create_render_pass(const char* vertex_shader_path, const char* pixel_shader_path, const char* tag)
+{
+	dm_render_pass* render_pass = dm_alloc(sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
+
+	// shader
+	render_pass->shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+
+	// sampler
+	dm_sampler_desc sampler = { 0 };
+	sampler.comparison = DM_COMPARISON_ALWAYS;
+	sampler.filter = DM_FILTER_LINEAR;
+	sampler.u = DM_TEXTURE_MODE_WRAP;
+	sampler.v = DM_TEXTURE_MODE_WRAP;
+	sampler.w = DM_TEXTURE_MODE_WRAP;
+
+	render_pass->sampler = sampler;
+
+	// uniforms
+	render_pass->uniforms = dm_map_create(sizeof(dm_uniform), 0);
+
+	if(!dm_renderer_create_render_pass_impl(render_pass)) return false;
+
+	dm_map_insert(render_passes, tag, render_pass);
 
 	return true;
 }

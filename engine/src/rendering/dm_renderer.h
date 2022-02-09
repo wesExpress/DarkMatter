@@ -59,6 +59,8 @@ bool dm_renderer_init_object_data();
 
 // API functions
 
+bool dm_renderer_create_render_pass(const char* vertex_shader_path, const char* pixel_shader_path, const char* tag);
+
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag);
 bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs);
 void dm_renderer_submit_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms);

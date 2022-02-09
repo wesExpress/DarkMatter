@@ -411,4 +411,11 @@ typedef struct dm_render_pipeline
     void* internal_pipeline;
 } dm_render_pipeline;
 
+typedef struct dm_render_pass
+{
+    dm_shader* shader;
+    dm_map_t* uniforms;
+    dm_sampler_desc sampler;
+} dm_render_pass;
+
 #endif

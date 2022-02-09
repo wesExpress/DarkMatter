@@ -37,6 +37,15 @@ typedef struct dm_internal_pipeline
     dm_metal_render_pass* render_pass;
 } dm_internal_pipeline;
 
+typedef struct dm_internal_render_pass
+{
+    id<MTLSamplerState> sampler_state;
+    dm_metal_render_pass* render_pass;
+    id<CAMetalDrawable> drawable;
+    id<MTLCommandBuffer> command_buffer;
+    id <MTLRenderCommandEncoder> command_encoder;
+} dm_internal_render_pass;
+
 typedef struct dm_internal_buffer
 {
     id<MTLBuffer> buffer;

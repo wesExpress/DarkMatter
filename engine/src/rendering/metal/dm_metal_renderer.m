@@ -215,6 +215,32 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
     return true;
 }
 
+bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass)
+{
+    render_pass->internal_render_pass = dm_alloc(sizeof(dm_internal_render_pass), DM_MEM_RENDER_PASS);
+    dm_internal_render_pass* internal_pass = render_pass->internal_render_pass;
+
+    // sampler
+    MTLSamplerDescriptor* sampler_desc = [MTLSamplerDescriptor new];
+    sampler_desc.minFilter = MTLSamplerMinMagFilterNearest;
+    sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+    sampler_desc.mipFilter = MTLSamplerMipFilterLinear;
+    sampler_desc.sAddressMode = MTLSamplerAddressModeClampToEdge;
+    sampler_desc.tAddressMode = MTLSamplerAddressModeClampToEdge;
+
+    internal_pass->sampler_state = [metal_renderer->device newSamplerStateWithDescriptor:sampler_desc];
+    if(!internal_pass->sampler_state)
+    {
+        DM_LOG_FATAL("Could not create metal sampler state!");
+        return false;
+    }
+
+    // shader
+    if(!dm_metal_create_shader_library(render_pass->shader, @"shaders/metal/object_shader.metallib", metal_renderer)) return false;
+
+    return false;
+}
+
 void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
 {
     dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
