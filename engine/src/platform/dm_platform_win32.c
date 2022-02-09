@@ -271,14 +271,48 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
 	case WM_KEYDOWN:
 	case WM_SYSKEYDOWN:
 	{
-		dm_key_code key = (dm_key_code)wparam;
+		WPARAM vk = wparam;;
+
+		UINT scancode = (lparam & 0x00ff0000) >> 16;
+		int extended = (lparam & 0x01000000) != 0;
+
+		switch (vk)
+		{
+		case VK_SHIFT:
+		{
+			vk = MapVirtualKey(scancode, MAPVK_VSC_TO_VK_EX);
+		} break;
+		case VK_CONTROL:
+		{
+			vk = extended ? VK_RCONTROL : VK_LCONTROL;
+		} break;
+		}
+
+		dm_key_code key = (dm_key_code)vk;
 		dm_event_dispatch((dm_event) { DM_KEY_DOWN_EVENT, NULL, &key });
 
 	} break;
 	case WM_KEYUP:
 	case WM_SYSKEYUP:
 	{
-		dm_key_code key = (dm_key_code)wparam;
+		WPARAM vk = wparam;;
+
+		UINT scancode = (lparam & 0x00ff0000) >> 16;
+		int extended = (lparam & 0x01000000) != 0;
+
+		switch (vk)
+		{
+		case VK_SHIFT:
+		{
+			vk = MapVirtualKey(scancode, MAPVK_VSC_TO_VK_EX);
+		} break;
+		case VK_CONTROL:
+		{
+			vk = extended ? VK_RCONTROL : VK_LCONTROL;
+		} break;
+		}
+
+		dm_key_code key = (dm_key_code)vk;
 		dm_event_dispatch((dm_event) { DM_KEY_UP_EVENT, NULL, &key });
 	} break;
 
