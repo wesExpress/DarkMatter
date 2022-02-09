@@ -11,9 +11,9 @@ bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_desc
 	return dm_renderer_submit_images(image_descs, num_desc);
 }
 
-void dm_renderer_api_submit_objects(dm_list* objects)
+bool dm_renderer_api_submit_objects(dm_list* objects)
 {
-	dm_renderer_submit_objects(objects);
+	return dm_renderer_submit_objects(objects);
 }
 
 void dm_renderer_api_set_clear_color(dm_vec3 color)

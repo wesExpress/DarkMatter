@@ -44,12 +44,6 @@ bool dm_engine_create(dm_application* app)
         return false;
     }
 
-    if (!e_data->application->dm_application_init(e_data->application))
-    {
-        DM_LOG_FATAL("Application could not be initialized!");
-        return false;
-    }
-
     if (!dm_renderer_init_object_data())
     {
         DM_LOG_FATAL("Could not initialize object data!");
@@ -59,6 +53,12 @@ bool dm_engine_create(dm_application* app)
     if (!dm_renderer_create_default_render_passes())
     {
         DM_LOG_FATAL("Could not create default render passes!");
+        return false;
+    }
+
+    if (!e_data->application->dm_application_init(e_data->application))
+    {
+        DM_LOG_FATAL("Application could not be initialized!");
         return false;
     }
 

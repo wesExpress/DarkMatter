@@ -155,6 +155,11 @@ bool dm_renderer_begin_frame()
 	*******************************/
 
 	dm_render_pass* obj_pass = dm_map_get(render_passes, "object");
+	if (!obj_pass)
+	{
+		DM_LOG_FATAL("Object render pass is null!");
+		return false;
+	}
 
 	dm_uniform* view_proj = dm_map_get(obj_pass->uniforms, "view_proj");
 #ifdef DM_DIRECTX
@@ -203,6 +208,59 @@ bool dm_renderer_begin_frame()
 
 bool dm_renderer_end_frame()
 {
+	/**********************
+	  light source render pass
+	****************************/
+
+	dm_render_pass* lsrc_pass = dm_map_get(render_passes, "light_src");
+	if (!lsrc_pass)
+	{
+		DM_LOG_FATAL("Light source render pass is NULL!");
+		return false;
+	}
+
+	dm_uniform* view_proj = dm_map_get(lsrc_pass->uniforms, "view_proj");
+#ifdef DM_DIRECTX
+	dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
+	dm_memcpy(view_proj->data, &new_view_proj, sizeof(new_view_proj));
+#else
+	dm_memcpy(view_proj->data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
+#endif
+
+	for (uint32_t i = 0; i < mesh_tags->count; i++)
+	{
+		dm_string* key = dm_list_at(mesh_tags, i);
+		dm_inst_data* inst_data = dm_map_get(inst_map, key->string);
+		dm_list* objs = dm_map_get(lsrc_pass->objects, key->string);
+		dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
+
+		for (uint32_t j = 0; j < objs->count; j++)
+		{
+			dm_game_object* obj = dm_list_at(objs, j);
+			dm_vertex_inst inst = { 0 };
+
+			inst.model = dm_mat4_identity();
+			inst.model = dm_mat_translate(inst.model, obj->transform.position);
+			inst.model = dm_mat_scale(inst.model, obj->transform.scale);
+#ifdef DM_DIRECTX
+			inst.model = dm_mat4_transpose(inst.model);
+#endif
+			inst.color = obj->color;
+
+			dm_list_append(buffer_data, &inst);
+		}
+
+		dm_render_command_begin_renderpass(lsrc_pass, r_data.render_commands);
+		dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
+		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, lsrc_pass, r_data.render_commands);
+		dm_render_command_end_renderpass(lsrc_pass, r_data.render_commands);
+
+		dm_list_destroy(buffer_data);
+	}
+
+	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
+	dm_renderer_clear_command_buffer(r_data.render_commands);
+
 	return dm_renderer_end_frame_impl(&r_data);
 }
 
@@ -533,6 +591,8 @@ bool dm_renderer_submit_objects(dm_list* objects)
 			return false;
 		}
 	}
+
+	return true;
 }
 
 bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs)

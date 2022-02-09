@@ -30,9 +30,6 @@ bool dm_application_init(dm_application* app)
 {
 	DM_LOG_TRACE("Hellow from the application!\n");
 
-	// textures
-	DM_LOG_DEBUG("Submitting texture data from app...");
-
 	dm_image_desc image_desc1 = { 0 };
 	image_desc1.path = "assets/container.jpg";
 	image_desc1.name = "uTexture1";
@@ -50,32 +47,30 @@ bool dm_application_init(dm_application* app)
 
 	//if (!dm_renderer_api_submit_images(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
 
+	// clear color
+	dm_renderer_api_set_clear_color((dm_vec3) { 0, 0, 0 });
+
 	// camera
 	dm_renderer_api_set_camera_pos((dm_vec3) { 0, 0, 4 });
 	dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
 
 	objects = dm_list_create(sizeof(dm_game_object), 0);
-	dm_list_append(objects, &(dm_game_object){ 
-		.transform={{0, 0, 0}, { 1,1,1 }}, 
-		.color={1, 0.5, 0.31}, 
-		.texture=0, 
-		.mesh="cube",
-		.render_pass="object"
+	dm_list_append(objects, &(dm_game_object){
+		.transform = { {0, 0, 0}, { 1,1,1 } },
+			.color = { 1, 0.5, 0.31 },
+			.texture = 0,
+			.mesh = "cube",
+			.render_pass = "object"
 	});
-	dm_list_append(objects, &(dm_game_object){ 
-		.transform={{1.2, 1, 2}, { 0.2,0.2,0.2 }},
-		.color={1,1,1},
-		.texture= 0, 
-		.mesh = "cube",
-		.render_pass="light_src"
+	dm_list_append(objects, &(dm_game_object){
+		.transform = { {1.2, 1, 2}, { 0.2,0.2,0.2 } },
+			.color = { 1,1,1 },
+			.texture = 0,
+			.mesh = "cube",
+			.render_pass = "light_src"
 	});
 
-	dm_renderer_api_submit_objects(objects);
-
-	// clear color
-	dm_renderer_api_set_clear_color((dm_vec3) { 0, 0, 0 });
-
-	return true;
+	return dm_renderer_api_submit_objects(objects);
 }
 
 void dm_application_shutdown(dm_application* app)
