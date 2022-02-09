@@ -286,6 +286,7 @@ typedef struct dm_uniform_desc
     dm_uniform_data_t data_t;
     size_t element_size;
     uint32_t count;
+    size_t data_size;
 } dm_uniform_desc;
 
 typedef struct dm_unifom
