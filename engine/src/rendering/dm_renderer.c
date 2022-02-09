@@ -12,9 +12,10 @@
 
 static dm_renderer_data r_data = { 0 };
 
-bool dm_renderer_create_object_pipeline(dm_render_pipeline* pipeline);
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
+
+void dm_renderer_destroy_render_pass(dm_render_pass* render_pass);
 
 // forward declaration of the implementation, or backend, functionality
 // if not defined, compiler will be angry
@@ -23,13 +24,13 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data);
 bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data);
 
-bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass);
+bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass);
 
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
-bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render_pipeline* pipeline);
 
 // vertex data
 dm_list* vertices = NULL;
@@ -42,6 +43,7 @@ dm_list* mesh_tags = NULL;
 
 // render passes
 dm_map_t* render_passes = NULL;
+
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
@@ -56,7 +58,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	};
 	r_data.viewport = viewport;
 
-	r_data.object_pipeline = dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
+	r_data.pipeline = dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 
 	if(!dm_renderer_init_impl(platform_data, &r_data))
 	{
@@ -87,10 +89,9 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		DM_CAMERA_PERSPECTIVE
 	);
 
-	// object pipeline
-	if (!dm_renderer_create_object_pipeline(r_data.object_pipeline))
+	if (!dm_renderer_init_render_pipeline(r_data.pipeline))
 	{
-		DM_LOG_FATAL("Failed to create object render pipeline!");
+		DM_LOG_FATAL("Failed to create render pipeline!");
 		return false;
 	}
 
@@ -127,8 +128,8 @@ void dm_renderer_shutdown()
 	dm_list_destroy(r_data.render_commands);
 
 	// cleanup
-	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
-	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
+	dm_renderer_destroy_render_pipeline(r_data.pipeline);
+	dm_free(r_data.pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 	dm_image_map_destroy();
 
 	// backend shutdown
@@ -152,8 +153,15 @@ bool dm_renderer_begin_frame()
 {
 	dm_render_command_clear(&r_data.clear_color, r_data.render_commands);
 	dm_render_command_set_viewport(&r_data.viewport, r_data.render_commands);
+	dm_render_command_bind_pipeline(r_data.pipeline, r_data.render_commands);
 
-	dm_uniform* view_proj = dm_map_get(r_data.object_pipeline->uniforms, "view_proj");
+	/************************
+	    object render pass
+	*******************************/
+
+	dm_render_pass* obj_pass = dm_map_get(render_passes, "object");
+
+	dm_uniform* view_proj = dm_map_get(obj_pass->uniforms, "view_proj");
 #ifdef DM_DIRECTX
 	dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
 	dm_memcpy(view_proj->data, &new_view_proj, sizeof(new_view_proj));
@@ -184,16 +192,15 @@ bool dm_renderer_begin_frame()
 			dm_list_append(buffer_data, &inst);
 		}
 
-		dm_render_command_begin_renderpass(r_data.render_commands);
-		dm_render_command_bind_pipeline(r_data.object_pipeline, r_data.render_commands);
-		dm_render_command_update_buffer(r_data.object_pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
-		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.render_commands);
-		dm_render_command_end_renderpass(r_data.render_commands);
+		dm_render_command_begin_renderpass(obj_pass, r_data.render_commands);
+		dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
+		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, obj_pass, r_data.render_commands);
+		dm_render_command_end_renderpass(obj_pass, r_data.render_commands);
 
 		dm_list_destroy(buffer_data);
 	}
 
-	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.object_pipeline)) return false;
+	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
 	dm_renderer_clear_command_buffer(r_data.render_commands);
 	
 	return true;
@@ -206,8 +213,24 @@ bool dm_renderer_end_frame()
 
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 {
-	// rasterizer
-	pipeline->raster_desc.shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+	// blend
+	dm_blend_state_desc blend = { 0 };
+	blend.is_enabled = true;
+	blend.src = DM_BLEND_FUNC_SRC_ALPHA;
+	blend.dest = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
+
+	// depth
+	dm_depth_state_desc depth = { 0 };
+	depth.is_enabled = true;
+	depth.comparison = DM_COMPARISON_LESS;
+
+	// stencil
+	dm_stencil_state_desc stencil = { 0 };
+
+	// fill-in pipeline
+	pipeline->blend_desc = blend;
+	pipeline->depth_desc = depth;
+	pipeline->stencil_desc = stencil;
 
 	// render packet
 	pipeline->vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
@@ -215,7 +238,6 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	pipeline->inst_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 
 	pipeline->render_packet.image_paths = dm_list_create(sizeof(dm_string), 0);
-	pipeline->uniforms = dm_map_create(sizeof(dm_uniform), 0);
 
 	return dm_renderer_create_render_pipeline_impl(pipeline);
 }
@@ -235,147 +257,117 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 		dm_strdel(str->string);
 	}
 
-	for (uint32_t i = 0; i < pipeline->uniforms->capacity; i++)
-	{
-		if (pipeline->uniforms->items[i])
-		{
-			dm_uniform* uniform = pipeline->uniforms->items[i]->value;
-			dm_free(uniform->data, uniform->desc.count * uniform->desc.element_size, DM_MEM_RENDERER_UNIFORM);
-		}
-	}
-	dm_map_destroy(pipeline->uniforms);
 	dm_list_destroy(pipeline->render_packet.image_paths);
-
-	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
-}
-
-bool dm_renderer_create_object_pipeline(dm_render_pipeline* pipeline)
-{
-	// raster
-	dm_raster_state_desc raster = { 0 };
-	raster.cull_mode = DM_CULL_BACK;
-	raster.winding_order = DM_WINDING_COUNTER_CLOCK;
-	raster.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
-
-	// blend
-	dm_blend_state_desc blend = { 0 };
-	blend.is_enabled = true;
-	blend.src = DM_BLEND_FUNC_SRC_ALPHA;
-	blend.dest = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
-
-	// depth
-	dm_depth_state_desc depth = { 0 };
-	depth.is_enabled = true;
-	depth.comparison = DM_COMPARISON_LESS;
-
-	// stencil
-	dm_stencil_state_desc stencil = { 0 };
-
-	// sampler
-	dm_sampler_desc sampler = { 0 };
-	sampler.comparison = DM_COMPARISON_ALWAYS;
-	sampler.filter = DM_FILTER_LINEAR;
-	sampler.u = DM_TEXTURE_MODE_WRAP;
-	sampler.v = DM_TEXTURE_MODE_WRAP;
-	sampler.w = DM_TEXTURE_MODE_WRAP;
-
-	// fill-in pipeline
-	pipeline->raster_desc = raster;
-	pipeline->blend_desc = blend;
-	pipeline->depth_desc = depth;
-	pipeline->stencil_desc = stencil;
-	pipeline->sampler_desc = sampler;
-
-	// internal pipeline
-	return dm_renderer_init_render_pipeline(pipeline);
 }
 
 bool dm_renderer_init_object_data()
 {
-	// built-in shader
-	dm_shader_desc vs_desc = { 0 };
-#ifdef DM_OPENGL
-	vs_desc.path = "shaders/glsl/object_vertex.glsl";
-#elif defined DM_DIRECTX
-	vs_desc.path = "shaders/hlsl/object_vertex.fxc";
-#elif defined DM_METAL
-	vs_desc.path = "vertex_main";
-#endif
-	vs_desc.type = DM_SHADER_TYPE_VERTEX;
-
-	dm_shader_desc ps_desc = { 0 };
-#ifdef DM_OPENGL
-	ps_desc.path = "shaders/glsl/object_pixel.glsl";
-#elif defined DM_DIRECTX
-	ps_desc.path = "shaders/hlsl/object_pixel.fxc";
-#elif defined DM_METAL
-	ps_desc.path = "fragment_main";
-#endif
-	ps_desc.type = DM_SHADER_TYPE_PIXEL;
-
-	r_data.object_pipeline->raster_desc.shader->vertex_desc = vs_desc;
-	r_data.object_pipeline->raster_desc.shader->pixel_desc = ps_desc;
-
 	// buffers
 	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = vertices->count * vertices->element_size, .elem_size=vertices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT , .name = "vertex"};
 	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .data_t = DM_BUFFER_DATA_T_UINT, .buffer_size = indices->count * indices->element_size, .elem_size=indices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT, .name = "index"};
 	dm_buffer_desc inst_desc = { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = sizeof(dm_inst_data) * DM_MAX_INSTANCES, .elem_size=sizeof(dm_vertex_inst), .usage = DM_BUFFER_USAGE_DYNAMIC, .cpu_access = DM_BUFFER_CPU_WRITE, .name = "instance" };
 
-	r_data.object_pipeline->vertex_buffer->desc = vb_desc;
-	r_data.object_pipeline->index_buffer->desc = ib_desc;
-	r_data.object_pipeline->inst_buffer->desc = inst_desc;
+	r_data.pipeline->vertex_buffer->desc = vb_desc;
+	r_data.pipeline->index_buffer->desc = ib_desc;
+	r_data.pipeline->inst_buffer->desc = inst_desc;
+		
+	if(!dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, r_data.pipeline)) return false;
 
-	dm_vertex_attrib_desc v_attribs[] = {
+	return true;
+}
+
+bool dm_renderer_create_default_render_passes()
+{
+	// vertex attributes
+	dm_vertex_attrib_desc obj_v_attribs[] = {
 		pos_attrib_desc,
 		tex_coord_desc,
 		model_attrib_desc,
 		color_attrib_desc
 	};
 
-	dm_vertex_layout v_layout = {
-		.attributes = v_attribs,
-		.num = sizeof(v_attribs) / sizeof(dm_vertex_attrib_desc)
+	dm_vertex_layout obj_v_layout = {
+		.attributes = obj_v_attribs,
+		.num = sizeof(obj_v_attribs) / sizeof(obj_v_attribs[0])
 	};
 
-	/*
-	uniforms
-	*/
+	// uniforms
+	dm_uniform_desc vp_desc = { 0 };
+	vp_desc.name = "view_proj";
+	vp_desc.data_t = DM_UNIFORM_DATA_T_MATRIX_FLOAT;
+	vp_desc.element_size = sizeof(float);
+	vp_desc.count = 4;
 
-	dm_uniform_desc desc = { 0 };
-	desc.name = "view_proj";
-	desc.data_t = DM_UNIFORM_DATA_T_MATRIX_FLOAT;
-	desc.element_size = sizeof(float);
-	desc.count = 4;
-	dm_uniform uniform1 = { 0 };
-	uniform1.desc = desc;
-	uniform1.data = dm_alloc(sizeof(r_data.camera.view_proj), DM_MEM_RENDERER_UNIFORM);
-	dm_memcpy(uniform1.data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
+	dm_uniform_desc light_desc = { 0 };
+	light_desc.name = "global_light";
+	light_desc.data_t = DM_UNIFORM_DATA_T_FLOAT;
+	light_desc.element_size = sizeof(float);
+	light_desc.count = 3;
 
-	dm_map_insert(r_data.object_pipeline->uniforms, "view_proj", &uniform1);
-
-	desc.name = "global_light";
-	desc.data_t = DM_UNIFORM_DATA_T_FLOAT;
-	desc.element_size = sizeof(float);
-	desc.count = 3;
-	dm_uniform uniform2 = { 0 };
-	uniform2.desc = desc;
+	dm_uniform vp_uni = { 0 };
+	vp_uni.desc = vp_desc;
+	vp_uni.data = dm_alloc(vp_uni.desc.count * vp_uni.desc.element_size, DM_MEM_RENDERER_UNIFORM);
+	dm_memcpy(vp_uni.data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
+	
+	dm_uniform light_uni = { 0 };
+	light_uni.desc = light_desc;
 	dm_vec3 color = { 1,1,1 };
-	uniform2.data = dm_alloc(sizeof(color), DM_MEM_RENDERER_UNIFORM);
-	dm_memcpy(uniform2.data, &color, sizeof(color));
+	light_uni.data = dm_alloc(light_uni.desc.count * light_uni.desc.element_size , DM_MEM_RENDERER_UNIFORM);
+	dm_memcpy(light_uni.data, &color, sizeof(color));
 
-	dm_map_insert(r_data.object_pipeline->uniforms, "global_light", &uniform2);
-		
-	if(!dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, v_layout, r_data.object_pipeline)) return false;
+	dm_list* uni_list = dm_list_create(sizeof(dm_uniform), 0);
+	dm_list_append(uni_list, &vp_uni);
+	dm_list_append(uni_list, &light_uni);
+
+	// shaders
+#ifdef DM_OPENGL
+	const char* object_vertex_shader = "shaders/glsl/object_vertex.glsl";
+#elif defined DM_DIRECTX
+	const char* object_vertex_shader = "shaders/hlsl/object_vertex.fxc";
+#elif defined DM_METAL
+	const char* object_vertex_shader = "vertex_main";
+#endif
+
+#ifdef DM_OPENGL
+	const char* object_pixel_shader = "shaders/glsl/object_pixel.glsl";
+#elif defined DM_DIRECTX
+	const char* object_pixel_shader = "shaders/hlsl/object_pixel.fxc";
+#elif defined DM_METAL
+	const char* object_pixel_shader = "fragment_main";
+#endif
+
+	// object render pass
+	if (!dm_renderer_create_render_pass(object_vertex_shader, object_pixel_shader, obj_v_layout, uni_list, "object"))
+	{
+		DM_LOG_FATAL("Could not create default object render pass!");
+		return false;
+	}
+
+	dm_list_destroy(uni_list);
 
 	return true;
 }
 
-bool dm_renderer_create_render_pass(const char* vertex_shader_path, const char* pixel_shader_path, const char* tag)
+bool dm_renderer_create_render_pass(const char* vertex_shader, const char* pixel_shader, dm_vertex_layout v_layout, dm_list* uniforms, const char* tag)
 {
 	dm_render_pass* render_pass = dm_alloc(sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
 
 	// shader
 	render_pass->shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+
+	render_pass->shader->vertex_desc.path = vertex_shader;
+	render_pass->shader->vertex_desc.type = DM_SHADER_TYPE_VERTEX;
+
+	render_pass->shader->pixel_desc.path = pixel_shader;
+	render_pass->shader->pixel_desc.type = DM_SHADER_TYPE_PIXEL;
+
+	// raster
+	dm_raster_state_desc raster = { 0 };
+	raster.cull_mode = DM_CULL_BACK;
+	raster.winding_order = DM_WINDING_COUNTER_CLOCK;
+	raster.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
+
+	render_pass->raster_desc = raster;
 
 	// sampler
 	dm_sampler_desc sampler = { 0 };
@@ -385,16 +377,38 @@ bool dm_renderer_create_render_pass(const char* vertex_shader_path, const char* 
 	sampler.v = DM_TEXTURE_MODE_WRAP;
 	sampler.w = DM_TEXTURE_MODE_WRAP;
 
-	render_pass->sampler = sampler;
+	render_pass->sampler_desc = sampler;
 
 	// uniforms
 	render_pass->uniforms = dm_map_create(sizeof(dm_uniform), 0);
 
-	if(!dm_renderer_create_render_pass_impl(render_pass)) return false;
+	for (uint32_t i = 0; i < uniforms->count; i++)
+	{
+		dm_uniform* uniform = dm_list_at(uniforms, i);
+
+		dm_map_insert(render_pass->uniforms, uniform->desc.name, uniform);
+	}
+
+	if(!dm_renderer_create_render_pass_impl(render_pass, v_layout, r_data.pipeline)) return false;
 
 	dm_map_insert(render_passes, tag, render_pass);
 
 	return true;
+}
+
+void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
+{
+	for (uint32_t i = 0; i < render_pass->uniforms->capacity; i++)
+	{
+		if (render_pass->uniforms->items[i])
+		{
+			dm_uniform* uniform = render_pass->uniforms->items[i]->value;
+			dm_free(uniform->data, uniform->desc.count * uniform->desc.element_size, DM_MEM_RENDERER_UNIFORM);
+		}
+	}
+	dm_map_destroy(render_pass->uniforms);
+
+	dm_renderer_destroy_render_pass_impl(render_pass);
 }
 
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag)
@@ -463,7 +477,7 @@ bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs)
 		dm_string str = { 0 };
 		str.string = dm_strdup(image_descs[i].path);
 		str.len = strlen(str.string);
-		dm_list_append(r_data.object_pipeline->render_packet.image_paths, &str);
+		dm_list_append(r_data.pipeline->render_packet.image_paths, &str);
 	}
 
 	return true;

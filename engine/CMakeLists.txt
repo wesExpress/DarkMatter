@@ -67,6 +67,7 @@ set(
     src/rendering/dm_camera.c
 
     src/rendering/opengl/dm_opengl_renderer.c
+    src/rendering/opengl/dm_opengl_render_pass.c
     src/rendering/opengl/dm_opengl_buffer.c
     src/rendering/opengl/dm_opengl_shader.c
     src/rendering/opengl/dm_opengl_enum_conversion.c

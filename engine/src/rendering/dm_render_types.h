@@ -355,7 +355,6 @@ typedef struct dm_raster_state_desc
     dm_cull_mode cull_mode;
     dm_winding_order winding_order;
     dm_primitive_topology primitive_topology;
-    dm_shader* shader;
 } dm_raster_state_desc;
 
 typedef struct dm_blend_state_desc
@@ -397,25 +396,24 @@ typedef struct dm_render_command
 
 typedef struct dm_render_pipeline
 {
-    dm_raster_state_desc raster_desc;
     dm_blend_state_desc blend_desc;
     dm_depth_state_desc depth_desc;
     dm_stencil_state_desc stencil_desc;
-    dm_sampler_desc sampler_desc;
     dm_render_packet render_packet;
-    bool wireframe;
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
     dm_buffer* inst_buffer;
-    dm_map_t* uniforms;
     void* internal_pipeline;
 } dm_render_pipeline;
 
 typedef struct dm_render_pass
 {
+    dm_raster_state_desc raster_desc;
     dm_shader* shader;
     dm_map_t* uniforms;
-    dm_sampler_desc sampler;
+    dm_sampler_desc sampler_desc;
+    bool wireframe;
+    void* internal_render_pass;
 } dm_render_pass;
 
 #endif

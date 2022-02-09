@@ -56,6 +56,12 @@ bool dm_engine_create(dm_application* app)
         return false;
     }
 
+    if (!dm_renderer_create_default_render_passes())
+    {
+        DM_LOG_FATAL("Could not create default render passes!");
+        return false;
+    }
+
     e_data->is_running = true;
     e_data->is_suspended = false;
 
