@@ -5,7 +5,7 @@
 #include "core/dm_assert.h"
 #include "core/dm_mem.h"
 
-bool dm_directx_create_device(dm_internal_renderer* renderer)
+bool dm_directx_create_device(dm_directx_renderer* renderer)
 {
 	UINT flags = 0;
 #if DM_DEBUG
@@ -45,7 +45,7 @@ bool dm_directx_create_device(dm_internal_renderer* renderer)
 	return true;
 }
 
-void dm_directx_destroy_device(dm_internal_renderer* renderer)
+void dm_directx_destroy_device(dm_directx_renderer* renderer)
 {
 	ID3D11Device* device = renderer->device;
 	ID3D11DeviceContext* context = renderer->context;
@@ -64,7 +64,7 @@ void dm_directx_destroy_device(dm_internal_renderer* renderer)
 }
 
 #if DM_DEBUG
-void dm_directx_device_report_live_objects(dm_internal_renderer* renderer)
+void dm_directx_device_report_live_objects(dm_directx_renderer* renderer)
 {
 	HRESULT hr;
 	ID3D11Debug* debugger = renderer->debugger;

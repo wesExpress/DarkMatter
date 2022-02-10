@@ -29,16 +29,16 @@ const char* dm_directx_decode_category(D3D11_MESSAGE_CATEGORY category);
 const char* dm_directx_decode_severity(D3D11_MESSAGE_SEVERITY severity);
 #endif
 
-static dm_internal_renderer* directx_renderer = NULL;
+static dm_directx_renderer* directx_renderer = NULL;
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
 {
 	DM_LOG_DEBUG("Initializing Directx11 Backend...");
 
-	renderer_data->object_pipeline->internal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+	renderer_data->pipeline->internal_pipeline = dm_alloc(sizeof(dm_directx_pipeline), DM_MEM_RENDER_PIPELINE);
 	dm_internal_windows_data* internal_data = platform_data->internal_data;
-	dm_internal_pipeline* internal_pipe = renderer_data->object_pipeline->internal_pipeline;
-	directx_renderer = dm_alloc(sizeof(dm_internal_renderer), DM_MEM_RENDERER);
+	dm_directx_pipeline* internal_pipe = renderer_data->pipeline->internal_pipeline;
+	directx_renderer = dm_alloc(sizeof(dm_directx_renderer), DM_MEM_RENDERER);
 
 	directx_renderer->hwnd = internal_data->hwnd;
 	directx_renderer->h_instance = internal_data->h_instance;
@@ -54,15 +54,10 @@ void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
 	dm_directx_destroy_swapchain(directx_renderer);
 	dm_directx_destroy_device(directx_renderer);
 
-	dm_free(directx_renderer, sizeof(dm_internal_renderer), DM_MEM_RENDERER);
+	dm_free(directx_renderer, sizeof(dm_directx_renderer), DM_MEM_RENDERER);
 }
 
-void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data)
-{
-	
-}
-
-bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
+bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data)
 {
 	HRESULT hr;
 
@@ -82,20 +77,24 @@ bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data)
 		return false;
 	}
 
+#ifdef DM_DEBUG
+	dm_directx_print_errors();
+#endif
+
 	return true;
 }
 
-void dm_renderer_draw_arrays_impl(dm_render_pipeline* pipeline, int first, size_t count)
+void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass)
 {
-	directx_renderer->context->lpVtbl->Draw(directx_renderer->context, count, first);
+	directx_renderer->context->lpVtbl->Draw(directx_renderer->context, count, start);
 }
 
-void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pipeline* pipeline)
+void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass)
 {
 	directx_renderer->context->lpVtbl->DrawIndexed(directx_renderer->context, num_indices, index_offset, vertex_offset);
 }
 
-void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pipeline* pipeline)
+void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pass* render_pass)
 {
 	directx_renderer->context->lpVtbl->DrawIndexedInstanced(directx_renderer->context, num_indices, num_insts, index_offset, vertex_offset, inst_offset);
 }
@@ -106,7 +105,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 	ID3D11Device* device = directx_renderer->device;
 	ID3D11DeviceContext* context = directx_renderer->context;
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
+	dm_directx_pipeline* internal_pipe = pipeline->internal_pipeline;
 	ID3D11RenderTargetView* render_view = internal_pipe->render_view;
 	ID3D11DepthStencilView* depth_view = internal_pipe->depth_stencil_view;
 
@@ -115,13 +114,6 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	*/
 	if (!dm_directx_create_rendertarget(directx_renderer, internal_pipe)) return false;
 	if (!dm_directx_create_depth_stencil(directx_renderer, internal_pipe)) return false;
-
-	/*
-	// viewport
-	*/
-	internal_pipe->viewport.Width = pipeline->viewport.width;
-	internal_pipe->viewport.Height = pipeline->viewport.height;
-	internal_pipe->viewport.MaxDepth = pipeline->viewport.max_depth;
 
 	/*
 	// blending 
@@ -155,91 +147,19 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	}
 
 	DX_ERROR_CHECK(device->lpVtbl->CreateDepthStencilState(device, &depth_stencil_desc, &internal_pipe->depth_stencil_state), "ID3D11Device::CreateDepthStencilState failed!");
-	dm_mem_db_adjust(sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
-
-	/*
-	// rasterizer
-	*/
-	
-	D3D11_RASTERIZER_DESC rd = { 0 };
-	// wireframe
-	if (pipeline->wireframe)
-	{
-		rd.FillMode = D3D11_FILL_WIREFRAME;
-	}
-	else
-	{
-		rd.FillMode = D3D11_FILL_SOLID;
-	}
-
-	// culling
-	rd.CullMode = dm_cull_to_directx_cull(pipeline->raster_desc.cull_mode);
-	if (rd.CullMode == D3D11_CULL_NONE) return false;
-	
-	rd.DepthClipEnable = pipeline->depth_desc.is_enabled;
-	// winding
-	switch (pipeline->raster_desc.winding_order)
-	{
-	case DM_WINDING_CLOCK:
-	{
-		rd.FrontCounterClockwise = true;
-	} break;
-	case DM_WINDING_COUNTER_CLOCK:
-	{
-		rd.FrontCounterClockwise = false;
-	} break;
-	default:
-		DM_LOG_FATAL("Unknown winding order!");
-		return false;
-	}
-
-	DX_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pipe->rasterizer_state), "ID3D11Device::CreateRasterizerState failed!");
-	dm_mem_db_adjust(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
-
-	/*
-	// topology
-	*/
-	internal_pipe->topology = dm_toplogy_to_directx_topology(pipeline->raster_desc.primitive_topology);
-	if (internal_pipe->topology == D3D11_PRIMITIVE_UNDEFINED) return false;
-
-	/*
-	sampler state
-	*/
-	D3D11_FILTER filter = dm_image_filter_to_directx_filter(pipeline->sampler_desc.filter);
-	if (filter == D3D11_FILTER_MAXIMUM_ANISOTROPIC + 1) return false;
-	D3D11_TEXTURE_ADDRESS_MODE u_mode = dm_texture_mode_to_directx_mode(pipeline->sampler_desc.u);
-	if (u_mode == D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1) return false;
-	D3D11_TEXTURE_ADDRESS_MODE v_mode = dm_texture_mode_to_directx_mode(pipeline->sampler_desc.v);
-	if (v_mode == D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1) return false;
-	D3D11_TEXTURE_ADDRESS_MODE w_mode = dm_texture_mode_to_directx_mode(pipeline->sampler_desc.w);
-	if (w_mode == D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1) return false;
-	D3D11_COMPARISON_FUNC comp = dm_comp_to_directx_comp(pipeline->sampler_desc.comparison);
-	if (comp == D3D11_COMPARISON_ALWAYS + 1) return false;
-
-	D3D11_SAMPLER_DESC sample_desc = { 0 };
-	sample_desc.Filter = filter;
-	sample_desc.AddressU = u_mode;
-	sample_desc.AddressV = v_mode;
-	sample_desc.AddressW = w_mode;
-	sample_desc.MaxAnisotropy = 1;
-	sample_desc.ComparisonFunc = comp;
-	if (filter != D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT) sample_desc.MaxLOD = D3D11_FLOAT32_MAX;
-	
-	DX_ERROR_CHECK(directx_renderer->device->lpVtbl->CreateSamplerState(directx_renderer->device, &sample_desc, &internal_pipe->sample_state), "ID3D11Device::CreateSamplerState failed!");
-	dm_mem_db_adjust(sizeof(ID3D11SamplerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
 
 	return true;
 }
 
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
+	dm_directx_pipeline* internal_pipe = pipeline->internal_pipeline;
 
-	dm_directx_delete_buffer(pipeline->vertex_buffer, internal_pipe);
-	dm_directx_delete_buffer(pipeline->index_buffer, internal_pipe);
-	dm_directx_delete_buffer(pipeline->inst_buffer, internal_pipe);
-	dm_directx_delete_buffer(pipeline->view_proj, internal_pipe);
-	dm_directx_delete_shader(pipeline->raster_desc.shader, internal_pipe);
+	dm_directx_delete_buffer(pipeline->vertex_buffer);
+	dm_directx_delete_buffer(pipeline->index_buffer);
+	dm_directx_delete_buffer(pipeline->inst_buffer);
+
+	DX_RELEASE(internal_pipe->depth_stencil_state);
 
 	/*
 	texture
@@ -252,46 +172,27 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 		dm_directx_destroy_texture(image);
 	}
 
-	DX_RELEASE(internal_pipe->rasterizer_state);
-	DX_RELEASE(internal_pipe->depth_stencil_state);
-	dm_mem_db_adjust(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
-	dm_mem_db_adjust(sizeof(ID3D11DepthStencilState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
-
 	dm_directx_destroy_depth_stencil(internal_pipe);
 	dm_directx_destroy_rendertarget(internal_pipe);
-
-	DX_RELEASE(internal_pipe->sample_state);
-	dm_mem_db_adjust(sizeof(ID3D11SamplerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
-
 	dm_list_destroy(internal_pipe->vertex_buffers);
 
-	dm_free(pipeline->internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+	dm_free(pipeline->internal_pipeline, sizeof(dm_directx_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
-
-	/*
-	// shader
-	*/
-	if (!dm_directx_create_shader(pipeline->raster_desc.shader, v_layout, directx_renderer, pipeline)) return false;
+	dm_directx_pipeline* internal_pipe = pipeline->internal_pipeline;
 
 	/*
 	// buffers
 	*/
-	if (!dm_directx_create_buffer(pipeline->vertex_buffer, vb_data, directx_renderer, internal_pipe)) return false;
-	if (!dm_directx_create_buffer(pipeline->index_buffer, ib_data, directx_renderer, internal_pipe)) return false;
-	if (!dm_directx_create_buffer(pipeline->inst_buffer, 0, directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_buffer(pipeline->vertex_buffer, vb_data, directx_renderer)) return false;
+	if (!dm_directx_create_buffer(pipeline->index_buffer, ib_data, directx_renderer)) return false;
+	if (!dm_directx_create_buffer(pipeline->inst_buffer, 0, directx_renderer)) return false;
 
 	internal_pipe->vertex_buffers = dm_list_create(sizeof(dm_buffer), 0);
 	dm_list_append(internal_pipe->vertex_buffers, pipeline->vertex_buffer);
 	dm_list_append(internal_pipe->vertex_buffers, pipeline->inst_buffer);
-
-	/*
-	// constant buffer(s)
-	*/
-	if (!dm_directx_create_buffer(pipeline->view_proj, mvp_data, directx_renderer, internal_pipe)) return false;
 
 	/*
 	textures
@@ -307,11 +208,105 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp
 	return true;
 }
 
+bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
+{
+	HRESULT hr;
+
+	ID3D11Device* device = directx_renderer->device;
+	ID3D11DeviceContext* context = directx_renderer->context;
+
+	render_pass->internal_render_pass = dm_alloc(sizeof(dm_directx_render_pass), DM_MEM_RENDER_PASS);
+	dm_directx_render_pass* internal_pass = render_pass->internal_render_pass;
+
+	// shader
+	if (!dm_directx_create_shader(render_pass->shader, v_layout, directx_renderer)) return false;
+
+	// rasterizer
+	D3D11_RASTERIZER_DESC rd = { 0 };
+	// wireframe
+	if (render_pass->wireframe)
+	{
+		rd.FillMode = D3D11_FILL_WIREFRAME;
+	}
+	else
+	{
+		rd.FillMode = D3D11_FILL_SOLID;
+	}
+
+	// culling
+	rd.CullMode = dm_cull_to_directx_cull(render_pass->raster_desc.cull_mode);
+	if (rd.CullMode == D3D11_CULL_NONE) return false;
+
+	rd.DepthClipEnable = pipeline->depth_desc.is_enabled;
+	// winding
+	switch (render_pass->raster_desc.winding_order)
+	{
+	case DM_WINDING_CLOCK:
+	{
+		rd.FrontCounterClockwise = true;
+	} break;
+	case DM_WINDING_COUNTER_CLOCK:
+	{
+		rd.FrontCounterClockwise = false;
+	} break;
+	default:
+		DM_LOG_FATAL("Unknown winding order!");
+		return false;
+	}
+
+	DX_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pass->rasterizer_state), "ID3D11Device::CreateRasterizerState failed!");
+	dm_mem_db_adjust(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
+
+	/*
+	// topology
+	*/
+	internal_pass->topology = dm_toplogy_to_directx_topology(render_pass->raster_desc.primitive_topology);
+	if (internal_pass->topology == D3D11_PRIMITIVE_UNDEFINED) return false;
+
+	/*
+	sampler state
+	*/
+	D3D11_FILTER filter = dm_image_filter_to_directx_filter(render_pass->sampler_desc.filter);
+	if (filter == D3D11_FILTER_MAXIMUM_ANISOTROPIC + 1) return false;
+	D3D11_TEXTURE_ADDRESS_MODE u_mode = dm_texture_mode_to_directx_mode(render_pass->sampler_desc.u);
+	if (u_mode == D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1) return false;
+	D3D11_TEXTURE_ADDRESS_MODE v_mode = dm_texture_mode_to_directx_mode(render_pass->sampler_desc.v);
+	if (v_mode == D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1) return false;
+	D3D11_TEXTURE_ADDRESS_MODE w_mode = dm_texture_mode_to_directx_mode(render_pass->sampler_desc.w);
+	if (w_mode == D3D11_TEXTURE_ADDRESS_MIRROR_ONCE + 1) return false;
+	D3D11_COMPARISON_FUNC comp = dm_comp_to_directx_comp(render_pass->sampler_desc.comparison);
+	if (comp == D3D11_COMPARISON_ALWAYS + 1) return false;
+
+	D3D11_SAMPLER_DESC sample_desc = { 0 };
+	sample_desc.Filter = filter;
+	sample_desc.AddressU = u_mode;
+	sample_desc.AddressV = v_mode;
+	sample_desc.AddressW = w_mode;
+	sample_desc.MaxAnisotropy = 1;
+	sample_desc.ComparisonFunc = comp;
+	if (filter != D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT) sample_desc.MaxLOD = D3D11_FLOAT32_MAX;
+
+	DX_ERROR_CHECK(device->lpVtbl->CreateSamplerState(device, &sample_desc, &internal_pass->sample_state), "ID3D11Device::CreateSamplerState failed!");
+	dm_mem_db_adjust(sizeof(ID3D11SamplerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
+
+	return true;
+}
+
+void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
+{
+	render_pass->internal_render_pass = dm_alloc(sizeof(dm_directx_render_pass), DM_MEM_RENDER_PASS);
+	dm_directx_render_pass* internal_pass = render_pass->internal_render_pass;
+
+	DX_RELEASE(internal_pass->sample_state);
+	DX_RELEASE(internal_pass->rasterizer_state);
+	
+}
+
 bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_size)
 {
 	HRESULT hr;
 
-	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
+	dm_directx_buffer* internal_buffer = buffer->internal_buffer;
 
 	D3D11_MAPPED_SUBRESOURCE msr;
 	ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
@@ -330,32 +325,40 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
 	return true;
 }
 
-void dm_renderer_begin_renderpass_impl(dm_render_pipeline* pipeline)
+void dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 {
+	ID3D11DeviceContext* context = directx_renderer->context;
 
+	dm_directx_render_pass* internal_pass = render_pass->internal_render_pass;
+
+	ID3D11RasterizerState* raster_state = internal_pass->rasterizer_state;
+	dm_directx_shader* internal_shader = render_pass->shader->internal_shader;
+
+	// raster state
+	context->lpVtbl->RSSetState(context, raster_state);
+	context->lpVtbl->IASetPrimitiveTopology(context, internal_pass->topology);
+
+	// sampler
+	context->lpVtbl->PSSetSamplers(context, 0, 1, &internal_pass->sample_state);
+
+	// shader
+	context->lpVtbl->VSSetShader(context, internal_shader->vertex_shader, NULL, 0);
+	context->lpVtbl->PSSetShader(context, internal_shader->pixel_shader, NULL, 0);
+	context->lpVtbl->IASetInputLayout(context, internal_shader->input_layout);
 }
 
 void dm_renderer_end_rederpass_impl()
 {
-#ifdef DM_DEBUG
-	dm_directx_print_errors();
-#endif
+
 }
 
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
+	dm_directx_pipeline* internal_pipe = pipeline->internal_pipeline;
 
 	ID3D11DeviceContext* context = directx_renderer->context;
 	ID3D11RenderTargetView* render_target = internal_pipe->render_view;
 	ID3D11DepthStencilView* depth_stencil = internal_pipe->depth_stencil_view;
-	ID3D11RasterizerState* raster_state = internal_pipe->rasterizer_state;
-	dm_internal_shader* internal_shader = (dm_internal_shader*)pipeline->raster_desc.shader->internal_shader;
-
-	/*
-	// viewport
-	*/
-	context->lpVtbl->RSSetViewports(context, 1, &internal_pipe->viewport);
 
 	/*
 	// render target
@@ -363,35 +366,15 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	context->lpVtbl->OMSetRenderTargets(context, 1u, &render_target, depth_stencil);
 
 	/*
-	// raster state
-	*/
-	context->lpVtbl->RSSetState(context, raster_state);
-	context->lpVtbl->IASetPrimitiveTopology(context, internal_pipe->topology);
-
-	/*
 	// depth stencil state
 	*/
 	context->lpVtbl->OMSetDepthStencilState(context, internal_pipe->depth_stencil_state, 1);
-
-	/*
-	// shader
-	*/
-	context->lpVtbl->VSSetShader(context, internal_shader->vertex_shader, NULL, 0);
-	context->lpVtbl->PSSetShader(context, internal_shader->pixel_shader, NULL, 0);
-	context->lpVtbl->IASetInputLayout(context, internal_shader->input_layout);
-
-	/*
-	// sampler
-	*/
-	context->lpVtbl->PSSetSamplers(context, 0, 1, &internal_pipe->sample_state);
 
 	/*
 	// buffers
 	*/
 	dm_directx_bind_buffer(pipeline->index_buffer, 0, directx_renderer);
 	dm_directx_bind_vertex_buffers(internal_pipe->vertex_buffers, directx_renderer);
-
-	dm_directx_bind_buffer(pipeline->view_proj, 0, directx_renderer);
 
 	/*
 	textures
@@ -406,20 +389,21 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	return true;
 }
 
-void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline)
+void dm_renderer_set_viewport_impl(dm_viewport viewport)
 {
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
+	ID3D11DeviceContext* context = directx_renderer->context;
 
 	D3D11_VIEWPORT new_viewport = { 0 };
 	new_viewport.Width = viewport.width;
 	new_viewport.Height = viewport.height;
 	new_viewport.MaxDepth = 1.0f;
-	internal_pipe->viewport = new_viewport;
+	
+	context->lpVtbl->RSSetViewports(context, 1, &new_viewport);
 }
 
 void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 {
-	dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
+	dm_directx_pipeline* internal_pipe = pipeline->internal_pipeline;
 
 	ID3D11DeviceContext* context = directx_renderer->context;
 	ID3D11RenderTargetView* render_target = internal_pipe->render_view;

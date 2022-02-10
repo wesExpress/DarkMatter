@@ -6,12 +6,12 @@
 #include "core/dm_mem.h"
 #include "dm_directx_enum_conversion.h"
 
-bool dm_directx_create_texture(dm_image* image, dm_internal_renderer* renderer)
+bool dm_directx_create_texture(dm_image* image, dm_directx_renderer* renderer)
 {
 	HRESULT hr;
 
-	image->internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
-	dm_internal_texture* internal_texture = image->internal_texture;
+	image->internal_texture = dm_alloc(sizeof(dm_directx_texture), DM_MEM_RENDERER_TEXTURE);
+	dm_directx_texture* internal_texture = image->internal_texture;
 
 	DXGI_FORMAT image_format = dm_image_fmt_to_directx_fmt(image->desc.format);
 	if (image_format == DXGI_FORMAT_UNKNOWN) return false;
@@ -47,7 +47,7 @@ bool dm_directx_create_texture(dm_image* image, dm_internal_renderer* renderer)
 
 void dm_directx_destroy_texture(dm_image* image)
 {
-	dm_internal_texture* internal_texture = image->internal_texture;
+	dm_directx_texture* internal_texture = image->internal_texture;
 
 	DX_RELEASE(internal_texture->texture);
 	DX_RELEASE(internal_texture->view);
@@ -55,12 +55,12 @@ void dm_directx_destroy_texture(dm_image* image)
 	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDERER_TEXTURE, DM_MEM_ADJUST_SUBTRACT);
 	dm_mem_db_adjust(sizeof(ID3D11ShaderResourceView), DM_MEM_RENDERER_TEXTURE, DM_MEM_ADJUST_SUBTRACT);
 
-	dm_free(image->internal_texture, sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
+	dm_free(image->internal_texture, sizeof(dm_directx_texture), DM_MEM_RENDERER_TEXTURE);
 }
 
-void dm_directx_bind_texture(dm_image* image, uint32_t slot, dm_internal_renderer* renderer)
+void dm_directx_bind_texture(dm_image* image, uint32_t slot, dm_directx_renderer* renderer)
 {
-	dm_internal_texture* internal_texture = image->internal_texture;
+	dm_directx_texture* internal_texture = image->internal_texture;
 	
 	renderer->context->lpVtbl->PSSetShaderResources(renderer->context, slot, 1, &internal_texture->view);
 }
