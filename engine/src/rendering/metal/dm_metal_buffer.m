@@ -14,13 +14,13 @@ bool dm_metal_create_buffer(dm_buffer* buffer, void* data, dm_metal_renderer* re
 
         if(data)
         {
-            internal_buffer->buffer = [renderer->device newBufferWithBytes:data
+            internal_buffer->buffer = [renderer.device newBufferWithBytes:data
                                                         length:buffer->desc.buffer_size
                                                         options:MTLResourceOptionCPUCacheModeDefault];
         }
         else
         {
-            internal_buffer->buffer = [renderer->device newBufferWithLength:buffer->desc.buffer_size
+            internal_buffer->buffer = [renderer.device newBufferWithLength:buffer->desc.buffer_size
                                                         options:MTLResourceOptionCPUCacheModeDefault];
         }
         

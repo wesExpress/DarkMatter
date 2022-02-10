@@ -19,7 +19,7 @@ bool dm_metal_create_texture(dm_image* image, dm_metal_renderer* renderer)
         texture_desc.height = image->desc.height;
         texture_desc.usage = MTLTextureUsageShaderRead;
 
-        internal_texture->texture = [renderer->device newTextureWithDescriptor:texture_desc];
+        internal_texture->texture = [renderer.device newTextureWithDescriptor:texture_desc];
         if(!internal_texture)
         {
             DM_LOG_FATAL("Could not create metal texture from image: %s", image->desc.path);
@@ -35,7 +35,7 @@ bool dm_metal_create_texture(dm_image* image, dm_metal_renderer* renderer)
                                    withBytes: image->data
                                    bytesPerRow: bytes_per_row];
 
-        id <MTLCommandBuffer> command_buffer = [renderer->command_queue commandBuffer];
+        id <MTLCommandBuffer> command_buffer = [renderer.command_queue commandBuffer];
         id <MTLBlitCommandEncoder> blit_encoder = [command_buffer blitCommandEncoder];
         [blit_encoder generateMipmapsForTexture: internal_texture->texture];
         [blit_encoder endEncoding];

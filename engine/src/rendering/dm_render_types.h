@@ -309,7 +309,8 @@ typedef struct dm_shader
 {
     dm_shader_desc vertex_desc;
     dm_shader_desc pixel_desc;
-
+    bool single_file;
+    const char* file_name;
     void* internal_shader;
 } dm_shader;
 

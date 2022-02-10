@@ -13,9 +13,6 @@
 #include "platform/dm_platform_apple.h"
 
 @interface dm_metal_view : NSView
-{
-    NSWindow* window;
-}
 
 @property (nonatomic, strong) CAMetalLayer* metal_layer;
 

@@ -65,7 +65,7 @@ bool dm_renderer_create_default_render_passes();
 
 // API functions
 
-bool dm_renderer_create_render_pass(const char* vertex_shader, const char* pixel_shader, dm_vertex_layout v_layout, dm_list* uniforms, const char* tag);
+bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout v_layout, dm_list* uniforms, const char* tag);
 
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag);
 bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs);

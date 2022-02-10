@@ -98,6 +98,8 @@ if(APPLE)
         src/rendering/metal/dm_metal_texture.m
         src/rendering/metal/dm_metal_shader.m
         src/rendering/metal/dm_metal_view.m
+        src/rendering/metal/dm_metal_pipeline.m
+        src/rendering/metal/dm_metal_render_pass.m
     )
 
     set(SOURCES ${SOURCES} ${OBJC_SOURCES})

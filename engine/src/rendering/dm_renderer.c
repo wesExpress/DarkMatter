@@ -380,37 +380,55 @@ bool dm_renderer_create_default_render_passes()
 	// light source uniforms
 	dm_uniform lsrc_vp_uni = dm_create_uniform("view_proj", mat4_uni_desc, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
 
+	dm_shader obj_shader = {0};
+	obj_shader.vertex_desc.type = DM_SHADER_TYPE_VERTEX;
+	obj_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
+
+#ifdef DM_METAL
+	obj_shader.single_file = true;
+	obj_shader.file_name = "shaders/metal/object_shader.metallib";
+#endif
+
 	// shaders
 #ifdef DM_OPENGL
-	const char* object_vertex_shader = "shaders/glsl/object_vertex.glsl";
+	obj_shader.vertex_desc.path = "shaders/glsl/object_vertex.glsl";
 #elif defined DM_DIRECTX
-	const char* object_vertex_shader = "shaders/hlsl/object_vertex.fxc";
+	obj_shader.vertex_desc.path = "shaders/hlsl/object_vertex.fxc";
 #elif defined DM_METAL
-	const char* object_vertex_shader = "vertex_main";
+	obj_shader.vertex_desc.path = "vertex_main";
 #endif
 
 #ifdef DM_OPENGL
-	const char* object_pixel_shader = "shaders/glsl/object_pixel.glsl";
+	obj_shader.pixel_desc.path = "shaders/glsl/object_pixel.glsl";
 #elif defined DM_DIRECTX
-	const char* object_pixel_shader = "shaders/hlsl/object_pixel.fxc";
+	obj_shader.pixel_desc.path = "shaders/hlsl/object_pixel.fxc";
 #elif defined DM_METAL
-	const char* object_pixel_shader = "fragment_main";
+	obj_shader.pixel_desc.path = "fragment_main";
+#endif
+
+	dm_shader lsrc_shader = {0};
+	lsrc_shader.vertex_desc.type = DM_SHADER_TYPE_VERTEX;
+	lsrc_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
+
+#ifdef DM_METAL
+	lsrc_shader.single_file = true;
+	lsrc_shader.file_name = "shaders/metal/light_src_shader.metallib";
 #endif
 
 #ifdef DM_OPENGL
-	const char* light_src_vertex_shader = "shaders/glsl/light_src_vertex.glsl";
+	lsrc_shader.vertex_desc.path = "shaders/glsl/light_src_vertex.glsl";
 #elif defined DM_DIRECTX
-	const char* light_src_vertex_shader = "shaders/hlsl/light_src_vertex.fxc";
+	lsrc_shader.vertex_desc.path = "shaders/hlsl/light_src_vertex.fxc";
 #elif defined DM_METAL
-	const char* light_src_vertex_shader = "vertex_main";
+	lsrc_shader.vertex_desc.path = "vertex_main";
 #endif
 
 #ifdef DM_OPENGL
-	const char* light_src_pixel_shader = "shaders/glsl/light_src_pixel.glsl";
+	lsrc_shader.pixel_desc.path = "shaders/glsl/light_src_pixel.glsl";
 #elif defined DM_DIRECTX
-	const char* light_src_pixel_shader = "shaders/hlsl/light_src_pixel.fxc";
+	lsrc_shader.pixel_desc.path = "shaders/hlsl/light_src_pixel.fxc";
 #elif defined DM_METAL
-	const char* light_src_pixel_shader = "light_src_main";
+	lsrc_shader.pixel_desc.path = "light_src_main";
 #endif
 
 	// object render pass
@@ -421,7 +439,7 @@ bool dm_renderer_create_default_render_passes()
 	dm_list_append(obj_uni_list, &light_pos);
 	dm_list_append(obj_uni_list, &view_pos);
 
-	if (!dm_renderer_create_render_pass(object_vertex_shader, object_pixel_shader, obj_v_layout, obj_uni_list, "object"))
+	if (!dm_renderer_create_render_pass(obj_shader, obj_v_layout, obj_uni_list, "object"))
 	{
 		DM_LOG_FATAL("Could not create default object render pass!");
 		return false;
@@ -433,7 +451,7 @@ bool dm_renderer_create_default_render_passes()
 	dm_list* lsrc_uni_list = dm_list_create(sizeof(dm_uniform), 0);
 	dm_list_append(lsrc_uni_list, &lsrc_vp_uni);
 
-	if (!dm_renderer_create_render_pass(light_src_vertex_shader, light_src_pixel_shader, obj_v_layout, lsrc_uni_list, "light_src"))
+	if (!dm_renderer_create_render_pass(lsrc_shader, obj_v_layout, lsrc_uni_list, "light_src"))
 	{
 		DM_LOG_FATAL("Could not create default light src render pass!");
 		return false;
@@ -444,7 +462,7 @@ bool dm_renderer_create_default_render_passes()
 	return true;
 }
 
-bool dm_renderer_create_render_pass(const char* vertex_shader, const char* pixel_shader, dm_vertex_layout v_layout, dm_list* uniforms, const char* tag)
+bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout v_layout, dm_list* uniforms, const char* tag)
 {
 	dm_render_pass* render_pass = dm_alloc(sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
 
@@ -452,12 +470,7 @@ bool dm_renderer_create_render_pass(const char* vertex_shader, const char* pixel
 
 	// shader
 	render_pass->shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
-
-	render_pass->shader->vertex_desc.path = vertex_shader;
-	render_pass->shader->vertex_desc.type = DM_SHADER_TYPE_VERTEX;
-
-	render_pass->shader->pixel_desc.path = pixel_shader;
-	render_pass->shader->pixel_desc.type = DM_SHADER_TYPE_PIXEL;
+	dm_memcpy(render_pass->shader, &shader, sizeof(dm_shader));
 
 	// raster
 	dm_raster_state_desc raster = { 0 };

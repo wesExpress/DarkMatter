@@ -8,8 +8,15 @@
 #include "dm_metal_renderer.h"
 #include <stdbool.h>
 
-bool dm_metal_create_shader_library(dm_shader* shader, NSString* path, dm_metal_renderer* renderer);
-void dm_metal_destroy_shader_library(dm_shader* shader);
+@interface dm_metal_shader_library : NSObject
+
+@property (nonatomic, strong) id<MTLLibrary> library;
+@property (nonatomic, strong) id<MTLFunction> vertex_func;
+@property (nonatomic, strong) id<MTLFunction> fragment_func;
+
+- (id)create: (dm_shader*)shader :(NSString*)path :(dm_metal_renderer*)renderer;
+
+@end
 
 #endif
 
