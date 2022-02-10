@@ -5,44 +5,41 @@
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
 
-bool dm_metal_create_shader_library(dm_shader* shader, NSString* path, dm_metal_renderer* renderer)
-{
-    @autoreleasepool
-    {
-        shader->internal_shader = dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
-        dm_internal_shader* internal_shader = shader->internal_shader;
+@implementation dm_metal_shader_library
 
-        internal_shader->library = [renderer->device newLibraryWithFile:path error:NULL];
-        if(!internal_shader->library)
+- (id) create: (dm_shader*) shader :(NSString*) path :(dm_metal_renderer*) renderer
+{
+    self = [super init];
+
+    if(self)
+    {
+        _library = [renderer.device newLibraryWithFile: path error: NULL];
+        if(!_library)
         {
             DM_LOG_FATAL("Could not create metal library from file: %s", path);
-            return false;
+            return NULL;
         }
 
         NSString* vertex_func_name = [[NSString alloc] initWithUTF8String:shader->vertex_desc.path];
-        internal_shader->vertex_func = [internal_shader->library newFunctionWithName:vertex_func_name];
-        if(!internal_shader->vertex_func)
+        _vertex_func = [_library newFunctionWithName:vertex_func_name];
+        if(!_vertex_func)
         {
             DM_LOG_FATAL("Could not create vertex function with name: %s", shader->vertex_desc.path);
+            return NULL;
         }
 
         NSString* fragment_func_name = [[NSString alloc] initWithUTF8String:shader->pixel_desc.path];
-        internal_shader->fragment_func = [internal_shader->library newFunctionWithName:fragment_func_name];
-        if(!internal_shader->fragment_func)
+        _fragment_func = [_library newFunctionWithName:fragment_func_name];
+        if(!_fragment_func)
         {
             DM_LOG_FATAL("Could not create fragment function with name: %s", shader->pixel_desc.path);
+            return NULL;
         }
     }
 
-    return true;
+    return self;
 }
 
-void dm_metal_destroy_shader_library(dm_shader* shader)
-{
-    @autoreleasepool
-    {
-        dm_free(shader->internal_shader, sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
-    }
-}
+@end
 
 #endif
