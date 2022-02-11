@@ -5,7 +5,7 @@
 #include "core/dm_assert.h"
 #include "core/dm_mem.h"
 
-bool dm_directx_create_swapchain(dm_internal_renderer* renderer)
+bool dm_directx_create_swapchain(dm_directx_renderer* renderer)
 {
 	// set up the swap chain pointer to be created in this function
 	IDXGISwapChain* swap_chain = NULL;
@@ -56,7 +56,7 @@ bool dm_directx_create_swapchain(dm_internal_renderer* renderer)
 	return true;
 }
 
-void dm_directx_destroy_swapchain(dm_internal_renderer* renderer)
+void dm_directx_destroy_swapchain(dm_directx_renderer* renderer)
 {
 	// release the directx object
 	IDXGISwapChain* swap_chain = renderer->swap_chain;

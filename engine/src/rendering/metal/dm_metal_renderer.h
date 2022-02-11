@@ -9,56 +9,34 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
+#include "dm_metal_view.h"
 #include "rendering/dm_renderer.h"
 #include "core/math/dm_math.h"
 
-@class dm_metal_view;
+@interface dm_metal_renderer : NSObject
+    
+@property (strong, nonatomic) id<MTLDevice> device;
+@property (strong, nonatomic) id<MTLCommandQueue> command_queue;
+@property (strong, nonatomic) id<MTLCommandBuffer> command_buffer;
+@property (strong, nonatomic) id<MTLRenderCommandEncoder> command_encoder;
+@property (strong, nonatomic) id<MTLBuffer> index_buffer;
+@property (strong, nonatomic) dm_metal_view* view;
 
-typedef struct dm_metal_render_pass
-{
-    id<CAMetalDrawable> drawable;
-    id<MTLCommandBuffer> command_buffer;
-    id <MTLRenderCommandEncoder> command_encoder;
-} dm_metal_render_pass;
+@property (nonatomic) dm_vec4 clear_color;
 
-typedef struct dm_metal_renderer
-{
-    id<MTLDevice> device;
-    id<MTLCommandQueue> command_queue;
-    dm_metal_view* view;
-    dm_vec4 clear_color;
-} dm_metal_renderer;
+- (id) initWithFrame: (NSRect)frame;
 
-typedef struct dm_internal_pipeline
-{
-    id<MTLRenderPipelineState> pipeline_state;
-    id<MTLDepthStencilState> depth_stencil;
-    id<MTLSamplerState> sampler_state;
-    dm_metal_render_pass* render_pass;
-} dm_internal_pipeline;
+@end
 
 typedef struct dm_internal_buffer
 {
     id<MTLBuffer> buffer;
 } dm_internal_buffer;
 
-typedef struct dm_internal_shader
-{
-    id<MTLLibrary> library;
-    id<MTLFunction> vertex_func;
-    id<MTLFunction> fragment_func;
-} dm_internal_shader;
-
 typedef struct dm_internal_texture
 {
     id<MTLTexture> texture;
 } dm_internal_texture;
-
-typedef struct demo_vertex
-{
-    dm_vec4 position;
-    dm_vec4 color;
-} demo_vertex;
 
 #endif
 

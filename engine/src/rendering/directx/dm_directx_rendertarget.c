@@ -5,7 +5,7 @@
 #include "core/dm_assert.h"
 #include "core/dm_mem.h"
 
-bool dm_directx_create_rendertarget(dm_internal_renderer* renderer, dm_internal_pipeline* pipeline)
+bool dm_directx_create_rendertarget(dm_directx_renderer* renderer, dm_directx_pipeline* pipeline)
 {
 	DM_ASSERT_MSG(renderer->device, "DirectX device is NULL!");
 	DM_ASSERT_MSG(renderer->swap_chain, "DirectX swap chain is NULL!");
@@ -22,7 +22,7 @@ bool dm_directx_create_rendertarget(dm_internal_renderer* renderer, dm_internal_
 	return true;
 }
 
-void dm_directx_destroy_rendertarget(dm_internal_pipeline* pipeline)
+void dm_directx_destroy_rendertarget(dm_directx_pipeline* pipeline)
 {
 	ID3D11RenderTargetView* view = pipeline->render_view;
 	ID3D11Texture2D* back_buffer = pipeline->render_back_buffer;

@@ -6,12 +6,12 @@
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
 
-bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_renderer* renderer, dm_internal_pipeline* pipeline)
+bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_directx_renderer* renderer)
 {
 	HRESULT hr;
 
-	buffer->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
+	buffer->internal_buffer = dm_alloc(sizeof(dm_directx_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_directx_buffer* internal_buffer = buffer->internal_buffer;
 
 	ID3D11Device* device = renderer->device;
 	ID3D11DeviceContext* context = renderer->context;
@@ -41,26 +41,23 @@ bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_internal_rendere
 	{
 		DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &desc, 0, &internal_buffer->buffer), "ID3D11Device::CreateBuffer failed!");
 	}
-	dm_mem_db_adjust(sizeof(ID3D11Buffer), DM_MEM_RENDERER_BUFFER, DM_MEM_ADJUST_ADD);
 
 	return true;
 }
 
-void dm_directx_delete_buffer(dm_buffer* buffer, dm_internal_pipeline* pipeline)
+void dm_directx_delete_buffer(dm_buffer* buffer)
 {
-	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
+	dm_directx_buffer* internal_buffer = buffer->internal_buffer;
 
 	DX_RELEASE(internal_buffer->buffer);
-
-	dm_mem_db_adjust(sizeof(ID3D11Buffer), DM_MEM_RENDERER_BUFFER, DM_MEM_ADJUST_SUBTRACT);
 	
-	dm_free(buffer->internal_buffer, sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_free(buffer->internal_buffer, sizeof(dm_directx_buffer), DM_MEM_RENDERER_BUFFER);
 }
 
-void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_internal_renderer* renderer)
+void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_directx_renderer* renderer)
 {
 	ID3D11DeviceContext* context = renderer->context;
-	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
+	dm_directx_buffer* internal_buffer = buffer->internal_buffer;
 
 	UINT stride = buffer->desc.elem_size;
 	UINT offset = 0;
@@ -82,7 +79,7 @@ void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_internal_render
 	}
 }
 
-void dm_directx_bind_vertex_buffers(dm_list* buffers, dm_internal_renderer* renderer)
+void dm_directx_bind_vertex_buffers(dm_list* buffers, dm_directx_renderer* renderer)
 {
 	ID3D11DeviceContext* context = renderer->context;
 	
@@ -93,7 +90,7 @@ void dm_directx_bind_vertex_buffers(dm_list* buffers, dm_internal_renderer* rend
 	for (uint32_t i = 0; i < buffers->count; i++)
 	{
 		dm_buffer* buffer = dm_list_at(buffers, i);
-		dm_internal_buffer* internal_buffer = buffer->internal_buffer;
+		dm_directx_buffer* internal_buffer = buffer->internal_buffer;
 		buffer_list[i] = internal_buffer->buffer;
 		stride_list[i] = buffer->desc.elem_size;
 		offset_list[i] = 0;

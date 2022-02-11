@@ -21,25 +21,35 @@ typedef struct dm_internal_constant_buffer
 	void* data;
 } dm_internal_constant_buffer;
 
+typedef struct dm_internal_uniform
+{
+	GLint location;
+} dm_internal_uniform;
+
 typedef struct dm_internal_shader
 {
 	GLuint id;
 } dm_internal_shader;
-
-typedef struct dm_internal_pipeline
-{
-	GLuint vao;
-	GLenum blend_src, blend_dest;
-	GLenum blend_func, depth_func, stencil_func;
-	GLenum cull, winding;
-	GLenum primitive;
-} dm_internal_pipeline;
 
 typedef struct dm_internal_texture
 {
 	GLuint id, slot;
 	GLint location;
 } dm_internal_texture;
+
+typedef struct dm_internal_pipeline
+{
+	GLenum blend_src, blend_dest;
+	GLenum blend_func, depth_func, stencil_func;
+} dm_internal_pipeline;
+
+typedef struct dm_opengl_render_pass
+{
+	GLuint vao;
+	GLenum cull, winding;
+	GLenum primitive;
+	GLenum min_filter, mag_filter, s_wrap, t_wrap;
+} dm_opengl_render_pass;
 
 typedef enum dm_opengl_uniform
 {

@@ -2,30 +2,36 @@
 #include "dm_vertex_attribs.h"
 #include "dm_command_buffer.h"
 #include "dm_image.h"
+#include "dm_geometry.h"
+#include "dm_uniform.h"
+
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
 #include "core/math/dm_math.h"
-#include "structures/dm_map.h"
+
 #include <stddef.h>
 
 static dm_renderer_data r_data = { 0 };
 
-bool dm_renderer_create_object_pipeline();
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
+
+void dm_renderer_destroy_render_pass(dm_render_pass* render_pass);
 
 // forward declaration of the implementation, or backend, functionality
 // if not defined, compiler will be angry
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data);
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data);
-void dm_renderer_begin_scene_impl(dm_renderer_data* renderer_data);
-bool dm_renderer_end_scene_impl(dm_renderer_data* renderer_data);
+bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data);
+
+bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
+void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass);
 
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
-bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, void* mvp_data, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
+bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render_pipeline* pipeline);
 
 // vertex data
 dm_list* vertices = NULL;
@@ -33,15 +39,25 @@ dm_list* indices = NULL;
 
 // instances
 dm_map_t* inst_map = NULL;
-dm_map_t* inst_transforms = NULL;
-dm_list* object_tags = NULL;
+dm_list* mesh_tags = NULL;
+
+// render passes
+dm_map_t* render_passes = NULL;
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	r_data.clear_color = clear_color;
-	r_data.width = platform_data->window_width;
-	r_data.height = platform_data->window_height;
-	r_data.object_pipeline = dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
+
+	dm_viewport viewport = {
+		.x = 0,
+		.y = 0,
+		.width = platform_data->window_width,
+		.height = platform_data->window_height,
+		.max_depth = 1.0f
+	};
+	r_data.viewport = viewport;
+
+	r_data.pipeline = dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 
 	if(!dm_renderer_init_impl(platform_data, &r_data))
 	{
@@ -54,8 +70,9 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	indices = dm_list_create(sizeof(dm_index_t), 0);
 
 	inst_map = dm_map_create(sizeof(dm_inst_data), 0);
-	inst_transforms = dm_map_create(sizeof(dm_list), 0);
-	object_tags = dm_list_create(sizeof(dm_string), 0);
+	mesh_tags = dm_list_create(sizeof(dm_string), 0);
+	r_data.render_commands = dm_list_create(sizeof(dm_render_command), 0);
+	render_passes = dm_map_create(sizeof(dm_render_pass), 0);
 
 	// maps
 	dm_image_map_init();
@@ -70,13 +87,19 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		DM_CAMERA_PERSPECTIVE
 	);
 
-	// object pipeline
-	if (!dm_renderer_create_object_pipeline())
+	if (!dm_renderer_init_render_pipeline(r_data.pipeline))
 	{
-		DM_LOG_FATAL("Failed to create object render pipeline!");
+		DM_LOG_FATAL("Failed to create render pipeline!");
 		return false;
 	}
-	
+
+	// primitives
+	if (!dm_geometry_load_primitives())
+	{
+		DM_LOG_FATAL("Failed to initialize primitive vertex data!");
+		return false;
+	}
+
 	return true;
 }
 
@@ -87,23 +110,30 @@ void dm_renderer_shutdown()
 	dm_list_destroy(indices);
 
 	dm_map_destroy(inst_map);
-	dm_map_list_destroy(inst_transforms);
-	dm_list_destroy(object_tags);
+	dm_list_destroy(mesh_tags);
+	for(uint32_t i=0; i<render_passes->capacity;i++)
+	{
+		if(render_passes->items[i])
+		{
+			dm_render_pass* render_pass = render_passes->items[i]->value;
+			dm_renderer_destroy_render_pass(render_pass);
+		}
+	}
+	dm_map_destroy(render_passes);
 
-	// cleanup
-	dm_renderer_destroy_render_pipeline(r_data.object_pipeline);
-	dm_free(r_data.object_pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
+	if(r_data.render_commands->count>0) dm_renderer_clear_command_buffer(r_data.render_commands);
+	dm_list_destroy(r_data.render_commands);
+
+	dm_renderer_destroy_render_pipeline(r_data.pipeline);
+	dm_free(r_data.pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
 	dm_image_map_destroy();
 
 	// backend shutdown
 	dm_renderer_shutdown_impl(&r_data);
 }
 
-bool dm_renderer_resize(int new_width, int new_height)
+void dm_renderer_resize(int new_width, int new_height)
 {
-	r_data.width = new_width;
-	r_data.height = new_height;
-
 	dm_viewport viewport = {
 		.x = 0,
 		.y = new_height,
@@ -111,120 +141,172 @@ bool dm_renderer_resize(int new_width, int new_height)
 		.height = new_height,
 		.max_depth = 1.0f
 	};
-	r_data.object_pipeline->viewport = viewport;
-	dm_render_command_set_viewport(r_data.object_pipeline);
 
-	return true;
+	r_data.viewport = viewport;
 }
 
-bool dm_renderer_begin_scene()
+bool dm_renderer_begin_frame()
 {
-	dm_renderer_begin_scene_impl(&r_data);
+	dm_render_command_clear(&r_data.clear_color, r_data.render_commands);
+	dm_render_command_set_viewport(&r_data.viewport, r_data.render_commands);
+	dm_render_command_bind_pipeline(r_data.pipeline, r_data.render_commands);
 
-	// commands for object pipeline
-	if (!dm_list_is_empty(r_data.object_pipeline->render_commands))
+	/************************
+	    object render pass
+	*******************************/
+
+	dm_render_pass* obj_pass = dm_map_get(render_passes, "object");
+	if (!obj_pass)
 	{
-		dm_renderer_clear_command_buffer(r_data.object_pipeline->render_commands);
+		DM_LOG_FATAL("Object render pass is null!");
+		return false;
 	}
 
-	dm_render_command_clear(&r_data.clear_color, r_data.object_pipeline);
-#ifdef DM_DIRECTX
-	dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
-	dm_render_command_update_buffer(r_data.object_pipeline->view_proj, &new_view_proj, sizeof(new_view_proj), r_data.object_pipeline);
-#else
-	dm_render_command_update_buffer(r_data.object_pipeline->view_proj, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj), r_data.object_pipeline);
-#endif
-
-	for(uint32_t i=0; i<object_tags->count;i++)
+	// update the uniforms
+	for (uint32_t i = 0; i < obj_pass->uniforms->count; i++)
 	{
-		dm_string* key = dm_list_at(object_tags, i);
-		dm_inst_data* inst_data = dm_map_get(inst_map, key->string);
-		dm_list* inst_ts = dm_map_get(inst_transforms, key->string);
-		dm_list* buffer = dm_list_create(sizeof(dm_vertex_inst), 0);
+		dm_uniform* uniform = dm_list_at(obj_pass->uniforms, i);
 
-		for (uint32_t j = 0; j < inst_ts->count; j++)
+		if (strcmp(uniform->name, "view_proj") == 0)
 		{
-			dm_transform* transform = dm_list_at(inst_ts, j);
+#ifdef DM_DIRECTX
+			dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
+			dm_memcpy(uniform->data, &new_view_proj, sizeof(new_view_proj));
+#else
+			dm_memcpy(uniform->data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
+#endif
+		}
+		else if (strcmp(uniform->name, "light_pos") == 0)
+		{
+			dm_render_pass* light_pass = dm_map_get(render_passes, "light_src");
+			if (!light_pass)
+			{
+				DM_LOG_FATAL("Light source render pass is NULL!");
+				return false;
+			}
+			dm_list* lights = dm_map_get(light_pass->objects, "cube");
+			dm_game_object* light = dm_list_at(lights, 0);
+			if (!light)
+			{
+				DM_LOG_FATAL("Light is NULL!");
+				return false;
+			}
+			dm_memcpy(uniform->data, &light->transform.position, sizeof(light->transform.position));
+		}
+		else if (strcmp(uniform->name, "view_pos") == 0)
+		{
+			dm_memcpy(uniform->data, &r_data.camera.pos, sizeof(r_data.camera.pos));
+		}
+	}
+
+	// render the objects
+	for(uint32_t i=0; i< mesh_tags->count;i++)
+	{
+		dm_string* key = dm_list_at(mesh_tags, i);
+		dm_inst_data* inst_data = dm_map_get(inst_map, key->string);
+		dm_list* objs = dm_map_get(obj_pass->objects, key->string);
+		dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
+
+		for (uint32_t j = 0; j < objs->count; j++)
+		{
+			dm_game_object* obj = dm_list_at(objs, j);
 			dm_vertex_inst inst = { 0 };
 
 			inst.model = dm_mat4_identity();
-			inst.model = dm_mat_translate(inst.model, transform->position);
+			inst.model = dm_mat_translate(inst.model, obj->transform.position);
+			inst.model = dm_mat_scale(inst.model, obj->transform.scale);
 #ifdef DM_DIRECTX
 			inst.model = dm_mat4_transpose(inst.model);
 #endif
+			inst.color = obj->color;
 
-			dm_list_append(buffer, &inst);
+			dm_list_append(buffer_data, &inst);
 		}
 
-		dm_render_command_begin_renderpass(r_data.object_pipeline);
-		dm_render_command_bind_pipeline(r_data.object_pipeline);
-		dm_render_command_update_buffer(r_data.object_pipeline->inst_buffer, buffer->data, buffer->count * buffer->element_size, r_data.object_pipeline);
-		//dm_render_command_draw_indexed(inst_data->index_count, inst_data->index_offset, inst_data->vertex_offset, r_data.object_pipeline);
-		dm_render_command_draw_instanced(inst_data->index_count, inst_ts->count, inst_data->index_offset, inst_data->vertex_offset, 0, r_data.object_pipeline);
-		dm_render_command_end_renderpass(r_data.object_pipeline);
+		dm_render_command_begin_renderpass(obj_pass, r_data.render_commands);
+		dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
+		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, obj_pass, r_data.render_commands);
+		dm_render_command_end_renderpass(obj_pass, r_data.render_commands);
 
-		dm_list_destroy(buffer);
+		dm_list_destroy(buffer_data);
 	}
+
+	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
+	dm_renderer_clear_command_buffer(r_data.render_commands);
 	
 	return true;
 }
 
-bool dm_renderer_end_scene()
+bool dm_renderer_end_frame()
 {
-	if (!dm_renderer_submit_command_buffer(r_data.object_pipeline->render_commands, r_data.object_pipeline)) return false;
+	/**********************
+	  light source render pass
+	****************************/
 
-	return dm_renderer_end_scene_impl(&r_data);
+	
+	
+	dm_render_pass* lsrc_pass = dm_map_get(render_passes, "light_src");
+	if (!lsrc_pass)
+	{
+		DM_LOG_FATAL("Light source render pass is NULL!");
+		return false;
+	}
+	// update the uniforms
+	for (uint32_t i = 0; i < lsrc_pass->uniforms->count; i++)
+	{
+		dm_uniform* uniform = dm_list_at(lsrc_pass->uniforms, i);
+
+		if (strcmp(uniform->name, "view_proj") == 0)
+		{
+#ifdef DM_DIRECTX
+			dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
+			dm_memcpy(uniform->data, &new_view_proj, sizeof(new_view_proj));
+#else
+			dm_memcpy(uniform->data, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
+#endif
+		}
+	}
+
+	// render the light sources
+	for (uint32_t i = 0; i < mesh_tags->count; i++)
+	{
+		dm_string* key = dm_list_at(mesh_tags, i);
+		dm_inst_data* inst_data = dm_map_get(inst_map, key->string);
+		dm_list* objs = dm_map_get(lsrc_pass->objects, key->string);
+		dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
+
+		for (uint32_t j = 0; j < objs->count; j++)
+		{
+			dm_game_object* obj = dm_list_at(objs, j);
+			dm_vertex_inst inst = { 0 };
+
+			inst.model = dm_mat4_identity();
+			inst.model = dm_mat_translate(inst.model, obj->transform.position);
+			inst.model = dm_mat_scale(inst.model, obj->transform.scale);
+#ifdef DM_DIRECTX
+			inst.model = dm_mat4_transpose(inst.model);
+#endif
+			inst.color = obj->color;
+
+			dm_list_append(buffer_data, &inst);
+		}
+
+		dm_render_command_begin_renderpass(lsrc_pass, r_data.render_commands);
+		dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
+		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, lsrc_pass, r_data.render_commands);
+		dm_render_command_end_renderpass(lsrc_pass, r_data.render_commands);
+
+		dm_list_destroy(buffer_data);
+	}
+
+	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
+	dm_renderer_clear_command_buffer(r_data.render_commands);
+
+	return dm_renderer_end_frame_impl(&r_data);
 }
 
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 {
-	// command buffer
-	pipeline->render_commands = dm_list_create(sizeof(dm_render_command), 0);
-
-	// rasterizer
-	pipeline->raster_desc.shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
-
-	// render packet
-	pipeline->vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->inst_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->view_proj = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	pipeline->render_packet.image_paths = dm_list_create(sizeof(dm_string), 0);
-
-	return dm_renderer_create_render_pipeline_impl(pipeline);
-}
-
-void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
-{
-	dm_renderer_clear_command_buffer(pipeline->render_commands);
-	dm_list_destroy(pipeline->render_commands);
-
-	dm_renderer_destroy_render_pipeline_impl(pipeline);
-
-	dm_free(pipeline->vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_free(pipeline->index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_free(pipeline->inst_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_free(pipeline->view_proj, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-
-	// images
-	for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
-	{
-		dm_string* str = dm_list_at(pipeline->render_packet.image_paths, i);
-		dm_strdel(str->string);
-	}
-	dm_list_destroy(pipeline->render_packet.image_paths);
-
-	dm_free(pipeline->raster_desc.shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
-}
-
-bool dm_renderer_create_object_pipeline()
-{
-	// raster
-	dm_raster_state_desc raster = { 0 };
-	raster.cull_mode = DM_CULL_BACK;
-	raster.winding_order = DM_WINDING_COUNTER_CLOCK;
-	raster.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
-
 	// blend
 	dm_blend_state_desc blend = { 0 };
 	blend.is_enabled = true;
@@ -239,6 +321,183 @@ bool dm_renderer_create_object_pipeline()
 	// stencil
 	dm_stencil_state_desc stencil = { 0 };
 
+	// fill-in pipeline
+	pipeline->blend_desc = blend;
+	pipeline->depth_desc = depth;
+	pipeline->stencil_desc = stencil;
+
+	// render packet
+	pipeline->vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	pipeline->inst_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+
+	pipeline->render_packet.image_paths = dm_list_create(sizeof(dm_string), 0);
+
+	return dm_renderer_create_render_pipeline_impl(pipeline);
+}
+
+void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
+{
+	dm_renderer_destroy_render_pipeline_impl(pipeline);
+
+	dm_free(pipeline->vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_free(pipeline->index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_free(pipeline->inst_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
+
+	// images
+	for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
+	{
+		dm_string* str = dm_list_at(pipeline->render_packet.image_paths, i);
+		dm_strdel(str->string);
+	}
+
+	dm_list_destroy(pipeline->render_packet.image_paths);
+}
+
+bool dm_renderer_init_object_data()
+{
+	// buffers
+	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = vertices->count * vertices->element_size, .elem_size=vertices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT , .name = "vertex"};
+	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .data_t = DM_BUFFER_DATA_T_UINT, .buffer_size = indices->count * indices->element_size, .elem_size=indices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT, .name = "index"};
+	dm_buffer_desc inst_desc = { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = sizeof(dm_inst_data) * DM_MAX_INSTANCES, .elem_size=sizeof(dm_vertex_inst), .usage = DM_BUFFER_USAGE_DYNAMIC, .cpu_access = DM_BUFFER_CPU_WRITE, .name = "instance" };
+
+	r_data.pipeline->vertex_buffer->desc = vb_desc;
+	r_data.pipeline->index_buffer->desc = ib_desc;
+	r_data.pipeline->inst_buffer->desc = inst_desc;
+		
+	if(!dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, r_data.pipeline)) return false;
+
+	return true;
+}
+
+bool dm_renderer_create_default_render_passes()
+{
+	// vertex attributes
+	dm_vertex_attrib_desc obj_v_attribs[] = {
+		pos_attrib_desc,
+		norm_attrib_desc,
+		tex_coord_desc,
+		model_attrib_desc,
+		color_attrib_desc
+	};
+
+	dm_vertex_layout obj_v_layout = {
+		.attributes = obj_v_attribs,
+		.num = sizeof(obj_v_attribs) / sizeof(obj_v_attribs[0])
+	};
+
+	// object uniforms
+	dm_uniform obj_vp = dm_create_uniform("view_proj", mat4_uni_desc, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
+	dm_uniform light_color = dm_create_uniform("light_color", vec3_uni_desc, &(dm_vec3){1, 1, 1}, sizeof(dm_vec3));
+	dm_uniform ambient_str = dm_create_uniform("ambient_str", float_uni_desc, &(float){0.1}, sizeof(float));
+	dm_uniform light_pos = dm_create_uniform("light_pos", vec3_uni_desc, &(dm_vec3){0,0,0}, sizeof(dm_vec3));
+	dm_uniform view_pos = dm_create_uniform("view_pos", vec3_uni_desc, &(dm_vec3){0,0,0}, sizeof(dm_vec3));
+
+	// light source uniforms
+	dm_uniform lsrc_vp_uni = dm_create_uniform("view_proj", mat4_uni_desc, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
+
+	dm_shader obj_shader = {0};
+	obj_shader.vertex_desc.type = DM_SHADER_TYPE_VERTEX;
+	obj_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
+	obj_shader.name = "object";
+
+#ifdef DM_METAL
+	obj_shader.single_file = true;
+	obj_shader.file_name = "shaders/metal/object_shader.metallib";
+#endif
+
+	// shaders
+#ifdef DM_OPENGL
+	obj_shader.vertex_desc.path = "shaders/glsl/object_vertex.glsl";
+#elif defined DM_DIRECTX
+	obj_shader.vertex_desc.path = "shaders/hlsl/object_vertex.fxc";
+#elif defined DM_METAL
+	obj_shader.vertex_desc.path = "vertex_main";
+#endif
+
+#ifdef DM_OPENGL
+	obj_shader.pixel_desc.path = "shaders/glsl/object_pixel.glsl";
+#elif defined DM_DIRECTX
+	obj_shader.pixel_desc.path = "shaders/hlsl/object_pixel.fxc";
+#elif defined DM_METAL
+	obj_shader.pixel_desc.path = "fragment_main";
+#endif
+
+	dm_shader lsrc_shader = {0};
+	lsrc_shader.vertex_desc.type = DM_SHADER_TYPE_VERTEX;
+	lsrc_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
+	lsrc_shader.name = "light_src";
+
+#ifdef DM_METAL
+	lsrc_shader.single_file = true;
+	lsrc_shader.file_name = "shaders/metal/light_src_shader.metallib";
+#endif
+
+#ifdef DM_OPENGL
+	lsrc_shader.vertex_desc.path = "shaders/glsl/light_src_vertex.glsl";
+#elif defined DM_DIRECTX
+	lsrc_shader.vertex_desc.path = "shaders/hlsl/light_src_vertex.fxc";
+#elif defined DM_METAL
+	lsrc_shader.vertex_desc.path = "vertex_main";
+#endif
+
+#ifdef DM_OPENGL
+	lsrc_shader.pixel_desc.path = "shaders/glsl/light_src_pixel.glsl";
+#elif defined DM_DIRECTX
+	lsrc_shader.pixel_desc.path = "shaders/hlsl/light_src_pixel.fxc";
+#elif defined DM_METAL
+	lsrc_shader.pixel_desc.path = "light_src_main";
+#endif
+
+	// object render pass
+	dm_list* obj_uni_list = dm_list_create(sizeof(dm_uniform), 0);
+	dm_list_append(obj_uni_list, &obj_vp);
+	dm_list_append(obj_uni_list, &light_color);
+	dm_list_append(obj_uni_list, &ambient_str);
+	dm_list_append(obj_uni_list, &light_pos);
+	dm_list_append(obj_uni_list, &view_pos);
+
+	if (!dm_renderer_create_render_pass(obj_shader, obj_v_layout, obj_uni_list, obj_shader.name))
+	{
+		DM_LOG_FATAL("Could not create default object render pass!");
+		return false;
+	}
+
+	//dm_list_destroy(obj_uni_list);
+
+	// light src render pass
+	dm_list* lsrc_uni_list = dm_list_create(sizeof(dm_uniform), 0);
+	dm_list_append(lsrc_uni_list, &lsrc_vp_uni);
+
+	if (!dm_renderer_create_render_pass(lsrc_shader, obj_v_layout, lsrc_uni_list, lsrc_shader.name))
+	{
+		DM_LOG_FATAL("Could not create default light src render pass!");
+		return false;
+	}
+	
+	//dm_list_destroy(lsrc_uni_list);
+
+	return true;
+}
+
+bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout v_layout, dm_list* uniforms, const char* tag)
+{
+	dm_render_pass* render_pass = dm_alloc(sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
+
+	render_pass->name = tag;
+
+	// shader
+	render_pass->shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
+	dm_memcpy(render_pass->shader, &shader, sizeof(dm_shader));
+
+	// raster
+	dm_raster_state_desc raster = { 0 };
+	raster.cull_mode = DM_CULL_BACK;
+	raster.winding_order = DM_WINDING_COUNTER_CLOCK;
+	raster.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
+
+	render_pass->raster_desc = raster;
+
 	// sampler
 	dm_sampler_desc sampler = { 0 };
 	sampler.comparison = DM_COMPARISON_ALWAYS;
@@ -247,94 +506,37 @@ bool dm_renderer_create_object_pipeline()
 	sampler.v = DM_TEXTURE_MODE_WRAP;
 	sampler.w = DM_TEXTURE_MODE_WRAP;
 
-	// viewport
-	dm_viewport viewport = { 0 };
-	viewport.y = r_data.height;
-	viewport.width = r_data.width;
-	viewport.height = r_data.height;
-	viewport.max_depth = 1.0f;
+	render_pass->sampler_desc = sampler;
 
-	// fill-in pipeline
-	r_data.object_pipeline->raster_desc = raster;
-	r_data.object_pipeline->blend_desc = blend;
-	r_data.object_pipeline->depth_desc = depth;
-	r_data.object_pipeline->stencil_desc = stencil;
-	r_data.object_pipeline->sampler_desc = sampler;
-	r_data.object_pipeline->viewport = viewport;
+	// uniforms
+	render_pass->uniforms = uniforms;
 
-	// internal pipeline
-	dm_renderer_init_render_pipeline(r_data.object_pipeline);
+	render_pass->objects = dm_map_create(sizeof(dm_list), 0);
+
+	if(!dm_renderer_create_render_pass_impl(render_pass, v_layout, r_data.pipeline)) return false;
+
+	dm_map_insert(render_passes, tag, render_pass);
+
+	dm_free(render_pass, sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
 
 	return true;
 }
 
-bool dm_renderer_init_object_data()
+void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
 {
-	// built-in shader
-	dm_shader_desc vs_desc = { 0 };
-#ifdef DM_OPENGL
-	vs_desc.path = "shaders/glsl/object_vertex.glsl";
-#elif defined DM_DIRECTX
-	vs_desc.path = "shaders/hlsl/object_vertex.fxc";
-#elif defined DM_METAL
-	vs_desc.path = "vertex_main";
-#endif
-	vs_desc.type = DM_SHADER_TYPE_VERTEX;
+	dm_renderer_destroy_render_pass_impl(render_pass);
 
-	dm_shader_desc ps_desc = { 0 };
-#ifdef DM_OPENGL
-	ps_desc.path = "shaders/glsl/object_pixel.glsl";
-#elif defined DM_DIRECTX
-	ps_desc.path = "shaders/hlsl/object_pixel.fxc";
-#elif defined DM_METAL
-	ps_desc.path = "fragment_main";
-#endif
-	ps_desc.type = DM_SHADER_TYPE_PIXEL;
+	for (uint32_t i = 0; i < render_pass->uniforms->count; i++)
+	{
+		
+		dm_uniform* uniform = dm_list_at(render_pass->uniforms, i);
+		dm_destroy_uniform(uniform);
+	}
+	dm_list_destroy(render_pass->uniforms);
 
-	r_data.object_pipeline->raster_desc.shader->vertex_desc = vs_desc;
-	r_data.object_pipeline->raster_desc.shader->pixel_desc = ps_desc;
+	dm_free(render_pass->shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 
-	// buffers
-	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = vertices->count * vertices->element_size, .elem_size=vertices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT , .name = "vertex"};
-	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .data_t = DM_BUFFER_DATA_T_UINT, .buffer_size = indices->count * indices->element_size, .elem_size=indices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT, .name = "index"};
-	dm_buffer_desc inst_desc = { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = sizeof(dm_inst_data) * DM_MAX_INSTANCES, .elem_size=sizeof(dm_vertex_inst), .usage = DM_BUFFER_USAGE_DYNAMIC, .cpu_access = DM_BUFFER_CPU_WRITE, .name = "instance" };
-
-	r_data.object_pipeline->vertex_buffer->desc = vb_desc;
-	r_data.object_pipeline->index_buffer->desc = ib_desc;
-	r_data.object_pipeline->inst_buffer->desc = inst_desc;
-
-	dm_vertex_attrib_desc v_attribs[] = {
-		pos_attrib_desc,
-		tex_coord_desc,
-		model_attrib_desc
-	};
-
-	dm_vertex_layout v_layout = {
-		.attributes = v_attribs,
-		.num = sizeof(v_attribs) / sizeof(dm_vertex_attrib_desc)
-	};
-
-	/*
-	// constant buffers
-	*/
-	dm_buffer_desc vp_desc = { 0 };
-	vp_desc.type = DM_BUFFER_TYPE_CONSTANT;
-	vp_desc.usage = DM_BUFFER_USAGE_DYNAMIC;
-	vp_desc.cpu_access = DM_BUFFER_CPU_WRITE;
-	vp_desc.data_t = DM_BUFFER_DATA_T_MATRIX;
-	vp_desc.elem_size = sizeof(float);
-	vp_desc.count = 4;
-	vp_desc.buffer_size = ((sizeof(dm_mat4) + 15) / 16) * 16;
-	vp_desc.name = "view_proj";
-
-	r_data.object_pipeline->view_proj->desc = vp_desc;
-
-	dm_mat4 model = dm_mat4_identity();
-	model = dm_mat4_mul_mat4(model, r_data.camera.view_proj);
-
-	if(!dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, &model, v_layout, r_data.object_pipeline)) return false;
-
-	return true;
+	dm_map_list_destroy(render_pass->objects);
 }
 
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag)
@@ -343,7 +545,7 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 		.string = tag,
 		.len = strlen(tag)
 	};
-	dm_list_append(object_tags, &obj_tag);
+	dm_list_append(mesh_tags, &obj_tag);
 	
 	dm_inst_data inst_data = { 0 };
 	inst_data.index_count = num_indices;
@@ -373,28 +575,37 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 	}
 }
 
-void dm_renderer_submit_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms)
+bool dm_renderer_submit_objects(dm_list* objects)
 {
-	dm_list* transf_list = dm_list_create(sizeof(dm_transform), 0);
-
-	for (uint32_t i = 0; i < num_transforms; i++)
+	for (uint32_t i = 0; i < objects->count; i++)
 	{
-		dm_list_append(transf_list, &transforms[i]);
+		dm_game_object* object = dm_list_at(objects, i);
+		dm_render_pass* render_pass = dm_map_get(render_passes, object->render_pass);
+
+		if (render_pass)
+		{
+			dm_list* obj_list = dm_map_get(render_pass->objects, object->mesh);
+
+			if (!obj_list)
+			{
+				obj_list = dm_list_create(sizeof(dm_game_object), 0);
+				dm_list_append(obj_list, object);
+				dm_map_insert_list(render_pass->objects, object->mesh, obj_list);
+				dm_list_destroy(obj_list);
+			}
+			else
+			{
+				dm_list_append(obj_list, object);
+			}
+		}
+		else
+		{
+			DM_LOG_FATAL("Trying to submit an object to an unknown render pass: %s", object->render_pass);
+			return false;
+		}
 	}
 
-	dm_map_insert_list(inst_transforms, tag, transf_list);
-	dm_list_destroy(transf_list);
-}
-
-void dm_renderer_update_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms)
-{
-	dm_list* inst_ts = dm_map_get(inst_transforms, tag);
-	dm_list_clear(inst_ts, 0);
-
-	for (uint32_t i = 0; i < num_transforms; i++)
-	{
-		dm_list_append(inst_ts, &transforms[i]);
-	}
+	return true;
 }
 
 bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs)
@@ -406,10 +617,15 @@ bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs)
 		dm_string str = { 0 };
 		str.string = dm_strdup(image_descs[i].path);
 		str.len = strlen(str.string);
-		dm_list_append(r_data.object_pipeline->render_packet.image_paths, &str);
+		dm_list_append(r_data.pipeline->render_packet.image_paths, &str);
 	}
 
 	return true;
+}
+
+void dm_renderer_set_clear_color(dm_vec3 color)
+{
+	r_data.clear_color = dm_vec4_set_from_vec3(color);
 }
 
 void dm_renderer_set_camera_pos(dm_vec3 pos)

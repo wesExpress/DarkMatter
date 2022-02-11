@@ -22,8 +22,10 @@
 	 "RENDERER       ",
 	 "RENDER COMMAND ",
 	 "RENDER PIPELINE",
+	 "RENDER PASS    ",
 	 "BUFFER         ",
 	 "SHADER         ",
+	 "UNIFORM        ",
 	 "TEXTURE        ",
 	 "UNKNOWN        "
  };
@@ -181,11 +183,17 @@ void dm_mem_all_freed()
 				case DM_MEM_RENDER_PIPELINE:
 					strcpy(buffer, "render pipeline");
 					break;
+				case DM_MEM_RENDER_PASS:
+					strcpy(buffer, "render pass");
+					break;
 				case DM_MEM_RENDERER_BUFFER:
 					strcpy(buffer, "buffer");
 					break;
 				case DM_MEM_RENDERER_SHADER:
 					strcpy(buffer, "shader");
+					break;
+				case DM_MEM_RENDERER_UNIFORM:
+					strcpy(buffer, "uniform");
 					break;
 				case DM_MEM_RENDERER_TEXTURE:
 					strcpy(buffer, "texture");

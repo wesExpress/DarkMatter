@@ -64,38 +64,60 @@ void dm_opengl_bind_shader(dm_shader* shader)
     glCheckError();
 }
 
-bool dm_opengl_bind_uniform(dm_buffer* cb)
+bool dm_opengl_create_uniform(dm_uniform* uniform, dm_shader* shader)
 {
-    dm_internal_constant_buffer* internal_buffer = cb->internal_buffer;
+    uniform->internal_uniform = dm_alloc(sizeof(dm_internal_uniform), DM_MEM_RENDERER_SHADER);
 
-    switch (cb->desc.data_t)
+    dm_internal_uniform* internal_uni = uniform->internal_uniform;
+    dm_internal_shader* internal_shader = shader->internal_shader;
+
+    internal_uni->location = glGetUniformLocation(internal_shader->id, uniform->name);
+    if (internal_uni->location == -1)
     {
-    case DM_BUFFER_DATA_T_INT:
+        DM_LOG_FATAL("Could not find uniform: '%s'", uniform->name);
+        return false;
+    }
+
+    return true;
+}
+
+void dm_opengl_destroy_uniform(dm_uniform* uniform)
+{
+    dm_free(uniform->internal_uniform, sizeof(dm_internal_uniform), DM_MEM_RENDERER_SHADER);
+}
+
+bool dm_opengl_bind_uniform(dm_uniform* uniform)
+{
+    dm_internal_uniform* internal_uniform = uniform->internal_uniform;
+
+    switch (uniform->desc.data_t)
     {
-        switch (cb->desc.count)
+    case DM_UNIFORM_DATA_T_INT:
+    {
+        switch (uniform->desc.count)
         {
         case 1:
         {
-            int data = *(int*)internal_buffer->data;
-            glUniform1i(internal_buffer->location, data);
+            int data = *(int*)uniform->data;
+            glUniform1i(internal_uniform->location, data);
             glCheckErrorReturn();
         } break;
         case 2:
         {
-            dm_vec2 data = *(dm_vec2*)internal_buffer->data;
-            glUniform2i(internal_buffer->location, data.x, data.y);
+            dm_vec2 data = *(dm_vec2*)uniform->data;
+            glUniform2i(internal_uniform->location, data.x, data.y);
             glCheckErrorReturn();
         } break;
         case 3:
         {
-            dm_vec3 data = *(dm_vec3*)internal_buffer->data;
-            glUniform3i(internal_buffer->location, data.x, data.y, data.z);
+            dm_vec3 data = *(dm_vec3*)uniform->data;
+            glUniform3i(internal_uniform->location, data.x, data.y, data.z);
             glCheckErrorReturn();
         } break;
         case 4:
         {
-            dm_vec4 data = *(dm_vec4*)internal_buffer->data;
-            glUniform4i(internal_buffer->location, data.x, data.y, data.z, data.w);
+            dm_vec4 data = *(dm_vec4*)uniform->data;
+            glUniform4i(internal_uniform->location, data.x, data.y, data.z, data.w);
             glCheckErrorReturn();
         } break;
         default:
@@ -104,33 +126,33 @@ bool dm_opengl_bind_uniform(dm_buffer* cb)
         }
     } break;
 
-    case DM_BUFFER_DATA_T_BOOL:
-    case DM_BUFFER_DATA_T_UINT:
+    case DM_UNIFORM_DATA_T_BOOL:
+    case DM_UNIFORM_DATA_T_UINT:
     {
-        switch (cb->desc.count)
+        switch (uniform->desc.count)
         {
         case 1:
         {
-            uint32_t data = *(uint32_t*)internal_buffer->data;
-            glUniform1ui(internal_buffer->location, data);
+            uint32_t data = *(uint32_t*)uniform->data;
+            glUniform1ui(internal_uniform->location, data);
             glCheckErrorReturn();
         } break;
         case 2:
         {
-            dm_vec2 data = *(dm_vec2*)internal_buffer->data;
-            glUniform2ui(internal_buffer->location, data.x, data.y);
+            dm_vec2 data = *(dm_vec2*)uniform->data;
+            glUniform2ui(internal_uniform->location, data.x, data.y);
             glCheckErrorReturn();
         } break;
         case 3:
         {
-            dm_vec3 data = *(dm_vec3*)internal_buffer->data;
-            glUniform3ui(internal_buffer->location, data.x, data.y, data.z);
+            dm_vec3 data = *(dm_vec3*)uniform->data;
+            glUniform3ui(internal_uniform->location, data.x, data.y, data.z);
             glCheckErrorReturn();
         } break;
         case 4:
         {
-            dm_vec4 data = *(dm_vec4*)internal_buffer->data;
-            glUniform4ui(internal_buffer->location, data.x, data.y, data.z, data.w);
+            dm_vec4 data = *(dm_vec4*)uniform->data;
+            glUniform4ui(internal_uniform->location, data.x, data.y, data.z, data.w);
             glCheckErrorReturn();
         } break;
         default:
@@ -139,32 +161,32 @@ bool dm_opengl_bind_uniform(dm_buffer* cb)
         }
     } break;
 
-    case DM_BUFFER_DATA_T_FLOAT:
+    case DM_UNIFORM_DATA_T_FLOAT:
     {
-        switch (cb->desc.count)
+        switch (uniform->desc.count)
         {
         case 1:
         {
-            float data = *(float*)internal_buffer->data;
-            glUniform1f(internal_buffer->location, data);
+            float data = *(float*)uniform->data;
+            glUniform1f(internal_uniform->location, data);
             glCheckErrorReturn();
         } break;
         case 2:
         {
-            dm_vec2 data = *(dm_vec2*)internal_buffer->data;
-            glUniform2f(internal_buffer->location, data.x, data.y);
+            dm_vec2 data = *(dm_vec2*)uniform->data;
+            glUniform2f(internal_uniform->location, data.x, data.y);
             glCheckErrorReturn();
         } break;
         case 3:
         {
-            dm_vec3* data = (dm_vec3*)internal_buffer->data;
-            glUniform3f(internal_buffer->location, data->x, data->y, data->z);
+            dm_vec3* data = (dm_vec3*)uniform->data;
+            glUniform3f(internal_uniform->location, data->x, data->y, data->z);
             glCheckErrorReturn();
         } break;
         case 4:
         {
-            dm_vec4 data = *(dm_vec4*)internal_buffer->data;
-            glUniform4f(internal_buffer->location, data.x, data.y, data.z, data.w);
+            dm_vec4 data = *(dm_vec4*)uniform->data;
+            glUniform4f(internal_uniform->location, data.x, data.y, data.z, data.w);
             glCheckErrorReturn();
         } break;
         default:
@@ -173,26 +195,27 @@ bool dm_opengl_bind_uniform(dm_buffer* cb)
         }
     } break;
 
-    case DM_BUFFER_DATA_T_MATRIX:
+    case DM_UNIFORM_DATA_T_MATRIX_INT:
+    case DM_UNIFORM_DATA_T_MATRIX_FLOAT:
     {
-        switch (cb->desc.count)
+        switch (uniform->desc.count)
         {
         case 2:
         {
-            dm_mat2 data = *(dm_mat2*)internal_buffer->data;
-            glUniformMatrix2fv(internal_buffer->location, 1, GL_FALSE, &data.m[0]);
+            dm_mat2 data = *(dm_mat2*)uniform->data;
+            glUniformMatrix2fv(internal_uniform->location, 1, GL_FALSE, &data.m[0]);
             glCheckErrorReturn();
         } break;
         case 3:
         {
-            dm_mat3 data = *(dm_mat3*)internal_buffer->data;
-            glUniformMatrix3fv(internal_buffer->location, 1, GL_FALSE, &data.m[0]);
+            dm_mat3 data = *(dm_mat3*)uniform->data;
+            glUniformMatrix3fv(internal_uniform->location, 1, GL_FALSE, &data.m[0]);
             glCheckErrorReturn();
         } break;
         case 4:
         {
-            dm_mat4 data = *(dm_mat4*)internal_buffer->data;
-            glUniformMatrix4fv(internal_buffer->location, 1, GL_FALSE, &data.m[0]);
+            dm_mat4 data = *(dm_mat4*)uniform->data;
+            glUniformMatrix4fv(internal_uniform->location, 1, GL_FALSE, &data.m[0]);
             glCheckErrorReturn();
         } break;
         default:
@@ -206,18 +229,6 @@ bool dm_opengl_bind_uniform(dm_buffer* cb)
         return false;
     } 
 
-    return true;
-}
-
-bool dm_opengl_find_uniform_loc(GLuint program, const char* name, GLint* location)
-{
-    DM_ASSERT_MSG(name, "Uniform name is NULL! Something went wrong with the constant buffer.");
-    *location = glGetUniformLocation(program, name);
-    if (*location == -1)
-    {
-        DM_LOG_FATAL("Could not find uniform: '%s'", name);
-        return false;
-    }
     return true;
 }
 

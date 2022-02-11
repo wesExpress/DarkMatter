@@ -10,8 +10,8 @@
 #include "dm_directx_renderer.h"
 #include "platform/dm_platform.h"
 
-bool dm_directx_create_swapchain(dm_internal_renderer* renderer);
-void dm_directx_destroy_swapchain(dm_internal_renderer* renderer);
+bool dm_directx_create_swapchain(dm_directx_renderer* renderer);
+void dm_directx_destroy_swapchain(dm_directx_renderer* renderer);
 
 #endif // directx check
 

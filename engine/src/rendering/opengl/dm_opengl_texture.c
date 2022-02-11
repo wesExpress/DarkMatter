@@ -31,7 +31,12 @@ bool dm_opengl_create_texture(dm_image* image, int texture_slot, GLuint shader)
 	glCheckErrorReturn();
 
 	internal_texture->slot = texture_slot;
-	if(!dm_opengl_find_uniform_loc(shader, image->desc.name, &internal_texture->location)) return false;
+	internal_texture->location = glGetUniformLocation(shader, image->desc.name);
+	if (internal_texture->location == -1)
+	{
+		DM_LOG_FATAL("Could not find uniform: '%s'", image->desc.name);
+		return false;
+	}
 
 	return true;
 }

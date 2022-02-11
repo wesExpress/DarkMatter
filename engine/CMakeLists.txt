@@ -63,9 +63,12 @@ set(
     src/rendering/dm_renderer_api.c
     src/rendering/dm_command_buffer.c
     src/rendering/dm_image.c
+    src/rendering/dm_geometry.c
     src/rendering/dm_camera.c
+    src/rendering/dm_uniform.c
 
     src/rendering/opengl/dm_opengl_renderer.c
+    src/rendering/opengl/dm_opengl_render_pass.c
     src/rendering/opengl/dm_opengl_buffer.c
     src/rendering/opengl/dm_opengl_shader.c
     src/rendering/opengl/dm_opengl_enum_conversion.c
@@ -95,6 +98,8 @@ if(APPLE)
         src/rendering/metal/dm_metal_texture.m
         src/rendering/metal/dm_metal_shader.m
         src/rendering/metal/dm_metal_view.m
+        src/rendering/metal/dm_metal_pipeline.m
+        src/rendering/metal/dm_metal_render_pass.m
     )
 
     set(SOURCES ${SOURCES} ${OBJC_SOURCES})
@@ -169,18 +174,22 @@ endif()
 if(DM_RENDER_OPENGL)
     set(VERTEX_SHADERS
         shaders/glsl/object_vertex.glsl
+        shaders/glsl/light_src_vertex.glsl
     )
     set(PIXEL_SHADERS
         shaders/glsl/object_pixel.glsl
+        shaders/glsl/light_src_pixel.glsl
     )
 
     set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
 elseif(WIN32)
     set(VERTEX_SHADERS
         shaders/hlsl/object_vertex.hlsl
+        shaders/hlsl/light_src_vertex.hlsl
     )
     set(PIXEL_SHADERS
         shaders/hlsl/object_pixel.hlsl
+        shaders/hlsl/light_src_pixel.hlsl
     )    
 
     set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
@@ -204,29 +213,30 @@ if(WIN32 AND NOT DM_RENDER_OPENGL)
     
     set(current_output_path ${CMAKE_BINARY_DIR}/shaders/hlsl)
 
-    function(compile_hlsl shaders shader_entry shader_version)
-        foreach(shader ${shaders})
-            get_filename_component(file_we ${shader} NAME_WE)
-            set(shader_out ${current_output_path}/${file_we}.fxc)
-            add_custom_command(
-                OUTPUT ${shader_out}
-                COMMAND ${FXC} ${FXC_FLAGS} /E ${shader_entry} /T ${shader_version} ${CMAKE_CURRENT_SOURCE_DIR}/${shader} /Fo ${shader_out} 
-                MAIN_DEPENDENCY ${shader}
-                COMMENT "Compiling ${shader}..."
-                VERBATIM
-            )
-            add_custom_target(fx_${file_we} DEPENDS ${shader_out})
-            add_dependencies(${PROJECT_NAME} fx_${file_we})
-
-        endforeach()
+    function(compile_hlsl shader shader_entry shader_version)
+        get_filename_component(file_we ${shader} NAME_WE)
+        set(shader_out ${current_output_path}/${file_we}.fxc)
+        add_custom_command(
+            OUTPUT ${shader_out}
+            COMMAND ${FXC} ${FXC_FLAGS} /E ${shader_entry} /T ${shader_version} ${CMAKE_CURRENT_SOURCE_DIR}/${shader} /Fo ${shader_out} 
+            MAIN_DEPENDENCY ${shader}
+            COMMENT "Compiling ${shader}..."
+            VERBATIM
+        )
+        add_custom_target(fx_${file_we} DEPENDS ${shader_out})
+        add_dependencies(${PROJECT_NAME} fx_${file_we})
     endfunction()
 
     # vertex shaders
-    compile_hlsl(${VERTEX_SHADERS} v_main vs_5_0)
+    foreach(shader ${VERTEX_SHADERS})
+        compile_hlsl(${shader} v_main vs_5_0)
+    endforeach()
 
     # pixel shaders
-    compile_hlsl(${PIXEL_SHADERS} p_main ps_5_0)
-
+    foreach(shader ${PIXEL_SHADERS})
+        compile_hlsl(${shader} p_main ps_5_0)
+    endforeach()
+    
 # metal shaders
 elseif(APPLE)    
     set(current_output_path ${CMAKE_BINARY_DIR}/shaders/metal)

@@ -6,6 +6,7 @@
 typedef struct dm_transform
 {
 	dm_vec3 position;
+	dm_vec3 scale;
 } dm_transform;
 
 typedef struct dm_editor_camera
@@ -14,5 +15,14 @@ typedef struct dm_editor_camera
 	float move_velocity, look_sens;
 	uint32_t last_x, last_y;
 } dm_editor_camera;
+
+typedef struct dm_game_object
+{
+	dm_transform transform;
+	dm_vec3 color;
+	const char* texture;
+	const char* mesh;
+	const char* render_pass;
+} dm_game_object;
 
 #endif

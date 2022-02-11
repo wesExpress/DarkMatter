@@ -13,10 +13,11 @@
 typedef struct dm_renderer_data
 {
 	dm_camera camera;
-	int width, height;
 	dm_color clear_color;
+	dm_list* render_commands;
+	dm_viewport viewport;
 
-	dm_render_pipeline* object_pipeline;
+	dm_render_pipeline* pipeline;
 } dm_renderer_data;
 
 /*
@@ -39,29 +40,37 @@ mainly a wrapper for the backend renderer resizing the user is not exposed to
 @param new_width - new window width
 @param new_height - new window height
 */
-bool dm_renderer_resize(int new_width, int new_height);
+void dm_renderer_resize(int new_width, int new_height);
 
 /*
 mainly a wrapper for the backend renderer begin scene the user is not exposed to
 */
-bool dm_renderer_begin_scene();
+bool dm_renderer_begin_frame();
 
 /*
 mainly a wrapper for the backend renderer end scene the user is not exposed to
 */
-bool dm_renderer_end_scene();
+bool dm_renderer_end_frame();
 
 /*
 initializes the vertex and index buffers. called after the application has submitted everything.
 */
 bool dm_renderer_init_object_data();
 
+/*
+default render passes:
+- objects
+*/
+bool dm_renderer_create_default_render_passes();
+
 // API functions
+
+bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout v_layout, dm_list* uniforms, const char* tag);
 
 void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag);
 bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs);
-void dm_renderer_submit_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms);
-void dm_renderer_update_object_transforms(const char* tag, dm_transform* transforms, uint32_t num_transforms);
+bool dm_renderer_submit_objects(dm_list* objects);
+void dm_renderer_set_clear_color(dm_vec3 color);
 
 void dm_renderer_set_camera_pos(dm_vec3 pos);
 void dm_renderer_update_camera_pos(dm_vec3 delta_pos);

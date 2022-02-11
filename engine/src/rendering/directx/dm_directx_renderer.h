@@ -16,25 +16,25 @@
 #define DX_ERROR_CHECK(HRCALL, ERROR_MSG) hr = HRCALL; if(hr!=S_OK){ DM_LOG_FATAL(ERROR_MSG); DM_LOG_FATAL(dm_get_win32_error_msg(hr)); return false; }
 #define DX_RELEASE(OBJ) if(OBJ) { OBJ->lpVtbl->Release(OBJ); }
 
-typedef struct dm_internal_buffer
+typedef struct dm_directx_buffer
 {
 	ID3D11Buffer* buffer;
-} dm_internal_buffer;
+} dm_directx_buffer;
 
-typedef struct dm_internal_shader
+typedef struct dm_directx_shader
 {
 	ID3D11VertexShader* vertex_shader;
 	ID3D11PixelShader* pixel_shader;
 	ID3D11InputLayout* input_layout;
-} dm_internal_shader;
+} dm_directx_shader;
 
-typedef struct dm_internal_texture
+typedef struct dm_directx_texture
 {
 	ID3D11Texture2D* texture;
 	ID3D11ShaderResourceView* view;
-} dm_internal_texture;
+} dm_directx_texture;
 
-typedef struct dm_internal_renderer
+typedef struct dm_directx_renderer
 {
 	HWND hwnd;
 	HINSTANCE h_instance;
@@ -46,21 +46,25 @@ typedef struct dm_internal_renderer
 #if DM_DEBUG
 	ID3D11Debug* debugger;
 #endif
-} dm_internal_renderer;
+} dm_directx_renderer;
 
-typedef struct dm_internal_pipeline
+typedef struct dm_directx_pipeline
 {
 	ID3D11RenderTargetView* render_view;
 	ID3D11Texture2D* render_back_buffer;
 	ID3D11DepthStencilView* depth_stencil_view;
 	ID3D11Texture2D* depth_stencil_back_buffer;
 	ID3D11DepthStencilState* depth_stencil_state;
+	dm_list* vertex_buffers;
+} dm_directx_pipeline;
+
+typedef struct dm_directx_render_pass
+{
 	ID3D11RasterizerState* rasterizer_state;
 	ID3D11SamplerState* sample_state;
 	D3D11_PRIMITIVE_TOPOLOGY topology;
-	D3D11_VIEWPORT viewport;
-	dm_list* vertex_buffers;
-} dm_internal_pipeline;
+	ID3D11Buffer* constant_buffer;
+} dm_directx_render_pass;
 
 #endif
 
