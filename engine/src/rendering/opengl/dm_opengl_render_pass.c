@@ -114,14 +114,11 @@ bool dm_opengl_create_render_pass(dm_render_pass* render_pass, dm_vertex_layout 
     glBindVertexArray(0);
 
     // uniforms
-    for (uint32_t i = 0; i < render_pass->uniforms->capacity; i++)
+    for (uint32_t i = 0; i < render_pass->uniforms->count; i++)
     {
-        if (render_pass->uniforms->items[i])
-        {
-            dm_uniform* uniform = render_pass->uniforms->items[i]->value;
+        dm_uniform* uniform = dm_list_at(render_pass->uniforms, i);
 
-            if (!dm_opengl_create_uniform(uniform, render_pass->shader)) return false;
-        }
+        if (!dm_opengl_create_uniform(uniform, render_pass->shader)) return false;
     }
 
     return true;
@@ -136,13 +133,11 @@ void dm_opengl_destroy_render_pass(dm_render_pass* render_pass)
 
     dm_opengl_delete_shader(render_pass->shader);
 
-    for (uint32_t i = 0; i < render_pass->uniforms->capacity; i++)
+    for (uint32_t i = 0; i < render_pass->uniforms->count; i++)
     {
-        if (render_pass->uniforms->items[i])
-        {
-            dm_uniform* uniform = render_pass->uniforms->items[i]->value;
-            dm_opengl_destroy_uniform(uniform);
-        }
+        dm_uniform* uniform = dm_list_at(render_pass->uniforms, i);
+
+        dm_opengl_destroy_uniform(uniform);
     }
 
     dm_free(render_pass->internal_render_pass, sizeof(dm_opengl_render_pass), DM_MEM_RENDER_PASS);
@@ -188,14 +183,11 @@ bool dm_opengl_begin_render_pass(dm_render_pass* render_pass)
     dm_opengl_bind_shader(render_pass->shader);
 
     // uniforms
-    for (uint32_t i = 0; i < render_pass->uniforms->capacity; i++)
+    for (uint32_t i = 0; i < render_pass->uniforms->count; i++)
     {
-        if (render_pass->uniforms->items[i])
-        {
-            dm_uniform* uniform = render_pass->uniforms->items[i]->value;
+        dm_uniform* uniform = dm_list_at(render_pass->uniforms, i);
 
-            if (!dm_opengl_bind_uniform(uniform)) return false;
-        }
+        if (!dm_opengl_bind_uniform(uniform)) return false;
     }
 
     return true;
