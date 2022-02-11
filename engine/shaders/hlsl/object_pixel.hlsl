@@ -1,22 +1,17 @@
 struct PS_INPUT
 {
     float4 position   : SV_Position;
-    float3 normal     : NORMAL;
-    float2 tex_coords : TEXCOORD;
-    float3 obj_color  : COLOR;
-    float3 frag_pos   : POSITION;
-};
-
-struct PS_OUPUT
-{
-    float4 color : SV_Target;
+    float3 normal     : NORMAL2;
+    float2 tex_coords : TEXCOORD2;
+    float3 obj_color  : COLOR2;
+    float3 frag_pos   : POSITION2;
 };
 
 cbuffer object_uniform : register(b0)
 {
     matrix view_proj;
-    float3 global_light;
-    float ambient;
+    float3 light_color;
+    float ambient_str;
     float3 light_pos;
     float3 view_pos;
 }
@@ -34,16 +29,19 @@ float4 p_main(PS_INPUT input) : SV_Target
     //
     //return float4(lerp(color1.rgb, color2.rgb, 0.2), 1.0);
     
+    float3 ambient = light_color * ambient_str;
+    
     float3 norm_normal = normalize(input.normal);
     float3 light_dir = normalize(light_pos - input.frag_pos);
     
-    float diffuse = max(dot(norm_normal, light_dir), 0.0f);
+    float diff = max(dot(norm_normal, light_dir), 0.0f);
+    float3 diffuse = light_color * diff;
     
     float3 view_dir = normalize(view_pos - input.frag_pos);
-    float3 reflect_dir = reflect(-light_dir, norm_normal);
+    float3 reflect_dir = reflect(light_dir, norm_normal);
     
     float spec = pow(max(dot(view_dir, reflect_dir), 0.0), 32);
-    float3 specular = spec_str * spec * global_light;
+    float3 specular = spec_str * spec * light_color;
     
-    return float4((ambient + diffuse + specular) * global_light, 1.0f);
+    return float4((ambient + diffuse + specular) * input.obj_color, 1.0f);
 }

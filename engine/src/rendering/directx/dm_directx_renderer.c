@@ -290,17 +290,14 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	// uniforms
 	size_t buffer_size = 0;
 	void* buffer_data = NULL;
-	for (uint32_t i = 0; i < render_pass->uniforms->capacity; i++)
+	for (uint32_t i = 0; i < render_pass->uniforms->count; i++)
 	{
-		if (render_pass->uniforms->items[i])
-		{
-			dm_uniform* uniform = render_pass->uniforms->items[i]->value;
+		dm_uniform* uniform = dm_list_at(render_pass->uniforms, i);
 
-			buffer_data = dm_realloc(buffer_data, buffer_size + uniform->desc.data_size);
-			void* dest = (char*)buffer_data + buffer_size;
-			dm_memcpy(dest, uniform->data, uniform->desc.data_size);
-			buffer_size += uniform->desc.data_size;
-		}
+		buffer_data = dm_realloc(buffer_data, buffer_size + uniform->desc.data_size);
+		void* dest = (char*)buffer_data + buffer_size;
+		dm_memcpy(dest, uniform->data, uniform->desc.data_size);
+		buffer_size += uniform->desc.data_size;
 	}
 
 	D3D11_USAGE usage = D3D11_USAGE_DYNAMIC;
@@ -386,17 +383,14 @@ void dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 	// uniforms
 	size_t buffer_size = 0;
 	void* buffer_data = NULL;
-	for (uint32_t i = 0; i < render_pass->uniforms->capacity; i++)
+	for (uint32_t i = 0; i < render_pass->uniforms->count; i++)
 	{
-		if (render_pass->uniforms->items[i])
-		{
-			dm_uniform* uniform = render_pass->uniforms->items[i]->value;
+		dm_uniform* uniform = dm_list_at(render_pass->uniforms, i);
 
-			buffer_data = dm_realloc(buffer_data, buffer_size + uniform->desc.data_size);
-			void* dest = (char*)buffer_data + buffer_size;
-			dm_memcpy(dest, uniform->data, uniform->desc.data_size);
-			buffer_size += uniform->desc.data_size;
-		}
+		buffer_data = dm_realloc(buffer_data, buffer_size + uniform->desc.data_size);
+		void* dest = (char*)buffer_data + buffer_size;
+		dm_memcpy(dest, uniform->data, uniform->desc.data_size);
+		buffer_size += uniform->desc.data_size;
 	}
 
 	D3D11_MAPPED_SUBRESOURCE msr;
