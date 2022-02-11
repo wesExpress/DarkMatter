@@ -255,7 +255,6 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	}
 
 	DX_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pass->rasterizer_state), "ID3D11Device::CreateRasterizerState failed!");
-	dm_mem_db_adjust(sizeof(ID3D11RasterizerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
 
 	/*
 	// topology
@@ -287,19 +286,55 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	if (filter != D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT) sample_desc.MaxLOD = D3D11_FLOAT32_MAX;
 
 	DX_ERROR_CHECK(device->lpVtbl->CreateSamplerState(device, &sample_desc, &internal_pass->sample_state), "ID3D11Device::CreateSamplerState failed!");
-	dm_mem_db_adjust(sizeof(ID3D11SamplerState), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
+
+	// uniforms
+	size_t buffer_size = 0;
+	void* buffer_data = NULL;
+	for (uint32_t i = 0; i < render_pass->uniforms->capacity; i++)
+	{
+		if (render_pass->uniforms->items[i])
+		{
+			dm_uniform* uniform = render_pass->uniforms->items[i]->value;
+
+			buffer_data = dm_realloc(buffer_data, buffer_size + uniform->desc.data_size);
+			void* dest = (char*)buffer_data + buffer_size;
+			dm_memcpy(dest, uniform->data, uniform->desc.data_size);
+			buffer_size += uniform->desc.data_size;
+		}
+	}
+
+	D3D11_USAGE usage = D3D11_USAGE_DYNAMIC;
+	D3D11_BIND_FLAG type = D3D11_BIND_CONSTANT_BUFFER;
+	D3D11_CPU_ACCESS_FLAG cpu_flag = D3D11_CPU_ACCESS_WRITE;
+
+	D3D11_BUFFER_DESC cb_desc = { 0 };
+	cb_desc.Usage = usage;
+	cb_desc.BindFlags = type;
+	cb_desc.CPUAccessFlags = cpu_flag;
+	cb_desc.ByteWidth = ((buffer_size + 15) / 16) * 16;
+	cb_desc.StructureByteStride = sizeof(float);
+
+	D3D11_SUBRESOURCE_DATA sd = { 0 };
+	sd.pSysMem = buffer_data;
+
+	DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &cb_desc, &sd, &internal_pass->constant_buffer), "ID3D11Device::CreateBuffer failed!");
+
+	free(buffer_data);
 
 	return true;
 }
 
 void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
 {
-	render_pass->internal_render_pass = dm_alloc(sizeof(dm_directx_render_pass), DM_MEM_RENDER_PASS);
 	dm_directx_render_pass* internal_pass = render_pass->internal_render_pass;
 
+	dm_directx_delete_shader(render_pass->shader);
+
 	DX_RELEASE(internal_pass->sample_state);
-	DX_RELEASE(internal_pass->rasterizer_state);
-	
+	DX_RELEASE(internal_pass->rasterizer_state);	
+	DX_RELEASE(internal_pass->constant_buffer);
+
+	dm_free(internal_pass, sizeof(dm_directx_render_pass), DM_MEM_RENDER_PASS);
 }
 
 bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_size)
@@ -327,6 +362,8 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
 
 void dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 {
+	HRESULT hr;
+
 	ID3D11DeviceContext* context = directx_renderer->context;
 
 	dm_directx_render_pass* internal_pass = render_pass->internal_render_pass;
@@ -345,6 +382,35 @@ void dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 	context->lpVtbl->VSSetShader(context, internal_shader->vertex_shader, NULL, 0);
 	context->lpVtbl->PSSetShader(context, internal_shader->pixel_shader, NULL, 0);
 	context->lpVtbl->IASetInputLayout(context, internal_shader->input_layout);
+
+	// uniforms
+	size_t buffer_size = 0;
+	void* buffer_data = NULL;
+	for (uint32_t i = 0; i < render_pass->uniforms->capacity; i++)
+	{
+		if (render_pass->uniforms->items[i])
+		{
+			dm_uniform* uniform = render_pass->uniforms->items[i]->value;
+
+			buffer_data = dm_realloc(buffer_data, buffer_size + uniform->desc.data_size);
+			void* dest = (char*)buffer_data + buffer_size;
+			dm_memcpy(dest, uniform->data, uniform->desc.data_size);
+			buffer_size += uniform->desc.data_size;
+		}
+	}
+
+	D3D11_MAPPED_SUBRESOURCE msr;
+	ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
+
+	DX_ERROR_CHECK(context->lpVtbl->Map(context, (ID3D11Resource*)internal_pass->constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr), "ID3D11DeviceContext::Map failed!");
+	dm_memcpy(msr.pData, buffer_data, buffer_size);
+	context->lpVtbl->Unmap(context, (ID3D11Resource*)internal_pass->constant_buffer, 0);
+
+	free(buffer_data);
+
+	// constant buffer
+	context->lpVtbl->VSSetConstantBuffers(context, 0, 1, &internal_pass->constant_buffer);
+	context->lpVtbl->PSSetConstantBuffers(context, 0, 1, &internal_pass->constant_buffer);
 }
 
 void dm_renderer_end_rederpass_impl()

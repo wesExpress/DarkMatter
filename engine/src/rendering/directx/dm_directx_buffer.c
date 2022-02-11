@@ -41,7 +41,6 @@ bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_directx_renderer
 	{
 		DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &desc, 0, &internal_buffer->buffer), "ID3D11Device::CreateBuffer failed!");
 	}
-	dm_mem_db_adjust(sizeof(ID3D11Buffer), DM_MEM_RENDERER_BUFFER, DM_MEM_ADJUST_ADD);
 
 	return true;
 }
@@ -51,8 +50,6 @@ void dm_directx_delete_buffer(dm_buffer* buffer)
 	dm_directx_buffer* internal_buffer = buffer->internal_buffer;
 
 	DX_RELEASE(internal_buffer->buffer);
-
-	dm_mem_db_adjust(sizeof(ID3D11Buffer), DM_MEM_RENDERER_BUFFER, DM_MEM_ADJUST_SUBTRACT);
 	
 	dm_free(buffer->internal_buffer, sizeof(dm_directx_buffer), DM_MEM_RENDERER_BUFFER);
 }

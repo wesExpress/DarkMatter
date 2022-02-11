@@ -63,6 +63,7 @@ typedef struct dm_directx_render_pass
 	ID3D11RasterizerState* rasterizer_state;
 	ID3D11SamplerState* sample_state;
 	D3D11_PRIMITIVE_TOPOLOGY topology;
+	ID3D11Buffer* constant_buffer;
 } dm_directx_render_pass;
 
 #endif

@@ -17,9 +17,13 @@ struct VS_OUTPUT
     float3 frag_pos   : POSITION;
 };
 
-cbuffer object_matrix : register(b0)
+cbuffer object_uniform : register(b0)
 {
     matrix view_proj;
+    float3 global_light;
+    float ambient;
+    float3 light_pos;
+    float3 view_pos;
 }
 
 VS_OUTPUT v_main(VS_INPUT input)
@@ -29,6 +33,7 @@ VS_OUTPUT v_main(VS_INPUT input)
     output.position = mul(float4(input.position, 1.0f), input.model);
     output.position = mul(output.position, view_proj);
     output.tex_coords = input.tex_coords;
+    output.frag_pos = mul(float4(input.position, 1.0f), input.model);
     
     return output;
 }

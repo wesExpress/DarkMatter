@@ -383,6 +383,7 @@ bool dm_renderer_create_default_render_passes()
 	dm_shader obj_shader = {0};
 	obj_shader.vertex_desc.type = DM_SHADER_TYPE_VERTEX;
 	obj_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
+	obj_shader.name = "object";
 
 #ifdef DM_METAL
 	obj_shader.single_file = true;
@@ -409,6 +410,7 @@ bool dm_renderer_create_default_render_passes()
 	dm_shader lsrc_shader = {0};
 	lsrc_shader.vertex_desc.type = DM_SHADER_TYPE_VERTEX;
 	lsrc_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
+	lsrc_shader.name = "light_src";
 
 #ifdef DM_METAL
 	lsrc_shader.single_file = true;
@@ -439,7 +441,7 @@ bool dm_renderer_create_default_render_passes()
 	dm_list_append(obj_uni_list, &light_pos);
 	dm_list_append(obj_uni_list, &view_pos);
 
-	if (!dm_renderer_create_render_pass(obj_shader, obj_v_layout, obj_uni_list, "object"))
+	if (!dm_renderer_create_render_pass(obj_shader, obj_v_layout, obj_uni_list, obj_shader.name))
 	{
 		DM_LOG_FATAL("Could not create default object render pass!");
 		return false;
@@ -451,7 +453,7 @@ bool dm_renderer_create_default_render_passes()
 	dm_list* lsrc_uni_list = dm_list_create(sizeof(dm_uniform), 0);
 	dm_list_append(lsrc_uni_list, &lsrc_vp_uni);
 
-	if (!dm_renderer_create_render_pass(lsrc_shader, obj_v_layout, lsrc_uni_list, "light_src"))
+	if (!dm_renderer_create_render_pass(lsrc_shader, obj_v_layout, lsrc_uni_list, lsrc_shader.name))
 	{
 		DM_LOG_FATAL("Could not create default light src render pass!");
 		return false;
