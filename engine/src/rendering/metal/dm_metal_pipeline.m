@@ -6,7 +6,7 @@
 
 @implementation dm_metal_pipeline
 
-- (id) initWithRenderer: (dm_metal_renderer*)renderer :(dm_render_pipeline*)pipeline
+- (id) initWithRenderer: (dm_metal_renderer*)renderer AndPipeline:(dm_render_pipeline*)pipeline
 {
     self = [super init];
 
@@ -41,7 +41,7 @@
 
 - (id) init
 {
-    return [self initWithRenderer: NULL pipeline: NULL];
+    return [self initWithRenderer: NULL AndPipeline: NULL];
 }
 
 @end
