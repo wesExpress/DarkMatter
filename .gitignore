@@ -10,3 +10,7 @@ out/*
 *.cod
 *.air
 *.metallib
+
+.idea/*
+cmake-build-debug/*
+lib/*

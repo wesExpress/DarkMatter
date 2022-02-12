@@ -2,9 +2,7 @@
 
 #ifdef DM_METAL
 
-#include "dm_metal_view.h"
 #include "dm_metal_buffer.h"
-#include "dm_metal_shader.h"
 #include "dm_metal_texture.h"
 #include "dm_metal_pipeline.h"
 #include "dm_metal_render_pass.h"
@@ -13,11 +11,6 @@
 
 #include "core/dm_assert.h"
 #include "core/dm_mem.h"
-#include "core/dm_string.h"
-
-#include "platform/dm_platform_apple.h"
-
-#include "structures/dm_list.h"
 
 #include <stdbool.h>
 #include <stdio.h>

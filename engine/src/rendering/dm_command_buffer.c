@@ -4,8 +4,8 @@
 
 void dm_renderer_submit_command(dm_render_command_type command_type, void* data, dm_list* render_commands);
 
-bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass);
-void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass);
+bool dm_renderer_begin_render_pass_impl(dm_render_pass* render_pass);
+void dm_renderer_end_render_pass_impl(dm_render_pass* render_pass);
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline);
 void dm_renderer_set_viewport_impl(dm_viewport viewport);
 void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline);
@@ -23,12 +23,12 @@ typedef struct dm_draw_command
 	dm_render_pass* render_pass;
 } dm_draw_command;
 
-void dm_render_command_begin_renderpass(dm_render_pass* render_pass, dm_list* render_commands)
+void dm_render_command_begin_render_pass(dm_render_pass* render_pass, dm_list* render_commands)
 {
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, render_pass, render_commands);
 }
 
-void dm_render_command_end_renderpass(dm_render_pass* render_pass, dm_list* render_commands)
+void dm_render_command_end_render_pass(dm_render_pass* render_pass, dm_list* render_commands)
 {
 	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, render_pass, render_commands);
 }
@@ -171,14 +171,13 @@ bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipel
 
 		switch (command->type)
 		{
-		// TODO flesh out
 		case DM_RENDER_COMMAND_BEGIN_RENDER_PASS:
 		{
-			if (!dm_renderer_begin_renderpass_impl((dm_render_pass*)command->data)) return false;
+			if (!dm_renderer_begin_render_pass_impl((dm_render_pass*)command->data)) return false;
 		} break;
 		case DM_RENDER_COMMAND_END_RENDER_PASS:
 		{
-			dm_renderer_end_rederpass_impl((dm_render_pass*)command->data);
+			dm_renderer_end_render_pass_impl((dm_render_pass*)command->data);
 		} break;
 		case DM_RENDER_COMMAND_SET_VIEWPORT:
 		{
