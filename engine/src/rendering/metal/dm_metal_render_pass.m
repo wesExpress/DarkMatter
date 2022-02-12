@@ -86,7 +86,17 @@
 {
     if(renderer.drawable)
     {
-        id<MTLTexture> texture = renderer.drawable.texture;
+        CGSize drawable_size = renderer.view.metal_layer.drawableSize;
+
+        MTLTextureDescriptor* tex_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
+                                                                                                     width:drawable_size.width
+                                                                                                    height:drawable_size.height
+                                                                                                 mipmapped:NO];
+        tex_desc.usage = MTLTextureUsageRenderTarget;
+        tex_desc.storageMode = MTLStorageModePrivate;
+
+        id<MTLTexture> texture = [renderer.device newTextureWithDescriptor:tex_desc];
+
         renderer.command_buffer = [renderer.command_queue commandBuffer];
 
         // render pass descriptor

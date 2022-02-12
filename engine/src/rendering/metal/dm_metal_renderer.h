@@ -39,11 +39,6 @@
 
 @end
 
-typedef struct dm_internal_buffer
-{
-    id<MTLBuffer> buffer;
-} dm_internal_buffer;
-
 typedef struct dm_internal_texture
 {
     id<MTLTexture> texture;

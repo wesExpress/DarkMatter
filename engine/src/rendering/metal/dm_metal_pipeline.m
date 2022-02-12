@@ -2,6 +2,7 @@
 
 #ifdef DM_METAL
 
+#include "dm_metal_buffer.h"
 #include "core/dm_logger.h"
 
 @implementation dm_metal_pipeline
@@ -38,11 +39,11 @@
     [renderer.command_encoder setFrontFacingWinding:MTLWindingCounterClockwise];
     [renderer.command_encoder setCullMode:MTLCullModeBack];
 
-    dm_internal_buffer* vertex_buffer = pipeline->vertex_buffer->internal_buffer;
-    dm_internal_buffer* inst_buffer = pipeline->inst_buffer->internal_buffer;
+    dm_metal_buffer* vertex_buffer = pipeline->vertex_buffer->internal_buffer;
+    dm_metal_buffer* inst_buffer = pipeline->inst_buffer->internal_buffer;
 
-    [renderer.command_encoder setVertexBuffer:vertex_buffer->buffer offset:0 atIndex:0];
-    [renderer.command_encoder setVertexBuffer:inst_buffer->buffer offset:0 atIndex:1];
+    [renderer.command_encoder setVertexBuffer:vertex_buffer.buffer offset:0 atIndex:0];
+    [renderer.command_encoder setVertexBuffer:inst_buffer.buffer offset:0 atIndex:1];
 
     return YES;
 }
