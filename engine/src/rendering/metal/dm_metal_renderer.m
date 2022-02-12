@@ -170,7 +170,7 @@ void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
 
 }
 
-void dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
+void dm_renderer_begin_render_pass_impl(dm_render_pass* render_pass)
 {
     @autoreleasepool
     {
@@ -201,7 +201,7 @@ void dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
     }
 }
 
-void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass)
+void dm_renderer_end_render_pass_impl(dm_render_pass* render_pass)
 {
     @autoreleasepool
     {

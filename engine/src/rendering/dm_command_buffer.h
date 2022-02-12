@@ -4,8 +4,8 @@
 #include "dm_render_types.h"
 
 // render commands
-void dm_render_command_begin_renderpass(dm_render_pass* render_pass, dm_list* render_commands);
-void dm_render_command_end_renderpass(dm_render_pass* render_pass, dm_list* render_commands);
+void dm_render_command_begin_render_pass(dm_render_pass* render_pass, dm_list* render_commands);
+void dm_render_command_end_render_pass(dm_render_pass* render_pass, dm_list* render_commands);
 
 void dm_render_command_bind_pipeline(dm_render_pipeline* pipeline, dm_list* render_commands);
 

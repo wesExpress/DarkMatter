@@ -223,10 +223,10 @@ bool dm_renderer_begin_frame()
 			dm_list_append(buffer_data, &inst);
 		}
 
-		dm_render_command_begin_renderpass(obj_pass, r_data.render_commands);
+		dm_render_command_begin_render_pass(obj_pass, r_data.render_commands);
 		dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
 		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, obj_pass, r_data.render_commands);
-		dm_render_command_end_renderpass(obj_pass, r_data.render_commands);
+		dm_render_command_end_render_pass(obj_pass, r_data.render_commands);
 
 		dm_list_destroy(buffer_data);
 	}
@@ -291,10 +291,10 @@ bool dm_renderer_end_frame()
 			dm_list_append(buffer_data, &inst);
 		}
 
-		dm_render_command_begin_renderpass(lsrc_pass, r_data.render_commands);
+		dm_render_command_begin_render_pass(lsrc_pass, r_data.render_commands);
 		dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
 		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, lsrc_pass, r_data.render_commands);
-		dm_render_command_end_renderpass(lsrc_pass, r_data.render_commands);
+		dm_render_command_end_render_pass(lsrc_pass, r_data.render_commands);
 
 		dm_list_destroy(buffer_data);
 	}
@@ -401,11 +401,6 @@ bool dm_renderer_create_default_render_passes()
 	obj_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
 	obj_shader.name = "object";
 
-#ifdef DM_METAL
-	obj_shader.single_file = true;
-	obj_shader.file_name = "shaders/metal/object_shader.metallib";
-#endif
-
 	// shaders
 #ifdef DM_OPENGL
 	obj_shader.vertex_desc.path = "shaders/glsl/object_vertex.glsl";
@@ -427,11 +422,6 @@ bool dm_renderer_create_default_render_passes()
 	lsrc_shader.vertex_desc.type = DM_SHADER_TYPE_VERTEX;
 	lsrc_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
 	lsrc_shader.name = "light_src";
-
-#ifdef DM_METAL
-	lsrc_shader.single_file = true;
-	lsrc_shader.file_name = "shaders/metal/light_src_shader.metallib";
-#endif
 
 #ifdef DM_OPENGL
 	lsrc_shader.vertex_desc.path = "shaders/glsl/light_src_vertex.glsl";

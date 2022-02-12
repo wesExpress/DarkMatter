@@ -29,10 +29,10 @@
         }
 
         // shader
-        NSString* shader_file = [NSString stringWithUTF8String: pass->shader->file_name];
-        pass->shader->internal_shader = [[dm_metal_shader_library alloc] create: pass->shader path: shader_file renderer: renderer];
-        if(!pass->shader->internal_shader) return NULL;
-        [shader_file release];
+        //NSString* shader_file = [NSString stringWithUTF8String: pass->shader->file_name];
+        //pass->shader->internal_shader = [[dm_metal_shader_library alloc] create: pass->shader path: shader_file renderer: renderer];
+        //if(!pass->shader->internal_shader) return NULL;
+        //[shader_file release];
     }
 
     return self;
