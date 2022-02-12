@@ -195,7 +195,7 @@ elseif(WIN32)
     set(SHADERS ${VERTEX_SHADERS} ${PIXEL_SHADERS})
 elseif(APPLE)
     set(SHADERS
-        shaders/metal/object_shader.metal
+        shaders/metal/object.metal
     )
 endif()
 

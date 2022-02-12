@@ -7,7 +7,7 @@
 
 @implementation dm_metal_shader_library
 
-- (id) create: (dm_shader*) shader :(NSString*) path :(dm_metal_renderer*) renderer
+- (id) initWithShader: (dm_shader*) shader AndPath:(NSString*) path AndRenderer:(dm_metal_renderer*) renderer
 {
     self = [super init];
 

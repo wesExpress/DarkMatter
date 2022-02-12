@@ -50,6 +50,13 @@
     return self;
 }
 
+- (void) setIndexBuffer: (dm_buffer*)buffer
+{
+    id<MTLBuffer> index_buffer = buffer->internal_buffer;
+
+    _index_buffer = index_buffer;
+}
+
 @end
 
 #define DM_METAL_BUFFER_ALIGNMENT 256
@@ -101,11 +108,8 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
     @autoreleasepool
     {
-        pipeline->internal_pipeline = [[dm_metal_pipeline alloc] init];
-        if(!pipeline->internal_pipeline) return false;        
-
-        dm_metal_pipeline* internal_pipe = pipeline->internal_pipeline;
-        if(![internal_pipe initWithRenderer:metal_renderer AndPipeline:pipeline]) return false;
+        pipeline->internal_pipeline = [[dm_metal_pipeline alloc] initWithRenderer:metal_renderer AndPipeline:pipeline];
+        if(!pipeline->internal_pipeline) return false;
     }
 
     return true;
@@ -140,7 +144,7 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render
         if(!dm_metal_create_buffer(pipeline->index_buffer, ib_data, metal_renderer)) return false;
         if(!dm_metal_create_buffer(pipeline->inst_buffer, NULL, metal_renderer)) return false;
 
-        metal_renderer.index_buffer = pipeline->index_buffer->internal_buffer;
+        [metal_renderer setIndexBuffer: pipeline->index_buffer];
 
         // textures
         //for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
@@ -163,6 +167,8 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass)
 
         if(!render_pass->internal_render_pass) return false;
     }
+
+    return true;
 }
 
 void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
@@ -190,6 +196,9 @@ void dm_renderer_begin_render_pass_impl(dm_render_pass* render_pass)
             passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(metal_renderer.clear_color.x, metal_renderer.clear_color.y, metal_renderer.clear_color.z, metal_renderer.clear_color.w);
 
             metal_renderer.command_encoder = [metal_renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
+
+            // pipeline state
+            [metal_renderer.command_encoder setRenderPipelineState:internal_pass.pipeline_state];
 
             // sampler
             [metal_renderer.command_encoder setFragmentSamplerState:internal_pass.sampler_state atIndex:0];
@@ -222,9 +231,6 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     @autoreleasepool
     {
         dm_metal_pipeline* internal_pipe = pipeline->internal_pipeline;
-
-         // pipeline state
-        [metal_renderer.command_encoder setRenderPipelineState:internal_pipe.pipeline_state];
 
         // depth stencil
         [metal_renderer.command_encoder setDepthStencilState:internal_pipe.depth_stencil]; 

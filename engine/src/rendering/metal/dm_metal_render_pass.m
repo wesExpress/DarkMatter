@@ -4,10 +4,11 @@
 
 #include "core/dm_logger.h"
 #include "dm_metal_shader.h"
+#include <stdio.h>
 
 @implementation dm_metal_render_pass
 
-- (id) initWithRendererAndPass: (dm_metal_renderer*)renderer :(dm_render_pass*)pass
+- (id) initWithRenderer: (dm_metal_renderer*)renderer AndPass:(dm_render_pass*)pass
 {
     self = [super init];
 
@@ -29,10 +30,30 @@
         }
 
         // shader
-        //NSString* shader_file = [NSString stringWithUTF8String: pass->shader->file_name];
-        //pass->shader->internal_shader = [[dm_metal_shader_library alloc] create: pass->shader path: shader_file renderer: renderer];
-        //if(!pass->shader->internal_shader) return NULL;
-        //[shader_file release];
+        char buffer[512];
+        snprintf(buffer, sizeof buffer, "shaders/metal/%s.metallib", pass->shader->name);
+        NSString* shader_file = [NSString stringWithUTF8String: buffer];
+        pass->shader->internal_shader = [[dm_metal_shader_library alloc] initWithShader: pass->shader AndPath: shader_file AndRenderer: renderer];
+        if(!pass->shader->internal_shader) return NULL;
+
+        dm_metal_shader_library* shader_lib = pass->shader->internal_shader;
+
+        // pipeline state
+        NSString* vertex_name = [NSString stringWithUTF8String: pass->shader->vertex_desc.path];
+        NSString* frag_name = [NSString stringWithUTF8String: pass->shader->pixel_desc.path];
+
+        MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
+        pipe_desc.colorAttachments[0].pixelFormat = renderer.view.metal_layer.pixelFormat;
+        pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
+        pipe_desc.vertexFunction = [shader_lib.library newFunctionWithName: vertex_name];
+        pipe_desc.fragmentFunction = [shader_lib.library newFunctionWithName: frag_name];
+
+        _pipeline_state = [renderer.device newRenderPipelineStateWithDescriptor:pipe_desc error:NULL];
+        if(!_pipeline_state)
+        {
+            DM_LOG_FATAL("Could not create metal pipeline state");
+            return NULL;
+        }
     }
 
     return self;

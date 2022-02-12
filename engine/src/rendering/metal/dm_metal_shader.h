@@ -14,7 +14,7 @@
 @property (nonatomic, strong) id<MTLFunction> vertex_func;
 @property (nonatomic, strong) id<MTLFunction> fragment_func;
 
-- (id)create: (dm_shader*)shader :(NSString*)path :(dm_metal_renderer*)renderer;
+- (id) initWithShader: (dm_shader*)shader AndPath:(NSString*)path AndRenderer:(dm_metal_renderer*)renderer;
 
 @end
 

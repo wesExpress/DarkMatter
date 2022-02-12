@@ -22,18 +22,6 @@
             DM_LOG_FATAL("Could not create metal depth stencil state!");
             return NULL;
         }
-
-        // pipeline state
-        MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
-        pipe_desc.colorAttachments[0].pixelFormat = renderer.view.metal_layer.pixelFormat;
-        pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
-
-        _pipeline_state = [renderer.device newRenderPipelineStateWithDescriptor:pipe_desc error:NULL];
-        if(!_pipeline_state)
-        {
-            DM_LOG_FATAL("Could not create metal pipeline state");
-            return NULL;
-        }
     }
 
     return self;

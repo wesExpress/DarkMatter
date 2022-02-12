@@ -9,6 +9,7 @@
 
 @interface dm_metal_render_pass : NSObject
 
+@property (strong, nonatomic) id<MTLRenderPipelineState> pipeline_state;
 @property (strong, nonatomic) id<CAMetalDrawable> drawable;
 @property (strong, nonatomic) id<MTLSamplerState> sampler_state;
 
