@@ -196,6 +196,7 @@ elseif(WIN32)
 elseif(APPLE)
     set(SHADERS
         shaders/metal/object.metal
+        shaders/metal/light_src.metal
     )
 endif()
 
@@ -255,8 +256,8 @@ elseif(APPLE)
             COMMENT "Compiling intermediate metal shader: ${shader}..."
             VERBATIM
         )
-        add_custom_target(metal_first DEPENDS ${shader_intermediate})
-        add_dependencies(${PROJECT_NAME} metal_first)
+        add_custom_target(${file_we}_first DEPENDS ${shader_intermediate})
+        add_dependencies(${PROJECT_NAME} ${file_we}_first)
 
         add_custom_command(
             OUTPUT ${shader_out}
@@ -265,8 +266,8 @@ elseif(APPLE)
             COMMENT "Compiling metal shader lib: ${shader_intermediate}"
             VERBATIM
         )
-        add_custom_target(metal_second DEPENDS ${shader_out})
-        add_dependencies(${PROJECT_NAME} metal_second)
+        add_custom_target(${file_we}_second DEPENDS ${shader_out})
+        add_dependencies(${PROJECT_NAME} ${file_we}_second)
 
     endforeach()
 endif()

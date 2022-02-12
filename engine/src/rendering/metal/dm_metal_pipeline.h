@@ -13,6 +13,7 @@
 
 - (id) initWithRenderer:(dm_metal_renderer*)renderer AndPipeline:(dm_render_pipeline*)pipeline;
 
+- (BOOL) bind:(dm_render_pipeline*)pipeline Renderer:(dm_metal_renderer*)renderer;
 @end
 
 #endif 

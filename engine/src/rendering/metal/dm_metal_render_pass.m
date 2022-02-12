@@ -2,9 +2,10 @@
 
 #ifdef DM_METAL
 
-#include "core/dm_logger.h"
 #include "dm_metal_shader.h"
-#include <stdio.h>
+
+#include "core/dm_logger.h"
+#include "core/dm_mem.h"
 
 @implementation dm_metal_render_pass
 
@@ -54,9 +55,87 @@
             DM_LOG_FATAL("Could not create metal pipeline state");
             return NULL;
         }
+
+        // uniform buffer
+        size_t buffer_size = 0;
+        void* buffer_data = NULL;
+        for(uint32_t i=0; i<pass->uniforms->count;i++)
+        {
+            dm_uniform* uniform = dm_list_at(pass->uniforms, i);
+
+            buffer_data = dm_realloc(buffer_data, buffer_size + uniform->desc.data_size);
+            void* dest = (char*)buffer_data + buffer_size;
+            dm_memcpy(dest, uniform->data, uniform->desc.data_size);
+            buffer_size += uniform->desc.data_size;
+        }
+
+        _uniform_buffer = [renderer.device newBufferWithBytes:buffer_data length:buffer_size options:MTLResourceOptionCPUCacheModeDefault];
+        if(!_uniform_buffer)
+        {
+            DM_LOG_FATAL("Could not create uniform buffer!");
+            return NULL;
+        }
+
+        free(buffer_data);
     }
 
     return self;
+}
+
+- (BOOL) beginPass:(dm_metal_renderer*)renderer
+{
+    if(renderer.drawable)
+    {
+        id<MTLTexture> texture = renderer.drawable.texture;
+        renderer.command_buffer = [renderer.command_queue commandBuffer];
+
+        // render pass descriptor
+        MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
+        passDescriptor.colorAttachments[0].texture = texture;
+        passDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
+        passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
+        passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(renderer.clear_color.x, renderer.clear_color.y, renderer.clear_color.z, renderer.clear_color.w);
+
+        renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
+
+        // pipeline state
+        [renderer.command_encoder setRenderPipelineState:_pipeline_state];
+
+        // sampler
+        [renderer.command_encoder setFragmentSamplerState:_sampler_state atIndex:0];
+    }
+    else
+    {
+        DM_LOG_ERROR("Drawable was NULL...");
+    }
+
+    return YES;
+}
+
+- (void) endPass
+{
+    return;
+}
+
+- (BOOL) updateUniforms:(dm_render_pass*)pass
+{
+    size_t buffer_size = 0;
+    void* buffer_data = NULL;
+    for(uint32_t i=0; i<pass->uniforms->count;i++)
+    {
+        dm_uniform* uniform = dm_list_at(pass->uniforms, i);
+
+        buffer_data = dm_realloc(buffer_data, buffer_size + uniform->desc.data_size);
+        void* dest = (char*)buffer_data + buffer_size;
+        dm_memcpy(dest, uniform->data, uniform->desc.data_size);
+        buffer_size += uniform->desc.data_size;
+    }
+
+    dm_memcpy([_uniform_buffer contents], buffer_data, buffer_size);
+
+    free(buffer_data);
+
+    return YES;
 }
 
 @end

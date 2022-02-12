@@ -10,10 +10,13 @@
 @interface dm_metal_render_pass : NSObject
 
 @property (strong, nonatomic) id<MTLRenderPipelineState> pipeline_state;
-@property (strong, nonatomic) id<CAMetalDrawable> drawable;
 @property (strong, nonatomic) id<MTLSamplerState> sampler_state;
+@property (strong, nonatomic) id<MTLBuffer> uniform_buffer;
 
 - (id)initWithRenderer:(dm_metal_renderer*)renderer AndPass:(dm_render_pass*)pass;
+- (BOOL) beginPass:(dm_metal_renderer*)renderer;
+- (void) endPass;
+- (BOOL) updateUniforms:(dm_render_pass*)pass;
 
 @end
 

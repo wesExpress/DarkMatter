@@ -52,10 +52,68 @@
 
 - (void) setIndexBuffer: (dm_buffer*)buffer
 {
-    id<MTLBuffer> index_buffer = buffer->internal_buffer;
+    dm_internal_buffer* index_buffer = buffer->internal_buffer;
 
-    _index_buffer = index_buffer;
+    _index_buffer = index_buffer->buffer;
 }
+
+- (BOOL) beginFrame
+{
+    _drawable = [_view.metal_layer nextDrawable];
+
+    return YES;
+}
+
+- (void) endFrame
+{
+    [_command_encoder endEncoding];
+
+    [_command_buffer presentDrawable:_drawable];
+    [_command_buffer commit];
+}
+
+- (void) setViewport:(dm_viewport)viewport
+{
+    MTLViewport new_viewport;
+    new_viewport.originX = viewport.x;
+    new_viewport.originY = viewport.y;
+    new_viewport.width = viewport.width;
+    new_viewport.height = viewport.height;
+    new_viewport.znear = viewport.min_depth;
+    new_viewport.zfar = viewport.max_depth;
+
+    [_command_encoder setViewport:new_viewport];
+}
+
+- (void) clearScreen: (dm_color)color
+{
+    _clear_color = color;
+}
+
+- (void) drawArrays: (uint32_t)first Count: (uint32_t)count
+{
+    return;
+}
+
+- (void) drawIndexed: (uint32_t)num Offset:(uint32_t)offset
+{
+    [_command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                                 indexCount: num
+                                  indexType: MTLIndexTypeUInt32
+                                indexBuffer: _index_buffer
+                          indexBufferOffset: offset];
+}
+
+- (void) drawInstanced: (uint32_t)num_indices Offset:(uint32_t)offset NumInstances:(uint32_t)num_insts
+{
+    [_command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle
+                                 indexCount: num_indices
+                                  indexType: MTLIndexTypeUInt32
+                                indexBuffer: _index_buffer
+                          indexBufferOffset: offset
+                              instanceCount: num_insts];
+}
+
 
 @end
 
@@ -72,8 +130,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 {
     DM_LOG_DEBUG("Initializing Metal render backend...");
 
-    @autoreleasepool
-    {
+    @autoreleasepool {
         dm_internal_apple_data* internal_data = platform_data->internal_data;
         NSRect frame = [internal_data->content_view getWindowFrame];
 
@@ -96,18 +153,28 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
 {
-    
+    return;
+}
+
+bool dm_renderer_begin_frame_impl(dm_renderer_data* renderer_data)
+{
+    @autoreleasepool {
+        return [metal_renderer beginFrame];
+    }
 }
 
 bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data)
 {
+    @autoreleasepool {
+        [metal_renderer endFrame];
+    }
+
     return true;
 }
 
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-    @autoreleasepool
-    {
+    @autoreleasepool {
         pipeline->internal_pipeline = [[dm_metal_pipeline alloc] initWithRenderer:metal_renderer AndPipeline:pipeline];
         if(!pipeline->internal_pipeline) return false;
     }
@@ -118,12 +185,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
     @autoreleasepool
-    {        
-        // buffers
-        dm_metal_destroy_buffer(pipeline->vertex_buffer);
-        dm_metal_destroy_buffer(pipeline->index_buffer);
-        dm_metal_destroy_buffer(pipeline->inst_buffer);
-
+    {
         // textures
         for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
         {
@@ -140,9 +202,23 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render
     @autoreleasepool
     {
         // buffers
-        if(!dm_metal_create_buffer(pipeline->vertex_buffer, vb_data, metal_renderer)) return false;
-        if(!dm_metal_create_buffer(pipeline->index_buffer, ib_data, metal_renderer)) return false;
-        if(!dm_metal_create_buffer(pipeline->inst_buffer, NULL, metal_renderer)) return false;
+        pipeline->vertex_buffer->internal_buffer = [[dm_metal_buffer alloc] initWithData:vb_data AndLength:pipeline->vertex_buffer->desc.buffer_size AndRenderer:metal_renderer];
+        if(!pipeline->vertex_buffer->internal_buffer) {
+            DM_LOG_FATAL("Could not create internal vertex buffer!");
+            return false;
+        }
+
+        pipeline->index_buffer->internal_buffer = [[dm_metal_buffer alloc] initWithData:ib_data AndLength:pipeline->index_buffer->desc.buffer_size AndRenderer:metal_renderer];
+        if(!pipeline->index_buffer->internal_buffer) {
+            DM_LOG_FATAL("Could not create internal index buffer!");
+            return false;
+        }
+
+        pipeline->inst_buffer->internal_buffer = [[dm_metal_buffer alloc] initWithLength:pipeline->inst_buffer->desc.buffer_size AndRenderer:metal_renderer];
+        if(!pipeline->inst_buffer->internal_buffer) {
+            DM_LOG_FATAL("Could not create internal instance buffer!");
+            return false;
+        }
 
         [metal_renderer setIndexBuffer: pipeline->index_buffer];
 
@@ -161,8 +237,7 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render
 
 bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass)
 {
-    @autoreleasepool
-    {
+    @autoreleasepool {
         render_pass->internal_render_pass = [[dm_metal_render_pass alloc] initWithRenderer:metal_renderer AndPass:render_pass];
 
         if(!render_pass->internal_render_pass) return false;
@@ -173,56 +248,26 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass)
 
 void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
 {
-
+    return;
 }
 
-void dm_renderer_begin_render_pass_impl(dm_render_pass* render_pass)
+bool dm_renderer_begin_render_pass_impl(dm_render_pass* render_pass)
 {
-    @autoreleasepool
-    {
+    @autoreleasepool {
         dm_metal_render_pass* internal_pass = render_pass->internal_render_pass;
-        internal_pass.drawable = [metal_renderer.view.metal_layer nextDrawable];
-
-        if(internal_pass.drawable)
-        {
-            id<MTLTexture> texture = internal_pass.drawable.texture;
-            metal_renderer.command_buffer = [metal_renderer.command_queue commandBuffer];
-
-            // render pass descriptor
-            MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
-            passDescriptor.colorAttachments[0].texture = texture;
-            passDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
-            passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-            passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(metal_renderer.clear_color.x, metal_renderer.clear_color.y, metal_renderer.clear_color.z, metal_renderer.clear_color.w);
-
-            metal_renderer.command_encoder = [metal_renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
-
-            // pipeline state
-            [metal_renderer.command_encoder setRenderPipelineState:internal_pass.pipeline_state];
-
-            // sampler
-            [metal_renderer.command_encoder setFragmentSamplerState:internal_pass.sampler_state atIndex:0];
-        }
-        else
-        {
-            DM_LOG_ERROR("Drawable was null");
-        }
+        [internal_pass updateUniforms:render_pass];
+        [internal_pass beginPass:metal_renderer];
     }
+
+    return true;
 }
 
 void dm_renderer_end_render_pass_impl(dm_render_pass* render_pass)
 {
-    @autoreleasepool
-    {
+    @autoreleasepool {
         dm_metal_render_pass* internal_pass = render_pass->internal_render_pass;
 
-        [metal_renderer.command_encoder endEncoding];
-
-        [metal_renderer.command_buffer presentDrawable:internal_pass.drawable];
-        [metal_renderer.command_buffer commit];
-
-        [metal_renderer.command_encoder release];
-        [metal_renderer.command_buffer release];
+        [internal_pass endPass];
     }
 }
 
@@ -232,17 +277,7 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     {
         dm_metal_pipeline* internal_pipe = pipeline->internal_pipeline;
 
-        // depth stencil
-        [metal_renderer.command_encoder setDepthStencilState:internal_pipe.depth_stencil]; 
-        [metal_renderer.command_encoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
-        [metal_renderer.command_encoder setCullMode:MTLCullModeBack];
-
-        // buffers
-        dm_internal_buffer* internal_vb = pipeline->vertex_buffer->internal_buffer;
-        dm_internal_buffer* internal_inst = pipeline->inst_buffer->internal_buffer;
-
-        [metal_renderer.command_encoder setVertexBuffer:internal_vb->buffer offset:0 atIndex:0];
-        [metal_renderer.command_encoder setVertexBuffer:internal_inst->buffer offset:0 atIndex:1];
+        [internal_pipe bind:pipeline Renderer:metal_renderer];
 
         // textures
         //for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
@@ -260,45 +295,30 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline)
 {
-    @autoreleasepool
-    {
-        MTLViewport new_viewport;
-        new_viewport.originX = viewport.x;
-        new_viewport.originY = viewport.y;
-        new_viewport.width = viewport.width;
-        new_viewport.height = viewport.height;
-        new_viewport.znear = viewport.min_depth;
-        new_viewport.zfar = viewport.max_depth;
-
-        [metal_renderer.command_encoder setViewport:new_viewport];
+    @autoreleasepool {
+        [metal_renderer setViewport:viewport];
     }
-   
 }
 
 void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 {
-    @autoreleasepool
-    {
-        metal_renderer.clear_color = *clear_color;
+    @autoreleasepool {
+        [metal_renderer clearScreen:*clear_color];
     }
 }
 
 void dm_renderer_draw_arrays_impl(dm_render_pipeline* pipeline, int first, size_t count)
 {
-
+    @autoreleasepool {
+        [metal_renderer drawArrays: first Count: count];
+    }
 }
 
 void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass)
 {
     @autoreleasepool
     {
-        dm_metal_render_pass* internal_pass = render_pass->internal_render_pass;
-
-        [metal_renderer.command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle 
-                                        indexCount: num_indices
-                                        indexType: MTLIndexTypeUInt32
-                                        indexBuffer: metal_renderer.index_buffer
-                                        indexBufferOffset: index_offset];
+        [metal_renderer drawIndexed: num_indices Offset: index_offset];
     }
 }
 
@@ -306,16 +326,8 @@ void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, u
 {
     @autoreleasepool
     {
-        dm_metal_render_pass* internal_pass = render_pass->internal_render_pass;
-
-        [metal_renderer.command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle 
-                                        indexCount: num_indices
-                                        indexType: MTLIndexTypeUInt32
-                                        indexBuffer: metal_renderer.index_buffer
-                                        indexBufferOffset: index_offset
-                                        instanceCount: num_insts];
+        [metal_renderer drawInstanced:num_indices Offset:index_offset NumInstances:num_insts];
     }
-    
 }
 
 bool dm_renderer_update_buffer_impl(dm_buffer* cb, void* data, size_t data_size)

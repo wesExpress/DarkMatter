@@ -21,11 +21,21 @@
 @property (strong, nonatomic) id<MTLRenderCommandEncoder> command_encoder;
 @property (strong, nonatomic) id<MTLBuffer> index_buffer;
 @property (strong, nonatomic) dm_metal_view* view;
+@property (strong, nonatomic) id<CAMetalDrawable> drawable;
 
 @property (nonatomic) dm_vec4 clear_color;
 
 - (id) initWithFrame: (NSRect)frame;
+
+// my functions
 - (void) setIndexBuffer: (dm_buffer*)buffer;
+- (BOOL) beginFrame;
+- (void) endFrame;
+- (void) setViewport:(dm_viewport)viewport;
+- (void) clearScreen: (dm_color)color;
+- (void) drawArrays: (uint32_t)first Count: (uint32_t)count;
+- (void) drawIndexed: (uint32_t)num Offset:(uint32_t)offset;
+- (void) drawInstanced: (uint32_t)num_indices Offset:(uint32_t)offset NumInstances:(uint32_t)num_insts;
 
 @end
 

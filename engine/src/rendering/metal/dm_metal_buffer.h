@@ -7,8 +7,14 @@
 
 #include "dm_metal_renderer.h"
 
-bool dm_metal_create_buffer(dm_buffer* buffer, void* data, dm_metal_renderer* metal_renderer);
-void dm_metal_destroy_buffer(dm_buffer* buffer);
+@interface dm_metal_buffer : NSObject
+
+@property (strong, nonatomic) id<MTLBuffer> buffer;
+
+- (id) initWithData: (void*)data AndLength: (size_t)length AndRenderer: (dm_metal_renderer*)renderer;
+- (id) initWithLength: (size_t)length AndRenderer: (dm_metal_renderer*)renderer;
+
+@end
 
 #endif
 

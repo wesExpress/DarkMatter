@@ -23,6 +23,8 @@ void dm_renderer_destroy_render_pass(dm_render_pass* render_pass);
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data);
 void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data);
+
+bool dm_renderer_begin_frame_impl(dm_renderer_data* rederer_data);
 bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data);
 
 bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
@@ -147,6 +149,8 @@ void dm_renderer_resize(int new_width, int new_height)
 
 bool dm_renderer_begin_frame()
 {
+	if(!dm_renderer_begin_frame_impl(&r_data)) return false;
+
 	dm_render_command_clear(&r_data.clear_color, r_data.render_commands);
 	dm_render_command_set_viewport(&r_data.viewport, r_data.render_commands);
 	dm_render_command_bind_pipeline(r_data.pipeline, r_data.render_commands);
@@ -242,8 +246,6 @@ bool dm_renderer_end_frame()
 	/**********************
 	  light source render pass
 	****************************/
-
-	
 	
 	dm_render_pass* lsrc_pass = dm_map_get(render_passes, "light_src");
 	if (!lsrc_pass)
@@ -396,6 +398,12 @@ bool dm_renderer_create_default_render_passes()
 	// light source uniforms
 	dm_uniform lsrc_vp_uni = dm_create_uniform("view_proj", mat4_uni_desc, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
 
+	// shaders
+#ifdef DM_METAL
+	const char* vertex_func = "vertex_main";
+	const char* frag_func = "fragment_main";
+#endif
+
 	dm_shader obj_shader = {0};
 	obj_shader.vertex_desc.type = DM_SHADER_TYPE_VERTEX;
 	obj_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
@@ -407,7 +415,7 @@ bool dm_renderer_create_default_render_passes()
 #elif defined DM_DIRECTX
 	obj_shader.vertex_desc.path = "shaders/hlsl/object_vertex.fxc";
 #elif defined DM_METAL
-	obj_shader.vertex_desc.path = "vertex_main";
+	obj_shader.vertex_desc.path = vertex_func;
 #endif
 
 #ifdef DM_OPENGL
@@ -415,7 +423,7 @@ bool dm_renderer_create_default_render_passes()
 #elif defined DM_DIRECTX
 	obj_shader.pixel_desc.path = "shaders/hlsl/object_pixel.fxc";
 #elif defined DM_METAL
-	obj_shader.pixel_desc.path = "fragment_main";
+	obj_shader.pixel_desc.path = frag_func;
 #endif
 
 	dm_shader lsrc_shader = {0};
@@ -428,7 +436,7 @@ bool dm_renderer_create_default_render_passes()
 #elif defined DM_DIRECTX
 	lsrc_shader.vertex_desc.path = "shaders/hlsl/light_src_vertex.fxc";
 #elif defined DM_METAL
-	lsrc_shader.vertex_desc.path = "vertex_main";
+	lsrc_shader.vertex_desc.path = vertex_func;
 #endif
 
 #ifdef DM_OPENGL
@@ -436,7 +444,7 @@ bool dm_renderer_create_default_render_passes()
 #elif defined DM_DIRECTX
 	lsrc_shader.pixel_desc.path = "shaders/hlsl/light_src_pixel.fxc";
 #elif defined DM_METAL
-	lsrc_shader.pixel_desc.path = "light_src_main";
+	lsrc_shader.pixel_desc.path = frag_func;
 #endif
 
 	// object render pass
