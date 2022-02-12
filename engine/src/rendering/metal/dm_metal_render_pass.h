@@ -15,7 +15,7 @@
 
 - (id)initWithRenderer:(dm_metal_renderer*)renderer AndPass:(dm_render_pass*)pass;
 - (BOOL) beginPass:(dm_metal_renderer*)renderer;
-- (void) endPass;
+- (void) endPass:(dm_metal_renderer*)renderer;
 - (BOOL) updateUniforms:(dm_render_pass*)pass;
 
 @end

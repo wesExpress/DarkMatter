@@ -66,8 +66,6 @@
 
 - (void) endFrame
 {
-    [_command_encoder endEncoding];
-
     [_command_buffer presentDrawable:_drawable];
     [_command_buffer commit];
 }
@@ -113,7 +111,6 @@
                           indexBufferOffset: offset
                               instanceCount: num_insts];
 }
-
 
 @end
 
@@ -187,13 +184,13 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     @autoreleasepool
     {
         // textures
-        for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
-        {
-            dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
-            dm_image* image = dm_image_get(key->string);
-
-            dm_metal_destroy_texture(image);
-        }
+        //for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
+        //{
+        //    dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
+        //    dm_image* image = dm_image_get(key->string);
+        //
+        //    dm_metal_destroy_texture(image);
+        //}
     }
 }
 
@@ -269,7 +266,7 @@ void dm_renderer_end_render_pass_impl(dm_render_pass* render_pass)
     @autoreleasepool {
         dm_metal_render_pass* internal_pass = render_pass->internal_render_pass;
 
-        [internal_pass endPass];
+        [internal_pass endPass:metal_renderer];
     }
 }
 
@@ -334,9 +331,12 @@ void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, u
 
 bool dm_renderer_update_buffer_impl(dm_buffer* cb, void* data, size_t data_size)
 {
-    dm_metal_buffer* internal_buffer = cb->internal_buffer;
+    @autoreleasepool
+    {
+        dm_metal_buffer* internal_buffer = cb->internal_buffer;
 
-    dm_memcpy([internal_buffer.buffer contents], data, data_size);
+        dm_memcpy([internal_buffer.buffer contents], data, data_size);
+    }
 
     return true;
 }

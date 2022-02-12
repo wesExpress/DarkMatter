@@ -101,7 +101,7 @@
 
         // render pass descriptor
         MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
-        passDescriptor.colorAttachments[0].texture = texture;
+        passDescriptor.colorAttachments[0].texture = [renderer.drawable texture];
         passDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
         passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
         passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(renderer.clear_color.x, renderer.clear_color.y, renderer.clear_color.z, renderer.clear_color.w);
@@ -122,8 +122,10 @@
     return YES;
 }
 
-- (void) endPass
+- (void) endPass:(dm_metal_renderer*)renderer
 {
+    [renderer.command_encoder endEncoding];
+
     return;
 }
 
