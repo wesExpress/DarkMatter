@@ -146,7 +146,8 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 {
     DM_LOG_DEBUG("Initializing Metal render backend...");
 
-    @autoreleasepool {
+    //@autoreleasepool
+    {
         dm_internal_apple_data* internal_data = platform_data->internal_data;
         NSRect frame = [internal_data->content_view getWindowFrame];
 
@@ -174,14 +175,16 @@ void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
 
 bool dm_renderer_begin_frame_impl(dm_renderer_data* renderer_data)
 {
-    @autoreleasepool {
+    //@autoreleasepool
+    {
         return [metal_renderer beginFrame];
     }
 }
 
 bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data)
 {
-    @autoreleasepool {
+    //@autoreleasepool
+    {
         [metal_renderer endFrame];
     }
 
@@ -190,7 +193,8 @@ bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data)
 
 bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-    @autoreleasepool {
+    //@autoreleasepool
+    {
         pipeline->internal_pipeline = [[dm_metal_pipeline alloc] initWithRenderer:metal_renderer AndPipeline:pipeline];
         if(!pipeline->internal_pipeline) return false;
     }
@@ -200,7 +204,7 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-    @autoreleasepool
+    //@autoreleasepool
     {
         // textures
         //for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
@@ -215,7 +219,7 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render_pipeline* pipeline)
 {
-    @autoreleasepool
+    //@autoreleasepool
     {
         // buffers
         pipeline->vertex_buffer->internal_buffer = [[dm_metal_buffer alloc] initWithData:vb_data AndLength:pipeline->vertex_buffer->desc.buffer_size AndRenderer:metal_renderer];
@@ -236,8 +240,6 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render
             return false;
         }
 
-
-
         [metal_renderer setIndexBuffer: pipeline->index_buffer];
 
         // textures
@@ -255,7 +257,8 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render
 
 bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass)
 {
-    @autoreleasepool {
+    //@autoreleasepool
+    {
         render_pass->internal_render_pass = [[dm_metal_render_pass alloc] initWithRenderer:metal_renderer AndPass:render_pass];
 
         if(!render_pass->internal_render_pass) return false;
@@ -271,7 +274,8 @@ void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
 
 bool dm_renderer_begin_render_pass_impl(dm_render_pass* render_pass)
 {
-    @autoreleasepool {
+    //@autoreleasepool
+    {
         dm_metal_render_pass* internal_pass = render_pass->internal_render_pass;
         [internal_pass updateUniforms:render_pass];
         return [internal_pass beginPass:metal_renderer];
@@ -280,16 +284,18 @@ bool dm_renderer_begin_render_pass_impl(dm_render_pass* render_pass)
 
 void dm_renderer_end_render_pass_impl(dm_render_pass* render_pass)
 {
-    @autoreleasepool {
-        dm_metal_render_pass* internal_pass = render_pass->internal_render_pass;
+    //@autoreleasepool
+    {
+        [metal_renderer.command_encoder endEncoding];
+        //dm_metal_render_pass* internal_pass = render_pass->internal_render_pass;
 
-        [internal_pass endPass:metal_renderer];
+        //[internal_pass endPass:metal_renderer];
     }
 }
 
 bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 {
-    @autoreleasepool
+    //@autoreleasepool
     {
         dm_metal_pipeline* internal_pipe = pipeline->internal_pipeline;
 
@@ -311,28 +317,31 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_set_viewport_impl(dm_viewport viewport, dm_render_pipeline* pipeline)
 {
-    @autoreleasepool {
+    //@autoreleasepool
+    {
         [metal_renderer setViewport:viewport];
     }
 }
 
 void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 {
-    @autoreleasepool {
+    //@autoreleasepool
+    {
         [metal_renderer clearScreen:*clear_color];
     }
 }
 
 void dm_renderer_draw_arrays_impl(dm_render_pipeline* pipeline, int first, size_t count)
 {
-    @autoreleasepool {
+    //@autoreleasepool
+    {
         [metal_renderer drawArrays: first Count: count];
     }
 }
 
 void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass)
 {
-    @autoreleasepool
+    //@autoreleasepool
     {
         [metal_renderer drawIndexed: num_indices Offset: index_offset];
     }
@@ -340,7 +349,7 @@ void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, 
 
 void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pass* render_pass)
 {
-    @autoreleasepool
+    //@autoreleasepool
     {
         [metal_renderer drawInstanced:num_indices Offset:index_offset NumInstances:num_insts];
     }
@@ -348,7 +357,7 @@ void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, u
 
 bool dm_renderer_update_buffer_impl(dm_buffer* cb, void* data, size_t data_size)
 {
-    @autoreleasepool
+    //@autoreleasepool
     {
         dm_metal_buffer* internal_buffer = cb->internal_buffer;
 
