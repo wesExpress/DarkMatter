@@ -44,7 +44,7 @@
         NSString* frag_name = [NSString stringWithUTF8String: pass->shader->pixel_desc.path];
 
         MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
-        pipe_desc.colorAttachments[0].pixelFormat = renderer.view.metal_layer.pixelFormat;
+        pipe_desc.colorAttachments[0].pixelFormat = renderer.metal_layer.pixelFormat;
         pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
         pipe_desc.vertexFunction = [shader_lib.library newFunctionWithName: vertex_name];
         pipe_desc.fragmentFunction = [shader_lib.library newFunctionWithName: frag_name];
@@ -55,6 +55,12 @@
             DM_LOG_FATAL("Could not create metal pipeline state");
             return NULL;
         }
+
+        // render pass descriptor
+        _desc = [MTLRenderPassDescriptor new];
+        _desc.colorAttachments[0].loadAction = MTLLoadActionClear;
+        _desc.colorAttachments[0].storeAction = MTLStoreActionStore;
+        _desc.colorAttachments[0].clearColor = MTLClearColorMake(renderer.clear_color.x, renderer.clear_color.y, renderer.clear_color.z, renderer.clear_color.w);
 
         // uniform buffer
         size_t buffer_size = 0;
@@ -86,27 +92,21 @@
 {
     if(renderer.drawable)
     {
-        CGSize drawable_size = renderer.view.metal_layer.drawableSize;
+        CGSize drawable_size = renderer.metal_layer.drawableSize;
 
         MTLTextureDescriptor* tex_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float
                                                                                                      width:drawable_size.width
-                                                                                                    height:drawable_size.height
-                                                                                                 mipmapped:NO];
+                                                                                                    height:drawable_size.height mipmapped:NO];
+
         tex_desc.usage = MTLTextureUsageRenderTarget;
         tex_desc.storageMode = MTLStorageModePrivate;
 
         id<MTLTexture> texture = [renderer.device newTextureWithDescriptor:tex_desc];
 
+        _desc.colorAttachments[0].texture = renderer.texture;
+
         renderer.command_buffer = [renderer.command_queue commandBuffer];
-
-        // render pass descriptor
-        MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
-        passDescriptor.colorAttachments[0].texture = [renderer.drawable texture];
-        passDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
-        passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-        passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(renderer.clear_color.x, renderer.clear_color.y, renderer.clear_color.z, renderer.clear_color.w);
-
-        renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
+        renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:_desc];
 
         // pipeline state
         [renderer.command_encoder setRenderPipelineState:_pipeline_state];

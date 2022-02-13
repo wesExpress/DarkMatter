@@ -9,6 +9,8 @@
 
 #include "rendering/dm_image.h"
 
+#include "platform/dm_platform_apple.h"
+
 #include "core/dm_assert.h"
 #include "core/dm_mem.h"
 
@@ -20,24 +22,29 @@
 
 -(id) initWithFrame: (NSRect)frame
 {
-    self = [super init];
+    self = [super initWithFrame:frame];
 
     if(self)
     {
         _device = MTLCreateSystemDefaultDevice();
-
-        _view = [[dm_metal_view alloc] init];
-        if(!_view)
+        if(!_device)
         {
-            DM_LOG_FATAL("Could not create metal view!");
+            DM_LOG_FATAL("Could not create metal device!");
             return NULL;
         }
 
-        _view.metal_layer.device = _device;
-        _view.metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+        self.wantsLayer = true;
+        _metal_layer = [CAMetalLayer layer];
+        if(!_metal_layer)
+        {
+            DM_LOG_FATAL("Could not create metal layer!");
+            return false;
+        }
 
-        [_view setFrame: frame];
-        [_view.metal_layer setFrame: frame];
+        _metal_layer.device = _device;
+        _metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+
+        [_metal_layer setFrame: frame];
 
         _command_queue = [_device newCommandQueue];
         if(!_command_queue)
@@ -59,7 +66,19 @@
 
 - (BOOL) beginFrame
 {
-    _drawable = [_view.metal_layer nextDrawable];
+    _drawable = [_metal_layer nextDrawable];
+    if(!_drawable)
+    {
+        DM_LOG_FATAL("Metal drawable is NULL!");
+        return NO;
+    }
+
+    _texture = [_drawable texture];
+    if(!_texture)
+    {
+        DM_LOG_FATAL("Metal texture is NULL!");
+        return NO;
+    }
 
     return YES;
 }
@@ -135,11 +154,11 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 
         // content view is the main view for our NSWindow
         // must add our view to the subviews
-        [internal_data->content_view addSubview: metal_renderer.view];
+        [internal_data->content_view addSubview: metal_renderer];
 
         // must set the content view's layer to our metal layer
         [internal_data->content_view setWantsLayer: YES];
-        [internal_data->content_view setLayer: metal_renderer.view.metal_layer];
+        [internal_data->content_view setLayer: metal_renderer.metal_layer];
 
         // TODO: hack to get clear color for now
         metal_renderer.clear_color = renderer_data->clear_color;
@@ -255,10 +274,8 @@ bool dm_renderer_begin_render_pass_impl(dm_render_pass* render_pass)
     @autoreleasepool {
         dm_metal_render_pass* internal_pass = render_pass->internal_render_pass;
         [internal_pass updateUniforms:render_pass];
-        [internal_pass beginPass:metal_renderer];
+        return [internal_pass beginPass:metal_renderer];
     }
-
-    return true;
 }
 
 void dm_renderer_end_render_pass_impl(dm_render_pass* render_pass)

@@ -10,6 +10,7 @@
 @interface dm_metal_render_pass : NSObject
 
 @property (strong, nonatomic) id<MTLRenderPipelineState> pipeline_state;
+@property (strong, nonatomic) MTLRenderPassDescriptor* desc;
 @property (strong, nonatomic) id<MTLSamplerState> sampler_state;
 @property (strong, nonatomic) id<MTLBuffer> uniform_buffer;
 
