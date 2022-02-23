@@ -26,6 +26,7 @@
 @property (nonatomic) dm_vec4 clear_color;
 
 - (id) initWithFrame: (NSRect)frame;
++ (id) layerClass;
 
 // my functions
 - (void) setIndexBuffer: (dm_buffer*)buffer;

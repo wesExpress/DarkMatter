@@ -1,0 +1,42 @@
+version(1);
+
+project_name = "DarkMatter";
+
+patterns = {
+"*.c",
+"*.h",
+"*.m",
+"*.bat",
+"*.sh",
+"*.4coder",
+"*.md",
+"*.txt",
+};
+
+blacklist_patterns = {
+".*",
+};
+
+load_paths_custom = {
+ {"."},
+};
+
+load_paths = {
+ { load_paths_custom, .os = "win"  },
+ { load_paths_custom, .os = "linux"},
+ { load_paths_custom, .os = "mac"  },
+};
+
+build_on_mac = "engine/build_mac.sh";
+
+command_list = {
+	{
+		.name = "build mac",
+		.out = "*compilation*", .footer_panel=false, .save_dirty_files=true,
+		.cmd = {
+					{build_on_mac, .os = "mac"},
+				},
+	},
+};
+
+fkey_command[1] = "build mac";
