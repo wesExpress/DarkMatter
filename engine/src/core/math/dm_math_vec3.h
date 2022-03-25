@@ -1,6 +1,7 @@
 #ifndef __DM_MATH_VEC3_H__
 #define __DM_MATH_VEC3_H__
 
+#include "core/dm_defines.h"
 #include "dm_math_types.h"
 
 dm_vec3 dm_vec3_set(float x, float y, float z);
@@ -8,11 +9,11 @@ dm_vec3 dm_vec3_set_from_vec2(dm_vec2 vec);
 dm_vec3 dm_vec3_set_from_vec4(dm_vec4 vec);
 dm_vec3 dm_vec3_add_scalar(dm_vec3 vec, float scalar);
 dm_vec3 dm_vec3_sub_scalar(dm_vec3 vec, float scalar);
-dm_vec3 dm_vec3_scale(dm_vec3 vec, float scale);
-dm_vec3 dm_vec3_cross(dm_vec3 left, dm_vec3 right);
+DM_API dm_vec3 dm_vec3_scale(dm_vec3 vec, float scale);
+DM_API dm_vec3 dm_vec3_cross(dm_vec3 left, dm_vec3 right);
 dm_vec3 dm_vec3_add_vec3(dm_vec3 left, dm_vec3 right);
 dm_vec3 dm_vec3_sub_vec3(dm_vec3 left, dm_vec3 right);
-dm_vec3 dm_vec3_norm(dm_vec3 vec);
+DM_API dm_vec3 dm_vec3_norm(dm_vec3 vec);
 
 float dm_vec3_dot(dm_vec3 left, dm_vec3 right);
 float dm_vec3_len(dm_vec3 vec);
