@@ -14,9 +14,7 @@ FOR /R %%f in (*.c) do (
 cd ../..
 
 IF defined opengl (
-	REM	SET extern_files=..\engine\lib\stb_image\src\stb_image.c ..\engine\lib\mt19937\src\mt19937.c ..\engine\lib\mt19937\src\mt19937_64.c ..\engine\lib\glad\src\glad.c ..\engine\lib\glad\src\glad_wgl.c
-
-	SET extern_files=..\engine\lib\stb_image\src\stb_image.c
+	SET extern_files=..\engine\lib\stb_image\src\stb_image.c ..\engine\lib\mt19937\src\mt19937.c ..\engine\lib\mt19937\src\mt19937_64.c ..\engine\lib\glad\src\glad.c ..\engine\lib\glad\src\glad_wgl.c
 
 	SET include_flags=/I..\engine\src /I..\engine\lib\stb_image\include /I..\engine\lib\mt19937\include /I..\engine\lib\glad\include
 
@@ -24,9 +22,7 @@ IF defined opengl (
 
 	SET defines=/DDM_DEBUG /DDM_EXPORT /DDM_OPENGL
 ) ELSE (
-	REM SET extern_files=..\engine\lib\stb_image\src\stb_image.c ..\engine\lib\mt19937\src\mt19937.c ..\engine\lib\mt19937\src\mt19937_64.c
-
-	SET extern_files=..\engine\lib\stb_image\src\stb_image.c
+	SET extern_files=..\engine\lib\stb_image\src\stb_image.c ..\engine\lib\mt19937\src\mt19937.c ..\engine\lib\mt19937\src\mt19937_64.c
 
 	SET include_flags=/I..\engine\src /I..\engine\lib\stb_image\include /I..\engine\lib\mt19937\include
 
