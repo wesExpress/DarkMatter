@@ -2,7 +2,6 @@
 #define __DM_LIST_H__
 
 #include "core/dm_defines.h"
-
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -16,7 +15,6 @@ typedef struct dm_list
 } dm_list;
 
 DM_API dm_list* dm_list_create(size_t element_size, size_t capacity);
-
 DM_API void dm_list_destroy(dm_list* list);
 
 /*
