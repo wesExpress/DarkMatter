@@ -4,7 +4,7 @@
 #include <stdio.h>
 #include <stb_image/stb_image.h>
 
-dm_map_t* image_map = NULL;
+dm_map* image_map = NULL;
 
 void dm_image_map_init()
 {

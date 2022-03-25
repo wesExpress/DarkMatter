@@ -79,7 +79,7 @@ void dm_camera_set_projection(dm_camera* camera, float fov, int width, int heigh
             camera->projection = dm_mat_perspective(fov, aspect_ratio, n, f);
         } break;
         case DM_CAMERA_ORTHOGRAPHIC:
-		camera->projection = dm_mat_ortho(0, width, 0, height, n, f);
+		camera->projection = dm_mat_ortho(0.0f, (float)width, 0.0f, (float)height, n, f);
 		break;
         default: break;
 	}

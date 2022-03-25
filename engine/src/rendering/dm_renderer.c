@@ -1,4 +1,5 @@
 #include "dm_renderer.h"
+#include "dm_renderer_api.h"
 #include "dm_vertex_attribs.h"
 #include "dm_command_buffer.h"
 #include "dm_image.h"
@@ -38,19 +39,19 @@ dm_list* vertices = NULL;
 dm_list* indices = NULL;
 
 // instances
-dm_map_t* inst_map = NULL;
+dm_map* inst_map = NULL;
 dm_list* mesh_tags = NULL;
 
 // render passes
-dm_map_t* render_passes = NULL;
+dm_map* render_passes = NULL;
 
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	r_data.clear_color = clear_color;
     
 	dm_viewport viewport = {
-		.x = 0,
-		.y = 0,
+		.x = 0.0f,
+		.y = 0.0f,
 		.width = platform_data->window_width,
 		.height = platform_data->window_height,
 		.max_depth = 1.0f
@@ -83,7 +84,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
                    70.0f,
                    platform_data->window_width,
                    platform_data->window_height,
-                   0.01, 10000,
+                   0.01f, 10000,
                    DM_CAMERA_PERSPECTIVE
                    );
     
@@ -389,7 +390,7 @@ bool dm_renderer_create_default_render_passes()
 	// object uniforms
 	dm_uniform obj_vp = dm_create_uniform("view_proj", mat4_uni_desc, &r_data.camera.view_proj, sizeof(r_data.camera.view_proj));
 	dm_uniform light_color = dm_create_uniform("light_color", vec3_uni_desc, &(dm_vec3){1, 1, 1}, sizeof(dm_vec3));
-	dm_uniform ambient_str = dm_create_uniform("ambient_str", float_uni_desc, &(float){0.1}, sizeof(float));
+	dm_uniform ambient_str = dm_create_uniform("ambient_str", float_uni_desc, &(float){0.1f}, sizeof(float));
 	dm_uniform light_pos = dm_create_uniform("light_pos", vec3_uni_desc, &(dm_vec3){0,0,0}, sizeof(dm_vec3));
 	dm_uniform view_pos = dm_create_uniform("view_pos", vec3_uni_desc, &(dm_vec3){0,0,0}, sizeof(dm_vec3));
     
@@ -539,7 +540,11 @@ void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
 	dm_map_list_destroy(render_pass->objects);
 }
 
-void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag)
+/*
+RENDERER API FUNCTIONS
+*/
+
+void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices)
 {
 	dm_string obj_tag = {
 		.string = tag,
@@ -575,7 +580,7 @@ void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_
 	}
 }
 
-bool dm_renderer_submit_objects(dm_list* objects)
+bool dm_renderer_api_submit_objects(dm_list* objects)
 {
 	for (uint32_t i = 0; i < objects->count; i++)
 	{
@@ -608,7 +613,7 @@ bool dm_renderer_submit_objects(dm_list* objects)
 	return true;
 }
 
-bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs)
+bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_descs)
 {
 	if (!dm_images_load(image_descs, num_descs)) return false;
     
@@ -623,28 +628,28 @@ bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs)
 	return true;
 }
 
-void dm_renderer_set_clear_color(dm_vec3 color)
+void dm_renderer_api_set_clear_color(dm_vec3 color)
 {
 	r_data.clear_color = dm_vec4_set_from_vec3(color);
 }
 
-void dm_renderer_set_camera_pos(dm_vec3 pos)
+void dm_renderer_api_set_camera_pos(dm_vec3 pos)
 {
 	dm_camera_set_pos(&r_data.camera, pos);
 }
 
-void dm_renderer_update_camera_pos(dm_vec3 delta_pos)
+void dm_renderer_api_update_camera_pos(dm_vec3 delta_pos)
 {
 	dm_vec3 pos = dm_vec3_add_vec3(r_data.camera.pos, delta_pos);
 	dm_camera_set_pos(&r_data.camera, pos);
 }
 
-void dm_renderer_set_camera_forward(dm_vec3 forward)
+void dm_renderer_api_set_camera_forward(dm_vec3 forward)
 {
 	dm_camera_set_forward(&r_data.camera, forward);
 }
 
-void dm_renderer_update_camera_forward(dm_vec3 delta_forward)
+void dm_renderer_api_update_camera_forward(dm_vec3 delta_forward)
 {
 	dm_vec3 forward = dm_vec3_add_vec3(r_data.camera.forward, delta_forward);
 	forward.x = DM_CLAMP(forward.x, -89, 89);
@@ -653,17 +658,17 @@ void dm_renderer_update_camera_forward(dm_vec3 delta_forward)
 	dm_camera_set_forward(&r_data.camera, forward);
 }
 
-dm_vec3 dm_renderer_get_camera_forward()
+dm_vec3 dm_renderer_api_get_camera_forward()
 {
 	return r_data.camera.forward;
 }
 
-dm_vec3 dm_renderer_get_camera_up()
+dm_vec3 dm_renderer_api_get_camera_up()
 {
 	return r_data.camera.up;
 }
 
-dm_vec3 dm_renderer_get_camera_pos()
+dm_vec3 dm_renderer_api_get_camera_pos()
 {
 	return r_data.camera.pos;
 }

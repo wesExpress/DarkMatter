@@ -16,7 +16,7 @@ typedef struct dm_renderer_data
 	dm_color clear_color;
 	dm_list* render_commands;
 	dm_viewport viewport;
-
+    
 	dm_render_pipeline* pipeline;
 } dm_renderer_data;
 
@@ -63,21 +63,6 @@ default render passes:
 */
 bool dm_renderer_create_default_render_passes();
 
-// API functions
-
 bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout v_layout, dm_list* uniforms, const char* tag);
-
-void dm_renderer_submit_vertex_data(dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, const char* tag);
-bool dm_renderer_submit_images(dm_image_desc* image_descs, uint32_t num_descs);
-bool dm_renderer_submit_objects(dm_list* objects);
-void dm_renderer_set_clear_color(dm_vec3 color);
-
-void dm_renderer_set_camera_pos(dm_vec3 pos);
-void dm_renderer_update_camera_pos(dm_vec3 delta_pos);
-void dm_renderer_set_camera_forward(dm_vec3 forward);
-void dm_renderer_update_camera_forward(dm_vec3 delta_forward);
-dm_vec3 dm_renderer_get_camera_forward();
-dm_vec3 dm_renderer_get_camera_up();
-dm_vec3 dm_renderer_get_camera_pos();
 
 #endif
