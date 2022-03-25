@@ -3,7 +3,7 @@
 
 #include "rendering/dm_render_types.h"
 #include "core/dm_defines.h"
-#include "core/math/dm_math_types.h"
+#include "core/dm_math_types.h"
 #include "ecs/dm_components.h"
 #include <stdint.h>
 #include <stdbool.h>

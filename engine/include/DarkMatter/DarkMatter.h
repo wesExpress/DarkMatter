@@ -7,7 +7,7 @@
 
 #include "core/dm_defines.h"
 
-#include "core/math/dm_math.h"
+#include "core/dm_math.h"
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
 #include "core/dm_engine_types.h"

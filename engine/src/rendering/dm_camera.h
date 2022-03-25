@@ -2,7 +2,7 @@
 #define __DM_CAMERA_H__
 
 #include "core/dm_defines.h"
-#include "core/math/dm_math_types.h"
+#include "core/dm_math_types.h"
 
 typedef enum dm_camera_type
 {
@@ -16,14 +16,14 @@ typedef struct dm_camera
 	dm_mat4 view;
 	dm_mat4 projection;
 	dm_mat4 view_proj;
-
+    
 	dm_vec3 euler;
 	dm_vec3 forward;
 	dm_vec3 up;
-
+    
 	dm_vec3 pos;
 	float fov, aspect_ratio, nZ, fZ;
-
+    
 	dm_camera_type type;
 } dm_camera;
 
