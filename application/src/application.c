@@ -29,47 +29,47 @@ dm_list* objects = NULL;
 bool dm_application_init(dm_application* app)
 {
 	DM_LOG_TRACE("Hellow from the application!\n");
-
+    
 	dm_image_desc image_desc1 = { 0 };
 	image_desc1.path = "assets/container.jpg";
 	image_desc1.name = "uTexture1";
 	image_desc1.format = DM_TEXTURE_FORMAT_RGB;
 	image_desc1.internal_format = DM_TEXTURE_FORMAT_RGB;
-
+    
 	dm_image_desc image_desc2 = { 0 };
 	image_desc2.path = "assets/awesomeface.png";
 	image_desc2.name = "uTexture2";
 	image_desc2.format = DM_TEXTURE_FORMAT_RGBA;
 	image_desc2.internal_format = DM_TEXTURE_FORMAT_RGB;
 	image_desc2.flip = true;
-
+    
 	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
-
+    
 	//if (!dm_renderer_api_submit_images(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
-
+    
 	// clear color
 	dm_renderer_api_set_clear_color((dm_vec3) { 0, 0, 0 });
-
+    
 	// camera
 	dm_renderer_api_set_camera_pos((dm_vec3) { 0, 0, 4 });
 	dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
-
+    
 	objects = dm_list_create(sizeof(dm_game_object), 0);
 	dm_list_append(objects, &(dm_game_object){
-		.transform = { {0, 0, 0}, { 1,1,1 } },
-			.color = { 1, 0.5, 0.31 },
-			.texture = 0,
-			.mesh = "cube",
-			.render_pass = "object"
-	});
+                       .transform = { {0, 0, 0}, { 1,1,1 } },
+                       .color = { 1, 0.5, 0.31 },
+                       .texture = 0,
+                       .mesh = "cube",
+                       .render_pass = "object"
+                   });
 	dm_list_append(objects, &(dm_game_object){
-		.transform = { {1.2, 1, 2}, { 0.2,0.2,0.2 } },
-			.color = { 1,1,1 },
-			.texture = 0,
-			.mesh = "cube",
-			.render_pass = "light_src"
-	});
-
+                       .transform = { {1.2, 1, 2}, { 0.2,0.2,0.2 } },
+                       .color = { 1,1,1 },
+                       .texture = 0,
+                       .mesh = "cube",
+                       .render_pass = "light_src"
+                   });
+    
 	return dm_renderer_api_submit_objects(objects);
 }
 
@@ -81,21 +81,21 @@ void dm_application_shutdown(dm_application* app)
 bool dm_application_update(dm_application* app, float delta_time)
 {
 	dm_vec3 forward = { 0 };
-
+    
 	// camera direction
 	if (dm_input_is_key_pressed(DM_KEY_LSHIFT))
 	{
 		camera.yaw += dm_input_get_mouse_delta_x() * camera.look_sens;
 		camera.pitch -= dm_input_get_mouse_delta_y() * camera.look_sens;
-
+        
 		DM_CLAMP(camera.pitch, -89, 89);
 	}
-
+    
 	forward.x = dm_cos(dm_deg_to_rad(camera.yaw)) * dm_cos(dm_deg_to_rad(camera.pitch));
 	forward.y = dm_sin(dm_deg_to_rad(camera.pitch));
 	forward.z = dm_sin(dm_deg_to_rad(camera.yaw)) * dm_cos(dm_deg_to_rad(camera.pitch));
 	forward = dm_vec3_norm(forward);
-
+    
 	// camera position
 	if (dm_input_is_key_pressed(DM_KEY_A))
 	{
@@ -111,7 +111,7 @@ bool dm_application_update(dm_application* app, float delta_time)
 		delta_pos = dm_vec3_scale(delta_pos, camera.move_velocity * delta_time);
 		dm_renderer_api_update_camera_pos(delta_pos);
 	}
-
+    
 	if (dm_input_is_key_pressed(DM_KEY_W))
 	{
 		dm_vec3 delta_pos = dm_vec3_scale(dm_renderer_api_get_camera_forward(), camera.move_velocity * delta_time);
@@ -122,7 +122,7 @@ bool dm_application_update(dm_application* app, float delta_time)
 		dm_vec3 delta_pos = dm_vec3_scale(dm_renderer_api_get_camera_forward(), -camera.move_velocity * delta_time);
 		dm_renderer_api_update_camera_pos(delta_pos);
 	}
-
+    
 	if (dm_input_is_key_pressed(DM_KEY_Z))
 	{
 		dm_renderer_api_update_camera_pos((dm_vec3) { 0, -camera.move_velocity * delta_time, 0 });
@@ -131,10 +131,10 @@ bool dm_application_update(dm_application* app, float delta_time)
 	{
 		dm_renderer_api_update_camera_pos((dm_vec3) { 0, camera.move_velocity * delta_time, 0 });
 	}
-
+    
 	// update the camera
 	dm_renderer_api_set_camera_forward(forward);
-
+    
 	return true;
 }
 

@@ -40,15 +40,7 @@ set(
     src/core/dm_event.c
     src/core/dm_string.c
 
-    src/core/math/dm_math_misc.c
-    src/core/math/dm_math_vec2.c
-    src/core/math/dm_math_vec3.c
-    src/core/math/dm_math_vec4.c
-    src/core/math/dm_math_quat.c
-    src/core/math/dm_math_mat2.c
-    src/core/math/dm_math_mat3.c
-    src/core/math/dm_math_mat4.c
-    src/core/math/dm_math_mat_transforms.c
+	src/core/dm_math.c
 
     src/input/dm_input.c
 
@@ -68,21 +60,8 @@ set(
     src/rendering/dm_uniform.c
 
     src/rendering/opengl/dm_opengl_renderer.c
-    src/rendering/opengl/dm_opengl_render_pass.c
-    src/rendering/opengl/dm_opengl_buffer.c
-    src/rendering/opengl/dm_opengl_shader.c
-    src/rendering/opengl/dm_opengl_enum_conversion.c
-    src/rendering/opengl/dm_opengl_texture.c
 
     src/rendering/directx/dm_directx_renderer.c
-    src/rendering/directx/dm_directx_device.c
-    src/rendering/directx/dm_directx_swapchain.c
-    src/rendering/directx/dm_directx_rendertarget.c
-    src/rendering/directx/dm_directx_depth_stencil.c
-    src/rendering/directx/dm_directx_buffer.c
-    src/rendering/directx/dm_directx_shader.c
-    src/rendering/directx/dm_directx_texture.c
-    src/rendering/directx/dm_directx_enum_conversion.c
 
     # stb image
     lib/stb_image/include/stb_image/stb_image.c
