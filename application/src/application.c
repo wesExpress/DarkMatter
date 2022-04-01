@@ -27,6 +27,9 @@ dm_transform transforms_2[] = {
 
 dm_list* objects = NULL;
 
+dm_entity cube;
+dm_entity light;
+
 bool dm_application_init(dm_application* app)
 {
 	DM_LOG_TRACE("Hellow from the application!\n");
@@ -73,11 +76,19 @@ bool dm_application_init(dm_application* app)
                        .render_pass = "light_src"
                    });
     
-	return dm_renderer_api_submit_objects(objects);
+    cube = dm_ecs_create_entity();
+    light = dm_ecs_create_entity();
+    
+    if(!dm_ecs_add_component(cube, DM_COMPONENT_TRANSFORM, &(dm_transform){{0,0,0}, {1,1,1}})) return false;
+    if(!dm_ecs_add_component(light, DM_COMPONENT_TRANSFORM, &(dm_transform){{1.2, 1, 2}, {0.2,0.2,0.2}})) return false;
+    
+    return dm_renderer_api_submit_objects(objects);
 }
 
 void dm_application_shutdown(dm_application* app)
 {
+    
+    
 	dm_list_destroy(objects);
 }
 

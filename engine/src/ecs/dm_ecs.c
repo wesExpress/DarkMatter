@@ -1,6 +1,7 @@
 #include "dm_ecs.h"
 #include "core/dm_logger.h"
 #include "structures/dm_map.h"
+#include "core/dm_random.h"
 
 dm_map* transforms = NULL;
 
@@ -14,9 +15,9 @@ void dm_ecs_shutdown()
     dm_map_destroy(transforms);
 }
 
-dm_entity dm_ecs_new_entity()
+dm_entity dm_ecs_create_entity()
 {
-    return 0;
+    return dm_random_uint32();
 }
 
 void dm_ecs_delete_entity(dm_entity entity)
@@ -24,7 +25,7 @@ void dm_ecs_delete_entity(dm_entity entity)
     
 }
 
-bool dm_add_component(dm_entity entity, dm_component component, void* data)
+bool dm_ecs_add_component(dm_entity entity, dm_component component, void* data)
 {
     if(component == DM_COMPONENT_UNKNOWN)
     {
