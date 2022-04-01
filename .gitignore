@@ -11,3 +11,5 @@ bin/*
 *.cod
 *.air
 *.metallib
+
+*.4coder
