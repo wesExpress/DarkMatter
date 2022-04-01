@@ -14,14 +14,14 @@ bool dm_create_app(dm_application* application)
 	application->engine_config.start_width = window_width;
 	application->engine_config.start_height = window_height;
 	application->engine_config.clear_color = clear_color;
-
+    
 	application->dm_application_init = dm_application_init;
 	application->dm_application_shutdown = dm_application_shutdown;
 	application->dm_application_update = dm_application_update;
 	application->dm_application_render = dm_application_render;
 	application->dm_application_resize = dm_application_resize;
-
+    
 	application->engine_config.name = "Dark Matter Engine";
-
+    
 	return true;
 }

@@ -146,17 +146,9 @@ void dm_renderer_resize(int new_width, int new_height)
 	r_data.viewport = viewport;
 }
 
-bool dm_renderer_begin_frame()
+bool dm_renderer_render_objects()
 {
-	dm_render_command_clear(&r_data.clear_color, r_data.render_commands);
-	dm_render_command_set_viewport(&r_data.viewport, r_data.render_commands);
-	dm_render_command_bind_pipeline(r_data.pipeline, r_data.render_commands);
-    
-	/************************
-	    object render pass
-	*******************************/
-    
-	dm_render_pass* obj_pass = dm_map_get(render_passes, "object");
+    dm_render_pass* obj_pass = dm_map_get(render_passes, "object");
 	if (!obj_pass)
 	{
 		DM_LOG_FATAL("Object render pass is null!");
@@ -234,19 +226,13 @@ bool dm_renderer_begin_frame()
     
 	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
 	dm_renderer_clear_command_buffer(r_data.render_commands);
-	
-	return true;
+    
+    return true;
 }
 
-bool dm_renderer_end_frame()
+bool dm_render_light_sources()
 {
-	/**********************
-	  light source render pass
-	****************************/
-    
-	
-	
-	dm_render_pass* lsrc_pass = dm_map_get(render_passes, "light_src");
+    dm_render_pass* lsrc_pass = dm_map_get(render_passes, "light_src");
 	if (!lsrc_pass)
 	{
 		DM_LOG_FATAL("Light source render pass is NULL!");
@@ -302,6 +288,30 @@ bool dm_renderer_end_frame()
     
 	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
 	dm_renderer_clear_command_buffer(r_data.render_commands);
+    
+    return true;
+}
+
+bool dm_renderer_begin_frame()
+{
+	dm_render_command_clear(&r_data.clear_color, r_data.render_commands);
+	dm_render_command_set_viewport(&r_data.viewport, r_data.render_commands);
+	dm_render_command_bind_pipeline(r_data.pipeline, r_data.render_commands);
+    
+	/************************
+	    object render pass
+	*******************************/
+    dm_renderer_render_objects();
+	
+	return true;
+}
+
+bool dm_renderer_end_frame()
+{
+	/**********************
+	  light source render pass
+	****************************/
+	dm_render_light_sources();
     
 	return dm_renderer_end_frame_impl(&r_data);
 }
