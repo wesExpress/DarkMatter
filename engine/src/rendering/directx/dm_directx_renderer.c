@@ -1232,8 +1232,8 @@ void dm_renderer_set_viewport_impl(dm_viewport viewport)
 	ID3D11DeviceContext* context = directx_renderer->context;
     
 	D3D11_VIEWPORT new_viewport = { 0 };
-	new_viewport.Width = viewport.width;
-	new_viewport.Height = viewport.height;
+	new_viewport.Width = (FLOAT)viewport.width;
+	new_viewport.Height = (FLOAT)viewport.height;
 	new_viewport.MaxDepth = 1.0f;
 	
 	context->lpVtbl->RSSetViewports(context, 1, &new_viewport);

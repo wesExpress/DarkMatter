@@ -50,8 +50,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	r_data.clear_color = clear_color;
     
 	dm_viewport viewport = {
-		.x = 0.0f,
-		.y = 0.0f,
+		.x = 0, .y = 0,
 		.width = platform_data->window_width,
 		.height = platform_data->window_height,
 		.max_depth = 1.0f
@@ -70,10 +69,11 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	vertices = dm_list_create(sizeof(dm_vertex_t), 0);
 	indices = dm_list_create(sizeof(dm_index_t), 0);
     
-	inst_map = dm_map_create(sizeof(dm_inst_data), 0);
-	mesh_tags = dm_list_create(sizeof(dm_string), 0);
+	inst_map = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_inst_data), 0);
+	render_passes = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_render_pass), 0);
+	
+    mesh_tags = dm_list_create(sizeof(dm_string), 0);
 	r_data.render_commands = dm_list_create(sizeof(dm_render_command), 0);
-	render_passes = dm_map_create(sizeof(dm_render_pass), 0);
     
 	// maps
 	dm_image_map_init();
@@ -522,11 +522,11 @@ bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout v_layout,
 	// uniforms
 	render_pass->uniforms = uniforms;
     
-	render_pass->objects = dm_map_create(sizeof(dm_list), 0);
+	render_pass->objects = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_list), 0);
     
 	if(!dm_renderer_create_render_pass_impl(render_pass, v_layout, r_data.pipeline)) return false;
     
-	dm_map_insert(render_passes, tag, render_pass);
+	dm_map_insert(render_passes, (void*)tag, render_pass);
     
 	dm_free(render_pass, sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
     
@@ -566,7 +566,7 @@ void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_dat
 	inst_data.index_count = num_indices;
 	inst_data.index_offset = indices->count;
 	inst_data.vertex_offset = vertices->count;
-	dm_map_insert(inst_map, tag, &inst_data);
+	dm_map_insert(inst_map, (void*)tag, &inst_data);
     
 	for (uint32_t i = 0; i < num_vertices; i++)
 	{
@@ -595,17 +595,17 @@ bool dm_renderer_api_submit_objects(dm_list* objects)
 	for (uint32_t i = 0; i < objects->count; i++)
 	{
 		dm_game_object* object = dm_list_at(objects, i);
-		dm_render_pass* render_pass = dm_map_get(render_passes, object->render_pass);
+		dm_render_pass* render_pass = dm_map_get(render_passes, (void*)object->render_pass);
         
 		if (render_pass)
 		{
-			dm_list* obj_list = dm_map_get(render_pass->objects, object->mesh);
+			dm_list* obj_list = dm_map_get(render_pass->objects, (void*)object->mesh);
             
 			if (!obj_list)
 			{
 				obj_list = dm_list_create(sizeof(dm_game_object), 0);
 				dm_list_append(obj_list, object);
-				dm_map_insert_list(render_pass->objects, object->mesh, obj_list);
+				dm_map_insert_list(render_pass->objects, (void*)object->mesh, obj_list);
 				dm_list_destroy(obj_list);
 			}
 			else

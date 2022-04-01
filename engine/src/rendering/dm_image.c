@@ -8,7 +8,7 @@ dm_map* image_map = NULL;
 
 void dm_image_map_init()
 {
-	image_map = dm_map_create(sizeof(dm_image), 0);
+	image_map = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_image), 0);
 }
 
 void dm_image_map_destroy()
@@ -32,11 +32,11 @@ bool dm_images_load(dm_image_desc* image_descs, int num_descs)
 		{
 			dm_image image = { 0 };
 			image.desc = image_descs[i];
-
+            
 			DM_LOG_DEBUG("Loading image: %s", image.desc.path);
-
+            
 			stbi_set_flip_vertically_on_load(image.desc.flip);
-
+            
 			int num_channels;
 #if defined DM_DIRECTX || defined DM_METAL
 			num_channels = STBI_rgb_alpha;
@@ -50,14 +50,14 @@ bool dm_images_load(dm_image_desc* image_descs, int num_descs)
 				return false;
 			}
 			image.data = data;
-			dm_map_insert(image_map, image.desc.path, &image);
+			dm_map_insert(image_map, (void*)image.desc.path, &image);
 		}
 	}
-
+    
 	return true;
 }
 
 dm_image* dm_image_get(const char* name)
 {
-	return (dm_image*)dm_map_get(image_map, name);
+	return (dm_image*)dm_map_get(image_map, (void*)name);
 }
