@@ -5,6 +5,7 @@
 #include "rendering/dm_renderer.h"
 #include "platform/dm_platform.h"
 #include "input/dm_input.h"
+#include "ecs/dm_ecs.h"
 
 dm_engine_data* e_data = NULL;
 static bool initialized = false;
@@ -62,6 +63,8 @@ bool dm_engine_create(dm_application* app)
         return false;
     }
     
+    dm_ecs_init();
+    
     e_data->is_running = true;
     e_data->is_suspended = false;
     
@@ -72,6 +75,8 @@ bool dm_engine_create(dm_application* app)
 
 void dm_engine_shutdown()
 {
+    dm_ecs_shutdown();
+    
     e_data->application->dm_application_shutdown(e_data->application);
     
     dm_free(e_data->platform_data, sizeof(dm_platform_data), DM_MEM_PLATFORM);

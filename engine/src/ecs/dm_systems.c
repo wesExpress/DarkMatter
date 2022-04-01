@@ -45,8 +45,6 @@ void dm_ecs_update_editor_camera(dm_editor_camera* camera, float delta_time)
 		delta_pos = dm_vec3_add_vec3(delta_pos, dm_vec3_scale(camera->forward, -camera->move_velocity * delta_time));
 	}
     
-    //dm_renderer_api_update_camera_pos(delta_pos);
-    
     // vertical movement
 	if (dm_input_is_key_pressed(DM_KEY_Z))
 	{
