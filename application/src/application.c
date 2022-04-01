@@ -1,6 +1,7 @@
 #include "application.h"
 
 static dm_editor_camera camera = {
+    .pos = {0,0,4}, .forward = {0,0,0}, .up = {0,1,0},
 	.pitch = 0, .yaw=-90, .roll=0,
 	.move_velocity = 2.5f,
 	.look_sens = 0.1f
@@ -51,8 +52,10 @@ bool dm_application_init(dm_application* app)
 	dm_renderer_api_set_clear_color((dm_vec3) { 0, 0, 0 });
     
 	// camera
-	dm_renderer_api_set_camera_pos((dm_vec3) { 0, 0, 4 });
-	dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
+	dm_renderer_api_set_camera_pos(camera.pos);
+	dm_renderer_api_set_camera_forward(camera.forward);
+    
+    dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
     
 	objects = dm_list_create(sizeof(dm_game_object), 0);
 	dm_list_append(objects, &(dm_game_object){
@@ -80,60 +83,7 @@ void dm_application_shutdown(dm_application* app)
 
 bool dm_application_update(dm_application* app, float delta_time)
 {
-	dm_vec3 forward = { 0 };
-    
-	// camera direction
-	if (dm_input_is_key_pressed(DM_KEY_LSHIFT))
-	{
-		camera.yaw += dm_input_get_mouse_delta_x() * camera.look_sens;
-		camera.pitch -= dm_input_get_mouse_delta_y() * camera.look_sens;
-        
-		DM_CLAMP(camera.pitch, -89, 89);
-	}
-    
-	forward.x = dm_cos(dm_deg_to_rad(camera.yaw)) * dm_cos(dm_deg_to_rad(camera.pitch));
-	forward.y = dm_sin(dm_deg_to_rad(camera.pitch));
-	forward.z = dm_sin(dm_deg_to_rad(camera.yaw)) * dm_cos(dm_deg_to_rad(camera.pitch));
-	forward = dm_vec3_norm(forward);
-    
-	// camera position
-	if (dm_input_is_key_pressed(DM_KEY_A))
-	{
-		dm_vec3 delta_pos = dm_vec3_cross(dm_renderer_api_get_camera_forward(), dm_renderer_api_get_camera_up());
-		delta_pos = dm_vec3_norm(delta_pos);
-		delta_pos = dm_vec3_scale(delta_pos, -camera.move_velocity * delta_time);
-		dm_renderer_api_update_camera_pos(delta_pos);
-	}
-	else if (dm_input_is_key_pressed(DM_KEY_D))
-	{
-		dm_vec3 delta_pos = dm_vec3_cross(dm_renderer_api_get_camera_forward(), dm_renderer_api_get_camera_up());
-		delta_pos = dm_vec3_norm(delta_pos);
-		delta_pos = dm_vec3_scale(delta_pos, camera.move_velocity * delta_time);
-		dm_renderer_api_update_camera_pos(delta_pos);
-	}
-    
-	if (dm_input_is_key_pressed(DM_KEY_W))
-	{
-		dm_vec3 delta_pos = dm_vec3_scale(dm_renderer_api_get_camera_forward(), camera.move_velocity * delta_time);
-		dm_renderer_api_update_camera_pos(delta_pos);
-	}
-	else if (dm_input_is_key_pressed(DM_KEY_S))
-	{
-		dm_vec3 delta_pos = dm_vec3_scale(dm_renderer_api_get_camera_forward(), -camera.move_velocity * delta_time);
-		dm_renderer_api_update_camera_pos(delta_pos);
-	}
-    
-	if (dm_input_is_key_pressed(DM_KEY_Z))
-	{
-		dm_renderer_api_update_camera_pos((dm_vec3) { 0, -camera.move_velocity * delta_time, 0 });
-	}
-	else if (dm_input_is_key_pressed(DM_KEY_X))
-	{
-		dm_renderer_api_update_camera_pos((dm_vec3) { 0, camera.move_velocity * delta_time, 0 });
-	}
-    
-	// update the camera
-	dm_renderer_api_set_camera_forward(forward);
+	dm_ecs_update_editor_camera(&camera, delta_time);
     
 	return true;
 }

@@ -20,5 +20,7 @@
 #include "structures/dm_map.h"
 
 #include "ecs/dm_components.h"
+#include "ecs/dm_ecs.h"
+#include "ecs/dm_systems.h"
 
 #endif
