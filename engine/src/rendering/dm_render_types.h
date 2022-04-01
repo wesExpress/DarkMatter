@@ -1,7 +1,7 @@
 #ifndef __DM_RENDER_TYPES_H__
 #define __DM_RENDER_TYPES_H__
 
-#include "core/math/dm_math_types.h"
+#include "core/dm_math_types.h"
 #include "core/dm_string.h"
 #include "structures/dm_list.h"
 #include "structures/dm_map.h"
@@ -347,8 +347,8 @@ typedef struct dm_sampler_desc
 
 typedef struct dm_viewport
 {
-    float x, y;
-    float width, height;
+    uint32_t x, y;
+    uint32_t width, height;
     float min_depth, max_depth;
 } dm_viewport;
 
@@ -414,7 +414,7 @@ typedef struct dm_render_pass
     dm_shader* shader;
     dm_sampler_desc sampler_desc;
     dm_list* uniforms;
-    dm_map_t* objects;
+    dm_map* objects;
     bool wireframe;
     const char* name;
     void* internal_render_pass;

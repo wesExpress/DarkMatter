@@ -2,6 +2,7 @@ build/*
 */out/*
 out/*
 .vs/*
+bin/*
 
 .vscode/*
 
@@ -10,3 +11,5 @@ out/*
 *.cod
 *.air
 *.metallib
+
+*.4coder

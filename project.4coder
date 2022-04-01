@@ -1,0 +1,60 @@
+version(1);
+
+project_name = "DarkMatter";
+
+patterns = {
+"*.c",
+"*.h",
+"*.m",
+"*.hlsl",
+"*.glsl",
+"*.metal",
+"*.bat",
+"*.sh",
+"*.4coder",
+"*.md",
+"*.txt",
+};
+
+blacklist_patterns = {
+".*",
+};
+
+load_paths_custom = {
+ {"."},
+};
+
+load_paths = {
+ { load_paths_custom, .os = "win"  },
+ { load_paths_custom, .os = "linux"},
+ { load_paths_custom, .os = "mac"  },
+};
+
+build_on_win = "build_all.bat";
+build_on_mac = "engine/build_mac.sh";
+
+run_win = "run.bat";
+
+command_list = {
+	{
+		.name = "build",
+		.out = "*compilation*", .footer_panel=false, .save_dirty_files=true, .cursor_at_end=true,
+		.cmd = {
+					{build_on_win, .os = "win"},
+					{build_on_mac, .os = "mac"},
+				},
+	},
+
+	{
+		.name = "run",
+		.out = "", .footer_panel=false, .save_dirty_files=false, .cursor_at_end=true,
+		.cmd = {
+					{run_win, .os = "win"},
+				},
+	},
+};
+
+fkey_command[1] = "build";
+fkey_command[2] = "post_build";
+
+fkey_command[5] = "run";
