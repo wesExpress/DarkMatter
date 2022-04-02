@@ -31,9 +31,10 @@ load_paths = {
 };
 
 build_on_win = "build_all.bat";
-build_on_mac = "engine/build_mac.sh";
+build_on_mac = "./build_all.sh";
 
 run_win = "run.bat";
+run_mac = "./run.sh";
 
 command_list = {
 	{
@@ -50,6 +51,7 @@ command_list = {
 		.out = "", .footer_panel=false, .save_dirty_files=false, .cursor_at_end=true,
 		.cmd = {
 					{run_win, .os = "win"},
+					{run_mac, .os = "mac"},
 				},
 	},
 };
