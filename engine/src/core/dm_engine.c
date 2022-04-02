@@ -58,13 +58,14 @@ bool dm_engine_create(dm_application* app)
         return false;
     }
     
+    dm_random_init(0);
+    
     if (!e_data->application->dm_application_init(e_data->application))
     {
         DM_LOG_FATAL("Application could not be initialized!");
         return false;
     }
     
-    dm_random_init(0);
     dm_ecs_init();
     
     e_data->is_running = true;
