@@ -37,7 +37,7 @@ fi
 
 echo "Building $output..."
 
-clang $c_files $objc_files $external_files $compiler_flags -o ../bin/$output.dylib $defines $include_flags $linker_flags
+clang $c_files $objc_files $external_files $compiler_flags -o ../bin/lib$output.dylib $defines $include_flags $linker_flags
 
 # shaders
 if [ "$opengl" -eq 1 ]; then

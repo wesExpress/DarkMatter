@@ -47,7 +47,7 @@ bool dm_application_init(dm_application* app)
 	image_desc2.internal_format = DM_TEXTURE_FORMAT_RGB;
 	image_desc2.flip = true;
     
-	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
+	//dm_image_desc image_descs[] = { image_desc1, image_desc2 };
     
 	//if (!dm_renderer_api_submit_images(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
     
