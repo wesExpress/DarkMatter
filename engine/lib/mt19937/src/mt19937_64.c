@@ -53,7 +53,7 @@
    email: m-mat @ math.sci.hiroshima-u.ac.jp (remove spaces)
 */
 
-#include <mt19937/mt19937_64.h>
+#include "mt19937/mt19937_64.h"
 
 #define NN 312
 #define MM 156
