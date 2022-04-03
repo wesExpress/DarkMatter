@@ -101,7 +101,6 @@ void dm_map_insert(dm_map* map, void* key, void* value)
             case DM_MAP_KEY_UINT32:
             {
                 uint32_t index = dm_map_hash(key, map);
-                dm_hash hash = index;
                 
                 while(map->items[index])
                 {
@@ -135,6 +134,10 @@ void dm_map_insert(dm_map* map, void* key, void* value)
                 map->count++;
                 if(( (float)map->count / (float)map->capacity) >= DM_MAP_LOAD_FACTOR) dm_map_resize(map);
             } break;
+            default:
+            {
+                DM_LOG_ERROR("Key type not supported yet.");
+            } break;
         }
 		
 	}
@@ -148,7 +151,6 @@ void dm_map_insert_list(dm_map* map, void* key, dm_list* list)
 		if(list)
 		{
 			uint32_t index = dm_map_hash(key, map);
-			dm_hash hash = index;
 			bool replace = false;
             
 			while(map->items[index])
@@ -344,6 +346,10 @@ dm_map_item* dm_map_create_item(void* key, dm_map_key_type key_type, void* value
             //item->key = *(uint64_t*)key;
             dm_memcpy(item->key, key, sizeof(uint64_t));
         } break;
+        default:
+        {
+            DM_LOG_ERROR("Key type not supported yet.");
+        } break;
     }
     
     item->value = dm_alloc(type_size, DM_MEM_MAP);
@@ -370,6 +376,10 @@ void dm_map_destroy_item(dm_map_item* item, dm_map_key_type key_type, size_t typ
         case DM_MAP_KEY_UINT64:
         {
             dm_free(item->key, sizeof(uint64_t), DM_MEM_MAP);
+        } break;
+        default:
+        {
+            DM_LOG_ERROR("Key type not supported yet.");
         } break;
     }
 	dm_free(item->value, type_size, DM_MEM_MAP);

@@ -9,7 +9,7 @@
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
 
-#include "core/math/dm_math_types.h"
+#include "core/dm_math_types.h"
 #include "platform/dm_platform_apple.h"
 
 @interface dm_metal_view : NSView

@@ -2,6 +2,7 @@
 #define __DM_MATH_H__
 
 #include "dm_defines.h"
+#include "dm_assert.h"
 #include "dm_math_types.h"
 
 #include "dm_logger.h"
@@ -303,8 +304,8 @@ DM_INLINE
 void dm_vec3_sub_vec3_inpl(dm_vec3 left, dm_vec3 right, dm_vec3* out)
 {
 	*out = dm_vec3_sub_vec3(left, right);
+    
 }
-
 DM_INLINE
 dm_vec3 dm_vec3_norm(dm_vec3 vec)
 {

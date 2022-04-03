@@ -61,11 +61,6 @@
 #define UM 0xFFFFFFFF80000000ULL /* Most significant 33 bits */
 #define LM 0x7FFFFFFFULL /* Least significant 31 bits */
 
-/* The array for the state vector */
-static unsigned long long mt[NN];
-/* mti==NN+1 means mt[NN] is not initialized */
-static int mti = NN + 1;
-
 /* initializes mt[NN] with a seed */
 void init_genrand64(mt19937_64* context, uint64_t seed)
 {
@@ -107,14 +102,14 @@ uint64_t genrand64_uint64(mt19937_64* context)
     int i;
     unsigned long long x;
     static unsigned long long mag01[2] = { 0ULL, MATRIX_A };
-
+    
     if (context->mti >= NN) { /* generate NN words at one time */
-
+        
         /* if init_genrand64() has not been called, */
         /* a default initial seed is used     */
         if (context->mti == NN + 1)
             init_genrand64(context, 5489ULL);
-
+        
         for (i = 0; i < NN - MM; i++) {
             x = (context->mt[i] & UM) | (context->mt[i + 1] & LM);
             context->mt[i] = context->mt[i + MM] ^ (x >> 1) ^ mag01[(int)(x & 1ULL)];
@@ -125,17 +120,17 @@ uint64_t genrand64_uint64(mt19937_64* context)
         }
         x = (context->mt[NN - 1] & UM) | (context->mt[0] & LM);
         context->mt[NN - 1] = context->mt[MM - 1] ^ (x >> 1) ^ mag01[(int)(x & 1ULL)];
-
+        
         context->mti = 0;
     }
-
+    
     x = context->mt[context->mti++];
-
+    
     x ^= (x >> 29) & 0x5555555555555555ULL;
     x ^= (x << 17) & 0x71D67FFFEDA60000ULL;
     x ^= (x << 37) & 0xFFF7EEE000000000ULL;
     x ^= (x >> 43);
-
+    
     return x;
 }
 

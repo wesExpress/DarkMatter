@@ -54,7 +54,10 @@ bool dm_ecs_add_component(dm_entity entity, dm_component component, void* data)
             dm_map_insert(transforms, &entity, &transform); 
             
         } break;
-        
+        default:
+        {
+            DM_LOG_ERROR("Component not handled yet.");
+        }
     }
     
     return true;

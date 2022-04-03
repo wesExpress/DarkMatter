@@ -6,10 +6,15 @@
 #define DM_OPENGL_MINOR 6
 #endif
 
-// OpenGL is deprecated, so we just use Metal on Mac
 #ifdef __APPLE__
+#ifdef DM_OPENGL
+#define DM_PLATFORM_GLFW
+
+// OpenGL is deprecated, so we just use Metal on Mac
+#else
 #define DM_PLATFORM_APPLE
 #define DM_METAL
+#endif
 #define DM_INLINE
 
 #elif __WIN32__ || _WIN32 || WIN32
