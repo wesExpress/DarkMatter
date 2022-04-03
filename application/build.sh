@@ -8,9 +8,9 @@ echo "C Files: " $c_files
 
 output="DarkMatterApp"
 
-compiler_flags="-g -fdiagnostics-absolute-paths -Wall -Wno-missing-braces"
+compiler_flags="-g -fdeclspec -fPIC -fdiagnostics-absolute-paths -Wall -Wno-missing-braces"
 include_flags="-I../engine/include -I../engine/src "
-linker_flags="-lDarkMatter"
+linker_flags="-L../bin/ -lDarkMatter -Wl,-rpath,."
 defines="-DDM_DEBUG"
 
 echo "Building $output..."

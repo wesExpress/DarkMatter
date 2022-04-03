@@ -15,7 +15,7 @@
 #define DM_PLATFORM_APPLE
 #define DM_METAL
 #endif
-#define DM_INLINE
+#define DM_INLINE __attribute__((always_inline)) inline
 
 #elif __WIN32__ || _WIN32 || WIN32
 #define DM_PLATFORM_WIN32

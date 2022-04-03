@@ -23,7 +23,7 @@ fi
 
 output="DarkMatter"
 
-compiler_flags="-g -shared -fdiagnostics-absolute-paths -fdeclspec -fPIC -Wall -Wno-missing-braces"
+compiler_flags="-g -dynamiclib -std=gnu99 -fdiagnostics-absolute-paths -fdeclspec -fPIC -Wall -Wno-missing-braces"
 
 if [ "$opengl" -eq 1 ]; then
 	defines="-DDM_DEBUG -DDM_EXPORT -DDM_OPENGL"
@@ -37,7 +37,7 @@ fi
 
 echo "Building $output..."
 
-clang $c_files $objc_files $external_files $compiler_flags -o ../bin/$output.so $defines $include_flags $linker_flags
+clang $c_files $objc_files $external_files $compiler_flags -o ../bin/$output.dylib $defines $include_flags $linker_flags
 
 # shaders
 if [ "$opengl" -eq 1 ]; then
