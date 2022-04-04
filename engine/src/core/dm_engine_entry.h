@@ -5,6 +5,7 @@
 #include "dm_engine.h"
 #include "dm_logger.h"
 #include <stdbool.h>
+#include <unistd.h>
 
 extern bool dm_create_app(dm_application* application);
 
@@ -23,28 +24,36 @@ int main()
     DM_LOG_FATAL("Trying to compile on unsupprted platform!");
     return DM_UNSUPPORTED_PLATFORM;
 #endif
-
+    
+    char* buffer = dm_alloc(500, DM_MEM_STRING);
+    char* path = getcwd(buffer, 500);
+    if(path)
+    {
+        DM_LOG_INFO("Current working directory: %s", path);
+    }
+    dm_free(buffer, 500, DM_MEM_STRING);
+    
     dm_application app;
     if (!dm_create_app(&app))
     {
         DM_LOG_FATAL("Could not create application!");
         return DM_APPLICATION_CREATION_FAILURE;
     }
-
+    
     ///////////////////////
-
+    
     if (!dm_engine_create(&app))
     {
         return DM_ENGINE_CREATION_FAILURE;
     }
-
+    
     if (!dm_engine_run())
     {
         return DM_ENGINE_RUN_FAILURE;
     }
-
+    
     dm_engine_shutdown();
-
+    
     return DM_ENGINE_RUN_SUCCESS;
 }
 

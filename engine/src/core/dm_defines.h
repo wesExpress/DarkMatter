@@ -3,7 +3,11 @@
 
 #ifdef DM_OPENGL
 #define DM_OPENGL_MAJOR 4
+#ifdef __APPLE__
+#define DM_OPENGL_MINOR 1
+#else
 #define DM_OPENGL_MINOR 6
+#endif
 #endif
 
 #ifdef __APPLE__

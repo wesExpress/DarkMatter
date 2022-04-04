@@ -46,6 +46,7 @@ clang $c_files $objc_files $external_files $compiler_flags -o lib$output.dylib $
 install_name_tool -id @rpath/lib$output.dylib lib$output.dylib
 
 echo "Post build..."
+cd ..
 # shaders
 if [ "$opengl" -eq 1 ]; then
 	
