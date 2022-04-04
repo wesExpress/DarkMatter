@@ -1,11 +1,13 @@
 #ifndef __DM_ECS_H__
 #define __DM_ECS_H__
 
+#include "dm_components.h"
+
 #include "core/dm_defines.h"
 #include "core/dm_hash.h"
-#include "dm_components.h"
 #include <stdbool.h>
 
+enum dm_component;
 typedef dm_hash dm_entity;
 
 void dm_ecs_init();

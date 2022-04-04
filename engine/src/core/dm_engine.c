@@ -2,11 +2,11 @@
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
 #include "core/dm_app_config.h"
-#include "rendering/dm_renderer.h"
+#include "core/dm_random.h"
 #include "platform/dm_platform.h"
+#include "rendering/dm_renderer.h"
 #include "input/dm_input.h"
 #include "ecs/dm_ecs.h"
-#include "core/dm_random.h"
 
 dm_engine_data* e_data = NULL;
 static bool initialized = false;
@@ -59,6 +59,7 @@ bool dm_engine_create(dm_application* app)
     }
     
     dm_random_init(0);
+    dm_ecs_init();
     
     if (!e_data->application->dm_application_init(e_data->application))
     {
@@ -66,7 +67,6 @@ bool dm_engine_create(dm_application* app)
         return false;
     }
     
-    dm_ecs_init();
     
     e_data->is_running = true;
     e_data->is_suspended = false;

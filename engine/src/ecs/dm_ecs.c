@@ -1,7 +1,9 @@
 #include "dm_ecs.h"
+
 #include "core/dm_logger.h"
-#include "structures/dm_map.h"
 #include "core/dm_random.h"
+
+#include "structures/dm_map.h"
 
 dm_map* transforms = NULL;
 
