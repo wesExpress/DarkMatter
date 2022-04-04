@@ -1,6 +1,8 @@
 @echo off
 SetLocal EnableDelayedExpansion
 
+set SRC_DIR=%cd%
+
 REM set "opengl=true"
 
 cd engine/src
@@ -13,22 +15,18 @@ FOR /R %%f in (*.c) do (
 
 cd ../..
 
-IF defined opengl (
-	SET extern_files=..\engine\lib\stb_image\src\stb_image.c ..\engine\lib\mt19937\src\mt19937.c ..\engine\lib\mt19937\src\mt19937_64.c ..\engine\lib\glad\src\glad.c ..\engine\lib\glad\src\glad_wgl.c
-
-	SET include_flags=/I..\engine\src /I..\engine\lib\stb_image\include /I..\engine\lib\mt19937\include /I..\engine\lib\glad\include
-
-	SET linker_flags="/link user32.lib gdi32.lib Opengl32.lib"
-
-	SET defines=/DDM_DEBUG /DDM_EXPORT /DDM_OPENGL
-) ELSE (
-	SET extern_files=..\engine\lib\stb_image\src\stb_image.c ..\engine\lib\mt19937\src\mt19937.c ..\engine\lib\mt19937\src\mt19937_64.c
-
-	SET include_flags=/I..\engine\src /I..\engine\lib\stb_image\include /I..\engine\lib\mt19937\include
-
-	SET linker_flags="/link user32.lib gdi32.lib d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib"
-	
+	SET extern_files=%SRC_DIR%\engine\lib\stb_image\src\stb_image.c %SRC_DIR%\engine\lib\mt19937\src\mt19937.c %SRC_DIR%\engine\lib\mt19937\src\mt19937_64.c 
+	SET include_flags=/I%SRC_DIR%\engine\src /I%SRC_DIR%\engine\lib\stb_image\include /I%SRC_DIR%\engine\lib\mt19937\include 
+	SET linker_flags=/link user32.lib gdi32.lib
 	SET defines=/DDM_DEBUG /DDM_EXPORT
+
+IF defined opengl (
+	SET extern_files=%extern_files% %SRC_DIR%\engine\lib\glad\src\glad.c %SRC_DIR%\engine\lib\glad\src\glad_wgl.c 
+	SET include_flags=%include_flags% /I%SRC_DIR%\engine\lib\glad\include
+	SET linker_flags=%linker_flags% Opengl32.lib
+	SET defines=%defines% /DDM_OPENGL
+) ELSE (
+	SET linker_flags=%linker_flags% d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib
 )
 
 SET compiler_flags=/W2 /Zi
@@ -36,27 +34,28 @@ SET assembly=DarkMatter
 
 REM echo %include_flags%
 
-cd bin
+if not exist "build/engine" mkdir build/engine
+cd build
 ECHO Building %assembly%...
 cl %compiler_flags% %defines% /FC /LD %include_flags% %c_filenames% %extern_files% /Fe%assembly%.dll %linker_flags%
 
 REM Shaders
 IF defined opengl (
 	if not exist "shaders\glsl\" mkdir shaders\glsl
-	xcopy ..\engine\shaders\glsl\"." shaders\glsl /Y
+	xcopy %SRC_DIR%\engine\shaders\glsl\"." shaders\glsl /Y
 ) ELSE (
 	if not exist "shaders\hlsl" mkdir shaders\hlsl
 	SET fxc_flags=/Fc /Od /Zi
 
 	ECHO Compiling shader: object_vertex.hlsl
-	fxc %fxc_flags% /E v_main /T vs_5_0 ../engine/shaders/hlsl/object_vertex.hlsl /Fo shaders/hlsl/object_vertex.fxc
+	fxc %fxc_flags% /E v_main /T vs_5_0 %SRC_DIR%/engine/shaders/hlsl/object_vertex.hlsl /Fo shaders/hlsl/object_vertex.fxc
 
 	ECHO Compiling shader: object_pixel.hlsl
-	fxc %fxc_flags% /E p_main /T ps_5_0 ../engine/shaders/hlsl/object_pixel.hlsl /Fo shaders/hlsl/object_pixel.fxc
+	fxc %fxc_flags% /E p_main /T ps_5_0 %SRC_DIR%/engine/shaders/hlsl/object_pixel.hlsl /Fo shaders/hlsl/object_pixel.fxc
 
 	ECHO Compiling shader: light_src_vertex.hlsl
-	fxc %fxc_flags% /E v_main /T vs_5_0 ../engine/shaders/hlsl/light_src_vertex.hlsl /Fo shaders/hlsl/light_src_vertex.fxc
+	fxc %fxc_flags% /E v_main /T vs_5_0 %SRC_DIR%/engine/shaders/hlsl/light_src_vertex.hlsl /Fo shaders/hlsl/light_src_vertex.fxc
 
 	ECHO Compiling shader: light_src_pixel.hlsl
-	fxc %fxc_flags% /E p_main /T ps_5_0 ../engine/shaders/hlsl/light_src_pixel.hlsl /Fo shaders/hlsl/light_src_pixel.fxc
+	fxc %fxc_flags% /E p_main /T ps_5_0 %SRC_DIR%/engine/shaders/hlsl/light_src_pixel.hlsl /Fo shaders/hlsl/light_src_pixel.fxc
 )

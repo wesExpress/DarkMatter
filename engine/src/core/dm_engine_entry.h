@@ -1,11 +1,16 @@
 #ifndef __DM_ENGINE_ENTRY_H__
 #define __DM_ENGINE_ENTRY_H__
 
+#include "core/dm_defines.h"
 #include "dm_app_config.h"
 #include "dm_engine.h"
 #include "dm_logger.h"
 #include <stdbool.h>
+#ifndef DM_PLATFORM_WIN32
 #include <unistd.h>
+#endif
+
+#define DM_MAX_PATH 500
 
 extern bool dm_create_app(dm_application* application);
 
@@ -25,13 +30,15 @@ int main()
     return DM_UNSUPPORTED_PLATFORM;
 #endif
     
-    char* buffer = dm_alloc(500, DM_MEM_STRING);
-    char* path = getcwd(buffer, 500);
+#ifndef DM_PLATFORM_WIN32
+    char* buffer = dm_alloc(DM_MAX_PATH, DM_MEM_STRING);
+    char* path = getcwd(buffer, DM_MAX_PATH);
     if(path)
     {
         DM_LOG_INFO("Current working directory: %s", path);
     }
-    dm_free(buffer, 500, DM_MEM_STRING);
+    dm_free(buffer, DM_MAX_PATH, DM_MEM_STRING);
+#endif
     
     dm_application app;
     if (!dm_create_app(&app))
