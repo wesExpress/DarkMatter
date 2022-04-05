@@ -7,15 +7,21 @@
 typedef enum dm_component
 {
     DM_COMPONENT_TRANSFORM,
+    DM_COMPONENT_MESH,
     DM_COMPONENT_EDITOR_CAMERA,
     DM_COMPONENT_UNKNOWN
 } dm_component;
 
-typedef struct dm_transform
+typedef struct dm_transform_component
 {
 	dm_vec3 position;
 	dm_vec3 scale;
-} dm_transform;
+} dm_transform_component;
+
+typedef struct dm_mesh_component
+{
+    const char* name;
+} dm_mesh_component;
 
 typedef struct dm_editor_camera
 {
@@ -29,7 +35,7 @@ typedef struct dm_editor_camera
 
 typedef struct dm_game_object
 {
-	dm_transform transform;
+	dm_transform_component transform;
 	dm_vec3 color;
 	const char* texture;
 	const char* mesh;

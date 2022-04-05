@@ -7,7 +7,7 @@ static dm_editor_camera camera = {
 	.look_sens = 0.1f
 };
 
-dm_transform transforms_1[] = {
+dm_transform_component transforms_1[] = {
 	{{0, 0, 0}, {1,1,1}},
 	{{2, 5, -15}, {1,1,1}},
 	{{-1.5, -2.2, -2.5}, {1,1,1}},
@@ -20,7 +20,7 @@ dm_transform transforms_1[] = {
 	{{-1.3, 1, -1.5}, {1,1,1}}
 };
 
-dm_transform transforms_2[] = {
+dm_transform_component transforms_2[] = {
 	{{0,0,0}, {1,1,1}},
 	{{1.2,1,2}, {0.2,0.2,0.2}}
 };
@@ -79,8 +79,13 @@ bool dm_application_init(dm_application* app)
     cube = dm_ecs_create_entity();
     light = dm_ecs_create_entity();
     
-    if(!dm_ecs_add_component(cube, DM_COMPONENT_TRANSFORM, &(dm_transform){{0,0,0}, {1,1,1}})) return false;
-    if(!dm_ecs_add_component(light, DM_COMPONENT_TRANSFORM, &(dm_transform){{1.2, 1, 2}, {0.2,0.2,0.2}})) return false;
+    // orange cube
+    if(!dm_ecs_add_component(&cube, DM_COMPONENT_TRANSFORM, &(dm_transform_component){{0,0,0}, {1,1,1}})) return false;
+    if(!dm_ecs_add_component(&cube, DM_COMPONENT_MESH, "cube")) return false;
+    
+    // light src
+    if(!dm_ecs_add_component(&light, DM_COMPONENT_TRANSFORM, &(dm_transform_component){{1.2, 1, 2}, {0.2,0.2,0.2}})) return false;
+    
     
     return dm_renderer_api_submit_objects(objects);
 }
@@ -95,6 +100,9 @@ void dm_application_shutdown(dm_application* app)
 bool dm_application_update(dm_application* app, float delta_time)
 {
 	dm_ecs_update_editor_camera(&camera, delta_time);
+    
+    dm_transform_component* test = dm_ecs_get_component(&cube, DM_COMPONENT_TRANSFORM);
+    test = dm_ecs_get_component(&light, DM_COMPONENT_TRANSFORM);
     
 	return true;
 }
