@@ -107,7 +107,7 @@ bool dm_application_update(dm_application* app, float delta_time)
     transform->position.x = dm_cos(angle) * radius;
     
     // increase angle
-    angle += 0.05f;
+    angle += delta_time;
     
 	return true;
 }
