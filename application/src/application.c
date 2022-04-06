@@ -27,6 +27,9 @@ dm_entity light;
 dm_entity editor_camera;
 dm_entity cube2;
 
+float radius = 2.5f;
+float angle = 0.0f;
+
 bool dm_application_init(dm_application* app)
 {
 	DM_LOG_TRACE("Hellow from the application!\n");
@@ -90,6 +93,21 @@ void dm_application_shutdown(dm_application* app)
 bool dm_application_update(dm_application* app, float delta_time)
 {
 	dm_ecs_update_editor_camera(&camera, delta_time);
+    
+    // move cube
+    dm_transform_component* transform = dm_ecs_get_component(cube.id, DM_COMPONENT_TRANSFORM);
+    
+    transform->position.x = dm_cos(angle) * radius;
+    transform->position.y = dm_sin(angle) * radius;
+    
+    // move light
+    transform = dm_ecs_get_component(light.id, DM_COMPONENT_TRANSFORM);
+    
+    transform->position.z = dm_sin(angle) * radius;
+    transform->position.x = dm_cos(angle) * radius;
+    
+    // increase angle
+    angle += 0.05f;
     
 	return true;
 }
