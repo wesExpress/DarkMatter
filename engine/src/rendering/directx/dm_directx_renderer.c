@@ -1117,6 +1117,11 @@ bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot)
     return true;
 }
 
+bool dm_create_texture_impl(dm_image* image)
+{
+    return dm_directx_create_texture(image, directx_renderer);
+}
+
 void dm_destroy_texture_impl(dm_image* image)
 {
     dm_directx_destroy_texture(image);

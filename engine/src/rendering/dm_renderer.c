@@ -594,18 +594,9 @@ void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_dat
 	}
 }
 
-bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_descs)
+bool dm_renderer_api_register_image(dm_image_desc desc)
 {
-	if (!dm_images_load(image_descs, num_descs)) return false;
-    
-	for (uint32_t i = 0; i < num_descs; i++)
-	{
-		dm_string str = { 0 };
-		str.string = dm_strdup(image_descs[i].path);
-		str.len = strlen(str.string);
-	}
-    
-	return true;
+    return dm_load_image(desc);
 }
 
 void dm_renderer_api_set_clear_color(dm_vec3 color)
