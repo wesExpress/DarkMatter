@@ -2,9 +2,13 @@
 #include "input/dm_input.h"
 #include "core/dm_math.h"
 #include "rendering/dm_renderer_api.h"
+#include "dm_ecs.h"
 
-void dm_ecs_update_editor_camera(dm_editor_camera* camera, float delta_time)
+void dm_ecs_update_editor_camera(float delta_time)
 {
+    dm_list* camera_list = dm_ecs_get_entity_registry(DM_COMPONENT_EDITOR_CAMERA);
+    dm_editor_camera* camera = dm_ecs_get_component(*(uint32_t*)dm_list_at(camera_list, 0), DM_COMPONENT_EDITOR_CAMERA);
+    
     dm_vec3 forward = { 0 };
     dm_vec3 delta_pos = { 0 };
     

@@ -1,27 +1,5 @@
 #include "application.h"
 
-static dm_editor_camera camera = {
-    .pos = {0,0,4}, .forward = {0,0,0}, .up = {0,1,0},
-	.pitch = 0, .yaw=-90, .roll=0,
-	.move_velocity = 2.5f,
-	.look_sens = 0.1f
-};
-
-/*
-dm_transform_component transforms_1[] = {
-	{{0, 0, 0}, {1,1,1}},
-	{{2, 5, -15}, {1,1,1}},
-	{{-1.5, -2.2, -2.5}, {1,1,1}},
-	{{-3.8, -2, -12.3}, {1,1,1}},
-	{{2.4, -0.4, -3.5}, {1,1,1}},
-	{{-1.7, 3, -7.5}, {1,1,1}},
-	{{1.3, -2, -2.5}, {1,1,1}},
-	{{1.5, 2, -2.5}, {1,1,1}},
-	{{1.5, 0.2, -1.5}, {1,1,1}},
-	{{-1.3, 1, -1.5}, {1,1,1}}
-};
-*/
-
 dm_entity cube;
 dm_entity light;
 dm_entity editor_camera;
@@ -54,11 +32,13 @@ bool dm_application_init(dm_application* app)
     
 	dm_renderer_api_set_clear_color((dm_vec3) { 0, 0, 0 });
     
-    dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
     
     // camera
     editor_camera = dm_ecs_create_entity();
-    if(!dm_ecs_add_editor_camera(&editor_camera, &camera)) return false;
+    if(!dm_ecs_add_editor_camera(&editor_camera, &(dm_editor_camera){.pos={0,0,4}, .up={0,1,0}, .yaw=-90.0f, .move_velocity=2.5f, .look_sens=0.1f})) return false;
+    dm_editor_camera* c = dm_ecs_get_component(editor_camera.id, DM_COMPONENT_EDITOR_CAMERA);
+    
+    dm_input_get_mouse_pos(&c->last_x, &c->last_y);
     
     // orange cube
     cube = dm_ecs_create_entity();
@@ -92,7 +72,7 @@ void dm_application_shutdown(dm_application* app)
 
 bool dm_application_update(dm_application* app, float delta_time)
 {
-	dm_ecs_update_editor_camera(&camera, delta_time);
+	dm_ecs_update_editor_camera(delta_time);
     
     // move cube
     dm_transform_component* transform = dm_ecs_get_component(cube.id, DM_COMPONENT_TRANSFORM);

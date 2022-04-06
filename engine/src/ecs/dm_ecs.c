@@ -151,16 +151,17 @@ bool dm_ecs_add_editor_camera(dm_entity* entity, dm_editor_camera* camera)
 {
     if(!camera)
     {
-        camera->pos = dm_vec3_set(1,1,1);
-        camera->forward = dm_vec3_set(0,0,0);
-        camera->up = dm_vec3_set(0,1,0);
+        dm_editor_camera default_camera = {0};
         
-        camera->pitch= 0;
-        camera->yaw = -90;
-        camera->roll = 0;
+        default_camera.pos = dm_vec3_set(1,1,1);
+        default_camera.up = dm_vec3_set(0,1,0);
         
-        camera->move_velocity = 2.5f;
-        camera->look_sens = 0.1f;
+        default_camera.yaw = -90;
+        
+        default_camera.move_velocity = 2.5f;
+        default_camera.look_sens = 0.1f;
+        
+        return dm_ecs_insert_component(entity, DM_COMPONENT_EDITOR_CAMERA, &default_camera);
     }
     
     return dm_ecs_insert_component(entity, DM_COMPONENT_EDITOR_CAMERA, camera);

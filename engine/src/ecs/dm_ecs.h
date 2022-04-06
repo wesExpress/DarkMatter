@@ -56,4 +56,5 @@ DM_API bool dm_ecs_add_texture(dm_entity* entity, dm_texture_component* texture)
 DM_API bool dm_ecs_add_color(dm_entity* entity, dm_color_component* color);
 DM_API bool dm_ecs_add_light_src(dm_entity* entity, dm_light_src_component* light_src);
 DM_API bool dm_ecs_add_editor_camera(dm_entity* entity, dm_editor_camera* camera);
+
 #endif //DM_ECS_H
