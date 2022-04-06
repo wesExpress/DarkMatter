@@ -285,7 +285,23 @@ bool dm_map_exists(dm_map* map, void* key)
         {
             if (map->items[index])
             {
-                if (strcmp(map->items[index]->key, key) == 0) return true;
+                switch(map->key_type)
+                {
+                    case DM_MAP_KEY_STRING:
+                    {
+                        if (strcmp(map->items[index]->key, key) == 0) return true;
+                    } break;
+                    case DM_MAP_KEY_UINT32:
+                    case DM_MAP_KEY_UINT64:
+                    {
+                        uint32_t item_key = *(uint32_t*)map->items[index]->key;
+                        if (item_key == *(uint32_t*)key) return true;
+                    } break;
+                    default:
+                    {
+                        DM_LOG_ERROR("Key type not supported yet.");
+                    }
+                }
             }
             
             if(index>=map->capacity) index = 0;

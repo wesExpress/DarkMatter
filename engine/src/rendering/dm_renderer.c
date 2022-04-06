@@ -38,9 +38,11 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render
 dm_list* vertices = NULL;
 dm_list* indices = NULL;
 
-// instances
-dm_map* inst_map = NULL;
-dm_list* mesh_tags = NULL;
+// meshes
+dm_map* mesh_map = NULL;
+
+// camera
+dm_editor_camera* camera = NULL;
 
 // render passes
 dm_map* render_passes = NULL;
@@ -69,17 +71,22 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 	vertices = dm_list_create(sizeof(dm_vertex_t), 0);
 	indices = dm_list_create(sizeof(dm_index_t), 0);
     
-	inst_map = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_inst_data), 0);
-	render_passes = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_render_pass), 0);
+	//inst_map = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_inst_data), 0);
+    
+    render_passes = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_render_pass), 0);
 	
-    mesh_tags = dm_list_create(sizeof(dm_string), 0);
-	r_data.render_commands = dm_list_create(sizeof(dm_render_command), 0);
+    // mesh
+	mesh_map = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_mesh), 0);
     
-	// maps
-	dm_image_map_init();
     
-	// camera
-	dm_camera_init(
+    //mesh_tags = dm_list_create(sizeof(dm_string), 0);
+    r_data.render_commands = dm_list_create(sizeof(dm_render_command), 0);
+    
+    // maps
+    dm_image_map_init();
+    
+    // camera
+    dm_camera_init(
                    &r_data.camera, (dm_vec3) { 0, 0, 0 },
                    70.0f,
                    platform_data->window_width,
@@ -88,20 +95,20 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
                    DM_CAMERA_PERSPECTIVE
                    );
     
-	if (!dm_renderer_init_render_pipeline(r_data.pipeline))
-	{
-		DM_LOG_FATAL("Failed to create render pipeline!");
-		return false;
-	}
+    if (!dm_renderer_init_render_pipeline(r_data.pipeline))
+    {
+        DM_LOG_FATAL("Failed to create render pipeline!");
+        return false;
+    }
     
-	// primitives
-	if (!dm_geometry_load_primitives())
-	{
-		DM_LOG_FATAL("Failed to initialize primitive vertex data!");
-		return false;
-	}
+    // primitives
+    if (!dm_geometry_load_primitives())
+    {
+        DM_LOG_FATAL("Failed to initialize primitive vertex data!");
+        return false;
+    }
     
-	return true;
+    return true;
 }
 
 void dm_renderer_shutdown()
@@ -110,27 +117,35 @@ void dm_renderer_shutdown()
 	dm_list_destroy(vertices);
 	dm_list_destroy(indices);
     
-	dm_map_destroy(inst_map);
-	dm_list_destroy(mesh_tags);
-	for(uint32_t i=0; i<render_passes->capacity;i++)
-	{
-		if(render_passes->items[i])
-		{
-			dm_render_pass* render_pass = render_passes->items[i]->value;
-			dm_renderer_destroy_render_pass(render_pass);
-		}
-	}
-	dm_map_destroy(render_passes);
+	//dm_map_destroy(inst_map);
+	dm_for_map_item(mesh_map)
+    {
+        dm_mesh* mesh = item->value;
+        dm_list_destroy(mesh->entities);
+    }
     
-	if(r_data.render_commands->count>0) dm_renderer_clear_command_buffer(r_data.render_commands);
-	dm_list_destroy(r_data.render_commands);
+    dm_map_destroy(mesh_map);
     
-	dm_renderer_destroy_render_pipeline(r_data.pipeline);
-	dm_free(r_data.pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
-	dm_image_map_destroy();
+    //dm_list_destroy(mesh_tags);
+    for(uint32_t i=0; i<render_passes->capacity;i++)
+    {
+        if(render_passes->items[i])
+        {
+            dm_render_pass* render_pass = render_passes->items[i]->value;
+            dm_renderer_destroy_render_pass(render_pass);
+        }
+    }
+    dm_map_destroy(render_passes);
     
-	// backend shutdown
-	dm_renderer_shutdown_impl(&r_data);
+    if(r_data.render_commands->count>0) dm_renderer_clear_command_buffer(r_data.render_commands);
+    dm_list_destroy(r_data.render_commands);
+    
+    dm_renderer_destroy_render_pipeline(r_data.pipeline);
+    dm_free(r_data.pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
+    dm_image_map_destroy();
+    
+    // backend shutdown
+    dm_renderer_shutdown_impl(&r_data);
 }
 
 void dm_renderer_resize(int new_width, int new_height)
@@ -192,37 +207,47 @@ bool dm_renderer_render_objects()
 		}
 	}
     
-	// render the objects
-	for(uint32_t i=0; i< mesh_tags->count;i++)
-	{
-		dm_string* key = dm_list_at(mesh_tags, i);
-		dm_inst_data* inst_data = dm_map_get(inst_map, key->string);
-		dm_list* objs = dm_map_get(obj_pass->objects, key->string);
-		dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
+    dm_for_map_item(mesh_map)
+    {
+        dm_mesh* mesh = item->value;
+        //DM_LOG_TRACE("%s", item->key);
         
-		for (uint32_t j = 0; j < objs->count; j++)
-		{
-			dm_game_object* obj = dm_list_at(objs, j);
-			dm_vertex_inst inst = { 0 };
+        dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
+        uint32_t count = 0;
+        
+        for(uint32_t i=0; i<mesh->entities->count; i++)
+        {
+            uint32_t entity_id = *(uint32_t*)dm_list_at(mesh->entities, i);
+            dm_transform_component* transform = dm_ecs_get_component(entity_id, DM_COMPONENT_TRANSFORM);
+            dm_color_component* color = dm_ecs_get_component(entity_id, DM_COMPONENT_COLOR);
+            bool is_light = (dm_ecs_get_component(entity_id, DM_COMPONENT_LIGHT_SRC) != NULL);
             
-			inst.model = dm_mat4_identity();
-			inst.model = dm_mat_translate(inst.model, obj->transform.position);
-			inst.model = dm_mat_scale(inst.model, obj->transform.scale);
+            if(!is_light)
+            {
+                dm_vertex_inst inst = {0};
+                
+                inst.model = dm_mat4_identity();
+                inst.model = dm_mat_translate(inst.model, transform->position);
+                inst.model = dm_mat_scale(inst.model, transform->scale);
 #ifdef DM_DIRECTX
-			inst.model = dm_mat4_transpose(inst.model);
+                inst.model = dm_mat4_transpose(inst.model);
 #endif
-			inst.color = obj->color;
-            
-			dm_list_append(buffer_data, &inst);
-		}
+                
+                inst.color = dm_vec3_set_from_vec4(color->color);
+                
+                dm_list_append(buffer_data, &inst);
+                
+                count++;
+            }
+        }
         
-		dm_render_command_begin_renderpass(obj_pass, r_data.render_commands);
+        dm_render_command_begin_renderpass(obj_pass, r_data.render_commands);
 		dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
-		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, obj_pass, r_data.render_commands);
+		dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, obj_pass, r_data.render_commands);
 		dm_render_command_end_renderpass(obj_pass, r_data.render_commands);
         
-		dm_list_destroy(buffer_data);
-	}
+        dm_list_destroy(buffer_data);
+    }
     
 	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
 	dm_renderer_clear_command_buffer(r_data.render_commands);
@@ -254,37 +279,41 @@ bool dm_render_light_sources()
 		}
 	}
     
-	// render the light sources
-	for (uint32_t i = 0; i < mesh_tags->count; i++)
-	{
-		dm_string* key = dm_list_at(mesh_tags, i);
-		dm_inst_data* inst_data = dm_map_get(inst_map, key->string);
-		dm_list* objs = dm_map_get(lsrc_pass->objects, key->string);
-		dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
+    dm_render_command_begin_renderpass(lsrc_pass, r_data.render_commands);
+    
+    dm_list* lights = dm_ecs_get_entity_registry(DM_COMPONENT_LIGHT_SRC);
+    
+    for(uint32_t i = 0; i<lights->count; i++)
+    {
+        dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
         
-		for (uint32_t j = 0; j < objs->count; j++)
-		{
-			dm_game_object* obj = dm_list_at(objs, j);
-			dm_vertex_inst inst = { 0 };
-            
-			inst.model = dm_mat4_identity();
-			inst.model = dm_mat_translate(inst.model, obj->transform.position);
-			inst.model = dm_mat_scale(inst.model, obj->transform.scale);
+        uint32_t entity_id = *(uint32_t*)dm_list_at(lights, i);
+        dm_mesh_component* mesh_c = dm_ecs_get_component(entity_id, DM_COMPONENT_MESH);
+        dm_mesh* mesh = dm_map_get(mesh_map, mesh_c->name);
+        
+        dm_transform_component* transform = dm_ecs_get_component(entity_id, DM_COMPONENT_TRANSFORM);
+        dm_light_src_component* light_src = dm_ecs_get_component(entity_id, DM_COMPONENT_LIGHT_SRC);
+        
+        dm_vertex_inst inst = {0};
+        
+        inst.model = dm_mat4_identity();
+        inst.model = dm_mat_translate(inst.model, transform->position);
+        inst.model = dm_mat_scale(inst.model, transform->scale);
 #ifdef DM_DIRECTX
-			inst.model = dm_mat4_transpose(inst.model);
+        inst.model = dm_mat4_transpose(inst.model);
 #endif
-			inst.color = obj->color;
-            
-			dm_list_append(buffer_data, &inst);
-		}
         
-		dm_render_command_begin_renderpass(lsrc_pass, r_data.render_commands);
-		dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
-		dm_render_command_draw_instanced(inst_data->index_count, objs->count, inst_data->index_offset, inst_data->vertex_offset, 0, lsrc_pass, r_data.render_commands);
-		dm_render_command_end_renderpass(lsrc_pass, r_data.render_commands);
+        inst.color = dm_vec3_set_from_vec4(light_src->color);
         
-		dm_list_destroy(buffer_data);
-	}
+        dm_list_append(buffer_data, &inst);
+        
+        dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
+        dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, lsrc_pass, r_data.render_commands);
+        
+        dm_list_destroy(buffer_data);
+    }
+    
+    dm_render_command_end_renderpass(lsrc_pass, r_data.render_commands);
     
 	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
 	dm_renderer_clear_command_buffer(r_data.render_commands);
@@ -553,20 +582,15 @@ void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
 /*
 RENDERER API FUNCTIONS
 */
-
 void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices)
 {
-	dm_string obj_tag = {
-		.string = tag,
-		.len = strlen(tag)
-	};
-	dm_list_append(mesh_tags, &obj_tag);
-	
-	dm_inst_data inst_data = { 0 };
-	inst_data.index_count = num_indices;
-	inst_data.index_offset = indices->count;
-	inst_data.vertex_offset = vertices->count;
-	dm_map_insert(inst_map, (void*)tag, &inst_data);
+    dm_mesh mesh = {0};
+    mesh.index_count = num_indices;
+    mesh.vertex_offset = vertices->count;
+    mesh.index_offset = indices->count;
+    mesh.entities = dm_list_create(sizeof(uint32_t), 0);
+    
+    dm_map_insert(mesh_map, tag, &mesh);
     
 	for (uint32_t i = 0; i < num_vertices; i++)
 	{
@@ -641,6 +665,46 @@ bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_desc
 void dm_renderer_api_set_clear_color(dm_vec3 color)
 {
 	r_data.clear_color = dm_vec4_set_from_vec3(color);
+}
+
+/*
+to simplify rendering, we simply store what entities are using what mesh
+we also keep track of the index each entity is at in the mesh's list
+*/
+bool dm_renderer_api_register_mesh(dm_entity* entity, dm_mesh_component* component)
+{
+    dm_mesh* mesh = dm_map_get(mesh_map, component->name);
+    
+    component->index = mesh->entities->count;
+    
+    dm_list_append(mesh->entities, &entity->id);
+    
+    return true;
+}
+
+bool dm_renderer_api_deregister_mesh(dm_entity* entity)
+{
+    dm_mesh_component* mesh_c = dm_ecs_get_component(entity->id, DM_COMPONENT_MESH);
+    
+    dm_mesh* mesh = dm_map_get(mesh_map, mesh_c->name);
+    
+    for(uint32_t i=mesh_c->index; i<mesh->entities->count; i++)
+    {
+        uint32_t id = *(uint32_t*)dm_list_at(mesh->entities, i);
+        dm_mesh_component* c = dm_ecs_get_component(id, DM_COMPONENT_MESH);
+        c->index -= 1;
+    }
+    
+    dm_list_pop_at(mesh->entities, mesh_c->index);
+    
+    return true;
+}
+
+bool dm_renderer_api_register_camera(dm_entity* entity, dm_editor_camera* component)
+{
+    camera = dm_ecs_get_component(entity->id, DM_COMPONENT_EDITOR_CAMERA);
+    
+    return true;
 }
 
 void dm_renderer_api_set_camera_pos(dm_vec3 pos)

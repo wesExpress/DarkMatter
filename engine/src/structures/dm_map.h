@@ -30,6 +30,8 @@ typedef struct dm_map_t
     dm_map_item* end;
 } dm_map;
 
+#define dm_for_map_item(MAP) for(dm_map_item* item=(MAP)->begin; item != NULL; item=item->next)
+
 /*
 create a map with a specified size. If 0, then default size
 */

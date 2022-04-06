@@ -2,12 +2,17 @@
 #define __DM_COMPONENTS_H__
 
 #include "core/dm_math_types.h"
+#include "rendering/dm_render_types.h"
+
 #include <stdint.h>
 
 typedef enum dm_component
 {
     DM_COMPONENT_TRANSFORM,
     DM_COMPONENT_MESH,
+    DM_COMPONENT_TEXTURE,
+    DM_COMPONENT_COLOR,
+    DM_COMPONENT_LIGHT_SRC,
     DM_COMPONENT_EDITOR_CAMERA,
     DM_COMPONENT_UNKNOWN
 } dm_component;
@@ -20,8 +25,25 @@ typedef struct dm_transform_component
 
 typedef struct dm_mesh_component
 {
-    const char* name;
+    char* name;
+    uint32_t index;
 } dm_mesh_component;
+
+typedef struct dm_texture_component
+{
+    char* name;
+} dm_texture_component;
+
+typedef struct dm_color_component
+{
+    dm_color color;
+} dm_color_component;
+
+typedef struct dm_light_src_component
+{
+    dm_color color;
+    bool sync_to_obj_color;
+} dm_light_src_component;
 
 typedef struct dm_editor_camera
 {

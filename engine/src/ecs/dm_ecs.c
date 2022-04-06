@@ -6,16 +6,26 @@
 
 #include "structures/dm_map.h"
 
+#include "rendering/dm_renderer_api.h"
+
 #define BIT_SHIFT(X) 1 << X
 
 size_t component_sizes[] = {
     sizeof(dm_transform_component),
     sizeof(dm_mesh_component),
+    sizeof(dm_texture_component),
+    sizeof(dm_color_component),
+    sizeof(dm_light_src_component),
     sizeof(dm_editor_camera)
 };
 
+void dm_insert_component(dm_component component, dm_entity* entity, void* data);
 bool dm_add_transform(dm_entity* entity, void* data);
 bool dm_add_mesh(dm_entity* entity, void* data);
+bool dm_add_texture(dm_entity* entity, void* data);
+bool dm_add_color(dm_entity* entity, void* data);
+bool dm_add_light_src(dm_entity* entity, void* data);
+bool dm_add_editor_camera(dm_entity* entity, void* data);
 
 typedef struct dm_ecs_manager
 {
@@ -89,6 +99,18 @@ bool dm_ecs_add_component(dm_entity* entity, dm_component component, void* data)
         {
             if(!dm_add_mesh(entity, data)) return false;
         } break;
+        case DM_COMPONENT_COLOR:
+        {
+            if(!dm_add_color(entity, data)) return false;
+        } break;
+        case DM_COMPONENT_LIGHT_SRC:
+        {
+            if(!dm_add_light_src(entity, data)) return false;
+        } break;
+        case DM_COMPONENT_EDITOR_CAMERA:
+        {
+            if(!dm_add_editor_camera(entity, data)) return false;
+        } break;
         default:
         {
             DM_LOG_ERROR("Component not handled yet.");
@@ -105,6 +127,15 @@ bool dm_ecs_remove_component(dm_entity* entity, dm_component component)
 {
     if(dm_ecs_entity_has_component(entity, component))
     {
+        switch(component)
+        {
+            case DM_COMPONENT_MESH:
+            {
+                dm_renderer_api_deregister_mesh(entity);
+            } break;
+            default: break;
+        }
+        
         entity->component_mask &= ~BIT_SHIFT(component);
         
         return true;
@@ -114,12 +145,9 @@ bool dm_ecs_remove_component(dm_entity* entity, dm_component component)
     return false;
 }
 
-void* dm_ecs_get_component(dm_entity* entity, dm_component component)
+void* dm_ecs_get_component(uint32_t entity_id, dm_component component)
 {
-    if (dm_ecs_entity_has_component(entity, component)) return dm_map_get(manager.component_registry[component], &(entity->id));
-    
-    DM_LOG_ERROR("Trying to retrieve a non-existent component from entity!");
-    return NULL;
+    return dm_map_get(manager.component_registry[component], &entity_id);
 }
 
 bool dm_ecs_entity_has_component(dm_entity* entity, dm_component component)
@@ -140,7 +168,7 @@ bool dm_add_transform(dm_entity* entity, void* data)
         transform.scale = dm_vec3_set(1,1,1);
     }
     
-    dm_map_insert(manager.component_registry[DM_COMPONENT_TRANSFORM], &(entity->id), &transform);
+    dm_insert_component(DM_COMPONENT_TRANSFORM, entity, &transform);
     
     return true;
 }
@@ -150,8 +178,92 @@ bool dm_add_mesh(dm_entity* entity, void* data)
     dm_mesh_component mesh = {0};
     
     mesh.name = data;
+    dm_renderer_api_register_mesh(entity, &mesh);
     
-    dm_map_insert(manager.component_registry[DM_COMPONENT_MESH], &(entity->id), &mesh);
+    dm_insert_component(DM_COMPONENT_MESH, entity, &mesh);
     
     return true;
+}
+
+bool dm_add_texture(dm_entity* entity, void* data)
+{
+    dm_texture_component texture = {0};
+    
+    texture.name = data;
+    
+    dm_insert_component(DM_COMPONENT_TEXTURE, entity, &texture);
+    return true;
+}
+
+bool dm_add_color(dm_entity* entity, void* data)
+{
+    dm_color_component color = {0};
+    
+    color = *(dm_color_component*)data;
+    
+    dm_insert_component(DM_COMPONENT_COLOR, entity, &color);
+    
+    return true;
+}
+
+bool dm_add_light_src(dm_entity* entity, void* data)
+{
+    dm_light_src_component light = {0};
+    
+    light = *(dm_light_src_component*)data;
+    
+    if(light.sync_to_obj_color)
+    {
+        if(dm_ecs_entity_has_component(entity, DM_COMPONENT_COLOR))
+        {
+            dm_color_component color = *(dm_color_component*)dm_ecs_get_component(entity->id, DM_COMPONENT_COLOR);
+            light.color = color.color;
+        }
+        else
+        {
+            DM_LOG_ERROR("Can't sync light source color to non-existant object color. Setting to false.");
+            light.sync_to_obj_color = false;
+        }
+    }
+    
+    dm_insert_component(DM_COMPONENT_LIGHT_SRC, entity, &light);
+    
+    return true;
+}
+
+bool dm_add_editor_camera(dm_entity* entity, void* data)
+{
+    dm_editor_camera camera = {0};
+    
+    if(data)
+    {
+        camera = *(dm_editor_camera*)data;
+    }
+    else
+    {
+        camera.pos = dm_vec3_set(1,1,1);
+        camera.forward = dm_vec3_set(0,0,0);
+        camera.up = dm_vec3_set(0,1,0);
+        
+        camera.pitch= 0;
+        camera.yaw = -90;
+        camera.roll = 0;
+        
+        camera.move_velocity = 2.5f;
+        camera.look_sens = 0.1f;
+    }
+    
+    dm_insert_component(DM_COMPONENT_EDITOR_CAMERA, entity, &camera);
+    
+    return true;
+}
+
+void dm_insert_component(dm_component component, dm_entity* entity, void* data)
+{
+    dm_map_insert(manager.component_registry[component], &(entity->id), data);
+}
+
+dm_list* dm_ecs_get_entity_registry(dm_component component)
+{
+    return manager.entity_registry[component];
 }

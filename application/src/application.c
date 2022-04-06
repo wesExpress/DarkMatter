@@ -29,6 +29,7 @@ dm_list* objects = NULL;
 
 dm_entity cube;
 dm_entity light;
+dm_entity editor_camera;
 
 bool dm_application_init(dm_application* app)
 {
@@ -76,33 +77,37 @@ bool dm_application_init(dm_application* app)
                        .render_pass = "light_src"
                    });
     
-    cube = dm_ecs_create_entity();
-    light = dm_ecs_create_entity();
+    
+    // camera
+    editor_camera = dm_ecs_create_entity();
+    if(!dm_ecs_add_component(&editor_camera, DM_COMPONENT_EDITOR_CAMERA, &camera)) return false;
     
     // orange cube
+    cube = dm_ecs_create_entity();
+    
     if(!dm_ecs_add_component(&cube, DM_COMPONENT_TRANSFORM, &(dm_transform_component){{0,0,0}, {1,1,1}})) return false;
     if(!dm_ecs_add_component(&cube, DM_COMPONENT_MESH, "cube")) return false;
+    if(!dm_ecs_add_component(&cube, DM_COMPONENT_COLOR, &(dm_color){1, 0.5, 0.31})) return false;
     
     // light src
-    if(!dm_ecs_add_component(&light, DM_COMPONENT_TRANSFORM, &(dm_transform_component){{1.2, 1, 2}, {0.2,0.2,0.2}})) return false;
+    light = dm_ecs_create_entity();
     
+    if(!dm_ecs_add_component(&light, DM_COMPONENT_TRANSFORM, &(dm_transform_component){{1.2,1,2}, {0.2,0.2,0.2}})) return false;
+    if(!dm_ecs_add_component(&light, DM_COMPONENT_MESH, "cube")) return false;
+    if(!dm_ecs_add_component(&light, DM_COMPONENT_COLOR, &(dm_color_component){{1, 1, 1}})) return false;
+    if(!dm_ecs_add_component(&light, DM_COMPONENT_LIGHT_SRC, &(dm_light_src_component){{1, 1, 1}, {true}})) return false;
     
     return dm_renderer_api_submit_objects(objects);
 }
 
 void dm_application_shutdown(dm_application* app)
 {
-    
-    
 	dm_list_destroy(objects);
 }
 
 bool dm_application_update(dm_application* app, float delta_time)
 {
 	dm_ecs_update_editor_camera(&camera, delta_time);
-    
-    dm_transform_component* test = dm_ecs_get_component(&cube, DM_COMPONENT_TRANSFORM);
-    test = dm_ecs_get_component(&light, DM_COMPONENT_TRANSFORM);
     
 	return true;
 }

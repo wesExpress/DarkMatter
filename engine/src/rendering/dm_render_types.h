@@ -35,7 +35,15 @@ typedef struct dm_inst_data
     uint32_t index_count;
 } dm_inst_data;
 
-#define DM_MAX_INSTANCES 100000
+typedef struct dm_mesh
+{
+    uint32_t index_offset;
+    uint32_t vertex_offset;
+    uint32_t index_count;
+    dm_list* entities;
+} dm_mesh;
+
+#define DM_MAX_INSTANCES 10000
 
 /***********
     ENUMS

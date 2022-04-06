@@ -42,11 +42,16 @@ DM_API bool dm_ecs_remove_component(dm_entity* entity, dm_component component);
 /*
 retrieve a specified component
 */
-DM_API void* dm_ecs_get_component(dm_entity* entity, dm_component component);
+DM_API void* dm_ecs_get_component(uint32_t entity_id, dm_component component);
 
 /*
 check if an entity has a given component
 */
 DM_API bool dm_ecs_entity_has_component(dm_entity* entity, dm_component component);
+
+/*
+get the entity register for a component
+*/
+DM_API dm_list* dm_ecs_get_entity_registry(dm_component component);
 
 #endif //DM_ECS_H
