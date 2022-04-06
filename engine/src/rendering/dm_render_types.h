@@ -422,7 +422,6 @@ typedef struct dm_render_pass
     dm_shader* shader;
     dm_sampler_desc sampler_desc;
     dm_list* uniforms;
-    dm_map* objects;
     bool wireframe;
     const char* name;
     void* internal_render_pass;

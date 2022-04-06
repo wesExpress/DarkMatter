@@ -20,13 +20,6 @@ dm_transform_component transforms_1[] = {
 	{{-1.3, 1, -1.5}, {1,1,1}}
 };
 
-dm_transform_component transforms_2[] = {
-	{{0,0,0}, {1,1,1}},
-	{{1.2,1,2}, {0.2,0.2,0.2}}
-};
-
-dm_list* objects = NULL;
-
 dm_entity cube;
 dm_entity light;
 dm_entity editor_camera;
@@ -61,48 +54,31 @@ bool dm_application_init(dm_application* app)
     
     dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
     
-	objects = dm_list_create(sizeof(dm_game_object), 0);
-	dm_list_append(objects, &(dm_game_object){
-                       .transform = { {0, 0, 0}, { 1,1,1 } },
-                       .color = { 1, 0.5, 0.31 },
-                       .texture = 0,
-                       .mesh = "cube",
-                       .render_pass = "object"
-                   });
-	dm_list_append(objects, &(dm_game_object){
-                       .transform = { {1.2, 1, 2}, { 0.2,0.2,0.2 } },
-                       .color = { 1,1,1 },
-                       .texture = 0,
-                       .mesh = "cube",
-                       .render_pass = "light_src"
-                   });
-    
-    
     // camera
     editor_camera = dm_ecs_create_entity();
-    if(!dm_ecs_add_component(&editor_camera, DM_COMPONENT_EDITOR_CAMERA, &camera)) return false;
+    if(!dm_ecs_add_editor_camera(&editor_camera, &camera)) return false;
     
     // orange cube
     cube = dm_ecs_create_entity();
     
-    if(!dm_ecs_add_component(&cube, DM_COMPONENT_TRANSFORM, &(dm_transform_component){{0,0,0}, {1,1,1}})) return false;
-    if(!dm_ecs_add_component(&cube, DM_COMPONENT_MESH, "cube")) return false;
-    if(!dm_ecs_add_component(&cube, DM_COMPONENT_COLOR, &(dm_color){1, 0.5, 0.31})) return false;
+    if(!dm_ecs_add_transform(&cube, &(dm_transform_component){.position={0.0f,0.0f,0.0f}, .scale={1.0f,1.0f,1.0f}})) return false;
+    if(!dm_ecs_add_mesh(&cube, &(dm_mesh_component){.name="cube"})) return false;
+    if(!dm_ecs_add_color(&cube, &(dm_color_component){.color={1.0f, 0.5f, 0.31f}})) return false;
     
     // light src
     light = dm_ecs_create_entity();
     
-    if(!dm_ecs_add_component(&light, DM_COMPONENT_TRANSFORM, &(dm_transform_component){{1.2,1,2}, {0.2,0.2,0.2}})) return false;
-    if(!dm_ecs_add_component(&light, DM_COMPONENT_MESH, "cube")) return false;
-    if(!dm_ecs_add_component(&light, DM_COMPONENT_COLOR, &(dm_color_component){{1, 1, 1}})) return false;
-    if(!dm_ecs_add_component(&light, DM_COMPONENT_LIGHT_SRC, &(dm_light_src_component){{1, 1, 1}, {true}})) return false;
+    if(!dm_ecs_add_transform(&light, &(dm_transform_component){.position={1.2f,1.0f,2.0f}, .scale={0.2f,0.2f,0.2f}})) return false;
+    if(!dm_ecs_add_mesh(&light, &(dm_mesh_component){.name="cube"})) return false;
+    if(!dm_ecs_add_color(&light, &(dm_color_component){.color={1.0f, 1.0f, 1.0f}})) return false;
+    if(!dm_ecs_add_light_src(&light,&(dm_light_src_component){.color={1.0f, 1.0f, 1.0f}, .sync_to_obj_color=true})) return false;
     
-    return dm_renderer_api_submit_objects(objects);
+    return true;
 }
 
 void dm_application_shutdown(dm_application* app)
 {
-	dm_list_destroy(objects);
+    
 }
 
 bool dm_application_update(dm_application* app, float delta_time)

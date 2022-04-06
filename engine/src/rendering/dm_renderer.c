@@ -186,20 +186,15 @@ bool dm_renderer_render_objects()
 		}
 		else if (strcmp(uniform->name, "light_pos") == 0)
 		{
-			dm_render_pass* light_pass = dm_map_get(render_passes, "light_src");
-			if (!light_pass)
-			{
-				DM_LOG_FATAL("Light source render pass is NULL!");
-				return false;
-			}
-			dm_list* lights = dm_map_get(light_pass->objects, "cube");
-			dm_game_object* light = dm_list_at(lights, 0);
-			if (!light)
-			{
-				DM_LOG_FATAL("Light is NULL!");
-				return false;
-			}
-			dm_memcpy(uniform->data, &light->transform.position, sizeof(light->transform.position));
+            dm_list* lights = dm_ecs_get_entity_registry(DM_COMPONENT_LIGHT_SRC);
+            
+            for(uint32_t i=0; i<lights->count; i++)
+            {
+                uint32_t entity_id = *(uint32_t*)dm_list_at(lights, i);
+                dm_transform_component* transform = dm_ecs_get_component(entity_id, DM_COMPONENT_TRANSFORM);
+                
+                dm_memcpy(uniform->data, &transform->position, sizeof(transform->position));
+            }
 		}
 		else if (strcmp(uniform->name, "view_pos") == 0)
 		{
@@ -551,8 +546,6 @@ bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout v_layout,
 	// uniforms
 	render_pass->uniforms = uniforms;
     
-	render_pass->objects = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_list), 0);
-    
 	if(!dm_renderer_create_render_pass_impl(render_pass, v_layout, r_data.pipeline)) return false;
     
 	dm_map_insert(render_passes, (void*)tag, render_pass);
@@ -575,8 +568,6 @@ void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
 	dm_list_destroy(render_pass->uniforms);
     
 	dm_free(render_pass->shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
-    
-	dm_map_list_destroy(render_pass->objects);
 }
 
 /*
@@ -612,39 +603,6 @@ void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_dat
 	{
 		dm_list_append(indices, &index_data[i]);
 	}
-}
-
-bool dm_renderer_api_submit_objects(dm_list* objects)
-{
-	for (uint32_t i = 0; i < objects->count; i++)
-	{
-		dm_game_object* object = dm_list_at(objects, i);
-		dm_render_pass* render_pass = dm_map_get(render_passes, (void*)object->render_pass);
-        
-		if (render_pass)
-		{
-			dm_list* obj_list = dm_map_get(render_pass->objects, (void*)object->mesh);
-            
-			if (!obj_list)
-			{
-				obj_list = dm_list_create(sizeof(dm_game_object), 0);
-				dm_list_append(obj_list, object);
-				dm_map_insert_list(render_pass->objects, (void*)object->mesh, obj_list);
-				dm_list_destroy(obj_list);
-			}
-			else
-			{
-				dm_list_append(obj_list, object);
-			}
-		}
-		else
-		{
-			DM_LOG_FATAL("Trying to submit an object to an unknown render pass: %s", object->render_pass);
-			return false;
-		}
-	}
-    
-	return true;
 }
 
 bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_descs)

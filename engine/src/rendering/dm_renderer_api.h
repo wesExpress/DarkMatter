@@ -16,8 +16,6 @@ DM_API void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* ver
 
 DM_API bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_desc);
 
-DM_API bool dm_renderer_api_submit_objects(dm_list* objects);
-
 DM_API void dm_renderer_api_set_clear_color(dm_vec3 color);
 
 DM_API bool dm_renderer_api_register_mesh(dm_entity* entity, dm_mesh_component* component);
