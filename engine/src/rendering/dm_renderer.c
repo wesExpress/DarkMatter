@@ -12,6 +12,8 @@
 
 #include <stddef.h>
 
+#define DM_MAX_INSTANCES 10000
+
 static dm_renderer_data r_data = { 0 };
 
 bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);

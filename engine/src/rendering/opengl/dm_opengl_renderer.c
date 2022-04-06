@@ -48,7 +48,7 @@ typedef struct dm_internal_shader
 
 typedef struct dm_internal_texture
 {
-	GLuint id, slot;
+	GLuint id;
 	GLint location;
 } dm_internal_texture;
 
@@ -673,7 +673,7 @@ bool dm_opengl_validate_program(GLuint program)
 TEXTURE
 */
 
-bool dm_opengl_create_texture(dm_image* image, int texture_slot, GLuint shader)
+bool dm_opengl_create_texture(dm_image* image)
 {
 	image->internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
 	dm_internal_texture* internal_texture = image->internal_texture;
@@ -695,14 +695,6 @@ bool dm_opengl_create_texture(dm_image* image, int texture_slot, GLuint shader)
 	glGenerateMipmap(GL_TEXTURE_2D);
 	glCheckErrorReturn();
     
-	internal_texture->slot = texture_slot;
-	internal_texture->location = glGetUniformLocation(shader, image->desc.name);
-	if (internal_texture->location == -1)
-	{
-		DM_LOG_FATAL("Could not find uniform: '%s'", image->desc.name);
-		return false;
-	}
-    
 	return true;
 }
 
@@ -714,16 +706,16 @@ void dm_opengl_destroy_texture(dm_image* image)
 	dm_free(image->internal_texture, sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
 }
 
-bool dm_opengl_bind_texture(dm_image* image)
+bool dm_opengl_bind_texture(dm_image* image, uint32_t slot)
 {
 	dm_internal_texture* internal_texture = image->internal_texture;
     
-	glActiveTexture(GL_TEXTURE0 + internal_texture->slot);
+	glActiveTexture(GL_TEXTURE0 + slot);
 	glCheckErrorReturn();
 	glBindTexture(GL_TEXTURE_2D, internal_texture->id);
 	glCheckErrorReturn();
     
-	glUniform1i(internal_texture->location, internal_texture->slot);
+	glUniform1i(internal_texture->location, slot);
 	glCheckErrorReturn();
     
 	return true;
@@ -1005,14 +997,6 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_delete_buffer(pipeline->index_buffer);
     dm_opengl_delete_buffer(pipeline->inst_buffer);
     
-    // textures
-    for (uint32_t i = 0; i < pipeline->render_packet.image_paths->count; i++)
-    {
-        dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
-        dm_image* image = dm_image_get(key->string);
-        dm_opengl_destroy_texture(image);
-    }
-    
     dm_free(pipeline->internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
@@ -1100,16 +1084,6 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
         glDisable(GL_STENCIL_TEST);
     }
     
-    // TODO: need to change this eventually, this won't work with multiple textures per draw call
-    // textures
-    for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
-    {
-        dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
-        dm_image* image = dm_image_get(key->string);
-        
-        if (!dm_opengl_bind_texture(image)) return false;
-    }
-    
     return true;
 }
 
@@ -1149,6 +1123,21 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer)
     }
     
     return true;
+}
+
+bool dm_create_texture_impl(dm_image* image)
+{
+    return dm_opengl_create_texture(image);
+}
+
+void dm_destroy_texture_impl(dm_image* image)
+{
+    dm_opengl_destroy_texture(image);
+}
+
+bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot)
+{
+    return dm_opengl_bind_texture(image, slot);
 }
 
 void dm_renderer_set_viewport_impl(dm_viewport viewport)

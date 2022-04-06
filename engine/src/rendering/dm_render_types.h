@@ -43,7 +43,13 @@ typedef struct dm_mesh
     dm_list* entities;
 } dm_mesh;
 
-#define DM_MAX_INSTANCES 10000
+typedef struct dm_material
+{
+    dm_vec3 ambient;
+    dm_vec3 diffuse;
+    dm_vec3 specular;
+    float shininess;
+} dm_material;
 
 /***********
     ENUMS
