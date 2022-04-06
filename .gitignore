@@ -13,3 +13,5 @@ bin/*
 *.metallib
 
 *.4coder
+
+*.fxc

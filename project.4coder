@@ -33,6 +33,8 @@ load_paths = {
 build_on_win = "build_all.bat";
 build_on_mac = "./build_all.sh";
 
+post_win = "post_build.bat";
+
 run_win = "run.bat";
 run_mac = "./run.sh";
 
@@ -43,6 +45,13 @@ command_list = {
 		.cmd = {
 					{build_on_win, .os = "win"},
 					{build_on_mac, .os = "mac"},
+				},
+	},
+	{
+		.name = "post",
+		.out = "*compilation*", .footer_panel=false, .save_dirty_files=true, .cursor_at_end=true,
+		.cmd = {
+					{post_win, .os = "win"},
 				},
 	},
 
@@ -57,5 +66,6 @@ command_list = {
 };
 
 fkey_command[1] = "build";
+fkey_command[2] = "post";
 
 fkey_command[5] = "run";

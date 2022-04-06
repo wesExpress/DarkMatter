@@ -366,8 +366,6 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	pipeline->index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->inst_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
     
-	pipeline->render_packet.image_paths = dm_list_create(sizeof(dm_string), 0);
-    
 	return dm_renderer_create_render_pipeline_impl(pipeline);
 }
 
@@ -378,15 +376,6 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 	dm_free(pipeline->vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_free(pipeline->index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_free(pipeline->inst_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-    
-	// images
-	for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
-	{
-		dm_string* str = dm_list_at(pipeline->render_packet.image_paths, i);
-		dm_strdel(str->string);
-	}
-    
-	dm_list_destroy(pipeline->render_packet.image_paths);
 }
 
 bool dm_renderer_init_object_data()
@@ -614,7 +603,6 @@ bool dm_renderer_api_submit_images(dm_image_desc* image_descs, uint32_t num_desc
 		dm_string str = { 0 };
 		str.string = dm_strdup(image_descs[i].path);
 		str.len = strlen(str.string);
-		dm_list_append(r_data.pipeline->render_packet.image_paths, &str);
 	}
     
 	return true;

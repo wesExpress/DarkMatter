@@ -31,7 +31,7 @@ bool dm_application_init(dm_application* app)
 {
 	DM_LOG_TRACE("Hellow from the application!\n");
     
-    /*
+    
 	dm_image_desc image_desc1 = { 0 };
 	image_desc1.path = "assets/container.jpg";
 	image_desc1.name = "uTexture1";
@@ -44,10 +44,10 @@ bool dm_application_init(dm_application* app)
 	image_desc2.format = DM_TEXTURE_FORMAT_RGBA;
 	image_desc2.internal_format = DM_TEXTURE_FORMAT_RGB;
 	image_desc2.flip = true;
-    */
-	//dm_image_desc image_descs[] = { image_desc1, image_desc2 };
     
-	//if (!dm_renderer_api_submit_images(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
+    dm_image_desc image_descs[] = { image_desc1, image_desc2 };
+    
+	if (!dm_renderer_api_submit_images(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
     
 	dm_renderer_api_set_clear_color((dm_vec3) { 0, 0, 0 });
     

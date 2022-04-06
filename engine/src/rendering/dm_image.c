@@ -6,6 +6,8 @@
 
 dm_map* image_map = NULL;
 
+void dm_destroy_texture_impl(dm_image* image);
+
 void dm_image_map_init()
 {
 	image_map = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_image), 0);
@@ -13,13 +15,11 @@ void dm_image_map_init()
 
 void dm_image_map_destroy()
 {
-	for(uint32_t i=0; i<image_map->capacity; i++)
+    dm_for_map_item(image_map)
 	{
-		if(image_map->items[i])
-		{
-			dm_image* image = (dm_image*)image_map->items[i]->value;
-			stbi_image_free(image->data);
-		}
+        dm_image* image = item->value;
+        dm_destroy_texture_impl(image);
+        stbi_image_free(image->data);
 	}
 	dm_map_destroy(image_map);
 }

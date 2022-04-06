@@ -6,6 +6,7 @@
 #include "dm_engine.h"
 #include "dm_logger.h"
 #include <stdbool.h>
+#include <stdio.h>
 #ifndef DM_PLATFORM_WIN32
 #include <unistd.h>
 #endif
@@ -60,6 +61,8 @@ int main()
     }
     
     dm_engine_shutdown();
+    
+    getchar();
     
     return DM_ENGINE_RUN_SUCCESS;
 }

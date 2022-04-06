@@ -769,7 +769,6 @@ void dm_directx_destroy_depth_stencil(dm_directx_pipeline* pipeline)
 	DX_RELEASE(view);
 }
 
-
 /*
 RENDERTARGET
 */
@@ -937,17 +936,6 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     
 	DX_RELEASE(internal_pipe->depth_stencil_state);
     
-	/*
-	texture
-	*/
-	for (uint32_t i = 0; i < pipeline->render_packet.image_paths->count; i++)
-	{
-		dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
-		dm_image* image = dm_image_get(key->string);
-        
-		dm_directx_destroy_texture(image);
-	}
-    
 	dm_directx_destroy_depth_stencil(internal_pipe);
 	dm_directx_destroy_rendertarget(internal_pipe);
 	dm_list_destroy(internal_pipe->vertex_buffers);
@@ -969,17 +957,6 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render
 	internal_pipe->vertex_buffers = dm_list_create(sizeof(dm_buffer), 0);
 	dm_list_append(internal_pipe->vertex_buffers, pipeline->vertex_buffer);
 	dm_list_append(internal_pipe->vertex_buffers, pipeline->inst_buffer);
-    
-	/*
-	textures
-	*/
-	for (uint32_t i = 0; i < pipeline->render_packet.image_paths->count; i++ )
-	{
-		dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
-		dm_image* image = dm_image_get(key->string);
-        
-		if(!dm_directx_create_texture(image, directx_renderer)) return false;
-	}
     
 	return true;
 }
@@ -1133,6 +1110,18 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
 	return true;
 }
 
+bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot)
+{
+    dm_directx_bind_texture(image, slot, directx_renderer);
+    
+    return true;
+}
+
+void dm_destroy_texture_impl(dm_image* image)
+{
+    dm_directx_destroy_texture(image);
+}
+
 bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 {
 	HRESULT hr;
@@ -1213,16 +1202,6 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	*/
 	dm_directx_bind_buffer(pipeline->index_buffer, 0, directx_renderer);
 	dm_directx_bind_vertex_buffers(internal_pipe->vertex_buffers, directx_renderer);
-    
-	/*
-	textures
-	*/
-	for (uint32_t i = 0; i < pipeline->render_packet.image_paths->count; i++)
-	{
-		dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
-		dm_image* image = dm_image_get(key->string);
-		dm_directx_bind_texture(image, i, directx_renderer);
-	}
     
 	return true;
 }

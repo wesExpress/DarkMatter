@@ -225,6 +225,7 @@ typedef enum dm_render_command_type
     DM_RENDER_COMMAND_BIND_PIPELINE,
     DM_RENDER_COMMAND_UPDATE_BUFFER,
     DM_RENDER_COMMAND_BIND_BUFFER,
+    DM_RENDER_COMMAND_BIND_TEXTURE,
     DM_RENDER_COMMAND_DRAW_ARRAYS,
     DM_RENDER_COMMAND_DRAW_INDEXED,
     DM_RENDER_COMMAND_DRAW_INSTANCED,
@@ -327,10 +328,10 @@ typedef struct dm_image_desc
 {
     const char* path;
     const char* name;
-    dm_texture_format format;
-    dm_texture_format internal_format;
     int width, height, n_channels;
     bool flip;
+    dm_texture_format format;
+    dm_texture_format internal_format;
 } dm_image_desc;
 
 typedef struct dm_image
@@ -388,7 +389,6 @@ typedef struct dm_stencil_state_desc
 
 typedef struct dm_render_packet
 {
-    dm_list* image_paths;
     uint32_t index_count;
     uint32_t index_offset;
     uint32_t vertex_offset;

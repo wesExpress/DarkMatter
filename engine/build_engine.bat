@@ -40,22 +40,18 @@ ECHO Building %assembly%...
 cl %compiler_flags% %defines% /FC /LD %include_flags% %c_filenames% %extern_files% /Fe%assembly%.dll %linker_flags%
 
 REM Shaders
-IF defined opengl (
-	if not exist "shaders\glsl\" mkdir shaders\glsl
-	xcopy %SRC_DIR%\engine\shaders\glsl\"." shaders\glsl /Y
-) ELSE (
-	if not exist "shaders\hlsl" mkdir shaders\hlsl
+IF not defined opengl (
 	SET fxc_flags=/Fc /Od /Zi
 
 	ECHO Compiling shader: object_vertex.hlsl
-	fxc %fxc_flags% /E v_main /T vs_5_0 %SRC_DIR%/engine/shaders/hlsl/object_vertex.hlsl /Fo shaders/hlsl/object_vertex.fxc
+	fxc %fxc_flags% /E v_main /T vs_5_0 %SRC_DIR%/engine/shaders/hlsl/object_vertex.hlsl /Fo %SRC_DIR%/engine/shaders/hlsl/object_vertex.fxc
 
 	ECHO Compiling shader: object_pixel.hlsl
-	fxc %fxc_flags% /E p_main /T ps_5_0 %SRC_DIR%/engine/shaders/hlsl/object_pixel.hlsl /Fo shaders/hlsl/object_pixel.fxc
+	fxc %fxc_flags% /E p_main /T ps_5_0 %SRC_DIR%/engine/shaders/hlsl/object_pixel.hlsl /Fo %SRC_DIR%/engine/shaders/hlsl/object_pixel.fxc
 
 	ECHO Compiling shader: light_src_vertex.hlsl
-	fxc %fxc_flags% /E v_main /T vs_5_0 %SRC_DIR%/engine/shaders/hlsl/light_src_vertex.hlsl /Fo shaders/hlsl/light_src_vertex.fxc
+	fxc %fxc_flags% /E v_main /T vs_5_0 %SRC_DIR%/engine/shaders/hlsl/light_src_vertex.hlsl /Fo %SRC_DIR%/engine/shaders/hlsl/light_src_vertex.fxc
 
 	ECHO Compiling shader: light_src_pixel.hlsl
-	fxc %fxc_flags% /E p_main /T ps_5_0 %SRC_DIR%/engine/shaders/hlsl/light_src_pixel.hlsl /Fo shaders/hlsl/light_src_pixel.fxc
+	fxc %fxc_flags% /E p_main /T ps_5_0 %SRC_DIR%/engine/shaders/hlsl/light_src_pixel.hlsl /Fo %SRC_DIR%/engine/shaders/hlsl/light_src_pixel.fxc
 )

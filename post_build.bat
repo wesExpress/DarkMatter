@@ -1,12 +1,12 @@
 @echo off
 SetLocal EnableDelayedExpansion
 
-SET fxc_flags=/FC /Od /Zi
+set SRC_DIR=%cd%
 
-cd ../engine/shaders/hlsl
+cd build
 
-for %%f in (*.hlsl) do (
-	set shader=%%~nxf
-	ECHO %shader%
-	REM fxc %fxc_flags% /E
-)
+if not exist "shaders" mkdir shaders
+if not exist "assets" mkdir assets
+
+xcopy %SRC_DIR%\engine\shaders\"." shaders /Y
+xcopy %SRC_DIR%\application\assets\"." assets
