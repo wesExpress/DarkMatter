@@ -30,8 +30,6 @@ bool dm_engine_create(dm_application* app)
     e_data->platform_data->x = app->engine_config.start_x;
     e_data->platform_data->y = app->engine_config.start_y;
     
-    dm_input_init();
-    
     dm_event_set_callback(dm_engine_on_event);
     
     if(!dm_platform_init(e_data->platform_data, app->engine_config.name))
@@ -67,7 +65,6 @@ bool dm_engine_create(dm_application* app)
         return false;
     }
     
-    
     e_data->is_running = true;
     e_data->is_suspended = false;
     
@@ -80,6 +77,9 @@ void dm_engine_shutdown()
 {
     dm_ecs_shutdown();
     dm_random_shutdown();
+    
+    dm_renderer_shutdown();
+    dm_platform_shutdown(e_data);
     
     e_data->application->dm_application_shutdown(e_data->application);
     
@@ -139,10 +139,6 @@ bool dm_engine_run()
     }
     
     e_data->is_running = false;
-    
-    dm_input_shutdown();
-    dm_renderer_shutdown();
-    dm_platform_shutdown(e_data);
     
     return true;
 }
