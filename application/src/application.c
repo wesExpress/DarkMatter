@@ -7,6 +7,7 @@ static dm_editor_camera camera = {
 	.look_sens = 0.1f
 };
 
+/*
 dm_transform_component transforms_1[] = {
 	{{0, 0, 0}, {1,1,1}},
 	{{2, 5, -15}, {1,1,1}},
@@ -19,15 +20,18 @@ dm_transform_component transforms_1[] = {
 	{{1.5, 0.2, -1.5}, {1,1,1}},
 	{{-1.3, 1, -1.5}, {1,1,1}}
 };
+*/
 
 dm_entity cube;
 dm_entity light;
 dm_entity editor_camera;
+dm_entity cube2;
 
 bool dm_application_init(dm_application* app)
 {
 	DM_LOG_TRACE("Hellow from the application!\n");
     
+    /*
 	dm_image_desc image_desc1 = { 0 };
 	image_desc1.path = "assets/container.jpg";
 	image_desc1.name = "uTexture1";
@@ -40,17 +44,12 @@ bool dm_application_init(dm_application* app)
 	image_desc2.format = DM_TEXTURE_FORMAT_RGBA;
 	image_desc2.internal_format = DM_TEXTURE_FORMAT_RGB;
 	image_desc2.flip = true;
-    
+    */
 	//dm_image_desc image_descs[] = { image_desc1, image_desc2 };
     
 	//if (!dm_renderer_api_submit_images(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
     
-	// clear color
 	dm_renderer_api_set_clear_color((dm_vec3) { 0, 0, 0 });
-    
-	// camera
-	dm_renderer_api_set_camera_pos(camera.pos);
-	dm_renderer_api_set_camera_forward(camera.forward);
     
     dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
     
@@ -72,6 +71,13 @@ bool dm_application_init(dm_application* app)
     if(!dm_ecs_add_mesh(&light, &(dm_mesh_component){.name="cube"})) return false;
     if(!dm_ecs_add_color(&light, &(dm_color_component){.color={1.0f, 1.0f, 1.0f}})) return false;
     if(!dm_ecs_add_light_src(&light,&(dm_light_src_component){.color={1.0f, 1.0f, 1.0f}, .sync_to_obj_color=true})) return false;
+    
+    // blue cube
+    cube2 = dm_ecs_create_entity();
+    
+    if(!dm_ecs_add_transform(&cube2, &(dm_transform_component){.position={2.0f,2.0f,2.0f}, .scale={1.0f,1.0f,1.0f}})) return false;
+    if(!dm_ecs_add_mesh(&cube2, &(dm_mesh_component){.name="cube"})) return false;
+    if(!dm_ecs_add_color(&cube2, &(dm_color_component){.color={0.31f, 0.5f, 1.f}})) return false;
     
     return true;
 }
