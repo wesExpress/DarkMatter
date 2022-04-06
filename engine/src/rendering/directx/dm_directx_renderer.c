@@ -22,7 +22,7 @@
 #include <stdlib.h>
 
 #ifdef DM_DEBUG
-void dm_directx_print_errors();
+bool dm_directx_print_errors();
 const char* dm_directx_decode_category(D3D11_MESSAGE_CATEGORY category);
 const char* dm_directx_decode_severity(D3D11_MESSAGE_SEVERITY severity);
 #endif
@@ -1237,7 +1237,7 @@ void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 }
 
 #ifdef DM_DEBUG
-void dm_directx_print_errors()
+bool dm_directx_print_errors()
 {
 	HRESULT hr;
     
@@ -1246,7 +1246,7 @@ void dm_directx_print_errors()
 	if (hr != S_OK)
 	{
 		DM_LOG_ERROR("ID3D11Device::QueryInterface failed!");
-		return;
+		return false;
 	}
     
 	UINT64 message_count = info_queue->lpVtbl->GetNumStoredMessages(info_queue);
@@ -1265,17 +1265,39 @@ void dm_directx_print_errors()
         
 		switch (message->Severity)
 		{
-            case D3D11_MESSAGE_SEVERITY_CORRUPTION: DM_LOG_FATAL("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
-            case D3D11_MESSAGE_SEVERITY_ERROR: DM_LOG_ERROR("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
-            case D3D11_MESSAGE_SEVERITY_WARNING: DM_LOG_WARN("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
-            case D3D11_MESSAGE_SEVERITY_INFO: DM_LOG_INFO("\n    [DirectX11 %s]: (%d) %s", severity, (int)id, message->pDescription); break;
-            case D3D11_MESSAGE_SEVERITY_MESSAGE: DM_LOG_TRACE("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
+            case D3D11_MESSAGE_SEVERITY_CORRUPTION:
+            {
+                DM_LOG_FATAL("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); 
+                return false;
+            } break;
+            case D3D11_MESSAGE_SEVERITY_ERROR:
+            {
+                DM_LOG_ERROR("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); 
+                return false;
+            } break;
+            case D3D11_MESSAGE_SEVERITY_WARNING:
+            {
+                DM_LOG_WARN("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); 
+                return false;
+            } break;
+            case D3D11_MESSAGE_SEVERITY_INFO: 
+            {
+                DM_LOG_INFO("\n    [DirectX11 %s]: (%d) %s", severity, (int)id, message->pDescription); 
+                return false;
+            } break;
+            case D3D11_MESSAGE_SEVERITY_MESSAGE: 
+            {
+                DM_LOG_TRACE("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); 
+                return false;
+            } break;
 		}
         
 		dm_free(message, message_size, DM_MEM_RENDER_PIPELINE);
 	}
     
 	DX_RELEASE(info_queue);
+    
+    return true;
 }
 
 const char* dm_directx_decode_category(D3D11_MESSAGE_CATEGORY category)
