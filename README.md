@@ -1,4 +1,4 @@
-# CEngine
+# DarkMatter
 
 This is a cross-platform rendering engine for the purpose of learning. It is written entirely in C and does not use external libraries, with two main exceptions:
 - Libraries
