@@ -10,6 +10,7 @@ https://github.com/mattgallagher/CwlUtils/blob/master/Sources/ReferenceRandomGen
 */
 
 #include <stdint.h>
+#include <stdlib.h>
 
 typedef struct mt19937_64
 {

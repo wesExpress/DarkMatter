@@ -30,18 +30,46 @@ load_paths = {
  { load_paths_custom, .os = "mac"  },
 };
 
-build_on_win = "build_all.bat";
-build_on_mac = "engine/build_mac.sh";
+build_all_win = "build_all.bat";
+build_all_mac = "./build_all.sh";
+
+build_eng_win = "engine\build_engine.bat";
+
+build_app_win = "application\build_app.bat";
+
+post_win = "post_build.bat";
 
 run_win = "run.bat";
+run_mac = "./run.sh";
 
 command_list = {
 	{
-		.name = "build",
+		.name = "build_all",
 		.out = "*compilation*", .footer_panel=false, .save_dirty_files=true, .cursor_at_end=true,
 		.cmd = {
-					{build_on_win, .os = "win"},
-					{build_on_mac, .os = "mac"},
+					{build_all_win, .os = "win"},
+					{build_all_mac, .os = "mac"},
+				},
+	},
+	{
+		.name = "build_engine",
+		.out = "*compilation*", .footer_panel=false, .save_dirty_files=true, .cursor_at_end=true,
+		.cmd = {
+					{build_eng_win, .os = "win"},
+				},
+	},
+	{
+		.name = "build_app",
+		.out = "*compilation*", .footer_panel=false, .save_dirty_files=true, .cursor_at_end=true,
+		.cmd = {
+					{build_app_win, .os = "win"},
+				},
+	},
+	{
+		.name = "post",
+		.out = "*compilation*", .footer_panel=false, .save_dirty_files=true, .cursor_at_end=true,
+		.cmd = {
+					{post_win, .os = "win"},
 				},
 	},
 
@@ -50,11 +78,14 @@ command_list = {
 		.out = "", .footer_panel=false, .save_dirty_files=false, .cursor_at_end=true,
 		.cmd = {
 					{run_win, .os = "win"},
+					{run_mac, .os = "mac"},
 				},
 	},
 };
 
-fkey_command[1] = "build";
-fkey_command[2] = "post_build";
+fkey_command[1] = "build_all";
+fkey_command[2] = "build_engine";
+fkey_command[3] = "build_app";
+fkey_command[4] = "post";
 
 fkey_command[5] = "run";

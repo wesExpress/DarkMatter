@@ -4,8 +4,6 @@
 #include "core/dm_mem.h"
 #include "core/dm_math.h"
 
-static dm_camera* camera;
-
 void dm_camera_init(dm_camera* camera, dm_vec3 pos, float fov, int width, int height, float n, float f, dm_camera_type type)
 {
 	camera->pos = pos;

@@ -11,10 +11,10 @@
 
 #include "dm_metal_view.h"
 #include "rendering/dm_renderer.h"
-#include "core/math/dm_math.h"
+#include "core/dm_math.h"
 
 @interface dm_metal_renderer : NSObject
-    
+
 @property (strong, nonatomic) id<MTLDevice> device;
 @property (strong, nonatomic) id<MTLCommandQueue> command_queue;
 @property (strong, nonatomic) id<MTLCommandBuffer> command_buffer;

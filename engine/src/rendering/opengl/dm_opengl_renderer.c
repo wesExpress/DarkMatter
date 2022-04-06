@@ -16,6 +16,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <limits.h>
+
+#define DM_GLUINT_FAIL UINT_MAX
 
 /*
 STRUCTS
@@ -299,8 +302,6 @@ bool dm_opengl_create_buffer(dm_buffer* buffer, void* data)
     internal_buffer->usage = dm_usage_to_opengl_draw(buffer->desc.usage);
     if (internal_buffer->usage == DM_BUFFER_USAGE_UNKNOWN) return false;
     
-    dm_vertex* test = data;
-    
     glGenBuffers(1, &internal_buffer->id);
     glCheckErrorReturn();
     
@@ -342,7 +343,10 @@ bool dm_opengl_create_shader(dm_shader* shader)
     dm_internal_shader* internal_shader = shader->internal_shader;
     
     GLuint vertex_shader = dm_opengl_compile_shader(shader->vertex_desc);
+    if(vertex_shader == DM_GLUINT_FAIL) return false;
+    
     GLuint frag_shader = dm_opengl_compile_shader(shader->pixel_desc);
+    if(frag_shader == DM_GLUINT_FAIL) return false;
     
     DM_LOG_DEBUG("Linking shader...");
     internal_shader->id = glCreateProgram();
@@ -569,7 +573,12 @@ GLuint dm_opengl_compile_shader(dm_shader_desc desc)
     DM_LOG_DEBUG("Compiling shader: %s", desc.path);
     
     FILE* file = fopen(desc.path, "r");
-    DM_ASSERT_MSG(file, "Could not fopen file: %s", desc.path);
+    //DM_ASSERT_MSG(file, "Could not fopen file: %s", desc.path);
+    if(!file)
+    {
+        DM_LOG_FATAL("Could not fopen file: %s", desc.path);
+        return DM_GLUINT_FAIL;
+    }
     
     // determine size of memory to allocate to the buffer
     fseek(file, 0, SEEK_END);
@@ -595,7 +604,12 @@ GLuint dm_opengl_compile_shader(dm_shader_desc desc)
     glCompileShader(shader);
     glCheckError();
     
-    DM_ASSERT(dm_opengl_validate_shader(shader));
+    //DM_ASSERT(dm_opengl_validate_shader(shader));
+    if(!dm_opengl_validate_shader(shader))
+    {
+        DM_LOG_FATAL("Could not validate shader!");
+        return DM_GLUINT_FAIL;
+    }
     
     dm_free(string, length+1, DM_MEM_STRING);
     
@@ -987,8 +1001,6 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 {
-    dm_internal_pipeline* interanl_pipe = pipeline->internal_pipeline;
-    
     dm_opengl_delete_buffer(pipeline->vertex_buffer);
     dm_opengl_delete_buffer(pipeline->index_buffer);
     dm_opengl_delete_buffer(pipeline->inst_buffer);
@@ -1006,8 +1018,6 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
 
 bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render_pipeline* pipeline)
 {
-    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
-    
     /*
     // buffers
     */

@@ -22,7 +22,7 @@
 #include <stdlib.h>
 
 #ifdef DM_DEBUG
-void dm_directx_print_errors();
+bool dm_directx_print_errors();
 const char* dm_directx_decode_category(D3D11_MESSAGE_CATEGORY category);
 const char* dm_directx_decode_severity(D3D11_MESSAGE_SEVERITY severity);
 #endif
@@ -318,15 +318,15 @@ D3D11_INPUT_CLASSIFICATION dm_vertex_class_to_directx_class(dm_vertex_attrib_cla
 /*
 BUFFER
 */
-bool dm_directx_create_buffer(dm_buffer* buffer, void* data, dm_directx_renderer* renderer)
+bool dm_directx_create_buffer(dm_buffer* buffer, void* data)
 {
 	HRESULT hr;
     
 	buffer->internal_buffer = dm_alloc(sizeof(dm_directx_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_directx_buffer* internal_buffer = buffer->internal_buffer;
     
-	ID3D11Device* device = renderer->device;
-	ID3D11DeviceContext* context = renderer->context;
+	ID3D11Device* device = directx_renderer->device;
+	ID3D11DeviceContext* context = directx_renderer->context;
     
 	D3D11_USAGE usage = dm_buffer_usage_to_directx(buffer->desc.usage);
 	if (usage == D3D11_USAGE_STAGING + 1) return false;
@@ -366,9 +366,9 @@ void dm_directx_delete_buffer(dm_buffer* buffer)
 	dm_free(buffer->internal_buffer, sizeof(dm_directx_buffer), DM_MEM_RENDERER_BUFFER);
 }
 
-void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_directx_renderer* renderer)
+void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t slot)
 {
-	ID3D11DeviceContext* context = renderer->context;
+	ID3D11DeviceContext* context = directx_renderer->context;
 	dm_directx_buffer* internal_buffer = buffer->internal_buffer;
     
 	UINT stride = buffer->desc.elem_size;
@@ -391,9 +391,9 @@ void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_directx_rendere
 	}
 }
 
-void dm_directx_bind_vertex_buffers(dm_list* buffers, dm_directx_renderer* renderer)
+void dm_directx_bind_vertex_buffers(dm_list* buffers)
 {
-	ID3D11DeviceContext* context = renderer->context;
+	ID3D11DeviceContext* context = directx_renderer->context;
 	
 	ID3D11Buffer** buffer_list = dm_alloc(sizeof(ID3D11Buffer*) * buffers->count, DM_MEM_RENDERER_BUFFER);
 	UINT* stride_list = dm_alloc(sizeof(UINT) * buffers->count, DM_MEM_RENDERER_BUFFER);
@@ -440,15 +440,15 @@ bool dm_directx_create_input_element(dm_vertex_attrib_desc attrib_desc, D3D11_IN
 }
 
 
-bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout, dm_directx_renderer* renderer)
+bool dm_directx_create_shader(dm_shader* shader, dm_vertex_layout layout)
 {
 	HRESULT hr;
     
 	shader->internal_shader = dm_alloc(sizeof(dm_directx_shader), DM_MEM_RENDERER_SHADER);
 	dm_directx_shader* internal_shader = shader->internal_shader;
     
-	ID3D11Device* device = renderer->device;
-	ID3D11DeviceContext* context = renderer->context;
+	ID3D11Device* device = directx_renderer->device;
+	ID3D11DeviceContext* context = directx_renderer->context;
     
 	// vertex shader
 	wchar_t ws[100];
@@ -540,7 +540,7 @@ void dm_directx_delete_shader(dm_shader* shader)
 TEXTURE
 */
 
-bool dm_directx_create_texture(dm_image* image, dm_directx_renderer* renderer)
+bool dm_directx_create_texture(dm_image* image)
 {
 	HRESULT hr;
     
@@ -560,10 +560,10 @@ bool dm_directx_create_texture(dm_image* image, dm_directx_renderer* renderer)
 	tex_desc.Format = image_format;
 	tex_desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
     
-	DX_ERROR_CHECK(renderer->device->lpVtbl->CreateTexture2D(renderer->device, &tex_desc, NULL, &internal_texture->texture), "ID3D11Device::CreateTexture2D failed!");
+	DX_ERROR_CHECK(directx_renderer->device->lpVtbl->CreateTexture2D(directx_renderer->device, &tex_desc, NULL, &internal_texture->texture), "ID3D11Device::CreateTexture2D failed!");
 	dm_mem_db_adjust(sizeof(ID3D11Texture2D), DM_MEM_RENDERER_TEXTURE, DM_MEM_ADJUST_ADD);
     
-	renderer->context->lpVtbl->UpdateSubresource(renderer->context, (ID3D11Resource*)internal_texture->texture, 0, NULL, image->data, image->desc.width * 4, 0);
+	directx_renderer->context->lpVtbl->UpdateSubresource(directx_renderer->context, (ID3D11Resource*)internal_texture->texture, 0, NULL, image->data, image->desc.width * 4, 0);
     
 	D3D11_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
 	view_desc.Format = tex_desc.Format;
@@ -571,10 +571,10 @@ bool dm_directx_create_texture(dm_image* image, dm_directx_renderer* renderer)
 	view_desc.Texture2D.MostDetailedMip = 0;
 	view_desc.Texture2D.MipLevels = -1;
     
-	DX_ERROR_CHECK(renderer->device->lpVtbl->CreateShaderResourceView(renderer->device, (ID3D11Resource*)internal_texture->texture, &view_desc, &internal_texture->view), "ID3D11Device::CreateShaderResourceView failed!");
+	DX_ERROR_CHECK(directx_renderer->device->lpVtbl->CreateShaderResourceView(directx_renderer->device, (ID3D11Resource*)internal_texture->texture, &view_desc, &internal_texture->view), "ID3D11Device::CreateShaderResourceView failed!");
 	dm_mem_db_adjust(sizeof(ID3D11ShaderResourceView), DM_MEM_RENDERER_TEXTURE, DM_MEM_ADJUST_ADD);
     
-	renderer->context->lpVtbl->GenerateMips(renderer->context, internal_texture->view);
+	directx_renderer->context->lpVtbl->GenerateMips(directx_renderer->context, internal_texture->view);
     
 	return true;
 }
@@ -592,11 +592,11 @@ void dm_directx_destroy_texture(dm_image* image)
 	dm_free(image->internal_texture, sizeof(dm_directx_texture), DM_MEM_RENDERER_TEXTURE);
 }
 
-void dm_directx_bind_texture(dm_image* image, uint32_t slot, dm_directx_renderer* renderer)
+void dm_directx_bind_texture(dm_image* image, uint32_t slot)
 {
 	dm_directx_texture* internal_texture = image->internal_texture;
 	
-	renderer->context->lpVtbl->PSSetShaderResources(renderer->context, slot, 1, &internal_texture->view);
+	directx_renderer->context->lpVtbl->PSSetShaderResources(directx_renderer->context, slot, 1, &internal_texture->view);
 }
 
 /*
@@ -604,17 +604,17 @@ DEVICE
 */
 
 #if DM_DEBUG
-void dm_directx_device_report_live_objects(dm_directx_renderer* renderer)
+void dm_directx_device_report_live_objects()
 {
 	HRESULT hr;
-	ID3D11Debug* debugger = renderer->debugger;
+	ID3D11Debug* debugger = directx_renderer->debugger;
     
 	hr = debugger->lpVtbl->ReportLiveDeviceObjects(debugger, D3D11_RLDO_DETAIL);
 	if (hr != S_OK) DM_LOG_ERROR("ID3D11Debug::ReportLiveDeviceObjects failed!");
 }
 #endif
 
-bool dm_directx_create_device(dm_directx_renderer* renderer)
+bool dm_directx_create_device()
 {
 	UINT flags = 0;
 #if DM_DEBUG
@@ -633,33 +633,33 @@ bool dm_directx_create_device(dm_directx_renderer* renderer)
                                      flags,
                                      NULL, 0,
                                      D3D11_SDK_VERSION,
-                                     &renderer->device,
+                                     &directx_renderer->device,
                                      &feature_level,
-                                     &renderer->context),
+                                     &directx_renderer->context),
                    "D3D11CreateDevice failed!"
                    );
 	DM_ASSERT_MSG((feature_level == D3D_FEATURE_LEVEL_11_0), "Direct3D Feature Level 11 unsupported!");
     
 	UINT msaa_quality;
-	DX_ERROR_CHECK(renderer->device->lpVtbl->CheckMultisampleQualityLevels(renderer->device, DXGI_FORMAT_R8G8B8A8_UNORM, 4, &msaa_quality), "D3D11Device::CheckMultisampleQualityLevels failed!");
+	DX_ERROR_CHECK(directx_renderer->device->lpVtbl->CheckMultisampleQualityLevels(directx_renderer->device, DXGI_FORMAT_R8G8B8A8_UNORM, 4, &msaa_quality), "D3D11Device::CheckMultisampleQualityLevels failed!");
     
 	// if in debug, create the debugger to query live objects
 #if DM_DEBUG
-	DX_ERROR_CHECK(renderer->device->lpVtbl->QueryInterface(renderer->device, &IID_ID3D11Debug, (void**)&(renderer->debugger)), "D3D11Device::QueryInterface failed!");
+	DX_ERROR_CHECK(directx_renderer->device->lpVtbl->QueryInterface(directx_renderer->device, &IID_ID3D11Debug, (void**)&(directx_renderer->debugger)), "D3D11Device::QueryInterface failed!");
 #endif
     
 	return true;
 }
 
-void dm_directx_destroy_device(dm_directx_renderer* renderer)
+void dm_directx_destroy_device()
 {
-	ID3D11Device* device = renderer->device;
-	ID3D11DeviceContext* context = renderer->context;
+	ID3D11Device* device = directx_renderer->device;
+	ID3D11DeviceContext* context = directx_renderer->context;
     
 	DX_RELEASE(context);
 #if DM_DEBUG
-	dm_directx_device_report_live_objects(renderer);
-	DX_RELEASE(renderer->debugger);
+	dm_directx_device_report_live_objects();
+	DX_RELEASE(directx_renderer->debugger);
 #endif
     
 	DX_RELEASE(device);
@@ -669,18 +669,18 @@ void dm_directx_destroy_device(dm_directx_renderer* renderer)
 SWAPCHAIN
 */
 
-bool dm_directx_create_swapchain(dm_directx_renderer* renderer)
+bool dm_directx_create_swapchain()
 {
 	// set up the swap chain pointer to be created in this function
 	IDXGISwapChain* swap_chain = NULL;
     
 	// make sure the device has been created and then grab it
-	DM_ASSERT_MSG(renderer->device, "DirectX device is NULL!");
-	ID3D11Device* device = renderer->device;
+	DM_ASSERT_MSG(directx_renderer->device, "DirectX device is NULL!");
+	ID3D11Device* device = directx_renderer->device;
     
 	HRESULT hr;
 	RECT client_rect;
-	GetClientRect(renderer->hwnd, &client_rect);
+	GetClientRect(directx_renderer->hwnd, &client_rect);
     
 	struct DXGI_SWAP_CHAIN_DESC desc = { 0 };
 	desc.BufferDesc.Width = client_rect.right;
@@ -693,7 +693,7 @@ bool dm_directx_create_swapchain(dm_directx_renderer* renderer)
 	desc.SampleDesc.Count = 1;
 	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	desc.BufferCount = 1;
-	desc.OutputWindow = renderer->hwnd;
+	desc.OutputWindow = directx_renderer->hwnd;
 	desc.Windowed = TRUE;
 	desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
 	//desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
@@ -709,7 +709,7 @@ bool dm_directx_create_swapchain(dm_directx_renderer* renderer)
 	DX_ERROR_CHECK(dxgi_adapter->lpVtbl->GetParent(dxgi_adapter, &IID_IDXGIFactory, (void**)&dxgi_factory), "IDXGIAdapter::GetParent failed!");
     
 	// create the swap chain
-	DX_ERROR_CHECK(dxgi_factory->lpVtbl->CreateSwapChain(dxgi_factory, (IUnknown*)device, &desc, &renderer->swap_chain), "IDXGIFactory::CreateSwapChain failed!");
+	DX_ERROR_CHECK(dxgi_factory->lpVtbl->CreateSwapChain(dxgi_factory, (IUnknown*)device, &desc, &directx_renderer->swap_chain), "IDXGIFactory::CreateSwapChain failed!");
 	dm_mem_db_adjust(sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_ADD);
     
 	// release pack animal directx objects
@@ -720,10 +720,10 @@ bool dm_directx_create_swapchain(dm_directx_renderer* renderer)
 	return true;
 }
 
-void dm_directx_destroy_swapchain(dm_directx_renderer* renderer)
+void dm_directx_destroy_swapchain()
 {
 	// release the directx object
-	IDXGISwapChain* swap_chain = renderer->swap_chain;
+	IDXGISwapChain* swap_chain = directx_renderer->swap_chain;
 	DX_RELEASE(swap_chain);
     
 	dm_mem_db_adjust(sizeof(IDXGISwapChain), DM_MEM_RENDER_PIPELINE, DM_MEM_ADJUST_SUBTRACT);
@@ -733,15 +733,15 @@ void dm_directx_destroy_swapchain(dm_directx_renderer* renderer)
 DEPTHSTENCIL
 */
 
-bool dm_directx_create_depth_stencil(dm_directx_renderer* renderer, dm_directx_pipeline* pipeline)
+bool dm_directx_create_depth_stencil(dm_directx_pipeline* pipeline)
 {
-	DM_ASSERT_MSG(renderer->device, "DirectX device is NULL!");
+	DM_ASSERT_MSG(directx_renderer->device, "DirectX device is NULL!");
     
 	HRESULT hr;
 	RECT client_rect;
-	GetClientRect(renderer->hwnd, &client_rect);
+	GetClientRect(directx_renderer->hwnd, &client_rect);
 	
-	ID3D11Device* device = renderer->device;
+	ID3D11Device* device = directx_renderer->device;
     
 	D3D11_TEXTURE2D_DESC desc = { 0 };
 	desc.Width = client_rect.right;
@@ -769,19 +769,18 @@ void dm_directx_destroy_depth_stencil(dm_directx_pipeline* pipeline)
 	DX_RELEASE(view);
 }
 
-
 /*
 RENDERTARGET
 */
 
-bool dm_directx_create_rendertarget(dm_directx_renderer* renderer, dm_directx_pipeline* pipeline)
+bool dm_directx_create_rendertarget(dm_directx_pipeline* pipeline)
 {
-	DM_ASSERT_MSG(renderer->device, "DirectX device is NULL!");
-	DM_ASSERT_MSG(renderer->swap_chain, "DirectX swap chain is NULL!");
+	DM_ASSERT_MSG(directx_renderer->device, "DirectX device is NULL!");
+	DM_ASSERT_MSG(directx_renderer->swap_chain, "DirectX swap chain is NULL!");
     
 	HRESULT hr;
-	ID3D11Device* device = renderer->device;
-	IDXGISwapChain* swap_chain = renderer->swap_chain;
+	ID3D11Device* device = directx_renderer->device;
+	IDXGISwapChain* swap_chain = directx_renderer->swap_chain;
 	
 	DX_ERROR_CHECK(swap_chain->lpVtbl->GetBuffer(swap_chain, 0, &IID_ID3D11Texture2D, (void**)&(ID3D11Resource*)pipeline->render_back_buffer), "IDXGISwapChain::GetBuffer failed!");
 	device->lpVtbl->CreateRenderTargetView(device, (ID3D11Resource*)pipeline->render_back_buffer, NULL, &pipeline->render_view);
@@ -888,8 +887,8 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// Create the render target and depth stencil
 	*/
-	if (!dm_directx_create_rendertarget(directx_renderer, internal_pipe)) return false;
-	if (!dm_directx_create_depth_stencil(directx_renderer, internal_pipe)) return false;
+	if (!dm_directx_create_rendertarget(internal_pipe)) return false;
+	if (!dm_directx_create_depth_stencil(internal_pipe)) return false;
     
 	/*
 	// blending 
@@ -937,17 +936,6 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     
 	DX_RELEASE(internal_pipe->depth_stencil_state);
     
-	/*
-	texture
-	*/
-	for (uint32_t i = 0; i < pipeline->render_packet.image_paths->count; i++)
-	{
-		dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
-		dm_image* image = dm_image_get(key->string);
-        
-		dm_directx_destroy_texture(image);
-	}
-    
 	dm_directx_destroy_depth_stencil(internal_pipe);
 	dm_directx_destroy_rendertarget(internal_pipe);
 	dm_list_destroy(internal_pipe->vertex_buffers);
@@ -962,24 +950,13 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render
 	/*
 	// buffers
 	*/
-	if (!dm_directx_create_buffer(pipeline->vertex_buffer, vb_data, directx_renderer)) return false;
-	if (!dm_directx_create_buffer(pipeline->index_buffer, ib_data, directx_renderer)) return false;
-	if (!dm_directx_create_buffer(pipeline->inst_buffer, 0, directx_renderer)) return false;
+	if (!dm_directx_create_buffer(pipeline->vertex_buffer, vb_data)) return false;
+	if (!dm_directx_create_buffer(pipeline->index_buffer, ib_data)) return false;
+	if (!dm_directx_create_buffer(pipeline->inst_buffer, 0)) return false;
     
 	internal_pipe->vertex_buffers = dm_list_create(sizeof(dm_buffer), 0);
 	dm_list_append(internal_pipe->vertex_buffers, pipeline->vertex_buffer);
 	dm_list_append(internal_pipe->vertex_buffers, pipeline->inst_buffer);
-    
-	/*
-	textures
-	*/
-	for (uint32_t i = 0; i < pipeline->render_packet.image_paths->count; i++ )
-	{
-		dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
-		dm_image* image = dm_image_get(key->string);
-        
-		if(!dm_directx_create_texture(image, directx_renderer)) return false;
-	}
     
 	return true;
 }
@@ -995,7 +972,7 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	dm_directx_render_pass* internal_pass = render_pass->internal_render_pass;
     
 	// shader
-	if (!dm_directx_create_shader(render_pass->shader, v_layout, directx_renderer)) return false;
+	if (!dm_directx_create_shader(render_pass->shader, v_layout)) return false;
     
 	// rasterizer
 	D3D11_RASTERIZER_DESC rd = { 0 };
@@ -1128,9 +1105,26 @@ bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_s
 
 bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
 {
-	dm_directx_bind_buffer(buffer, slot, directx_renderer);
+	dm_directx_bind_buffer(buffer, slot);
     
 	return true;
+}
+
+bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot)
+{
+    dm_directx_bind_texture(image, slot);
+    
+    return true;
+}
+
+bool dm_create_texture_impl(dm_image* image)
+{
+    return dm_directx_create_texture(image);
+}
+
+void dm_destroy_texture_impl(dm_image* image)
+{
+    dm_directx_destroy_texture(image);
 }
 
 bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
@@ -1211,18 +1205,8 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
 	/*
 	// buffers
 	*/
-	dm_directx_bind_buffer(pipeline->index_buffer, 0, directx_renderer);
-	dm_directx_bind_vertex_buffers(internal_pipe->vertex_buffers, directx_renderer);
-    
-	/*
-	textures
-	*/
-	for (uint32_t i = 0; i < pipeline->render_packet.image_paths->count; i++)
-	{
-		dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
-		dm_image* image = dm_image_get(key->string);
-		dm_directx_bind_texture(image, i, directx_renderer);
-	}
+	dm_directx_bind_buffer(pipeline->index_buffer, 0);
+	dm_directx_bind_vertex_buffers(internal_pipe->vertex_buffers);
     
 	return true;
 }
@@ -1232,8 +1216,8 @@ void dm_renderer_set_viewport_impl(dm_viewport viewport)
 	ID3D11DeviceContext* context = directx_renderer->context;
     
 	D3D11_VIEWPORT new_viewport = { 0 };
-	new_viewport.Width = viewport.width;
-	new_viewport.Height = viewport.height;
+	new_viewport.Width = (FLOAT)viewport.width;
+	new_viewport.Height = (FLOAT)viewport.height;
 	new_viewport.MaxDepth = 1.0f;
 	
 	context->lpVtbl->RSSetViewports(context, 1, &new_viewport);
@@ -1253,7 +1237,7 @@ void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
 }
 
 #ifdef DM_DEBUG
-void dm_directx_print_errors()
+bool dm_directx_print_errors()
 {
 	HRESULT hr;
     
@@ -1262,7 +1246,7 @@ void dm_directx_print_errors()
 	if (hr != S_OK)
 	{
 		DM_LOG_ERROR("ID3D11Device::QueryInterface failed!");
-		return;
+		return false;
 	}
     
 	UINT64 message_count = info_queue->lpVtbl->GetNumStoredMessages(info_queue);
@@ -1281,17 +1265,39 @@ void dm_directx_print_errors()
         
 		switch (message->Severity)
 		{
-            case D3D11_MESSAGE_SEVERITY_CORRUPTION: DM_LOG_FATAL("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
-            case D3D11_MESSAGE_SEVERITY_ERROR: DM_LOG_ERROR("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
-            case D3D11_MESSAGE_SEVERITY_WARNING: DM_LOG_WARN("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
-            case D3D11_MESSAGE_SEVERITY_INFO: DM_LOG_INFO("\n    [DirectX11 %s]: (%d) %s", severity, (int)id, message->pDescription); break;
-            case D3D11_MESSAGE_SEVERITY_MESSAGE: DM_LOG_TRACE("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); break;
+            case D3D11_MESSAGE_SEVERITY_CORRUPTION:
+            {
+                DM_LOG_FATAL("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); 
+                return false;
+            } break;
+            case D3D11_MESSAGE_SEVERITY_ERROR:
+            {
+                DM_LOG_ERROR("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); 
+                return false;
+            } break;
+            case D3D11_MESSAGE_SEVERITY_WARNING:
+            {
+                DM_LOG_WARN("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); 
+                return false;
+            } break;
+            case D3D11_MESSAGE_SEVERITY_INFO: 
+            {
+                DM_LOG_INFO("\n    [DirectX11 %s]: (%d) %s", severity, (int)id, message->pDescription); 
+                return false;
+            } break;
+            case D3D11_MESSAGE_SEVERITY_MESSAGE: 
+            {
+                DM_LOG_TRACE("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); 
+                return false;
+            } break;
 		}
         
 		dm_free(message, message_size, DM_MEM_RENDER_PIPELINE);
 	}
     
 	DX_RELEASE(info_queue);
+    
+    return true;
 }
 
 const char* dm_directx_decode_category(D3D11_MESSAGE_CATEGORY category)

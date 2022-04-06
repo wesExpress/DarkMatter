@@ -2,9 +2,11 @@
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
 #include "core/dm_app_config.h"
-#include "rendering/dm_renderer.h"
+#include "core/dm_random.h"
 #include "platform/dm_platform.h"
+#include "rendering/dm_renderer.h"
 #include "input/dm_input.h"
+#include "ecs/dm_ecs.h"
 
 dm_engine_data* e_data = NULL;
 static bool initialized = false;
@@ -27,8 +29,6 @@ bool dm_engine_create(dm_application* app)
     e_data->platform_data->window_height = app->engine_config.start_height;
     e_data->platform_data->x = app->engine_config.start_x;
     e_data->platform_data->y = app->engine_config.start_y;
-    
-    dm_input_init();
     
     dm_event_set_callback(dm_engine_on_event);
     
@@ -56,6 +56,9 @@ bool dm_engine_create(dm_application* app)
         return false;
     }
     
+    dm_random_init(0);
+    dm_ecs_init();
+    
     if (!e_data->application->dm_application_init(e_data->application))
     {
         DM_LOG_FATAL("Application could not be initialized!");
@@ -72,6 +75,12 @@ bool dm_engine_create(dm_application* app)
 
 void dm_engine_shutdown()
 {
+    dm_ecs_shutdown();
+    dm_random_shutdown();
+    
+    dm_renderer_shutdown();
+    dm_platform_shutdown(e_data);
+    
     e_data->application->dm_application_shutdown(e_data->application);
     
     dm_free(e_data->platform_data, sizeof(dm_platform_data), DM_MEM_PLATFORM);
@@ -130,10 +139,6 @@ bool dm_engine_run()
     }
     
     e_data->is_running = false;
-    
-    dm_input_shutdown();
-    dm_renderer_shutdown();
-    dm_platform_shutdown(e_data);
     
     return true;
 }

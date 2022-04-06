@@ -32,7 +32,7 @@
    email: m-mat @ math.sci.hiroshima-u.ac.jp (remove space)
 */
 
-#include <mt19937/mt19937.h>
+#include "mt19937/mt19937.h"
 
 /* Period parameters */
 #define N 624
@@ -63,13 +63,13 @@ uint32_t genrand_int32(mt19937* context)
     unsigned long y;
     static unsigned long mag01[2] = { 0x0UL, MATRIX_A };
     /* mag01[x] = x * MATRIX_A  for x=0,1 */
-
+    
     if (context->mti >= N) { /* generate N words at one time */
         int kk;
-
+        
         if (context->mti == N + 1)   /* if init_genrand() has not been called, */
             init_genrand(context, 5489UL); /* a default initial seed is used */
-
+        
         for (kk = 0; kk < N - M; kk++) {
             y = (context->mt[kk] & UPPER_MASK) | (context->mt[kk + 1] & LOWER_MASK);
             context->mt[kk] = context->mt[kk + M] ^ (y >> 1) ^ mag01[y & 0x1UL];
@@ -80,18 +80,18 @@ uint32_t genrand_int32(mt19937* context)
         }
         y = (context->mt[N - 1] & UPPER_MASK) | (context->mt[0] & LOWER_MASK);
         context->mt[N - 1] = context->mt[M - 1] ^ (y >> 1) ^ mag01[y & 0x1UL];
-
+        
         context->mti = 0;
     }
-
+    
     y = context->mt[context->mti++];
-
+    
     /* Tempering */
     y ^= (y >> 11);
     y ^= (y << 7) & 0x9d2c5680UL;
     y ^= (y << 15) & 0xefc60000UL;
     y ^= (y >> 18);
-
+    
     return y;
 }
 

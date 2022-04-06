@@ -1,12 +1,14 @@
 #include "application.h"
 
 static dm_editor_camera camera = {
+    .pos = {0,0,4}, .forward = {0,0,0}, .up = {0,1,0},
 	.pitch = 0, .yaw=-90, .roll=0,
 	.move_velocity = 2.5f,
 	.look_sens = 0.1f
 };
 
-dm_transform transforms_1[] = {
+/*
+dm_transform_component transforms_1[] = {
 	{{0, 0, 0}, {1,1,1}},
 	{{2, 5, -15}, {1,1,1}},
 	{{-1.5, -2.2, -2.5}, {1,1,1}},
@@ -18,23 +20,28 @@ dm_transform transforms_1[] = {
 	{{1.5, 0.2, -1.5}, {1,1,1}},
 	{{-1.3, 1, -1.5}, {1,1,1}}
 };
+*/
 
-dm_transform transforms_2[] = {
-	{{0,0,0}, {1,1,1}},
-	{{1.2,1,2}, {0.2,0.2,0.2}}
-};
+dm_entity cube;
+dm_entity light;
+dm_entity editor_camera;
+dm_entity cube2;
 
-dm_list* objects = NULL;
+float radius = 2.5f;
+float angle = 0.0f;
 
 bool dm_application_init(dm_application* app)
 {
 	DM_LOG_TRACE("Hellow from the application!\n");
     
+    // images
 	dm_image_desc image_desc1 = { 0 };
 	image_desc1.path = "assets/container.jpg";
 	image_desc1.name = "uTexture1";
 	image_desc1.format = DM_TEXTURE_FORMAT_RGB;
 	image_desc1.internal_format = DM_TEXTURE_FORMAT_RGB;
+    
+    if(!dm_renderer_api_register_image(image_desc1)) return false;
     
 	dm_image_desc image_desc2 = { 0 };
 	image_desc2.path = "assets/awesomeface.png";
@@ -43,97 +50,64 @@ bool dm_application_init(dm_application* app)
 	image_desc2.internal_format = DM_TEXTURE_FORMAT_RGB;
 	image_desc2.flip = true;
     
-	dm_image_desc image_descs[] = { image_desc1, image_desc2 };
+    if(!dm_renderer_api_register_image(image_desc2)) return false;
     
-	//if (!dm_renderer_api_submit_images(image_descs, sizeof(image_descs) / sizeof(dm_image_desc))) return false;
-    
-	// clear color
 	dm_renderer_api_set_clear_color((dm_vec3) { 0, 0, 0 });
     
-	// camera
-	dm_renderer_api_set_camera_pos((dm_vec3) { 0, 0, 4 });
-	dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
+    dm_input_get_mouse_pos(&camera.last_x, &camera.last_y);
     
-	objects = dm_list_create(sizeof(dm_game_object), 0);
-	dm_list_append(objects, &(dm_game_object){
-                       .transform = { {0, 0, 0}, { 1,1,1 } },
-                       .color = { 1, 0.5, 0.31 },
-                       .texture = 0,
-                       .mesh = "cube",
-                       .render_pass = "object"
-                   });
-	dm_list_append(objects, &(dm_game_object){
-                       .transform = { {1.2, 1, 2}, { 0.2,0.2,0.2 } },
-                       .color = { 1,1,1 },
-                       .texture = 0,
-                       .mesh = "cube",
-                       .render_pass = "light_src"
-                   });
+    // camera
+    editor_camera = dm_ecs_create_entity();
+    if(!dm_ecs_add_editor_camera(&editor_camera, &camera)) return false;
     
-	return dm_renderer_api_submit_objects(objects);
+    // orange cube
+    cube = dm_ecs_create_entity();
+    
+    if(!dm_ecs_add_transform(&cube, &(dm_transform_component){.position={0.0f,0.0f,0.0f}, .scale={1.0f,1.0f,1.0f}})) return false;
+    if(!dm_ecs_add_mesh(&cube, &(dm_mesh_component){.name="cube"})) return false;
+    if(!dm_ecs_add_color(&cube, &(dm_color_component){.color={1.0f, 0.5f, 0.31f}})) return false;
+    
+    // light src
+    light = dm_ecs_create_entity();
+    
+    if(!dm_ecs_add_transform(&light, &(dm_transform_component){.position={1.2f,1.0f,2.0f}, .scale={0.2f,0.2f,0.2f}})) return false;
+    if(!dm_ecs_add_mesh(&light, &(dm_mesh_component){.name="cube"})) return false;
+    if(!dm_ecs_add_color(&light, &(dm_color_component){.color={1.0f, 1.0f, 1.0f}})) return false;
+    if(!dm_ecs_add_light_src(&light,&(dm_light_src_component){.color={1.0f, 1.0f, 1.0f}, .sync_to_obj_color=true})) return false;
+    
+    // blue cube
+    cube2 = dm_ecs_create_entity();
+    
+    if(!dm_ecs_add_transform(&cube2, &(dm_transform_component){.position={2.0f,2.0f,2.0f}, .scale={1.0f,1.0f,1.0f}})) return false;
+    if(!dm_ecs_add_mesh(&cube2, &(dm_mesh_component){.name="cube"})) return false;
+    if(!dm_ecs_add_color(&cube2, &(dm_color_component){.color={0.31f, 0.5f, 1.f}})) return false;
+    
+    return true;
 }
 
 void dm_application_shutdown(dm_application* app)
 {
-	dm_list_destroy(objects);
+    
 }
 
 bool dm_application_update(dm_application* app, float delta_time)
 {
-	dm_vec3 forward = { 0 };
+	dm_ecs_update_editor_camera(&camera, delta_time);
     
-	// camera direction
-	if (dm_input_is_key_pressed(DM_KEY_LSHIFT))
-	{
-		camera.yaw += dm_input_get_mouse_delta_x() * camera.look_sens;
-		camera.pitch -= dm_input_get_mouse_delta_y() * camera.look_sens;
-        
-		DM_CLAMP(camera.pitch, -89, 89);
-	}
+    // move cube
+    dm_transform_component* transform = dm_ecs_get_component(cube.id, DM_COMPONENT_TRANSFORM);
     
-	forward.x = dm_cos(dm_deg_to_rad(camera.yaw)) * dm_cos(dm_deg_to_rad(camera.pitch));
-	forward.y = dm_sin(dm_deg_to_rad(camera.pitch));
-	forward.z = dm_sin(dm_deg_to_rad(camera.yaw)) * dm_cos(dm_deg_to_rad(camera.pitch));
-	forward = dm_vec3_norm(forward);
+    transform->position.x = dm_cos(angle) * radius;
+    transform->position.y = dm_sin(angle) * radius;
     
-	// camera position
-	if (dm_input_is_key_pressed(DM_KEY_A))
-	{
-		dm_vec3 delta_pos = dm_vec3_cross(dm_renderer_api_get_camera_forward(), dm_renderer_api_get_camera_up());
-		delta_pos = dm_vec3_norm(delta_pos);
-		delta_pos = dm_vec3_scale(delta_pos, -camera.move_velocity * delta_time);
-		dm_renderer_api_update_camera_pos(delta_pos);
-	}
-	else if (dm_input_is_key_pressed(DM_KEY_D))
-	{
-		dm_vec3 delta_pos = dm_vec3_cross(dm_renderer_api_get_camera_forward(), dm_renderer_api_get_camera_up());
-		delta_pos = dm_vec3_norm(delta_pos);
-		delta_pos = dm_vec3_scale(delta_pos, camera.move_velocity * delta_time);
-		dm_renderer_api_update_camera_pos(delta_pos);
-	}
+    // move light
+    transform = dm_ecs_get_component(light.id, DM_COMPONENT_TRANSFORM);
     
-	if (dm_input_is_key_pressed(DM_KEY_W))
-	{
-		dm_vec3 delta_pos = dm_vec3_scale(dm_renderer_api_get_camera_forward(), camera.move_velocity * delta_time);
-		dm_renderer_api_update_camera_pos(delta_pos);
-	}
-	else if (dm_input_is_key_pressed(DM_KEY_S))
-	{
-		dm_vec3 delta_pos = dm_vec3_scale(dm_renderer_api_get_camera_forward(), -camera.move_velocity * delta_time);
-		dm_renderer_api_update_camera_pos(delta_pos);
-	}
+    transform->position.z = dm_sin(angle) * radius;
+    transform->position.x = dm_cos(angle) * radius;
     
-	if (dm_input_is_key_pressed(DM_KEY_Z))
-	{
-		dm_renderer_api_update_camera_pos((dm_vec3) { 0, -camera.move_velocity * delta_time, 0 });
-	}
-	else if (dm_input_is_key_pressed(DM_KEY_X))
-	{
-		dm_renderer_api_update_camera_pos((dm_vec3) { 0, camera.move_velocity * delta_time, 0 });
-	}
-    
-	// update the camera
-	dm_renderer_api_set_camera_forward(forward);
+    // increase angle
+    angle += delta_time;
     
 	return true;
 }
