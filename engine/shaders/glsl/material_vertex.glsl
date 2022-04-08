@@ -9,7 +9,6 @@ layout (location = 3) in mat4 aModel;
 
 out vec3 normal;
 out vec2 tex_coords;
-out vec3 obj_color;
 out vec3 frag_pos;
 
 uniform mat4 view_proj;

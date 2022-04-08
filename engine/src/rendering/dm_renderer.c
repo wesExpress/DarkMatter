@@ -240,7 +240,13 @@ bool dm_renderer_render_materials()
 #endif
                 
                 dm_image* diffuse_map = dm_image_get(material->diffuse_map);
+                dm_image* specular_map = dm_image_get(material->specular_map);
+                
+                uniform = dm_map_get(material_pass->uniforms, "shininess");
+                dm_memcpy(uniform->data, &material->shininess, sizeof(float));
+                
                 dm_render_command_bind_texture(diffuse_map, 0, r_data.render_commands);
+                dm_render_command_bind_texture(specular_map, 1, r_data.render_commands);
                 
                 dm_list_append(buffer_data, &inst);
                 
