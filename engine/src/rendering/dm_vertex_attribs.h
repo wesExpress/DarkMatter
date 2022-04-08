@@ -77,8 +77,8 @@ dm_vertex_attrib_desc diffuse_attrib_desc = {
 #endif
 	.data_t = DM_VERTEX_DATA_T_FLOAT,
 	.attrib_class = DM_VERTEX_ATTRIB_CLASS_INSTANCE,
-	.stride = sizeof(dm_vertex_color_inst_t),
-	.offset = offsetof(dm_vertex_color_inst_t, diffuse),
+	.stride = sizeof(dm_vertex_inst_t),
+	.offset = offsetof(dm_vertex_inst_t, diffuse),
 	.count = 3,
 	.normalized = false,
 };
@@ -91,8 +91,8 @@ dm_vertex_attrib_desc specular_attrib_desc = {
 #endif
 	.data_t = DM_VERTEX_DATA_T_FLOAT,
 	.attrib_class = DM_VERTEX_ATTRIB_CLASS_INSTANCE,
-	.stride = sizeof(dm_vertex_color_inst_t),
-	.offset = offsetof(dm_vertex_color_inst_t, specular),
+	.stride = sizeof(dm_vertex_inst_t),
+	.offset = offsetof(dm_vertex_inst_t, specular),
 	.count = 3,
 	.normalized = false,
 };
@@ -105,8 +105,8 @@ dm_vertex_attrib_desc shiny_attrib_desc = {
 #endif
 	.data_t = DM_VERTEX_DATA_T_FLOAT,
 	.attrib_class = DM_VERTEX_ATTRIB_CLASS_INSTANCE,
-	.stride = sizeof(dm_vertex_color_inst_t),
-	.offset = offsetof(dm_vertex_color_inst_t, shininess),
+	.stride = sizeof(dm_vertex_inst_t),
+	.offset = offsetof(dm_vertex_inst_t, shininess),
 	.count = 1,
 	.normalized = false,
 };

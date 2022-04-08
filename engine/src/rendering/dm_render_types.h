@@ -21,20 +21,14 @@ typedef struct dm_vertex
 typedef struct dm_vertex_inst
 {
     dm_mat4 model;
-} dm_vertex_inst;
-
-typedef struct dm_vertex_color_inst
-{
-    dm_mat4 model;
     dm_color diffuse;
     dm_color specular;
     float shininess;
-} dm_vertex_color_inst;
+} dm_vertex_inst;
 
 typedef uint32_t             dm_index_t;
 typedef dm_vertex            dm_vertex_t;
 typedef dm_vertex_inst       dm_vertex_inst_t;
-typedef dm_vertex_color_inst dm_vertex_color_inst_t;
 
 typedef struct dm_inst_data
 {
@@ -420,7 +414,6 @@ typedef struct dm_render_pipeline
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
     dm_buffer* inst_buffer;
-    dm_buffer* inst_color_buffer;
     void* internal_pipeline;
 } dm_render_pipeline;
 

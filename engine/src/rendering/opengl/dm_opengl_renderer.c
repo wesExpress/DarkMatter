@@ -988,7 +988,6 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_delete_buffer(pipeline->vertex_buffer);
     dm_opengl_delete_buffer(pipeline->index_buffer);
     dm_opengl_delete_buffer(pipeline->inst_buffer);
-    dm_opengl_delete_buffer(pipeline->inst_color_buffer);
     
     dm_free(pipeline->internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
@@ -998,7 +997,6 @@ bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render
     if (!dm_opengl_create_buffer(pipeline->vertex_buffer, vb_data)) return false;
     if (!dm_opengl_create_buffer(pipeline->index_buffer, ib_data)) return false;
     if (!dm_opengl_create_buffer(pipeline->inst_buffer, NULL)) return false;
-    if (!dm_opengl_create_buffer(pipeline->inst_color_buffer, NULL)) return false;
     
     return true;
 }

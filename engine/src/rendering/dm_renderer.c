@@ -216,7 +216,6 @@ bool dm_renderer_render_objects()
         dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
         
         dm_mesh* mesh = item->value;
-        //DM_LOG_TRACE("%s", item->key);
         
         uint32_t count = 0;
         
@@ -231,7 +230,7 @@ bool dm_renderer_render_objects()
                 dm_color_component* color = dm_ecs_get_component(entity, DM_COMPONENT_COLOR);
                 dm_transform_component* transform = dm_ecs_get_component(entity, DM_COMPONENT_TRANSFORM);
                 
-                dm_vertex_color_inst inst = {0};
+                dm_vertex_inst inst = {0};
                 
                 inst.model = dm_mat4_identity();
                 inst.model = dm_mat_translate(inst.model, transform->position);
@@ -250,8 +249,7 @@ bool dm_renderer_render_objects()
             }
         }
         
-        dm_render_command_update_buffer(r_data.pipeline->inst_color_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
-        dm_render_command_bind_buffer(r_data.pipeline->inst_color_buffer, 0, r_data.render_commands);
+        dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
         dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_color_pass, r_data.render_commands);
         dm_render_command_end_renderpass(material_color_pass, r_data.render_commands);
         
@@ -273,6 +271,8 @@ bool dm_render_light_sources()
 		return false;
 	}
     
+    dm_render_command_begin_renderpass(lsrc_pass, r_data.render_commands);
+    
     dm_uniform* uniform = dm_map_get(lsrc_pass->uniforms, "view_proj");
 #ifdef DM_DIRECTX
     dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
@@ -280,42 +280,48 @@ bool dm_render_light_sources()
 #else
     dm_memcpy(uniform->data, &r_data.camera.view_proj, sizeof(dm_mat4));
 #endif
+    dm_render_command_bind_uniform(uniform, r_data.render_commands);
     
-    dm_render_command_begin_renderpass(lsrc_pass, r_data.render_commands);
-    
-    dm_list* lights = dm_ecs_get_entity_registry(DM_COMPONENT_LIGHT_SRC);
-    
-    for(uint32_t i = 0; i<lights->count; i++)
+    dm_for_map_item(mesh_map)
     {
         dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
+        dm_mesh* mesh = item->value;
         
-        uint32_t entity_id = *(uint32_t*)dm_list_at(lights, i);
-        dm_mesh_component* mesh_c = dm_ecs_get_component(entity_id, DM_COMPONENT_MESH);
-        dm_mesh* mesh = dm_map_get(mesh_map, mesh_c->name);
+        uint32_t count = 0;
         
-        dm_transform_component* transform = dm_ecs_get_component(entity_id, DM_COMPONENT_TRANSFORM);
-        dm_light_src_component* light_src = dm_ecs_get_component(entity_id, DM_COMPONENT_LIGHT_SRC);
-        
-        dm_vertex_inst inst = {0};
-        
-        inst.model = dm_mat4_identity();
-        inst.model = dm_mat_translate(inst.model, transform->position);
-        inst.model = dm_mat_scale(inst.model, transform->scale);
+        for(uint32_t i=0; i<mesh->entities->count; i++)
+        {
+            dm_entity entity = *(dm_entity*)dm_list_at(mesh->entities, i);
+            
+            if(dm_ecs_entity_has_component(entity, DM_COMPONENT_LIGHT_SRC))
+            {
+                dm_transform_component* transform = dm_ecs_get_component(entity, DM_COMPONENT_TRANSFORM);
+                dm_light_src_component* light_src = dm_ecs_get_component(entity, DM_COMPONENT_LIGHT_SRC);
+                
+                dm_vertex_inst inst = {0};
+                
+                inst.model = dm_mat4_identity();
+                inst.model = dm_mat_translate(inst.model, transform->position);
+                inst.model = dm_mat_scale(inst.model, transform->scale);
 #ifdef DM_DIRECTX
-        inst.model = dm_mat4_transpose(inst.model);
+                inst.model = dm_mat4_transpose(inst.model);
 #endif
-        
-        //inst.color = dm_vec3_set_from_vec4(light_src->color);
-        
-        dm_list_append(buffer_data, &inst);
+                
+                inst.diffuse = light_src->diffuse;
+                
+                dm_list_append(buffer_data, &inst);
+                
+                count ++;
+            }
+        }
         
         dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
-        dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, lsrc_pass, r_data.render_commands);
+        dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, lsrc_pass, r_data.render_commands);
+        dm_render_command_end_renderpass(lsrc_pass, r_data.render_commands);
         
         dm_list_destroy(buffer_data);
     }
     
-    dm_render_command_end_renderpass(lsrc_pass, r_data.render_commands);
     
 	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
 	dm_renderer_clear_command_buffer(r_data.render_commands);
@@ -372,7 +378,6 @@ bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline)
 	pipeline->vertex_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->index_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	pipeline->inst_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-    pipeline->inst_color_buffer = dm_alloc(sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
     
 	return dm_renderer_create_render_pipeline_impl(pipeline);
 }
@@ -384,7 +389,6 @@ void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline)
 	dm_free(pipeline->vertex_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_free(pipeline->index_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 	dm_free(pipeline->inst_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
-    dm_free(pipeline->inst_color_buffer, sizeof(dm_buffer), DM_MEM_RENDERER_BUFFER);
 }
 
 bool dm_renderer_init_object_data()
@@ -393,12 +397,10 @@ bool dm_renderer_init_object_data()
 	dm_buffer_desc vb_desc = { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = vertices->count * vertices->element_size, .elem_size=vertices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT , .name = "vertex"};
 	dm_buffer_desc ib_desc = { .type = DM_BUFFER_TYPE_INDEX, .data_t = DM_BUFFER_DATA_T_UINT, .buffer_size = indices->count * indices->element_size, .elem_size=indices->element_size, .usage=DM_BUFFER_USAGE_DEFAULT, .name = "index"};
 	dm_buffer_desc inst_desc = { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = sizeof(dm_inst_data) * DM_MAX_INSTANCES, .elem_size=sizeof(dm_vertex_inst), .usage = DM_BUFFER_USAGE_DYNAMIC, .cpu_access = DM_BUFFER_CPU_WRITE, .name = "instance" };
-    dm_buffer_desc inst_color_desc = { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = sizeof(dm_inst_data) * DM_MAX_INSTANCES, .elem_size=sizeof(dm_vertex_inst), .usage = DM_BUFFER_USAGE_DYNAMIC, .cpu_access = DM_BUFFER_CPU_WRITE, .name = "instance_color" };
     
 	r_data.pipeline->vertex_buffer->desc = vb_desc;
 	r_data.pipeline->index_buffer->desc = ib_desc;
 	r_data.pipeline->inst_buffer->desc = inst_desc;
-    r_data.pipeline->inst_color_buffer->desc = inst_color_desc;
     
 	if(!dm_renderer_init_pipeline_data_impl(vertices->data, indices->data, r_data.pipeline)) return false;
     
@@ -530,7 +532,7 @@ bool dm_renderer_create_default_render_passes()
 	// light src render pass
     dm_uniform light_src_uniforms[] = { vp };
     
-	if (!dm_renderer_create_render_pass(lsrc_shader, material_v_layout, light_src_uniforms, 1, lsrc_shader.name))
+	if (!dm_renderer_create_render_pass(lsrc_shader, material_color_v_layout, light_src_uniforms, 1, lsrc_shader.name))
 	{
 		DM_LOG_FATAL("Could not create default light src render pass!");
 		return false;
