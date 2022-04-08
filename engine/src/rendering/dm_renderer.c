@@ -703,6 +703,7 @@ void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
 		
         dm_destroy_uniform(uniform);
 	}
+    dm_map_destroy(render_pass->uniforms);
     
 	dm_free(render_pass->shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 }
