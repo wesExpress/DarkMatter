@@ -356,6 +356,18 @@ void dm_vec4_set_inpl(float x, float y, float z, float w, dm_vec4* out)
 }
 
 DM_INLINE
+dm_vec4 dm_vec4_set_from_float(float f)
+{
+    return dm_vec4_set(f, f, f, 1);
+}
+
+DM_INLINE
+void dm_vec4_set_from_float_inpl(float f, dm_vec4* out)
+{
+    *out = dm_vec4_set_from_float(f);
+}
+
+DM_INLINE
 dm_vec4 dm_vec4_set_from_vec2(dm_vec2 vec)
 {
 	return (dm_vec4) { vec.x, vec.y, 0.0f, 0.0f };

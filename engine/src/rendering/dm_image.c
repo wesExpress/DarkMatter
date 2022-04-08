@@ -50,7 +50,7 @@ bool dm_load_image(dm_image_desc desc)
     
     if(!dm_create_texture_impl(&image)) return false;
     
-    dm_map_insert(image_map, (void*)image.desc.path, &image);
+    dm_map_insert(image_map, (void*)image.desc.name, &image);
     
     return true;
 }

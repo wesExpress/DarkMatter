@@ -11,6 +11,7 @@
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
 #include "core/dm_engine_types.h"
+#include "core/dm_engine_api.h"
 
 #include "input/dm_input.h"
 

@@ -54,6 +54,7 @@ typedef struct dm_light_src_component
     dm_color ambient;
     dm_color diffuse;
     dm_color specular;
+    float strength;
 } dm_light_src_component;
 
 typedef struct dm_editor_camera
