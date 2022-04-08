@@ -16,5 +16,5 @@ dm_uniform dm_create_uniform(const char* name, dm_uniform_desc desc, void* data,
 
 void dm_destroy_uniform(dm_uniform* uniform)
 {
-    dm_free(uniform->data, uniform->desc.data_size, DM_MEM_RENDERER_UNIFORM);
+    //dm_free(uniform->data, uniform->desc.data_size, DM_MEM_RENDERER_UNIFORM);
 }
