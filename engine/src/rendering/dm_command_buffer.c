@@ -16,8 +16,8 @@ void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, u
 
 bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_size);
 bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot);
-
 bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot);
+bool dm_renderer_bind_uniform_impl(dm_uniform* uniform);
 
 typedef struct dm_draw_command
 {
@@ -81,6 +81,11 @@ void dm_render_command_bind_texture(dm_image* image, uint32_t slot, dm_list* ren
     texture_command->image = image;
     texture_command->slot = slot;
     dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_TEXTURE, texture_command, render_commands);
+}
+
+void dm_render_command_bind_uniform(dm_uniform* uniform, dm_list* render_commands)
+{
+    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_UNIFORM, uniform, render_commands);
 }
 
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_render_pass* render_pass, dm_list* render_commands)
@@ -228,11 +233,15 @@ bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipel
                 dm_texture_command* texture_command = command->data;
                 if(!dm_renderer_bind_texture_impl(texture_command->image, texture_command->slot)) return false;
             } break;
+            case DM_RENDER_COMMAND_BIND_UNIFORM:
+            {
+                if(!dm_renderer_bind_uniform_impl((dm_uniform*)command->data)) return false;
+            } break;
             case DM_RENDER_COMMAND_DRAW_ARRAYS:
             {
                 dm_draw_command* draw_command = command->data;
                 dm_renderer_draw_arrays_impl(draw_command->commands[0], draw_command->commands[1], draw_command->render_pass);
-            }
+            } break;
             case DM_RENDER_COMMAND_DRAW_INDEXED:
             {
                 dm_draw_command* draw_command = command->data;

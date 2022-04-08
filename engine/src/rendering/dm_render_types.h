@@ -21,12 +21,20 @@ typedef struct dm_vertex
 typedef struct dm_vertex_inst
 {
     dm_mat4 model;
-    dm_vec3 color;
 } dm_vertex_inst;
 
-typedef uint32_t       dm_index_t;
-typedef dm_vertex      dm_vertex_t;
-typedef dm_vertex_inst dm_vertex_inst_t;
+typedef struct dm_vertex_color_inst
+{
+    dm_mat4 model;
+    dm_color diffuse;
+    dm_color specular;
+    float shininess;
+} dm_vertex_color_inst;
+
+typedef uint32_t             dm_index_t;
+typedef dm_vertex            dm_vertex_t;
+typedef dm_vertex_inst       dm_vertex_inst_t;
+typedef dm_vertex_color_inst dm_vertex_color_inst_t;
 
 typedef struct dm_inst_data
 {
@@ -42,14 +50,6 @@ typedef struct dm_mesh
     uint32_t index_count;
     dm_list* entities;
 } dm_mesh;
-
-typedef struct dm_material
-{
-    dm_vec3 ambient;
-    dm_vec3 diffuse;
-    dm_vec3 specular;
-    float shininess;
-} dm_material;
 
 /***********
     ENUMS
@@ -232,6 +232,7 @@ typedef enum dm_render_command_type
     DM_RENDER_COMMAND_UPDATE_BUFFER,
     DM_RENDER_COMMAND_BIND_BUFFER,
     DM_RENDER_COMMAND_BIND_TEXTURE,
+    DM_RENDER_COMMAND_BIND_UNIFORM,
     DM_RENDER_COMMAND_DRAW_ARRAYS,
     DM_RENDER_COMMAND_DRAW_INDEXED,
     DM_RENDER_COMMAND_DRAW_INSTANCED,
@@ -419,6 +420,7 @@ typedef struct dm_render_pipeline
     dm_buffer* vertex_buffer;
     dm_buffer* index_buffer;
     dm_buffer* inst_buffer;
+    dm_buffer* inst_color_buffer;
     void* internal_pipeline;
 } dm_render_pipeline;
 
@@ -427,7 +429,7 @@ typedef struct dm_render_pass
     dm_raster_state_desc raster_desc;
     dm_shader* shader;
     dm_sampler_desc sampler_desc;
-    dm_list* uniforms;
+    dm_map* uniforms;
     bool wireframe;
     const char* name;
     void* internal_render_pass;

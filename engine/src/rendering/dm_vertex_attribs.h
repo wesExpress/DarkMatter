@@ -68,18 +68,46 @@ dm_vertex_attrib_desc model_attrib_desc = {
 	.normalized = false
 };
 
-// color
-dm_vertex_attrib_desc color_attrib_desc = {
+// diffuse
+dm_vertex_attrib_desc diffuse_attrib_desc = {
 #ifdef DM_OPENGL
-	.name = "aColor",
+	.name = "aDiffuse",
 #elif defined DM_DIRECTX
 	.name = "COLOR",
 #endif
 	.data_t = DM_VERTEX_DATA_T_FLOAT,
 	.attrib_class = DM_VERTEX_ATTRIB_CLASS_INSTANCE,
-	.stride = sizeof(dm_vertex_inst_t),
-	.offset = offsetof(dm_vertex_inst_t, color),
+	.stride = sizeof(dm_vertex_color_inst_t),
+	.offset = offsetof(dm_vertex_color_inst_t, diffuse),
 	.count = 3,
+	.normalized = false,
+};
+
+dm_vertex_attrib_desc specular_attrib_desc = {
+#ifdef DM_OPENGL
+	.name = "aSpecular",
+#elif defined DM_DIRECTX
+	.name = "COLOR",
+#endif
+	.data_t = DM_VERTEX_DATA_T_FLOAT,
+	.attrib_class = DM_VERTEX_ATTRIB_CLASS_INSTANCE,
+	.stride = sizeof(dm_vertex_color_inst_t),
+	.offset = offsetof(dm_vertex_color_inst_t, specular),
+	.count = 3,
+	.normalized = false,
+};
+
+dm_vertex_attrib_desc shiny_attrib_desc = {
+#ifdef DM_OPENGL
+	.name = "aShininess",
+#elif defined DM_DIRECTX
+	.name = "COLOR",
+#endif
+	.data_t = DM_VERTEX_DATA_T_FLOAT,
+	.attrib_class = DM_VERTEX_ATTRIB_CLASS_INSTANCE,
+	.stride = sizeof(dm_vertex_color_inst_t),
+	.offset = offsetof(dm_vertex_color_inst_t, shininess),
+	.count = 1,
 	.normalized = false,
 };
 

@@ -830,9 +830,9 @@ bool dm_opengl_create_render_pass(dm_render_pass* render_pass, dm_vertex_layout 
     glBindVertexArray(0);
     
     // uniforms
-    for (uint32_t i = 0; i < render_pass->uniforms->count; i++)
+    dm_for_map_item(render_pass->uniforms)
     {
-        dm_uniform* uniform = dm_list_at(render_pass->uniforms, i);
+        dm_uniform* uniform = item->value;
         
         if (!dm_opengl_create_uniform(uniform, render_pass->shader)) return false;
     }
@@ -849,9 +849,9 @@ void dm_opengl_destroy_render_pass(dm_render_pass* render_pass)
     
     dm_opengl_delete_shader(render_pass->shader);
     
-    for (uint32_t i = 0; i < render_pass->uniforms->count; i++)
+    dm_for_map_item(render_pass->uniforms)
     {
-        dm_uniform* uniform = dm_list_at(render_pass->uniforms, i);
+        dm_uniform* uniform = item->value;
         
         dm_opengl_destroy_uniform(uniform);
     }
@@ -897,14 +897,6 @@ bool dm_opengl_begin_render_pass(dm_render_pass* render_pass)
     
     // shader
     dm_opengl_bind_shader(render_pass->shader);
-    
-    // uniforms
-    for (uint32_t i = 0; i < render_pass->uniforms->count; i++)
-    {
-        dm_uniform* uniform = dm_list_at(render_pass->uniforms, i);
-        
-        if (!dm_opengl_bind_uniform(uniform)) return false;
-    }
     
     return true;
 }
@@ -996,27 +988,17 @@ void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
     dm_opengl_delete_buffer(pipeline->vertex_buffer);
     dm_opengl_delete_buffer(pipeline->index_buffer);
     dm_opengl_delete_buffer(pipeline->inst_buffer);
+    dm_opengl_delete_buffer(pipeline->inst_color_buffer);
     
     dm_free(pipeline->internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
 bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render_pipeline* pipeline)
 {
-    /*
-    // buffers
-    */
     if (!dm_opengl_create_buffer(pipeline->vertex_buffer, vb_data)) return false;
     if (!dm_opengl_create_buffer(pipeline->index_buffer, ib_data)) return false;
     if (!dm_opengl_create_buffer(pipeline->inst_buffer, NULL)) return false;
-    
-    // textures
-    //dm_internal_shader* internal_shader = pipeline->raster_desc.shader->internal_shader;
-    //for(uint32_t i=0; i<pipeline->render_packet.image_paths->count; i++)
-    //{
-    //    dm_string* key = dm_list_at(pipeline->render_packet.image_paths, i);
-    //    dm_image* image = dm_image_get(key->string);
-    //    if (!dm_opengl_create_texture(image, i, internal_shader->id)) return false;
-    //}
+    if (!dm_opengl_create_buffer(pipeline->inst_color_buffer, NULL)) return false;
     
     return true;
 }
@@ -1110,16 +1092,19 @@ bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t size)
     return true;
 }
 
-bool dm_renderer_bind_buffer_impl(dm_buffer* buffer)
+bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
 {
     switch (buffer->desc.type)
     {
         case DM_BUFFER_TYPE_VERTEX: 
-        dm_opengl_bind_buffer(buffer);
-        break;
-        default: 
-        DM_LOG_ERROR("Haven't implemented this bind buffer type yet!");
-        return false;
+        {
+            dm_opengl_bind_buffer(buffer);
+        } break;
+        default:
+        {
+            DM_LOG_ERROR("Haven't implemented this bind buffer type yet!");
+            return false;
+        }
     }
     
     return true;
@@ -1128,6 +1113,11 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer)
 bool dm_create_texture_impl(dm_image* image)
 {
     return dm_opengl_create_texture(image);
+}
+
+bool dm_renderer_bind_uniform_impl(dm_uniform* uniform)
+{
+    return dm_opengl_bind_uniform(uniform);
 }
 
 void dm_destroy_texture_impl(dm_image* image)
