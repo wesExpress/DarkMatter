@@ -6,8 +6,8 @@ in vec3 frag_pos;
 
 out vec4 FragColor;
 
-uniform sampler2D diffuse_color;
-uniform sampler2D specular_color;
+uniform sampler2D diffuse_map;
+uniform sampler2D specular_map;
 uniform float shininess;
 
 uniform vec3 light_pos;
@@ -24,13 +24,14 @@ void main()
 	vec3 view_dir = normalize(view_pos - frag_pos);
 	vec3 reflect_dir = reflect(-light_dir, norm_normal);
 
-	vec3 ambient = light_ambient * vec3(texture(diffuse_color, tex_coords));
+	vec3 ambient = light_ambient * texture(diffuse_map, tex_coords).rgb;
 
 	float diff = max(dot(norm_normal, light_dir), 0.0);
-	vec3 diffuse = light_diffuse * diff * vec3(texture(diffuse_color, tex_coords));
+	diff = 0.01;
+	vec3 diffuse = light_diffuse * diff * texture(diffuse_map, tex_coords).rgb;
 
 	float spec = pow(max(dot(view_dir, reflect_dir), 0.0), shininess);
-	vec3 specular = light_specular * spec * vec3(texture(specular_color, tex_coords));
+	vec3 specular = light_specular * spec * texture(specular_map, tex_coords).rgb;
 
 	FragColor = vec4((ambient + diffuse + specular), 1);
 }

@@ -67,7 +67,7 @@ bool dm_application_init(dm_application* app)
     
     if(!dm_ecs_add_transform(light, &(dm_transform_component){.position={1.2f,1.0f,2.0f}, .scale={0.2f,0.2f,0.2f}})) return false;
     if(!dm_ecs_add_mesh(light, &(dm_mesh_component){.name="cube"})) return false;
-    if(!dm_ecs_add_light_src(light,&(dm_light_src_component){.ambient={0.2f,0.2f,0.2f}, .diffuse={1.0f,1.0f,1.0f}, .specular={1.0f,1.0f,1.0f}, .strength=0.5f})) return false;
+    if(!dm_ecs_add_light_src(light,&(dm_light_src_component){.ambient={0.2f,0.2f,0.2f}, .diffuse={1.0f,1.0f,1.0f}, .specular={1.0f,1.0f,1.0f}, .strength=1.0f})) return false;
     
     // blue cube
     cube2 = dm_ecs_create_entity();
@@ -81,7 +81,7 @@ bool dm_application_init(dm_application* app)
     
     if(!dm_ecs_add_transform(textured_cube, &(dm_transform_component){.position={-2.0f,-2.0f,-2.0f}, .scale={1.0f,1.0f,1.0f}})) return false;
     if(!dm_ecs_add_mesh(textured_cube, &(dm_mesh_component){.name="cube"})) return false;
-    if(!dm_ecs_add_material(textured_cube, &(dm_material_component){.diffuse_map="container_diffuse", .specular_map="container_specular", .shininess=32})) return false;
+    if(!dm_ecs_add_material(textured_cube, &(dm_material_component){.diffuse_map="container_diffuse", .specular_map="container_specular", .shininess=64})) return false;
     
     return true;
 }
@@ -107,6 +107,7 @@ bool dm_application_update(dm_application* app, float delta_time)
     transform->position.z = dm_sin(angle) * radius;
     transform->position.x = dm_cos(angle) * radius;
     
+    /*
     // change light color
     dm_light_src_component* light_src = dm_ecs_get_component(light, DM_COMPONENT_LIGHT_SRC);
     
@@ -116,7 +117,7 @@ bool dm_application_update(dm_application* app, float delta_time)
     light_src->ambient = dm_vec4_scale(light_src->ambient, 0.5f * 0.2f);
     light_src->diffuse = dm_vec4_set(scaling * 2, scaling * 0.7f, scaling * 1.3f, 1.0f);
     light_src->diffuse = dm_vec4_scale(light_src->diffuse, 0.5f);
-    
+    */
     // increase angle
     angle += delta_time;
     

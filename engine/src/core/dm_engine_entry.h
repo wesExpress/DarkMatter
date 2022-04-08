@@ -45,6 +45,7 @@ int main()
     if (!dm_create_app(&app))
     {
         DM_LOG_FATAL("Could not create application!");
+        getchar();
         return DM_APPLICATION_CREATION_FAILURE;
     }
     
@@ -52,11 +53,13 @@ int main()
     
     if (!dm_engine_create(&app))
     {
+        getchar();
         return DM_ENGINE_CREATION_FAILURE;
     }
     
     if (!dm_engine_run())
     {
+        getchar();
         return DM_ENGINE_RUN_FAILURE;
     }
     
