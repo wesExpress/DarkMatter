@@ -778,6 +778,7 @@ bool dm_opengl_create_render_pass(dm_render_pass* render_pass, dm_vertex_layout 
             {
                 dm_opengl_bind_buffer(pipeline->inst_buffer);
             } break;
+            default: break; 
         }
         
         GLenum data_t;
