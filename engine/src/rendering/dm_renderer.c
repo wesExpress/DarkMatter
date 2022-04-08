@@ -700,7 +700,8 @@ void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
     dm_for_map_item(render_pass->uniforms)
 	{
 		dm_uniform* uniform = item->value;
-		dm_destroy_uniform(uniform);
+		
+        dm_destroy_uniform(uniform);
 	}
     
 	dm_free(render_pass->shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);

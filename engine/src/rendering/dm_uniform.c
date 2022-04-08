@@ -4,13 +4,13 @@
 
 dm_uniform dm_create_uniform(const char* name, dm_uniform_desc desc, void* data, size_t data_size)
 {
-    dm_uniform uniform = {0};
-
+    dm_uniform uniform = { 0 };
+    
     uniform.name = name;
     uniform.desc = desc;
     uniform.data = dm_alloc(desc.data_size, DM_MEM_RENDERER_UNIFORM);
     dm_memcpy(uniform.data, data, data_size);
-
+    
     return uniform;
 }
 
