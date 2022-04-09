@@ -18,3 +18,14 @@ void dm_destroy_uniform(dm_uniform* uniform)
 {
     //dm_free(uniform->data, uniform->desc.data_size, DM_MEM_RENDERER_UNIFORM);
 }
+
+bool dm_set_uniform(char* name, void* data, dm_render_pass* render_pass)
+{
+    dm_uniform* uniform = dm_map_get(render_pass->uniforms, name);
+    
+    if(!uniform) return false;
+    
+    dm_memcpy(uniform->data, data, uniform->desc.data_size);
+    
+    return true;
+}
