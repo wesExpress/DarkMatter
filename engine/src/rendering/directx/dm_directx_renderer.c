@@ -427,6 +427,7 @@ bool dm_directx_create_input_element(dm_vertex_attrib_desc attrib_desc, D3D11_IN
 	if (input_class == DM_VERTEX_ATTRIB_CLASS_UNKNOWN) return false;
     
 	element_desc->SemanticName = attrib_desc.name;
+    element_desc->SemanticIndex = attrib_desc.index;
 	element_desc->Format = format;
 	element_desc->AlignedByteOffset = attrib_desc.offset;
 	element_desc->InputSlotClass = input_class;
@@ -1043,9 +1044,9 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	// uniforms
 	size_t buffer_size = 0;
 	void* buffer_data = NULL;
-	for (uint32_t i = 0; i < render_pass->uniforms->count; i++)
+	dm_for_map_item(render_pass->uniforms)
 	{
-		dm_uniform* uniform = dm_list_at(render_pass->uniforms, i);
+		dm_uniform* uniform = item->value;
         
 		buffer_data = dm_realloc(buffer_data, buffer_size + uniform->desc.data_size);
 		void* dest = (char*)buffer_data + buffer_size;
@@ -1127,6 +1128,12 @@ void dm_destroy_texture_impl(dm_image* image)
     dm_directx_destroy_texture(image);
 }
 
+bool dm_renderer_bind_uniform_impl(dm_uniform* uniform)
+{
+    //return dm_directx_bind_uniform(uniform);
+    return true;
+}
+
 bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 {
 	HRESULT hr;
@@ -1153,9 +1160,9 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 	// uniforms
 	size_t buffer_size = 0;
 	void* buffer_data = NULL;
-	for (uint32_t i = 0; i < render_pass->uniforms->count; i++)
+	dm_for_map_item(render_pass->uniforms)
 	{
-		dm_uniform* uniform = dm_list_at(render_pass->uniforms, i);
+		dm_uniform* uniform = item->value;
         
 		buffer_data = dm_realloc(buffer_data, buffer_size + uniform->desc.data_size);
 		void* dest = (char*)buffer_data + buffer_size;

@@ -177,45 +177,27 @@ bool dm_renderer_render_materials()
     dm_light_src_component* light = dm_ecs_get_component(light_id, DM_COMPONENT_LIGHT_SRC);
     dm_transform_component* light_transform = dm_ecs_get_component(light_id, DM_COMPONENT_TRANSFORM);
     
+    // update and bind the 'global' uniforms
+#ifdef DM_DIRECTX
+    dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
+    dm_set_uniform("view_proj", &new_view_proj, material_pass);
+#else
+    dm_set_uniform("view_proj", &r_data.camera.view_proj, material_pass);
+#endif
+    dm_set_uniform("view_pos", &r_data.camera.pos, material_pass);
+    
+    dm_set_uniform("light_pos", &light_transform->position, material_pass);
+    dm_set_uniform("light_ambient", &light->ambient, material_pass);
+    dm_set_uniform("light_diffuse", &light->diffuse, material_pass);
+    dm_set_uniform("light_specular", &light->specular, material_pass);
+    
     dm_for_map_item(mesh_map)
     {
         // bind the pass
-        dm_render_command_begin_renderpass(material_pass, r_data.render_commands);
-        
-        dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
+        //dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
         dm_mesh* mesh = item->value;
         
-        uint32_t count = 0;
-        
-        // update and bind the 'global' uniforms
-        dm_uniform* uniform = dm_map_get(material_pass->uniforms, "view_proj");
-#ifdef DM_DIRECTX
-        dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
-        dm_memcpy(uniform->data, &new_view_proj, sizeof(dm_mat4));
-#else
-        dm_memcpy(uniform->data, &r_data.camera.view_proj, sizeof(dm_mat4));
-#endif
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
-        
-        uniform = dm_map_get(material_pass->uniforms, "light_pos");
-        dm_memcpy(uniform->data, &light_transform->position, sizeof(dm_vec3));
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
-        
-        uniform = dm_map_get(material_pass->uniforms, "light_ambient");
-        dm_memcpy(uniform->data, &light->ambient, sizeof(dm_vec3));
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
-        
-        uniform = dm_map_get(material_pass->uniforms, "light_diffuse");
-        dm_memcpy(uniform->data, &light->diffuse, sizeof(dm_vec3));
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
-        
-        uniform = dm_map_get(material_pass->uniforms, "light_specular");
-        dm_memcpy(uniform->data, &light->specular, sizeof(dm_vec3));
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
-        
-        uniform = dm_map_get(material_pass->uniforms, "view_pos");
-        dm_memcpy(uniform->data, &r_data.camera.pos, sizeof(dm_vec3));
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
+        //uint32_t count = 0;
         
         for(uint32_t i=0; i<mesh->entities->count; i++)
         {
@@ -240,23 +222,24 @@ bool dm_renderer_render_materials()
                 dm_image* diffuse_map = dm_image_get(material->diffuse_map);
                 dm_image* specular_map = dm_image_get(material->specular_map);
                 
-                uniform = dm_map_get(material_pass->uniforms, "shininess");
-                dm_memcpy(uniform->data, &material->shininess, sizeof(float));
+                dm_set_uniform("shininess", &material->shininess, material_pass);
                 
                 dm_render_command_bind_texture(diffuse_map, 0, r_data.render_commands);
                 dm_render_command_bind_texture(specular_map, 1, r_data.render_commands);
                 
-                dm_list_append(buffer_data, &inst);
+                //dm_list_append(buffer_data, &inst);
                 
-                count++;
+                //count++;
+                
+                dm_render_command_begin_renderpass(material_pass, r_data.render_commands);
+                dm_render_command_update_buffer(r_data.pipeline->inst_buffer, &inst, sizeof(dm_vertex_inst), r_data.render_commands);
+                //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass, r_data.render_commands);
+                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_pass, r_data.render_commands);
+                dm_render_command_end_renderpass(material_pass, r_data.render_commands);
+                
+                //dm_list_destroy(buffer_data);
             }
         }
-        
-        dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
-        dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass, r_data.render_commands);
-        dm_render_command_end_renderpass(material_pass, r_data.render_commands);
-        
-        dm_list_destroy(buffer_data);
     }
     
 	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
@@ -279,49 +262,27 @@ bool dm_renderer_render_colored_materials()
     dm_light_src_component* light = dm_ecs_get_component(light_id, DM_COMPONENT_LIGHT_SRC);
     dm_transform_component* light_transform = dm_ecs_get_component(light_id, DM_COMPONENT_TRANSFORM);
     
+    // update the uniforms
+#ifdef DM_DIRECTX
+    dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
+    dm_set_uniform("view_proj", &new_view_proj, material_color_pass);
+#else
+    dm_set_uniform("view_proj", &r_data.camera.view_proj, material_color_pass);
+#endif
+    
+    dm_set_uniform("light_pos", &light_transform->position, material_color_pass);
+    dm_set_uniform("light_ambient", &light->ambient, material_color_pass);
+    dm_set_uniform("light_diffuse", &light->diffuse, material_color_pass);
+    dm_set_uniform("light_specular", &light->specular, material_color_pass);
+    dm_set_uniform("light_strength", &light->strength, material_color_pass);
+    dm_set_uniform("view_pos", &r_data.camera.pos, material_color_pass);
+    
     dm_for_map_item(mesh_map)
     {
-        // bind the pass
-        dm_render_command_begin_renderpass(material_color_pass, r_data.render_commands);
-        
-        dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
+        //dm_list* buffer_data = dm_list_create(sizeof(dm_vertex_inst), 0);
         dm_mesh* mesh = item->value;
         
-        uint32_t count = 0;
-        
-        // update and bind the 'global' uniforms
-        dm_uniform* uniform = dm_map_get(material_color_pass->uniforms, "view_proj");
-#ifdef DM_DIRECTX
-        dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
-        dm_memcpy(uniform->data, &new_view_proj, sizeof(dm_mat4));
-#else
-        dm_memcpy(uniform->data, &r_data.camera.view_proj, sizeof(dm_mat4));
-#endif
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
-        
-        uniform = dm_map_get(material_color_pass->uniforms, "light_pos");
-        dm_memcpy(uniform->data, &light_transform->position, sizeof(dm_vec3));
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
-        
-        uniform = dm_map_get(material_color_pass->uniforms, "light_ambient");
-        dm_memcpy(uniform->data, &light->ambient, sizeof(dm_vec3));
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
-        
-        uniform = dm_map_get(material_color_pass->uniforms, "light_diffuse");
-        dm_memcpy(uniform->data, &light->diffuse, sizeof(dm_vec3));
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
-        
-        uniform = dm_map_get(material_color_pass->uniforms, "light_specular");
-        dm_memcpy(uniform->data, &light->specular, sizeof(dm_vec3));
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
-        
-        uniform = dm_map_get(material_color_pass->uniforms, "light_strength");
-        dm_memcpy(uniform->data, &light->strength, sizeof(float));
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
-        
-        uniform = dm_map_get(material_color_pass->uniforms, "view_pos");
-        dm_memcpy(uniform->data, &r_data.camera.pos, sizeof(dm_vec3));
-        dm_render_command_bind_uniform(uniform, r_data.render_commands);
+        //uint32_t count = 0;
         
         for(uint32_t i=0; i<mesh->entities->count; i++)
         {
@@ -345,19 +306,22 @@ bool dm_renderer_render_colored_materials()
                 
                 inst.diffuse = color->diffuse;
                 inst.specular = color->specular;
-                inst.shininess = color->shininess;
                 
-                dm_list_append(buffer_data, &inst);
+                dm_set_uniform("shininess", &color->shininess, material_color_pass);
                 
-                count++;
+                //dm_list_append(buffer_data, &inst);
+                
+                //count++;
+                
+                dm_render_command_begin_renderpass(material_color_pass, r_data.render_commands);
+                dm_render_command_update_buffer(r_data.pipeline->inst_buffer, &inst, sizeof(dm_vertex_inst), r_data.render_commands);
+                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass, r_data.render_commands);
+                //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_color_pass, r_data.render_commands);
+                dm_render_command_end_renderpass(material_color_pass, r_data.render_commands);
+                
+                //dm_list_destroy(buffer_data);
             }
         }
-        
-        dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
-        dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_color_pass, r_data.render_commands);
-        dm_render_command_end_renderpass(material_color_pass, r_data.render_commands);
-        
-        dm_list_destroy(buffer_data);
     }
     
 	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
@@ -375,16 +339,12 @@ bool dm_render_light_sources()
 		return false;
 	}
     
-    dm_render_command_begin_renderpass(lsrc_pass, r_data.render_commands);
-    
-    dm_uniform* uniform = dm_map_get(lsrc_pass->uniforms, "view_proj");
 #ifdef DM_DIRECTX
     dm_mat4 new_view_proj = dm_mat4_transpose(r_data.camera.view_proj);
-    dm_memcpy(uniform->data, &new_view_proj, sizeof(dm_mat4));
+    dm_set_uniform("view_proj", &new_view_proj, lsrc_pass);
 #else
-    dm_memcpy(uniform->data, &r_data.camera.view_proj, sizeof(dm_mat4));
+    dm_set_uniform("view_proj", &r_data.camera.view_proj, lsrc_pass);
 #endif
-    dm_render_command_bind_uniform(uniform, r_data.render_commands);
     
     dm_for_map_item(mesh_map)
     {
@@ -419,6 +379,7 @@ bool dm_render_light_sources()
             }
         }
         
+        dm_render_command_begin_renderpass(lsrc_pass, r_data.render_commands);
         dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
         dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, lsrc_pass, r_data.render_commands);
         dm_render_command_end_renderpass(lsrc_pass, r_data.render_commands);
@@ -534,7 +495,6 @@ bool dm_renderer_create_default_render_passes()
 		model_attrib_desc,
         diffuse_attrib_desc,
         specular_attrib_desc,
-        shiny_attrib_desc
 	};
     
 	dm_vertex_layout material_color_v_layout = {
@@ -566,25 +526,25 @@ bool dm_renderer_create_default_render_passes()
 #ifdef DM_OPENGL
 	material_shader.vertex_desc.path = "shaders/glsl/material_vertex.glsl";
 #elif defined DM_DIRECTX
-	material_shader.vertex_desc.path = "shaders/hlsl/object_vertex.fxc";
+	material_shader.vertex_desc.path = "shaders/hlsl/material_vertex.fxc";
 #endif
     
 #ifdef DM_OPENGL
 	material_shader.pixel_desc.path = "shaders/glsl/material_pixel.glsl";
 #elif defined DM_DIRECTX
-	material_shader.pixel_desc.path = "shaders/hlsl/object_pixel.fxc";
+	material_shader.pixel_desc.path = "shaders/hlsl/material_pixel.fxc";
 #endif
     
 #ifdef DM_OPENGL
 	material_color_shader.vertex_desc.path = "shaders/glsl/material_color_vertex.glsl";
 #elif defined DM_DIRECTX
-	material_color_shader.vertex_desc.path = "shaders/hlsl/object_vertex.fxc";
+	material_color_shader.vertex_desc.path = "shaders/hlsl/material_color_vertex.fxc";
 #endif
     
 #ifdef DM_OPENGL
 	material_color_shader.pixel_desc.path = "shaders/glsl/material_color_pixel.glsl";
 #elif defined DM_DIRECTX
-	material_color_shader.pixel_desc.path = "shaders/hlsl/object_pixel.fxc";
+	material_color_shader.pixel_desc.path = "shaders/hlsl/material_color_pixel.fxc";
 #endif
     
 	dm_shader lsrc_shader = {0};
@@ -615,7 +575,7 @@ bool dm_renderer_create_default_render_passes()
     
 	// material render pass
     dm_uniform material_uniforms[] = {
-        vp, shiny, light_pos, light_ambient, light_diffuse, light_specular, view_pos
+        vp, light_pos, light_ambient, light_diffuse, light_specular, view_pos, shiny
     };
     
 	if (!dm_renderer_create_render_pass(material_shader, material_v_layout, material_uniforms, sizeof(material_uniforms) / sizeof(dm_uniform), material_shader.name))
@@ -626,7 +586,7 @@ bool dm_renderer_create_default_render_passes()
     
     // material color render pass
     dm_uniform material_color_uniforms[] = {
-        vp, light_pos, light_ambient, light_diffuse, light_specular, light_strength, view_pos
+        vp, light_pos, light_ambient, light_diffuse, light_specular, view_pos, shiny
     };
     
 	if (!dm_renderer_create_render_pass(material_color_shader, material_color_v_layout, material_color_uniforms, sizeof(material_color_uniforms) / sizeof(dm_uniform), material_color_shader.name))
