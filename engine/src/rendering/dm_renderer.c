@@ -273,7 +273,6 @@ bool dm_renderer_render_colored_materials()
     dm_set_uniform("light_ambient", &light->ambient, material_color_pass);
     dm_set_uniform("light_diffuse", &light->diffuse, material_color_pass);
     dm_set_uniform("light_specular", &light->specular, material_color_pass);
-    dm_set_uniform("light_strength", &light->strength, material_color_pass);
     dm_set_uniform("view_pos", &r_data.camera.pos, material_color_pass);
     
     dm_for_map_item(mesh_map)
@@ -505,10 +504,9 @@ bool dm_renderer_create_default_render_passes()
 	dm_uniform vp = dm_create_uniform("view_proj", mat4_uni_desc, &(dm_mat4){0}, sizeof(dm_mat4));
     dm_uniform shiny = dm_create_uniform("shininess", float_uni_desc, &(float){0}, sizeof(float));
 	dm_uniform light_pos = dm_create_uniform("light_pos", vec3_uni_desc, &(dm_vec3){0}, sizeof(dm_vec3));
-	dm_uniform light_ambient = dm_create_uniform("light_ambient", vec3_uni_desc, &(dm_vec3){0}, sizeof(dm_vec3));
-    dm_uniform light_diffuse = dm_create_uniform("light_diffuse", vec3_uni_desc, &(dm_vec3){0}, sizeof(dm_vec3));
-    dm_uniform light_specular = dm_create_uniform("light_specular", vec3_uni_desc, &(dm_vec3){0}, sizeof(dm_vec3));
-    dm_uniform light_strength = dm_create_uniform("light_strength", float_uni_desc, &(float){0}, sizeof(float));
+	dm_uniform light_ambient = dm_create_uniform("light_ambient", vec4_uni_desc, &(dm_vec4){0}, sizeof(dm_vec4));
+    dm_uniform light_diffuse = dm_create_uniform("light_diffuse", vec4_uni_desc, &(dm_vec4){0}, sizeof(dm_vec4));
+    dm_uniform light_specular = dm_create_uniform("light_specular", vec4_uni_desc, &(dm_vec4){0}, sizeof(dm_vec4));
     dm_uniform view_pos = dm_create_uniform("view_pos", vec3_uni_desc, &(dm_vec3){0}, sizeof(dm_vec3));
     
 	dm_shader material_shader = {0};
@@ -574,7 +572,7 @@ bool dm_renderer_create_default_render_passes()
     
 	// material render pass
     dm_uniform material_uniforms[] = {
-        vp, light_pos, light_ambient, light_diffuse, light_specular, view_pos, shiny
+        vp, light_ambient, light_diffuse, light_specular, light_pos, shiny, view_pos,
     };
     
 	if (!dm_renderer_create_render_pass(material_shader, material_v_layout, material_uniforms, sizeof(material_uniforms) / sizeof(dm_uniform), material_shader.name))
@@ -585,7 +583,7 @@ bool dm_renderer_create_default_render_passes()
     
     // material color render pass
     dm_uniform material_color_uniforms[] = {
-        vp, light_pos, light_ambient, light_diffuse, light_specular, view_pos, shiny
+        vp, light_ambient, light_diffuse, light_specular, light_pos, shiny, view_pos,
     };
     
 	if (!dm_renderer_create_render_pass(material_color_shader, material_color_v_layout, material_color_uniforms, sizeof(material_color_uniforms) / sizeof(dm_uniform), material_color_shader.name))

@@ -27,7 +27,6 @@ void main()
 	vec3 ambient = light_ambient * texture(diffuse_map, tex_coords).rgb;
 
 	float diff = max(dot(norm_normal, light_dir), 0.0);
-	diff = 0.01;
 	vec3 diffuse = light_diffuse * diff * texture(diffuse_map, tex_coords).rgb;
 
 	float spec = pow(max(dot(view_dir, reflect_dir), 0.0), shininess);

@@ -899,6 +899,12 @@ bool dm_opengl_begin_render_pass(dm_render_pass* render_pass)
     // shader
     dm_opengl_bind_shader(render_pass->shader);
     
+    // uniforms
+    dm_for_map_item(render_pass->uniforms)
+    {
+        dm_opengl_bind_uniform((dm_uniform*)item->value);
+    }
+    
     return true;
 }
 

@@ -9,12 +9,12 @@ struct PS_INPUT
 cbuffer object_uniform : register(b0)
 {
     matrix view_proj;
+    float4 light_ambient;
+    float4 light_diffuse;
+    float4 light_specular;
     float3 light_pos;
-    float3 light_ambient;
-    float3 light_diffuse;
-    float3 light_specular;
-	float3 view_pos;
 	float shininess;
+	float3 view_pos;
 };
 
 SamplerState sample_state;
@@ -24,9 +24,9 @@ Texture2D specular_map : register(t1);
 float4 p_main(PS_INPUT input) : SV_Target
 {
     float3 norm_normal = normalize(input.normal);
-    float3 view_dir = normalize(view_pos - input.frag_pos);
     float3 light_dir = normalize(light_pos - input.frag_pos);
-    float3 reflect_dir = reflect(light_dir, norm_normal);
+    float3 view_dir = normalize(view_pos - input.frag_pos);
+    float3 reflect_dir = reflect(-light_dir, norm_normal);
     
     float3 ambient = light_ambient * diffuse_map.Sample(sample_state, input.tex_coords);
 

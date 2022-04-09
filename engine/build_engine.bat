@@ -3,7 +3,7 @@ SetLocal EnableDelayedExpansion
 
 set SRC_DIR=%cd%
 
-set "opengl=true"
+REM set "opengl=true"
 
 cd engine/src
 

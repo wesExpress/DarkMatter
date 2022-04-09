@@ -11,12 +11,12 @@ struct PS_INPUT
 cbuffer object_uniform : register(b0)
 {
     matrix view_proj;
+    float4 light_ambient;
+    float4 light_diffuse;
+    float4 light_specular;
     float3 light_pos;
-    float3 light_ambient;
-    float3 light_diffuse;
-    float3 light_specular;
-	float3 view_pos;
 	float shininess;
+	float3 view_pos;
 };
 
 float4 p_main(PS_INPUT input) : SV_Target

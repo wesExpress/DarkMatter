@@ -18,12 +18,12 @@ struct VS_OUTPUT
 cbuffer object_uniform : register(b0)
 {
     matrix view_proj;
+    float4 light_ambient;
+    float4 light_diffuse;
+    float4 light_specular;
     float3 light_pos;
-    float3 light_ambient;
-    float3 light_diffuse;
-    float3 light_specular;
-	float3 view_pos;
 	float shininess;
+	float3 view_pos;
 };
 
 VS_OUTPUT v_main(VS_INPUT input)
@@ -33,8 +33,8 @@ VS_OUTPUT v_main(VS_INPUT input)
     output.position = mul(float4(input.position, 1.0f), input.model);
     output.position = mul(output.position, view_proj);
     
-    output.normal = input.normal;
-    output.tex_coords = input.tex_coords;
+	output.normal = input.normal;    
+	output.tex_coords = input.tex_coords;
     output.frag_pos = mul(float4(input.position, 1.0f), input.model);
     
     return output;
