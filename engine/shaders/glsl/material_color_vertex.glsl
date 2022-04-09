@@ -8,7 +8,6 @@ layout (location = 2) in vec2 aTexCoords;
 layout (location = 3) in mat4 aModel;
 layout (location = 7) in vec3 aDiffuse;
 layout (location = 8) in vec3 aSpecular;
-layout (location = 9) in float aShininess;
 
 out vec3 normal;
 out vec2 tex_coords;
@@ -17,7 +16,6 @@ out vec3 frag_pos;
 
 out vec3 diffuse_color;
 out vec3 specular_color;
-out float shininess;
 
 uniform mat4 view_proj;
 
@@ -31,5 +29,4 @@ void main()
 
 	diffuse_color = aDiffuse;
 	specular_color = aSpecular;
-	shininess = aShininess;
 }

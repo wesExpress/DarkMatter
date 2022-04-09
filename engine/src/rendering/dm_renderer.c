@@ -224,15 +224,14 @@ bool dm_renderer_render_materials()
                 
                 dm_set_uniform("shininess", &material->shininess, material_pass);
                 
-                dm_render_command_bind_texture(diffuse_map, 0, r_data.render_commands);
-                dm_render_command_bind_texture(specular_map, 1, r_data.render_commands);
-                
                 //dm_list_append(buffer_data, &inst);
                 
                 //count++;
                 
                 dm_render_command_begin_renderpass(material_pass, r_data.render_commands);
                 dm_render_command_update_buffer(r_data.pipeline->inst_buffer, &inst, sizeof(dm_vertex_inst), r_data.render_commands);
+                dm_render_command_bind_texture(diffuse_map, 0, r_data.render_commands);
+                dm_render_command_bind_texture(specular_map, 1, r_data.render_commands);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass, r_data.render_commands);
                 dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_pass, r_data.render_commands);
                 dm_render_command_end_renderpass(material_pass, r_data.render_commands);

@@ -15,8 +15,8 @@ struct VS_OUTPUT
     float3 normal     : NORMAL2;
     float2 tex_coords : TEXCOORD2;
     float3 frag_pos   : POSITION2;
-	float3 diffuse    : COLOR;
-	float3 specular   : COLOR1;
+	float3 diffuse    : COLOR2;
+	float3 specular   : COLOR3;
 };
 
 cbuffer object_uniform : register(b0)

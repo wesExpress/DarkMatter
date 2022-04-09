@@ -4,8 +4,8 @@ struct PS_INPUT
     float3 normal     : NORMAL2;
     float2 tex_coords : TEXCOORD2;
     float3 frag_pos   : POSITION2;
-	float3 diffuse    : COLOR;
-	float3 specular   : COLOR1;
+	float3 diffuse    : COLOR2;
+	float3 specular   : COLOR3;
 };
 
 cbuffer object_uniform : register(b0)
@@ -22,9 +22,9 @@ cbuffer object_uniform : register(b0)
 float4 p_main(PS_INPUT input) : SV_Target
 {
 	float3 norm_normal = normalize(input.normal);
-    float3 view_dir = normalize(view_pos - input.frag_pos);
     float3 light_dir = normalize(light_pos - input.frag_pos);
-    float3 reflect_dir = reflect(light_dir, norm_normal);
+    float3 view_dir = normalize(view_pos - input.frag_pos);
+    float3 reflect_dir = reflect(-light_dir, norm_normal);
     
     float3 ambient = light_ambient * input.diffuse;
 
