@@ -184,6 +184,7 @@ void* dm_platform_realloc(void* block, size_t size)
 void dm_platform_free(void* block)
 {
 	free(block);
+    block = NULL;
 }
 
 void* dm_platform_memzero(void* block, size_t size)

@@ -21,12 +21,13 @@ typedef struct dm_vertex
 typedef struct dm_vertex_inst
 {
     dm_mat4 model;
-    dm_vec3 color;
+    dm_color diffuse;
+    dm_color specular;
 } dm_vertex_inst;
 
-typedef uint32_t       dm_index_t;
-typedef dm_vertex      dm_vertex_t;
-typedef dm_vertex_inst dm_vertex_inst_t;
+typedef uint32_t             dm_index_t;
+typedef dm_vertex            dm_vertex_t;
+typedef dm_vertex_inst       dm_vertex_inst_t;
 
 typedef struct dm_inst_data
 {
@@ -42,8 +43,6 @@ typedef struct dm_mesh
     uint32_t index_count;
     dm_list* entities;
 } dm_mesh;
-
-#define DM_MAX_INSTANCES 10000
 
 /***********
     ENUMS
@@ -226,6 +225,7 @@ typedef enum dm_render_command_type
     DM_RENDER_COMMAND_UPDATE_BUFFER,
     DM_RENDER_COMMAND_BIND_BUFFER,
     DM_RENDER_COMMAND_BIND_TEXTURE,
+    DM_RENDER_COMMAND_BIND_UNIFORM,
     DM_RENDER_COMMAND_DRAW_ARRAYS,
     DM_RENDER_COMMAND_DRAW_INDEXED,
     DM_RENDER_COMMAND_DRAW_INSTANCED,
@@ -246,6 +246,7 @@ typedef struct dm_vertex_attrib_desc
     size_t stride;
     size_t offset;
     size_t count;
+    size_t index;
     bool normalized;
 } dm_vertex_attrib_desc;
 
@@ -421,7 +422,7 @@ typedef struct dm_render_pass
     dm_raster_state_desc raster_desc;
     dm_shader* shader;
     dm_sampler_desc sampler_desc;
-    dm_list* uniforms;
+    dm_map* uniforms;
     bool wireframe;
     const char* name;
     void* internal_render_pass;

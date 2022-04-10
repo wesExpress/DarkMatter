@@ -16,12 +16,12 @@ DM_API void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* ver
 
 DM_API void dm_renderer_api_set_clear_color(dm_vec3 color);
 
-DM_API bool dm_renderer_api_register_mesh(dm_entity* entity, dm_mesh_component* component);
-DM_API bool dm_renderer_api_deregister_mesh(dm_entity* entity);
+DM_API bool dm_renderer_api_register_mesh(dm_entity entity, dm_mesh_component* component);
+DM_API bool dm_renderer_api_deregister_mesh(dm_entity entity);
 
 DM_API bool dm_renderer_api_register_image(dm_image_desc desc);
 
-DM_API bool dm_renderer_api_register_camera(dm_entity* entity, dm_editor_camera* component);
+DM_API bool dm_renderer_api_register_camera(dm_entity entity, dm_editor_camera* component);
 
 // updating functions
 

@@ -55,4 +55,6 @@ static dm_uniform_desc float_uni_desc = {
 dm_uniform dm_create_uniform(const char* name, dm_uniform_desc desc, void* data, size_t data_size);
 void dm_destroy_uniform(dm_uniform* uniform);
 
+bool dm_set_uniform(char* name, void* data, dm_render_pass* render_pass);
+
 #endif

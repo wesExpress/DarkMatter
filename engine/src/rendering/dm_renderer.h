@@ -63,6 +63,6 @@ default render passes:
 */
 bool dm_renderer_create_default_render_passes();
 
-bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout v_layout, dm_list* uniforms, const char* tag);
+bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout v_layout, dm_uniform* uniforms, uint32_t num_uniforms, const char* tag);
 
 #endif
