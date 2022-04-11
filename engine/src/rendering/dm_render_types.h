@@ -41,6 +41,7 @@ typedef struct dm_mesh
     uint32_t index_offset;
     uint32_t vertex_offset;
     uint32_t index_count;
+    bool is_indexed;
     dm_list* entities;
 } dm_mesh;
 

@@ -16,6 +16,7 @@
 #include "input/dm_input.h"
 
 #include "rendering/dm_renderer_api.h"
+#include "rendering/dm_model.h"
 
 #include "structures/dm_list.h"
 #include "structures/dm_map.h"

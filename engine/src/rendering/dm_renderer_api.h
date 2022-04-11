@@ -12,7 +12,7 @@
 
 //submitting functions
 
-DM_API void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices);
+DM_API void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, bool is_indexed);
 
 DM_API void dm_renderer_api_set_clear_color(dm_vec3 color);
 

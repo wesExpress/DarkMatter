@@ -20,7 +20,7 @@ dm_list* dm_list_create(size_t element_size, size_t capacity)
     list->capacity = capacity;
     list->element_size = element_size;
     list->data = dm_alloc(list->capacity * list->element_size, DM_MEM_LIST);
-
+    
     return list;
 }
 
@@ -59,7 +59,7 @@ void dm_list_insert(dm_list* list, void* value, uint32_t index)
         if(index<list->count)
         {
             size_t block_size = (list->count - index) * list->element_size;
-
+            
             void* dest = (char*)list->data + (index + 1) * list->element_size;
             void* src = (char*)list->data + index * list->element_size;
             dm_memmove(dest, src, block_size);
@@ -125,7 +125,7 @@ void dm_list_pop_at(dm_list* list, uint32_t index)
         if(index<list->count)
         {
             size_t block_size = (list->count - index) * list->element_size;
-
+            
             void* dest = (char*)list->data + index * list->element_size;
             void* src = (char*)list->data + (index + 1) * list->element_size;
             dm_memmove(dest, src, block_size);
@@ -167,10 +167,10 @@ void dm_list_resize(dm_list* list, size_t new_capacity, dm_mem_adjust_func adjus
 {
     size_t new_size = new_capacity * list->element_size;
     int64_t block_size = (list->capacity - new_capacity) * list->element_size;
-
+    
     dm_mem_db_adjust(llabs(block_size), DM_MEM_LIST, adjust_func);
     list->data = dm_realloc(list->data, new_size);
-
+    
     list->capacity = new_capacity;
 }
 
@@ -183,7 +183,7 @@ void* dm_list_at(dm_list* list, uint32_t index)
         DM_LOG_ERROR("Trying to retrieve from list of count: %d with invalid index: %d", list->count, index);
     }
     else DM_LOG_ERROR("Trying to retrieve from NULL list! Returning NULL...");
-
+    
     return NULL;
 }
 
@@ -198,10 +198,6 @@ void dm_list_clear(dm_list* list, size_t new_capacity)
             list->data = dm_alloc(new_capacity * list->element_size, DM_MEM_LIST);
             list->capacity = new_capacity;
             list->count = 0;
-        }
-        else
-        {
-            DM_LOG_ERROR("Trying to clear length 0 list!");
         }
     }
     else

@@ -5,6 +5,7 @@
 #include "dm_image.h"
 #include "dm_geometry.h"
 #include "dm_uniform.h"
+#include "dm_model.h"
 
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
@@ -104,6 +105,8 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
     }
     
     // primitives
+    dm_model_loader_init();
+    
     if (!dm_geometry_load_primitives())
     {
         DM_LOG_FATAL("Failed to initialize primitive vertex data!");
@@ -127,8 +130,8 @@ void dm_renderer_shutdown()
     }
     
     dm_map_destroy(mesh_map);
+    dm_model_loader_shutdown();
     
-    //dm_list_destroy(mesh_tags);
     for(uint32_t i=0; i<render_passes->capacity;i++)
     {
         if(render_passes->items[i])
@@ -313,7 +316,8 @@ bool dm_renderer_render_colored_materials()
                 
                 dm_render_command_begin_renderpass(material_color_pass, r_data.render_commands);
                 dm_render_command_update_buffer(r_data.pipeline->inst_buffer, &inst, sizeof(dm_vertex_inst), r_data.render_commands);
-                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass, r_data.render_commands);
+                if(mesh->is_indexed) dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass, r_data.render_commands);
+                else dm_render_command_draw_arrays(mesh->vertex_offset, mesh->index_count, material_color_pass, r_data.render_commands);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_color_pass, r_data.render_commands);
                 dm_render_command_end_renderpass(material_color_pass, r_data.render_commands);
                 
@@ -668,12 +672,13 @@ void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
 /*
 RENDERER API FUNCTIONS
 */
-void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices)
+void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_data, dm_index_t* index_data, uint32_t num_vertices, uint32_t num_indices, bool is_indexed)
 {
     dm_mesh mesh = {0};
     mesh.index_count = num_indices;
     mesh.vertex_offset = vertices->count;
     mesh.index_offset = indices->count;
+    mesh.is_indexed = is_indexed;
     mesh.entities = dm_list_create(sizeof(uint32_t), 0);
     
     dm_map_insert(mesh_map, tag, &mesh);
@@ -696,7 +701,8 @@ void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_dat
     
 	for (uint32_t i = 0; i < num_indices; i++)
 	{
-		dm_list_append(indices, &index_data[i]);
+        uint32_t offset_index = index_data[i] + mesh.index_offset;
+		dm_list_append(indices, &offset_index);
 	}
 }
 
@@ -717,6 +723,12 @@ we also keep track of the index each entity is at in the mesh's list
 bool dm_renderer_api_register_mesh(dm_entity entity, dm_mesh_component* component)
 {
     dm_mesh* mesh = dm_map_get(mesh_map, component->name);
+    
+    if(!mesh)
+    {
+        DM_LOG_FATAL("Trying to access a non-existent mesh: %s", component->name);
+        return false;
+    }
     
     component->index = mesh->entities->count;
     

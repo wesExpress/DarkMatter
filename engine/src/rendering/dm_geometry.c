@@ -50,7 +50,7 @@ bool dm_geometry_load_primitives()
 	uint32_t num_vertices = sizeof(cube_vertices) / sizeof(dm_vertex_t);
 	uint32_t num_indices = sizeof(cube_indices) / sizeof(dm_index_t);
     
-	dm_renderer_api_submit_vertex_data("cube", cube_vertices, cube_indices, num_vertices, num_indices);
+	dm_renderer_api_submit_vertex_data("cube", cube_vertices, cube_indices, num_vertices, num_indices, true);
     
 	return true;
 }

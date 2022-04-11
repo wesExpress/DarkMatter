@@ -6,6 +6,8 @@ dm_entity editor_camera;
 dm_entity cube2;
 dm_entity textured_cube;
 
+dm_entity fox;
+
 float radius = 2.5f;
 float angle = 0.0f;
 
@@ -48,6 +50,9 @@ bool dm_application_init(dm_application* app)
     
     if(!dm_renderer_api_register_image(image_desc)) return false;
     
+    // models
+    if(!dm_load_model("assets/fox.gltf")) return false;
+    
     // camera
     editor_camera = dm_ecs_create_entity();
     if(!dm_ecs_add_editor_camera(editor_camera, &(dm_editor_camera){.pos={0,0,4}, .up={0,1,0}, .yaw=-90.0f, .move_velocity=2.5f, .look_sens=0.1f})) return false;
@@ -82,6 +87,12 @@ bool dm_application_init(dm_application* app)
     if(!dm_ecs_add_transform(textured_cube, &(dm_transform_component){.position={-2.0f,-2.0f,-2.0f}, .scale={1.0f,1.0f,1.0f}})) return false;
     if(!dm_ecs_add_mesh(textured_cube, &(dm_mesh_component){.name="cube"})) return false;
     if(!dm_ecs_add_material(textured_cube, &(dm_material_component){.diffuse_map="container_diffuse", .specular_map="container_specular", .shininess=64})) return false;
+    
+    // fox
+    fox = dm_ecs_create_entity();
+    if(!dm_ecs_add_transform(fox, &(dm_transform_component){.position={0.0f, 2.5f, -1.5f}, .scale={1,1,1}})) return false;
+    if(!dm_ecs_add_mesh(fox, &(dm_mesh_component){.name="fox1"})) return false;
+    if(!dm_ecs_add_color(fox, &(dm_color_component){.diffuse={1,0,0}, .specular={1,0,0}, .shininess=16})) return false;
     
     return true;
 }
