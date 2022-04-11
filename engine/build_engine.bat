@@ -16,7 +16,7 @@ FOR /R %%f in (*.c) do (
 cd ../..
 
 	SET extern_files=%SRC_DIR%\engine\lib\stb_image\src\stb_image.c %SRC_DIR%\engine\lib\mt19937\src\mt19937.c %SRC_DIR%\engine\lib\mt19937\src\mt19937_64.c 
-	SET include_flags=/I%SRC_DIR%\engine\src /I%SRC_DIR%\engine\lib\stb_image\include /I%SRC_DIR%\engine\lib\mt19937\include 
+	SET include_flags=/I%SRC_DIR%\engine\src /I%SRC_DIR%\engine\lib\stb_image\include /I%SRC_DIR%\engine\lib\mt19937\include /I%SRC_DIR%\engine\lib\cgltf
 	SET linker_flags=/link user32.lib gdi32.lib
 	SET defines=/DDM_DEBUG /DDM_EXPORT
 
