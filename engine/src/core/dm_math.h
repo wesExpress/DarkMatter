@@ -10,6 +10,8 @@
 #include <math.h>
 #include <stdbool.h>
 
+#define DM_MAX(X, Y) (X) > (Y) ? (X) : (Y)
+
 DM_API float dm_math_angle_xy(float x, float y);
 DM_API float dm_sin(float angle);
 DM_API float dm_cos(float angle);

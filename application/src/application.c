@@ -51,7 +51,7 @@ bool dm_application_init(dm_application* app)
     if(!dm_renderer_api_register_image(image_desc)) return false;
     
     // models
-    if(!dm_load_model("assets/fox.gltf")) return false;
+    if(!dm_load_model("assets/fox.gltf", true)) return false;
     
     // camera
     editor_camera = dm_ecs_create_entity();

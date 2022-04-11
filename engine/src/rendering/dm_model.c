@@ -21,10 +21,10 @@ typedef struct dm_model_loader
     dm_list* tex_coords;
 } dm_model_loader;
 
-bool dm_load_gltf(const char* path);
+bool dm_load_gltf(const char* path, bool normalize);
 const char* dm_convert_cgltf_error_to_str(cgltf_result code);
 
-#define DM_LOAD_ATTRIBUTE(LIST, ELEM_COUNT, ATTR_COUNT, ATTR_OFFSET, BUFFER_OFFSET, BUFFER_DATA)\
+#define DM_LOAD_ATTRIBUTE(LIST, ELEM_COUNT, ATTR_COUNT, ATTR_OFFSET, BUFFER_OFFSET, BUFFER_DATA, NORMALIZE)\
 float* d = (float*)BUFFER_DATA + BUFFER_OFFSET / sizeof(float) + BUFFER_OFFSET / sizeof(float);\
 uint32_t runner = 0;\
 for(uint32_t t=0; t<ATTR_COUNT; t++)\
@@ -34,11 +34,27 @@ switch(ELEM_COUNT)\
 case 2:\
 {\
 dm_vec2 temp = {d[t+runner], d[t+runner+1]};\
+if(NORMALIZE)\
+{\
+dm_vec2 mins = {(BUFFER_DATA)->min[0], (BUFFER_DATA)->min[1]};\
+dm_vec2 maxes = {(BUFFER_DATA)->max[0], (BUFFER_DATA)->max[1]};\
+dm_vec2 range = dm_vec2_sub_vec2(maxes, mins);\
+float scale = DM_MAX(range.x, range.y);\
+temp = dm_vec2_scale(temp, 1.0f/scale);\
+}\
 dm_list_append(LIST, &temp);\
 } break;\
 case 3:\
 {\
 dm_vec3 temp = {d[t+runner], d[t+runner+1], d[t+runner+2]};\
+if(NORMALIZE)\
+{\
+dm_vec3 mins = {(BUFFER_DATA)->min[0], (BUFFER_DATA)->min[1], (BUFFER_DATA)->min[2]};\
+dm_vec3 maxes = {(BUFFER_DATA)->max[0], (BUFFER_DATA)->max[1], (BUFFER_DATA)->max[2]};\
+dm_vec3 range = dm_vec3_sub_vec3(maxes, mins);\
+float scale = DM_MAX(DM_MAX(range.x, range.y), range.z);\
+temp = dm_vec3_scale(temp, 1.0f/scale);\
+}\
 dm_list_append(LIST, &temp);\
 } break;\
 }\
@@ -67,12 +83,12 @@ void dm_model_loader_shutdown()
     dm_list_destroy(model_loader.vertices);
 }
 
-bool dm_load_model(const char* path)
+bool dm_load_model(const char* path, bool normalize)
 {
-    return dm_load_gltf(path);
+    return dm_load_gltf(path, normalize);
 }
 
-bool dm_load_gltf(const char* path)
+bool dm_load_gltf(const char* path, bool normalize)
 {
     cgltf_options options = {0};
     cgltf_data* data = NULL;
@@ -125,25 +141,27 @@ bool dm_load_gltf(const char* path)
                 uint64_t offset = attribute.data->offset;
                 uint64_t count = attribute.data->count;
                 uint64_t stride = attribute.data->stride;
+                cgltf_accessor* buffer_data = buffer_view->buffer->data;
                 
                 switch(attribute.type)
                 {
                     case cgltf_attribute_type_position:
                     {
-                        DM_LOAD_ATTRIBUTE(model_loader.positions, 3, count, offset, buffer_view->offset, buffer_view->buffer->data);
+                        DM_LOAD_ATTRIBUTE(model_loader.positions, 3, count, offset, buffer_view->offset, buffer_data, (buffer_data->has_min && buffer_data->has_max));
                     } break;
                     case cgltf_attribute_type_normal:
                     {
-                        DM_LOAD_ATTRIBUTE(model_loader.normals, 3, count, offset, buffer_view->offset, buffer_view->buffer->data);
+                        DM_LOAD_ATTRIBUTE(model_loader.normals, 3, count, offset, buffer_view->offset, buffer_data, (buffer_data->has_min && buffer_data->has_max));
                     } break;
                     case cgltf_attribute_type_texcoord:
                     {
-                        DM_LOAD_ATTRIBUTE(model_loader.tex_coords, 2, count, offset, buffer_view->offset, buffer_view->buffer->data);
+                        DM_LOAD_ATTRIBUTE(model_loader.tex_coords, 2, count, offset, buffer_view->offset, buffer_data, (buffer_data->has_min && buffer_data->has_max));
                     } break;
                     default:
                     break;
                 }
             }
+            
             
             // indices
             cgltf_accessor* acc_indices = primitive.indices;

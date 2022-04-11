@@ -7,6 +7,6 @@
 void dm_model_loader_init();
 void dm_model_loader_shutdown();
 
-DM_API bool dm_load_model(const char* path);
+DM_API bool dm_load_model(const char* path, bool normalize);
 
 #endif //DM_MODEL_H
