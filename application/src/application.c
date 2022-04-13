@@ -6,7 +6,7 @@ dm_entity editor_camera;
 dm_entity cube2;
 dm_entity textured_cube;
 
-dm_entity fox;
+dm_entity model_load;
 
 float radius = 2.5f;
 float angle = 0.0f;
@@ -52,6 +52,7 @@ bool dm_application_init(dm_application* app)
     
     // models
     if(!dm_load_model("assets/fox.gltf", true)) return false;
+    if(!dm_load_model("assets/duck.gltf", false)) return false;
     
     // camera
     editor_camera = dm_ecs_create_entity();
@@ -88,11 +89,12 @@ bool dm_application_init(dm_application* app)
     if(!dm_ecs_add_mesh(textured_cube, &(dm_mesh_component){.name="cube"})) return false;
     if(!dm_ecs_add_material(textured_cube, &(dm_material_component){.diffuse_map="container_diffuse", .specular_map="container_specular", .shininess=64})) return false;
     
-    // fox
-    fox = dm_ecs_create_entity();
-    if(!dm_ecs_add_transform(fox, &(dm_transform_component){.position={0.0f, 2.5f, -1.5f}, .scale={1,1,1}})) return false;
-    if(!dm_ecs_add_mesh(fox, &(dm_mesh_component){.name="fox1"})) return false;
-    if(!dm_ecs_add_color(fox, &(dm_color_component){.diffuse={1,0,0}, .specular={1,0,0}, .shininess=16})) return false;
+    // model 
+    model_load= dm_ecs_create_entity();
+    if(!dm_ecs_add_transform(model_load, &(dm_transform_component){.position={0.0f, 2.5f, -1.5f}, .scale={1,1,1}})) return false;
+    //if(!dm_ecs_add_mesh(model_load, &(dm_mesh_component){.name="fox1"})) return false;
+    if(!dm_ecs_add_mesh(model_load, &(dm_mesh_component){.name="LOD3spShape"})) return false;
+    if(!dm_ecs_add_color(model_load, &(dm_color_component){.diffuse={1,0,0}, .specular={1,0,0}, .shininess=16})) return false;
     
     return true;
 }
