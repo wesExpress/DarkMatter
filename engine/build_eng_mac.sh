@@ -24,11 +24,12 @@ if [ "$opengl" -eq 1 ]; then
 	external_files="${external_files} $SRC_DIR/engine/lib/glad/src/glad.c"
 fi
 
-compiler_flags="-g -dynamiclib -std=gnu99 -fdiagnostics-absolute-paths -fdeclspec -fPIC -Wall -Wno-missing-braces"
+compiler_flags="-g -dynamiclib -std=gnu99 -fdiagnostics-absolute-paths -fdeclspec -fPIC -Wall -Wno-missing-braces -install_name @rpath/engine/lib$output.dylib"
 
 defines="-DDM_DEBUG -DDM_EXPORT"
 
-include_flags="-I$SRC_DIR/engine/src -I$SRC_DIR/engine/lib/stb_image/include -I$SRC_DIR/engine/lib/mt19937/include"
+include_flags="-I$SRC_DIR/engine/src -I$SRC_DIR/engine/lib/stb_image/include -I$SRC_DIR/engine/lib/mt19937/include
+-I$SRC_DIR/engine/lib/cgltf"
 
 linker_flags="-g -framework Cocoa"
 
@@ -43,27 +44,16 @@ fi
 echo "Building $output..."
 clang $c_files $objc_files $external_files $compiler_flags -o lib$output.dylib $defines $include_flags $linker_flags
 
-install_name_tool -id @rpath/lib$output.dylib lib$output.dylib
-
-echo "Post build..."
 cd ..
 # shaders
-if [ "$opengl" -eq 1 ]; then
-	
-	mkdir -p shaders/glsl
-
-	cp $SRC_DIR/engine/shaders/glsl/object_vertex.glsl shaders/glsl/
-	cp $SRC_DIR/engine/shaders/glsl/object_pixel.glsl shaders/glsl/
-	cp $SRC_DIR/engine/shaders/glsl/light_src_vertex.glsl shaders/glsl/
-	cp $SRC_DIR/engine/shaders/glsl/light_src_pixel.glsl shaders/glsl/
-else
+if [ "$opengl" -eq 0 ]; then
 	mkdir -p ../bin/shaders/metal
 
 	echo "Compiling object shader..."
-	xcrun -sdk macosx metal $SRC_DIR/engine/shaders/metal/object.metal -c -o shaders/metal/object.air
-	xcrun -sdk macosx metallib $SRC_DIR/engine/shaders/metal/object.air -o shaders/metal/object.metallib
+	xcrun -sdk macosx metal $SRC_DIR/engine/shaders/metal/object.metal -c -o $SRC_DIR/metal/object.air
+	xcrun -sdk macosx metallib $SRC_DIR/engine/shaders/metal/object.air -o $SRC_DIR/metal/object.metallib
 
 	echo "Compiling light source shader..."
-	xcrun -sdk macosx metal $SRC_DIR/engine/shaders/metal/light_src.metal -c -o shaders/metal/light_src.air
-	xcrun -sdk macosx metallib $SRC_DIR/engine/shaders/metal/light_src.air -o shaders/metal/light_src.metallib
+	xcrun -sdk macosx metal $SRC_DIR/engine/shaders/metal/light_src.metal -c -o $SRC_DIR/metal/light_src.air
+	xcrun -sdk macosx metallib $SRC_DIR/engine/shaders/metal/light_src.air -o $SRC_DIR/metal/light_src.metallib
 fi

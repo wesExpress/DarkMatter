@@ -31,7 +31,7 @@ load_paths = {
 };
 
 build_all_win   = "build_all.bat";
-build_all_mac   = "./build_all.sh";
+build_all_mac   = "./build_all_mac.sh";
 build_all_linux = "./build_all_linux.sh";
 
 build_eng_win   = "engine\build_engine.bat";
@@ -43,12 +43,12 @@ build_app_mac   = "./application/build_app_mac.sh";
 build_app_linux = "./application/build_app_linux.sh";
 
 post_win = "post_build.bat";
-post_mac = "./post_build_mac.sh";
-post_linux = "./post_build_linux.sh";
+post_mac = "./post_build.sh";
+post_linux = "./post_build.sh";
 
 run_win = "run.bat";
-run_mac = "./run_mac.sh";
-run_linux = "./run_linux.sh";
+run_mac = "./run.sh";
+run_linux = "./run.sh";
 
 command_list = {
 	{

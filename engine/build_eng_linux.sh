@@ -22,4 +22,4 @@ include_flags="-I$SRC_DIR/engine/src -I$SRC_DIR/engine/lib/stb_image/include -I$
 linker_flags="-g -lX11 -lX11-xcb -lxkbcommon -lGL -L/usr/X11R6/lib -lm"
 
 echo "Building $output..."
-clang $c_files $objc_files $external_files $compiler_flags -o lib$output.so $defines $include_flags $linker_flags
+clang $c_files $external_files $compiler_flags -o lib$output.so $defines $include_flags $linker_flags
