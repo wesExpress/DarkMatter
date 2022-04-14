@@ -15,10 +15,10 @@ FOR /R %%f in (*.c) do (
 
 cd ../..
 
-	SET extern_files=%SRC_DIR%\engine\lib\stb_image\src\stb_image.c %SRC_DIR%\engine\lib\mt19937\src\mt19937.c %SRC_DIR%\engine\lib\mt19937\src\mt19937_64.c 
-	SET include_flags=/I%SRC_DIR%\engine\src /I%SRC_DIR%\engine\lib\stb_image\include /I%SRC_DIR%\engine\lib\mt19937\include /I%SRC_DIR%\engine\lib\cgltf
-	SET linker_flags=/link user32.lib gdi32.lib
-	SET defines=/DDM_DEBUG /DDM_EXPORT
+SET extern_files=%SRC_DIR%\engine\lib\stb_image\src\stb_image.c %SRC_DIR%\engine\lib\mt19937\src\mt19937.c %SRC_DIR%\engine\lib\mt19937\src\mt19937_64.c 
+SET include_flags=/I%SRC_DIR%\engine\src /I%SRC_DIR%\engine\lib\stb_image\include /I%SRC_DIR%\engine\lib\mt19937\include /I%SRC_DIR%\engine\lib\cgltf
+SET linker_flags=/link user32.lib gdi32.lib
+SET defines=/DDM_DEBUG /DDM_EXPORT
 
 IF defined opengl (
 	SET extern_files=%extern_files% %SRC_DIR%\engine\lib\glad\src\glad.c %SRC_DIR%\engine\lib\glad\src\glad_wgl.c 
@@ -32,9 +32,7 @@ IF defined opengl (
 SET compiler_flags=/W2 /Zi
 SET assembly=DarkMatter
 
-REM echo %include_flags%
-
-if not exist "build/engine" mkdir build/engine
+if not exist "build\engine" mkdir build\engine
 cd build
 ECHO Building %assembly%...
 cl %compiler_flags% %defines% /FC /LD %include_flags% %c_filenames% %extern_files% /Fe%assembly%.dll %linker_flags%
