@@ -31,6 +31,8 @@ bool dm_engine_create(dm_application* app)
     e_data->platform_data->y = app->engine_config.start_y;
     
     dm_event_set_callback(dm_engine_on_event);
+    dm_random_init(0);
+    dm_ecs_init();
     
     if(!dm_platform_init(e_data->platform_data, app->engine_config.name))
     {
@@ -44,15 +46,6 @@ bool dm_engine_create(dm_application* app)
         return false;
     }
     
-    if (!dm_renderer_create_default_render_passes())
-    {
-        DM_LOG_FATAL("Could not create default render passes!");
-        return false;
-    }
-    
-    dm_random_init(0);
-    dm_ecs_init();
-    
     if (!e_data->application->dm_application_init(e_data->application))
     {
         DM_LOG_FATAL("Application could not be initialized!");
@@ -63,6 +56,12 @@ bool dm_engine_create(dm_application* app)
     if (!dm_renderer_init_object_data())
     {
         DM_LOG_FATAL("Could not initialize object data!");
+        return false;
+    }
+    
+    if (!dm_renderer_create_default_render_passes())
+    {
+        DM_LOG_FATAL("Could not create default render passes!");
         return false;
     }
     

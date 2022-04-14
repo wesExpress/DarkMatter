@@ -220,7 +220,7 @@ void dm_platform_glfw_key_callback(GLFWwindow* window, int key, int scancode, in
     {
         case GLFW_PRESS:
         {
-            dm_event_dispatch((dm_event) { DM_KEY_DOWN_EVENT, NULL, (void*)key_code });
+            dm_event_dispatch((dm_event) { DM_KEY_DOWN_EVENT, NULL, &key_code });
         } break;
         case GLFW_REPEAT:
         {
@@ -228,7 +228,7 @@ void dm_platform_glfw_key_callback(GLFWwindow* window, int key, int scancode, in
         } break;
         case GLFW_RELEASE:
         {
-            dm_event_dispatch((dm_event) { DM_KEY_UP_EVENT, NULL, (void*)key_code });
+            dm_event_dispatch((dm_event) { DM_KEY_UP_EVENT, NULL, &key_code });
         } break;
     }
 }
@@ -237,7 +237,7 @@ void dm_platform_glfw_char_callback(GLFWwindow* window, unsigned int key)
 {
     dm_key_code key_code = dm_translate_key_code(key);
     
-    dm_event_dispatch((dm_event) { DM_KEY_TYPE_EVENT, NULL, (void*)key_code });
+    dm_event_dispatch((dm_event) { DM_KEY_TYPE_EVENT, NULL, key_code });
 }
 
 void dm_platform_glfw_window_close_callback(GLFWwindow* window)
@@ -249,7 +249,7 @@ void dm_platform_glfw_window_resize_callback(GLFWwindow* window, int width, int 
 {
     uint32_t new_rect[2] = { width, height };
     
-    dm_event_dispatch((dm_event) { DM_WINDOW_RESIZE_EVENT, NULL, (void*)new_rect });
+    dm_event_dispatch((dm_event) { DM_WINDOW_RESIZE_EVENT, NULL, &new_rect });
 }
 
 void dm_platform_glfw_mouse_button_callback(GLFWwindow* window, int button, int action, int mods)
@@ -278,11 +278,11 @@ void dm_platform_glfw_mouse_button_callback(GLFWwindow* window, int button, int 
     {
         case GLFW_PRESS:
         {
-            dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, (void*)b });
+            dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_DOWN_EVENT, NULL, &b });
         }break;
         case GLFW_RELEASE:
         {
-            dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, (void*)b });
+            dm_event_dispatch((dm_event) { DM_MOUSEBUTTON_UP_EVENT, NULL, &b });
         }break;
     }
 }
@@ -291,7 +291,7 @@ void dm_platform_glfw_mouse_move_callback(GLFWwindow* window, double xPos, doubl
 {
     int32_t coords[2] = { (int32_t)xPos, (int32_t)yPos };
     
-    dm_event_dispatch((dm_event) { DM_MOUSE_MOVED_EVENT, NULL, (void*)coords });
+    dm_event_dispatch((dm_event) { DM_MOUSE_MOVED_EVENT, NULL, &coords });
 }
 
 void dm_platform_glfw_mouse_scroll_callback(GLFWwindow* window, double xOffset, double yOffset)
