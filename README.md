@@ -12,6 +12,8 @@ The general design philosophy is as follows:
 - Duplicate the same results on Windows with DirectX11 and on MacOSX with Metal
 - Iterate
 
+Trello board: https://trello.com/b/6YnZDsIV/darkmatter-engine
+
 Features
 - dm_list - dynamic sized array of generic type
 - dm_map  - dynamic sized hash table of generic type
