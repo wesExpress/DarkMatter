@@ -16,7 +16,7 @@
         _library = [renderer.device newLibraryWithFile: path error: NULL];
         if(!_library)
         {
-            DM_LOG_FATAL("Could not create metal library from file: %s", path);
+            DM_LOG_FATAL("Could not create metal library from file: %s", [path UTF8String]);
             return NULL;
         }
 

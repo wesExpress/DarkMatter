@@ -116,7 +116,7 @@ bool dm_renderer_create_pipeline_impl(dm_render_pipeline_state* pipeline)
         if(!pipeline->internal_pipeline) return false;        
 
         dm_metal_pipeline* internal_pipe = pipeline->internal_pipeline;
-        if(![internal_pipe initWithRenderer: metal_renderer andPipeline: pipeline]) return false;
+        //if(![internal_pipe initWithRenderer: metal_renderer andPipeline: pipeline]) return false;
     }
 
     return true;
@@ -145,14 +145,13 @@ bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data)
 
 bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass)
 {
-    @autoreleasepool
-    {
-        render_pass->internal_pass = [[dm_metal_render_pass alloc] initWithRenderer: metal_renderer andPass: render_pass];
+    render_pass->internal_pass = [[dm_metal_render_pass alloc] initWithRenderer: metal_renderer andPass: render_pass];
 		
-        if(!render_pass->internal_pass) return false;
+    if(!render_pass->internal_pass) return false;
 
-		render_pass->pipeline_state.internal_pipeline = [[dm_metal_pipeline alloc] initWithRenderer:metal_renderer andPipeline:&render_pass->pipeline_state];
-    }
+	render_pass->pipeline_state.internal_pipeline = [[dm_metal_pipeline alloc] initWithRenderer:metal_renderer andPass:render_pass andPipeline:&render_pass->pipeline_state];
+
+	if(!render_pass->pipeline_state.internal_pipeline) return false;
 
 	return true;
 }

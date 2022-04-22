@@ -14,7 +14,10 @@
     if(self)
     {
         // shader
-        NSString* shader_file = [NSString stringWithUTF8String: pass->name];
+		char file_buffer[256];
+		sprintf(file_buffer, "shaders/metal/%s.metallib", pass->name);
+
+        NSString* shader_file = [NSString stringWithUTF8String: file_buffer];
         pass->shader.internal_shader = [[dm_metal_shader_library alloc] createShader: &pass->shader withPath: shader_file andRenderer: renderer];
         if(!pass->shader.internal_shader) return NULL;
         [shader_file release];

@@ -25,7 +25,7 @@ typedef struct dm_buffer_data
 } dm_buffer_data;
 
 // render pass and pipeline
-extern bool dm_renderer_create_render_pass_impl(dm_render_pass render_pass, dm_vertex_layout layout);
+extern bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout layout);
 extern void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass);
 
 // forward declaration of the implementation, or backend, functionality
@@ -85,6 +85,7 @@ bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, d
                                     dm_render_pipeline_state pipeline_state, char* tag)
 {
     dm_render_pass render_pass = { 0 };
+    render_pass.name = tag;
     
     render_pass.pipeline_state = pipeline_state;
     render_pass.shader = shader;
@@ -97,7 +98,7 @@ bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, d
         dm_map_insert(render_pass.uniforms, uniforms[i].name, &uniforms[i]);
     }
     
-    if(!dm_renderer_create_render_pass_impl(render_pass, layout)) return false;
+    if(!dm_renderer_create_render_pass_impl(&render_pass, layout)) return false;
     
     dm_map_insert(render_passes, (void*)tag, &render_pass);
     

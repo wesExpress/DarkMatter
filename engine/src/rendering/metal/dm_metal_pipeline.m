@@ -2,16 +2,20 @@
 
 #ifdef DM_METAL
 
+#include "dm_metal_shader.h"
 #include "core/dm_logger.h"
 
 @implementation dm_metal_pipeline
 
-- (id) initWithRenderer:(dm_metal_renderer*)renderer andPipeline:(dm_render_pipeline_state*)pipeline
+- (id) initWithRenderer:(dm_metal_renderer*)renderer andPass:(dm_render_pass*)pass andPipeline:(dm_render_pipeline_state*)pipeline
 {
     self = [super init];
 
     if(self)
     {
+		// grab the shader
+		dm_metal_shader_library* shader_lib = pass->shader.internal_shader;
+
         // depth stencil
         MTLDepthStencilDescriptor* depth_stencil_desc = [MTLDepthStencilDescriptor new];
         depth_stencil_desc.depthCompareFunction = MTLCompareFunctionLess;
@@ -25,6 +29,9 @@
 
         // pipeline state
         MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
+		pipe_desc.vertexFunction = shader_lib.vertex_func;
+		pipe_desc.fragmentFunction = shader_lib.fragment_func;
+
         pipe_desc.colorAttachments[0].pixelFormat = renderer.view.metal_layer.pixelFormat;
         pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
 
@@ -52,11 +59,6 @@
     }
 
     return self;
-}
-
-- (id) init
-{
-    return [self initWithRenderer: NULL andPipeline: NULL];
 }
 
 @end
