@@ -10,9 +10,8 @@
 @interface dm_metal_render_pass : NSObject
 
 @property (strong, nonatomic) id<CAMetalDrawable> drawable;
-@property (strong, nonatomic) id<MTLSamplerState> sampler_state;
 
-- (id) initWithRendererAndPass: (dm_metal_renderer*)renderer :(dm_render_pass*)pass;
+- (id) initWithRenderer:(dm_metal_renderer*)renderer andPass:(dm_render_pass*)pass;
 
 @end
 

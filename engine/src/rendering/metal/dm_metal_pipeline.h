@@ -11,8 +11,9 @@
 
 @property (strong, nonatomic) id<MTLRenderPipelineState> pipeline_state;
 @property (strong, nonatomic) id<MTLDepthStencilState> depth_stencil;
+@property (strong, nonatomic) id<MTLSamplerState> sampler_state;
 
-- (id) initWithRenderer:(dm_metal_renderer*)renderer :(dm_render_pipeline*)pipeline;
+- (id) initWithRenderer:(dm_metal_renderer*)renderer andPipeline:(dm_render_pipeline_state*)pipeline;
 
 @end
 

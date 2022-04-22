@@ -6,6 +6,7 @@
 #include "dm_geometry.h"
 #include "dm_uniform.h"
 #include "dm_model.h"
+#include "dm_default_render_passes.h"
 
 #include "core/dm_mem.h"
 #include "core/dm_logger.h"
@@ -15,27 +16,25 @@
 
 #define DM_MAX_INSTANCES 10000
 
-static dm_renderer_data r_data = { 0 };
+// render pass and pipeline
+void dm_renderer_destroy_render_pipeline(dm_render_pipeline_state* pipeline);
+extern bool dm_create_render_pass_impl(dm_render_pass render_pass, dm_vertex_layout layout);
+extern void dm_renderer_destroy_render_pass(dm_render_pass* render_pass);
+extern void dm_destroy_render_pass_impl(dm_render_pass* render_pass);
 
-bool dm_renderer_init_render_pipeline(dm_render_pipeline* pipeline);
-void dm_renderer_destroy_render_pipeline(dm_render_pipeline* pipeline);
-
-void dm_renderer_destroy_render_pass(dm_render_pass* render_pass);
+// render command
+extern void dm_render_command_init();
+extern void dm_render_command_shutdown();
 
 // forward declaration of the implementation, or backend, functionality
-// if not defined, compiler will be angry
+extern bool dm_renderer_init_impl(dm_platform_data* platform_data);
+extern void dm_renderer_shutdown_impl();
+extern bool dm_renderer_end_frame_impl();
 
-bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data);
-void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data);
-bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data);
+extern bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
+extern void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
 
-bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout v_layout, dm_render_pipeline* pipeline);
-void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass);
-
-bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline);
-void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline);
-
-bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render_pipeline* pipeline);
+extern bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render_pipeline* pipeline);
 
 // vertex data
 dm_list* vertices = NULL;
@@ -44,15 +43,16 @@ dm_list* indices = NULL;
 // meshes
 dm_map* mesh_map = NULL;
 
+// render passes and pipelines
+dm_map* render_passes = NULL;
+dm_map* pipelines = NULL;
+
 // camera
 dm_editor_camera* camera = NULL;
 
-// render passes
-dm_map* render_passes = NULL;
-
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
-	r_data.clear_color = clear_color;
+	//r_data.clear_color = clear_color;
     
 	dm_viewport viewport = {
 		.x = 0, .y = 0,
@@ -60,35 +60,36 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 		.height = platform_data->window_height,
 		.max_depth = 1.0f
 	};
-	r_data.viewport = viewport;
+	//r_data.viewport = viewport;
     
-	r_data.pipeline = dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
+	//r_data.pipeline = dm_alloc(sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
     
-	if(!dm_renderer_init_impl(platform_data, &r_data))
+	if(!dm_renderer_init_impl(platform_data))
 	{
 		DM_LOG_FATAL("Renderer backend could not be initialized!");
 		return false;
 	}
     
-	// vertex data
+    // vertex data
 	vertices = dm_list_create(sizeof(dm_vertex_t), 0);
 	indices = dm_list_create(sizeof(dm_index_t), 0);
     
-	//inst_map = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_inst_data), 0);
-    
+    // render passes
     render_passes = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_render_pass), 0);
-	
+    
     // mesh
 	mesh_map = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_mesh), 0);
     
+    // pipelines
+    pipelines = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_render_pipeline_state), 0);
     
-    //mesh_tags = dm_list_create(sizeof(dm_string), 0);
-    r_data.render_commands = dm_list_create(sizeof(dm_render_command), 0);
+    dm_render_command_init();
     
-    // maps
+    // images/textures
     dm_image_map_init();
     
     // camera
+    /*
     dm_camera_init(
                    &r_data.camera, (dm_vec3) { 0, 0, 0 },
                    70.0f,
@@ -103,7 +104,7 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
         DM_LOG_FATAL("Failed to create render pipeline!");
         return false;
     }
-    
+    */
     // primitives
     dm_model_loader_init();
     
@@ -122,35 +123,38 @@ void dm_renderer_shutdown()
 	dm_list_destroy(vertices);
 	dm_list_destroy(indices);
     
-	//dm_map_destroy(inst_map);
+    // meshes
 	dm_for_map_item(mesh_map)
     {
         dm_mesh* mesh = item->value;
         dm_list_destroy(mesh->entities);
     }
-    
     dm_map_destroy(mesh_map);
-    dm_model_loader_shutdown();
     
-    for(uint32_t i=0; i<render_passes->capacity;i++)
+    // render passes
+    dm_for_map_item(render_passes)
     {
-        if(render_passes->items[i])
-        {
-            dm_render_pass* render_pass = render_passes->items[i]->value;
-            dm_renderer_destroy_render_pass(render_pass);
-        }
+        dm_render_pass* render_pass = item->value;
+        dm_renderer_destroy_render_pass(render_pass);
     }
     dm_map_destroy(render_passes);
     
-    if(r_data.render_commands->count>0) dm_renderer_clear_command_buffer(r_data.render_commands);
-    dm_list_destroy(r_data.render_commands);
+    // pipelines
+    dm_for_map_item(pipelines)
+    {
+        dm_render_pipeline_state* pipeline = item->value;
+        dm_renderer_destroy_render_pipeline(pipeline);
+    }
+    dm_map_destroy(pipelines);
     
-    dm_renderer_destroy_render_pipeline(r_data.pipeline);
-    dm_free(r_data.pipeline, sizeof(dm_render_pipeline), DM_MEM_RENDER_PIPELINE);
+    dm_model_loader_shutdown();
+    
+    dm_render_comand_shutdown();
+    
     dm_image_map_destroy();
     
     // backend shutdown
-    dm_renderer_shutdown_impl(&r_data);
+    dm_renderer_shutdown_impl();
 }
 
 void dm_renderer_resize(int new_width, int new_height)
@@ -231,21 +235,21 @@ bool dm_renderer_render_materials()
                 
                 //count++;
                 
-                dm_render_command_begin_renderpass(material_pass, r_data.render_commands);
-                dm_render_command_update_buffer(r_data.pipeline->inst_buffer, &inst, sizeof(dm_vertex_inst), r_data.render_commands);
-                dm_render_command_bind_texture(diffuse_map, 0, r_data.render_commands);
-                dm_render_command_bind_texture(specular_map, 1, r_data.render_commands);
+                dm_render_command_begin_renderpass(material_pass);
+                dm_render_command_update_buffer(r_data.pipeline->inst_buffer, &inst, sizeof(dm_vertex_inst));
+                dm_render_command_bind_texture(diffuse_map, 0);
+                dm_render_command_bind_texture(specular_map, 1);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass, r_data.render_commands);
-                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_pass, r_data.render_commands);
-                dm_render_command_end_renderpass(material_pass, r_data.render_commands);
+                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_pass);
+                dm_render_command_end_renderpass(material_pass);
                 
                 //dm_list_destroy(buffer_data);
             }
         }
     }
     
-	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
-	dm_renderer_clear_command_buffer(r_data.render_commands);
+	if (!dm_renderer_submit_command_buffer()) return false;
+	dm_renderer_clear_command_buffer();
     
     return true;
 }
@@ -314,20 +318,20 @@ bool dm_renderer_render_colored_materials()
                 
                 //count++;
                 
-                dm_render_command_begin_renderpass(material_color_pass, r_data.render_commands);
-                dm_render_command_update_buffer(r_data.pipeline->inst_buffer, &inst, sizeof(dm_vertex_inst), r_data.render_commands);
-                if(mesh->is_indexed) dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass, r_data.render_commands);
-                else dm_render_command_draw_arrays(mesh->vertex_offset, mesh->index_count, material_color_pass, r_data.render_commands);
+                dm_render_command_begin_renderpass(material_color_pass);
+                dm_render_command_update_buffer(r_data.pipeline->inst_buffer, &inst, sizeof(dm_vertex_inst));
+                if(mesh->is_indexed) dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass);
+                else dm_render_command_draw_arrays(mesh->vertex_offset, mesh->index_count, material_color_pass);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_color_pass, r_data.render_commands);
-                dm_render_command_end_renderpass(material_color_pass, r_data.render_commands);
+                dm_render_command_end_renderpass(material_color_pass);
                 
                 //dm_list_destroy(buffer_data);
             }
         }
     }
     
-	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
-	dm_renderer_clear_command_buffer(r_data.render_commands);
+	if (!dm_renderer_submit_command_buffer()) return false;
+	dm_renderer_clear_command_buffer();
     
     return true;
 }
@@ -381,17 +385,17 @@ bool dm_render_light_sources()
             }
         }
         
-        dm_render_command_begin_renderpass(lsrc_pass, r_data.render_commands);
-        dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size, r_data.render_commands);
-        dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, lsrc_pass, r_data.render_commands);
-        dm_render_command_end_renderpass(lsrc_pass, r_data.render_commands);
+        dm_render_command_begin_renderpass(lsrc_pass);
+        dm_render_command_update_buffer(r_data.pipeline->inst_buffer, buffer_data->data, buffer_data->count * buffer_data->element_size);
+        dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, lsrc_pass);
+        dm_render_command_end_renderpass(lsrc_pass);
         
         dm_list_destroy(buffer_data);
     }
     
     
-	if (!dm_renderer_submit_command_buffer(r_data.render_commands, r_data.pipeline)) return false;
-	dm_renderer_clear_command_buffer(r_data.render_commands);
+	if (!dm_renderer_submit_command_buffer()) return false;
+	dm_renderer_clear_command_buffer();
     
     return true;
 }
@@ -477,196 +481,44 @@ bool dm_renderer_init_object_data()
 
 bool dm_renderer_create_default_render_passes()
 {
-	// vertex attributes
-	dm_vertex_attrib_desc material_v_attribs[] = {
-		pos_attrib_desc,
-		norm_attrib_desc,
-		tex_coord_desc,
-		model_attrib_desc,
-	};
+    if(!dm_renderer_create_material_pass()) return false;
+    if(!dm_renderer_create_material_color_pass()) return false;
+    if(!dm_renderer_create_light_src_pass()) return false;
     
-	dm_vertex_layout material_v_layout = {
-		.attributes = material_v_attribs,
-		.num = sizeof(material_v_attribs) / sizeof(material_v_attribs[0])
-	};
-    
-    dm_vertex_attrib_desc material_color_v_attribs[] = {
-		pos_attrib_desc,
-		norm_attrib_desc,
-		tex_coord_desc,
-		model_attrib_desc,
-        diffuse_attrib_desc,
-        specular_attrib_desc,
-	};
-    
-	dm_vertex_layout material_color_v_layout = {
-		.attributes = material_color_v_attribs,
-		.num = sizeof(material_color_v_attribs) / sizeof(material_color_v_attribs[0])
-	};
-    
-	// default uniforms
-	dm_uniform vp = dm_create_uniform("view_proj", mat4_uni_desc, &(dm_mat4){0}, sizeof(dm_mat4));
-    dm_uniform shiny = dm_create_uniform("shininess", float_uni_desc, &(float){0}, sizeof(float));
-	dm_uniform light_pos = dm_create_uniform("light_pos", vec3_uni_desc, &(dm_vec3){0}, sizeof(dm_vec3));
-	dm_uniform light_ambient = dm_create_uniform("light_ambient", vec4_uni_desc, &(dm_vec4){0}, sizeof(dm_vec4));
-    dm_uniform light_diffuse = dm_create_uniform("light_diffuse", vec4_uni_desc, &(dm_vec4){0}, sizeof(dm_vec4));
-    dm_uniform light_specular = dm_create_uniform("light_specular", vec4_uni_desc, &(dm_vec4){0}, sizeof(dm_vec4));
-    dm_uniform view_pos = dm_create_uniform("view_pos", vec3_uni_desc, &(dm_vec3){0}, sizeof(dm_vec3));
-    
-	dm_shader material_shader = {0};
-	material_shader.vertex_desc.type = DM_SHADER_TYPE_VERTEX;
-	material_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
-	material_shader.name = "material";
-    
-    dm_shader material_color_shader = {0};
-	material_color_shader.vertex_desc.type = DM_SHADER_TYPE_VERTEX;
-	material_color_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
-	material_color_shader.name = "material_color";
-    
-	// shaders
-#ifdef DM_OPENGL
-	material_shader.vertex_desc.path = "shaders/glsl/material_vertex.glsl";
-#elif defined DM_DIRECTX
-	material_shader.vertex_desc.path = "shaders/hlsl/material_vertex.fxc";
-#endif
-    
-#ifdef DM_OPENGL
-	material_shader.pixel_desc.path = "shaders/glsl/material_pixel.glsl";
-#elif defined DM_DIRECTX
-	material_shader.pixel_desc.path = "shaders/hlsl/material_pixel.fxc";
-#endif
-    
-#ifdef DM_OPENGL
-	material_color_shader.vertex_desc.path = "shaders/glsl/material_color_vertex.glsl";
-#elif defined DM_DIRECTX
-	material_color_shader.vertex_desc.path = "shaders/hlsl/material_color_vertex.fxc";
-#endif
-    
-#ifdef DM_OPENGL
-	material_color_shader.pixel_desc.path = "shaders/glsl/material_color_pixel.glsl";
-#elif defined DM_DIRECTX
-	material_color_shader.pixel_desc.path = "shaders/hlsl/material_color_pixel.fxc";
-#endif
-    
-	dm_shader lsrc_shader = {0};
-	lsrc_shader.vertex_desc.type = DM_SHADER_TYPE_VERTEX;
-	lsrc_shader.pixel_desc.type = DM_SHADER_TYPE_PIXEL;
-	lsrc_shader.name = "light_src";
-    
-#ifdef DM_METAL
-	lsrc_shader.single_file = true;
-	lsrc_shader.file_name = "shaders/metal/light_src_shader.metallib";
-#endif
-    
-#ifdef DM_OPENGL
-	lsrc_shader.vertex_desc.path = "shaders/glsl/light_src_vertex.glsl";
-#elif defined DM_DIRECTX
-	lsrc_shader.vertex_desc.path = "shaders/hlsl/light_src_vertex.fxc";
-#elif defined DM_METAL
-	lsrc_shader.vertex_desc.path = "vertex_main";
-#endif
-    
-#ifdef DM_OPENGL
-	lsrc_shader.pixel_desc.path = "shaders/glsl/light_src_pixel.glsl";
-#elif defined DM_DIRECTX
-	lsrc_shader.pixel_desc.path = "shaders/hlsl/light_src_pixel.fxc";
-#elif defined DM_METAL
-	lsrc_shader.pixel_desc.path = "light_src_main";
-#endif
-    
-	// material render pass
-    dm_uniform material_uniforms[] = {
-        vp, light_ambient, light_diffuse, light_specular, light_pos, shiny, view_pos,
-    };
-    
-	if (!dm_renderer_create_render_pass(material_shader, material_v_layout, material_uniforms, sizeof(material_uniforms) / sizeof(dm_uniform), material_shader.name))
-	{
-		DM_LOG_FATAL("Could not create default material render pass!");
-		return false;
-	}
-    
-    // material color render pass
-    dm_uniform material_color_uniforms[] = {
-        vp, light_ambient, light_diffuse, light_specular, light_pos, shiny, view_pos,
-    };
-    
-	if (!dm_renderer_create_render_pass(material_color_shader, material_color_v_layout, material_color_uniforms, sizeof(material_color_uniforms) / sizeof(dm_uniform), material_color_shader.name))
-	{
-		DM_LOG_FATAL("Could not create default material color render pass!");
-		return false;
-	}
-    
-	// light src render pass
-    dm_uniform light_src_uniforms[] = { vp };
-    
-	if (!dm_renderer_create_render_pass(lsrc_shader, material_color_v_layout, light_src_uniforms, 1, lsrc_shader.name))
-	{
-		DM_LOG_FATAL("Could not create default light src render pass!");
-		return false;
-	}
-	
-	return true;
+    return true;
 }
 
-bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout v_layout, dm_uniform* uniforms, uint32_t num_uniforms, const char* tag)
+bool dm_renderer_create_render_pass(dm_shader_new shader, dm_vertex_layout layout, dm_uniform* uniforms, uint32_t num_uniforms,
+                                    dm_render_pipeline_state pipeline_state, char* tag)
 {
-	dm_render_pass* render_pass = dm_alloc(sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
+    dm_render_pass_new render_pass = { 0 };
     
-	render_pass->name = tag;
+    render_pass.pipeline_state = pipeline_state;
+    render_pass.shader = shader;
+    render_pass.uniforms = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_uniform), 0);
     
-	// shader
-	render_pass->shader = dm_alloc(sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
-	dm_memcpy(render_pass->shader, &shader, sizeof(dm_shader));
-    
-	// raster
-	dm_raster_state_desc raster = { 0 };
-	raster.cull_mode = DM_CULL_BACK;
-	raster.winding_order = DM_WINDING_COUNTER_CLOCK;
-	raster.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
-    
-	render_pass->raster_desc = raster;
-    
-	// sampler
-	dm_sampler_desc sampler = { 0 };
-	sampler.comparison = DM_COMPARISON_ALWAYS;
-	sampler.filter = DM_FILTER_LINEAR;
-	sampler.u = DM_TEXTURE_MODE_WRAP;
-	sampler.v = DM_TEXTURE_MODE_WRAP;
-	sampler.w = DM_TEXTURE_MODE_WRAP;
-    
-	render_pass->sampler_desc = sampler;
-    
-	// uniforms
-	//render_pass->uniforms = uniforms;
-    
-    render_pass->uniforms = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_uniform), 0);
     for(uint32_t i=0; i<num_uniforms; i++)
     {
-        dm_map_insert(render_pass->uniforms, uniforms[i].name, &uniforms[i]);
+        dm_map_insert(render_pass.uniforms, uniforms[i].name, &uniforms[i]);
     }
     
-	if(!dm_renderer_create_render_pass_impl(render_pass, v_layout, r_data.pipeline)) return false;
+    if(!dm_renderer_create_render_pass_impl(render_pass, layout)) return false;
     
-	dm_map_insert(render_passes, (void*)tag, render_pass);
+    dm_map_insert(render_passes, (void*)tag, &render_pass);
     
-	dm_free(render_pass, sizeof(dm_render_pass), DM_MEM_RENDER_PASS);
-    
-	return true;
+    return true;
 }
 
 void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
 {
-	dm_renderer_destroy_render_pass_impl(render_pass);
+    dm_renderer_destroy_render_pass_impl(render_pass);
     
     dm_for_map_item(render_pass->uniforms)
-	{
-		dm_uniform* uniform = item->value;
-		
+    {
+        dm_uniform* uniform = item->value;
         dm_destroy_uniform(uniform);
-	}
+    }
     dm_map_destroy(render_pass->uniforms);
-    
-	dm_free(render_pass->shader, sizeof(dm_shader), DM_MEM_RENDERER_SHADER);
 }
 
 /*

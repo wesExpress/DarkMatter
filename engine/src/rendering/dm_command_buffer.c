@@ -2,22 +2,22 @@
 #include "core/dm_logger.h"
 #include "core/dm_mem.h"
 
-void dm_renderer_submit_command(dm_render_command_type command_type, void* data, dm_list* render_commands);
+void dm_renderer_submit_command(dm_render_command_type command_type, void* data);
 
-bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass);
-void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass);
-bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline);
-void dm_renderer_set_viewport_impl(dm_viewport viewport);
-void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline);
+extern bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass);
+extern void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass);
+extern bool dm_renderer_bind_pipeline_impl(dm_render_pipeline_state* pipeline);
+extern void dm_renderer_set_viewport_impl(dm_viewport viewport);
+extern void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline_state* pipeline);
 
-void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass);
-void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass);
+extern void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass);
+extern void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass);
 void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pass* render_pass);
 
-bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_size);
-bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot);
-bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot);
-bool dm_renderer_bind_uniform_impl(dm_uniform* uniform);
+extern bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_size);
+extern bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot);
+extern bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot);
+extern bool dm_renderer_bind_uniform_impl(dm_uniform* uniform);
 
 typedef struct dm_draw_command
 {
@@ -31,32 +31,44 @@ typedef struct dm_texture_command
     uint32_t slot;
 } dm_texture_command;
 
-void dm_render_command_begin_renderpass(dm_render_pass* render_pass, dm_list* render_commands)
+dm_list* render_commands = NULL;
+
+void dm_render_command_init()
 {
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, render_pass, render_commands);
+    render_commands = dm_list_create(sizeof(dm_render_command), 0);
 }
 
-void dm_render_command_end_renderpass(dm_render_pass* render_pass, dm_list* render_commands)
+void dm_render_command_shutdown()
 {
-	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, render_pass, render_commands);
+    dm_list_destroy(render_commands);
 }
 
-void dm_render_command_bind_pipeline(dm_render_pipeline* pipeline, dm_list* render_commands)
+void dm_render_command_begin_renderpass(dm_render_pass* render_pass)
 {
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, NULL, render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, render_pass);
 }
 
-void dm_render_command_set_viewport(dm_viewport* viewport, dm_list* render_commands)
+void dm_render_command_end_renderpass(dm_render_pass* render_pass)
 {
-	dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, viewport, render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, render_pass);
 }
 
-void dm_render_command_clear(dm_color* color, dm_list* render_commands)
+void dm_render_command_bind_pipeline(dm_render_pipeline_state* pipeline)
 {
-	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, color, render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, NULL);
 }
 
-void dm_render_command_update_buffer(dm_buffer* buffer, void* data, size_t data_size, dm_list* render_commands)
+void dm_render_command_set_viewport(dm_viewport* viewport)
+{
+	dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, viewport);
+}
+
+void dm_render_command_clear(dm_color* color)
+{
+	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, color);
+}
+
+void dm_render_command_update_buffer(dm_buffer* buffer, void* data, size_t data_size)
 {
 	dm_buffer_update_packet* update_packet = dm_alloc(sizeof(dm_buffer_update_packet), DM_MEM_RENDER_COMMAND);
 	update_packet->buffer = buffer;
@@ -64,31 +76,31 @@ void dm_render_command_update_buffer(dm_buffer* buffer, void* data, size_t data_
 	update_packet->data = dm_alloc(data_size, DM_MEM_RENDER_COMMAND);
 	dm_memcpy(update_packet->data, data, data_size);
     
-	dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_BUFFER, update_packet, render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_BUFFER, update_packet);
 }
 
-void dm_render_command_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_list* render_commands)
+void dm_render_command_bind_buffer(dm_buffer* buffer, uint32_t slot)
 {
 	dm_buffer_bind_packet* packet = dm_alloc(sizeof(dm_buffer_bind_packet), DM_MEM_RENDER_COMMAND);
 	packet->buffer = buffer;
 	packet->slot = slot;
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, packet, render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, packet);
 }
 
-void dm_render_command_bind_texture(dm_image* image, uint32_t slot, dm_list* render_commands)
+void dm_render_command_bind_texture(dm_image* image, uint32_t slot)
 {
     dm_texture_command* texture_command = dm_alloc(sizeof(dm_texture_command), DM_MEM_RENDER_COMMAND);
     texture_command->image = image;
     texture_command->slot = slot;
-    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_TEXTURE, texture_command, render_commands);
+    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_TEXTURE, texture_command);
 }
 
-void dm_render_command_bind_uniform(dm_uniform* uniform, dm_list* render_commands)
+void dm_render_command_bind_uniform(dm_uniform* uniform)
 {
-    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_UNIFORM, uniform, render_commands);
+    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_UNIFORM, uniform);
 }
 
-void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_render_pass* render_pass, dm_list* render_commands)
+void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_render_pass* render_pass)
 {
 	dm_draw_command* draw_command = dm_alloc(sizeof(dm_draw_command), DM_MEM_RENDER_COMMAND);
     
@@ -98,10 +110,10 @@ void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_render_pas
     
 	draw_command->render_pass = render_pass;
     
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_ARRAYS, draw_command, render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_ARRAYS, draw_command);
 }
 
-void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass, dm_list* render_commands)
+void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass)
 {
 	dm_draw_command* draw_command = dm_alloc(sizeof(dm_draw_command), DM_MEM_RENDER_COMMAND);
     
@@ -112,10 +124,10 @@ void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset,
     
 	draw_command->render_pass = render_pass;
     
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, draw_command, render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, draw_command);
 }
 
-void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pass* render_pass, dm_list* render_commands)
+void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pass* render_pass)
 {
 	dm_draw_command* draw_command = dm_alloc(sizeof(dm_draw_command), DM_MEM_RENDER_COMMAND);
     
@@ -128,17 +140,17 @@ void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, 
     
 	draw_command->render_pass = render_pass;
     
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INSTANCED, draw_command, render_commands);
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INSTANCED, draw_command);
 }
 
-void dm_renderer_submit_command(dm_render_command_type command_type, void* data, dm_list* render_commands)
+void dm_renderer_submit_command(dm_render_command_type command_type, void* data)
 {
 	dm_render_command command = { .data = data, .type = command_type };
 	
 	dm_list_append(render_commands, &command);
 }
 
-void dm_renderer_clear_command_buffer(dm_list* render_commands)
+void dm_renderer_clear_command_buffer()
 {
 	for(uint32_t i=0; i<render_commands->count;i++)
 	{
@@ -189,7 +201,7 @@ void dm_renderer_clear_command_buffer(dm_list* render_commands)
 	dm_list_clear(render_commands, 0);
 }
 
-bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipeline* pipeline)
+bool dm_renderer_submit_command_buffer()
 {
 	for(uint32_t i=0; i<render_commands->count; i++)
 	{
@@ -212,11 +224,11 @@ bool dm_renderer_submit_command_buffer(dm_list* render_commands, dm_render_pipel
             } break;
             case DM_RENDER_COMMAND_CLEAR:
             {
-                dm_renderer_clear_impl((dm_color*)command->data, pipeline);
+                dm_renderer_clear_impl((dm_color*)command->data, NULL);
             } break;
             case DM_RENDER_COMMAND_BIND_PIPELINE:
             {
-                if (!dm_renderer_bind_pipeline_impl(pipeline)) return false;
+                if (!dm_renderer_bind_pipeline_impl(NULL)) return false;
             } break;
             case DM_RENDER_COMMAND_UPDATE_BUFFER:
             {

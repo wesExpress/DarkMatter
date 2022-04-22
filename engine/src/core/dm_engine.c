@@ -53,9 +53,9 @@ bool dm_engine_create(dm_application* app)
     }
     
     // finally create vertex and index buffers
-    if (!dm_renderer_init_object_data())
+    if (!dm_renderer_init_buffer_data())
     {
-        DM_LOG_FATAL("Could not initialize object data!");
+        DM_LOG_FATAL("Could not initialize buffer data!");
         return false;
     }
     

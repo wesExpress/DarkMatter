@@ -16,7 +16,7 @@
 // bound to window with setDelegate message
 @implementation dm_window_delegate
 
-- (bool)windowShouldClose:(NSNotification*)notification
+- (BOOL)windowShouldClose:(NSNotification*)notification
 {
     dm_event_dispatch((dm_event) { DM_WINDOW_CLOSE_EVENT, NULL, NULL });
     return YES;

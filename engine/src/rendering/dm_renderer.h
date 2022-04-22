@@ -1,25 +1,15 @@
 #ifndef __DM_RENDERER_H__
 #define __DM_RENDERER_H__
 
-#include <stdbool.h>
 #include "core/dm_engine_types.h"
-#include "ecs/dm_components.h"
+//#include "ecs/dm_components.h"
 #include "dm_render_types.h"
 #include "dm_colors.h"
 #include "dm_camera.h"
 
+#include <stdbool.h>
+
 #define MAX_RENDER_RESOURCES 100
-
-typedef struct dm_renderer_data
-{
-	dm_camera camera;
-	dm_color clear_color;
-	dm_list* render_commands;
-	dm_viewport viewport;
-    
-	dm_render_pipeline* pipeline;
-} dm_renderer_data;
-
 /*
 mainly a wrapper for the backend renderer initialization the user is not exposed to.
 creates and initializes the camera as well.
@@ -55,14 +45,16 @@ bool dm_renderer_end_frame();
 /*
 initializes the vertex and index buffers. called after the application has submitted everything.
 */
-bool dm_renderer_init_object_data();
+bool dm_renderer_init_buffer_data();
 
 /*
 default render passes:
-- objects
+- materials
+- color materials
+- light srcs (temp)
 */
 bool dm_renderer_create_default_render_passes();
 
-bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout v_layout, dm_uniform* uniforms, uint32_t num_uniforms, const char* tag);
-
+bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, dm_uniform* uniforms, uint32_t num_uniforms,
+                                    dm_render_pipeline_state pipeline_state, char* tag);
 #endif

@@ -199,6 +199,10 @@ bool dm_load_gltf(const char* path, bool normalize)
                             case cgltf_component_type_r_32f:
                             num_components /= sizeof(uint32_t);
                             break;
+                            
+                            default:
+                            DM_LOG_ERROR("Shouldn't be here...");
+                            break;
                         }
                         
                         for (uint32_t c=0; c<attrib.count; )

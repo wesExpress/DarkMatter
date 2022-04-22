@@ -3,7 +3,7 @@
 set echo on
 output="DarkMatter"
 
-opengl=1
+opengl=0
 
 SRC_DIR=$PWD
 #echo "$SRC_DIR"
@@ -38,7 +38,7 @@ if [ "$opengl" -eq 1 ]; then
 	include_flags="${include_flags} -I$SRC_DIR/engine/lib/glad/include -I$SRC_DIR/engine/lib/glfw/include"
 	linker_flags="${linker_flags} -lglfw -framework OpenGl -framework CoreVideo"
 else
-	linker_flags="${linkerflags} -lobjc -framework QuartzCore -framework CoreFoundation -framework Metal"
+	linker_flags="${linkerflags} -lobjc -framework QuartzCore -framework CoreFoundation -framework Cocoa -framework Metal"
 fi
 
 echo "Building $output..."
@@ -49,11 +49,15 @@ cd ..
 if [ "$opengl" -eq 0 ]; then
 	mkdir -p ../bin/shaders/metal
 
-	echo "Compiling object shader..."
-	xcrun -sdk macosx metal $SRC_DIR/engine/shaders/metal/object.metal -c -o $SRC_DIR/metal/object.air
-	xcrun -sdk macosx metallib $SRC_DIR/engine/shaders/metal/object.air -o $SRC_DIR/metal/object.metallib
+	echo "Compiling material shader..."
+	xcrun -sdk macosx metal $SRC_DIR/engine/shaders/metal/material.metal -c -o $SRC_DIR/engine/shaders/metal/material.air
+	xcrun -sdk macosx metallib $SRC_DIR/engine/shaders/metal/material.air -o $SRC_DIR/engine/shaders/metal/material.metallib
+
+	echo "Compiling material color shader..."
+	xcrun -sdk macosx metal $SRC_DIR/engine/shaders/metal/material_color.metal -c -o $SRC_DIR/engine/shaders/metal/material_color.air
+	xcrun -sdk macosx metallib $SRC_DIR/engine/shaders/metal/material_color.air -o $SRC_DIR/engine/shaders/metal/material_color.metallib
 
 	echo "Compiling light source shader..."
-	xcrun -sdk macosx metal $SRC_DIR/engine/shaders/metal/light_src.metal -c -o $SRC_DIR/metal/light_src.air
-	xcrun -sdk macosx metallib $SRC_DIR/engine/shaders/metal/light_src.air -o $SRC_DIR/metal/light_src.metallib
+	xcrun -sdk macosx metal $SRC_DIR/engine/shaders/metal/light_src.metal -c -o $SRC_DIR/engine/shaders/metal/light_src.air
+	xcrun -sdk macosx metallib $SRC_DIR/engine/shaders/metal/light_src.air -o $SRC_DIR/engine/shaders/metal/light_src.metallib
 fi

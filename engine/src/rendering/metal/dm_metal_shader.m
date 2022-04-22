@@ -7,7 +7,7 @@
 
 @implementation dm_metal_shader_library
 
-- (id) create: (dm_shader*) shader :(NSString*) path :(dm_metal_renderer*) renderer
+- (id) createShader:(dm_shader*)shader withPath:(NSString*)path andRenderer:(dm_metal_renderer*)renderer
 {
     self = [super init];
 
@@ -20,19 +20,37 @@
             return NULL;
         }
 
-        NSString* vertex_func_name = [[NSString alloc] initWithUTF8String:shader->vertex_desc.path];
-        _vertex_func = [_library newFunctionWithName:vertex_func_name];
+		for (uint32_t i=0; i<shader->num_stages; i++)
+		{
+			dm_shader_desc stage = shader->stages[i];
+			
+	        NSString* func_name = [[NSString alloc] initWithUTF8String:stage.source];
+
+			switch (stage.type)
+			{
+				case DM_SHADER_TYPE_VERTEX:
+				{
+    	    		_vertex_func = [_library newFunctionWithName:func_name];
+				} break;
+				case DM_SHADER_TYPE_PIXEL:
+				{
+        			_fragment_func = [_library newFunctionWithName:func_name];
+				} break;
+				default:
+				DM_LOG_ERROR("Unknown shader type, shouldn't be here...");
+				break;
+			}
+		}
+
         if(!_vertex_func)
         {
-            DM_LOG_FATAL("Could not create vertex function with name: %s", shader->vertex_desc.path);
+        	DM_LOG_FATAL("Could not create vertex function from shader: %s", shader->pass);
             return NULL;
-        }
+		}
 
-        NSString* fragment_func_name = [[NSString alloc] initWithUTF8String:shader->pixel_desc.path];
-        _fragment_func = [_library newFunctionWithName:fragment_func_name];
         if(!_fragment_func)
         {
-            DM_LOG_FATAL("Could not create fragment function with name: %s", shader->pixel_desc.path);
+            DM_LOG_FATAL("Could not create fragment function from shader: %s", shader->pass);
             return NULL;
         }
     }

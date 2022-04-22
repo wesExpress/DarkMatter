@@ -100,8 +100,11 @@ typedef enum dm_uniform_data_t
     DM_UNIFORM_DATA_T_INT,
     DM_UNIFORM_DATA_T_UINT,
     DM_UNIFORM_DATA_T_FLOAT,
-    DM_UNIFORM_DATA_T_MATRIX_INT,
-    DM_UNIFORM_DATA_T_MATRIX_FLOAT,
+    DM_UNIFORM_DATA_T_VEC2,
+    DM_UNIFORM_DATA_T_VEC3,
+    DM_UNIFORM_DATA_T_VEC4,
+    DM_UNIFORM_DATA_T_MAT4_INT,
+    DM_UNIFORM_DATA_T_MAT4_FLOAT,
     DM_UNIFORM_DATA_T_UNKNOWN
 } dm_uniform_data_t;
 
@@ -302,8 +305,8 @@ typedef struct dm_uniform_desc
 
 typedef struct dm_unifom
 {
-    dm_uniform_desc desc;
-    const char* name;
+    dm_uniform_data_t type;
+    char* name;
     void* internal_uniform;
     void* data;
 } dm_uniform;
@@ -313,14 +316,23 @@ typedef struct dm_unifom
 typedef struct dm_shader_desc
 {
     dm_shader_type type;
-    const char* path;
+    char* source;
 } dm_shader_desc;
 
+/*
 typedef struct dm_shader
 {
     dm_shader_desc vertex_desc;
     dm_shader_desc pixel_desc;
-    const char* name;
+    char* name;
+    void* internal_shader;
+} dm_shader;
+*/
+typedef struct dm_shader
+{
+    dm_shader_desc* stages;
+    uint32_t num_stages;
+    char* pass;
     void* internal_shader;
 } dm_shader;
 
@@ -406,6 +418,7 @@ typedef struct dm_render_command
     void* data;
 } dm_render_command;
 
+/*
 typedef struct dm_render_pipeline
 {
     dm_blend_state_desc blend_desc;
@@ -427,6 +440,27 @@ typedef struct dm_render_pass
     bool wireframe;
     const char* name;
     void* internal_render_pass;
+} dm_render_pass;
+*/
+typedef struct dm_render_pipeline_state
+{
+    dm_blend_state_desc blend_desc;
+    dm_depth_state_desc depth_desc;
+    dm_stencil_state_desc stencil_desc;
+    dm_raster_state_desc raster_desc;
+    dm_sampler_desc sampler_desc;
+    bool wireframe;
+    void* internal_pipeline;
+} dm_render_pipeline_state;
+
+typedef struct dm_render_pass
+{
+    dm_render_pipeline_state pipeline_state;
+    dm_viewport viewport;
+    dm_shader shader;
+    dm_map* uniforms;
+    char* name;
+    void* internal_pass;
 } dm_render_pass;
 
 #endif

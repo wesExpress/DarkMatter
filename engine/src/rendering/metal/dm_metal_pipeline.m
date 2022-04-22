@@ -6,7 +6,7 @@
 
 @implementation dm_metal_pipeline
 
-- (id) initWithRenderer: (dm_metal_renderer*)renderer :(dm_render_pipeline*)pipeline
+- (id) initWithRenderer:(dm_metal_renderer*)renderer andPipeline:(dm_render_pipeline_state*)pipeline
 {
     self = [super init];
 
@@ -34,6 +34,21 @@
             DM_LOG_FATAL("Could not create metal pipeline state");
             return NULL;
         }
+
+		// sampler
+        MTLSamplerDescriptor* sampler_desc = [MTLSamplerDescriptor new];
+        sampler_desc.minFilter = MTLSamplerMinMagFilterNearest;
+        sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+        sampler_desc.mipFilter = MTLSamplerMipFilterLinear;
+        sampler_desc.sAddressMode = MTLSamplerAddressModeClampToEdge;
+        sampler_desc.tAddressMode = MTLSamplerAddressModeClampToEdge;
+
+        _sampler_state = [renderer.device newSamplerStateWithDescriptor:sampler_desc];
+        if(!_sampler_state)
+        {
+            DM_LOG_FATAL("Could not create metal sampler state!");
+            return NULL;
+        }
     }
 
     return self;
@@ -41,7 +56,7 @@
 
 - (id) init
 {
-    return [self initWithRenderer: NULL pipeline: NULL];
+    return [self initWithRenderer: NULL andPipeline: NULL];
 }
 
 @end

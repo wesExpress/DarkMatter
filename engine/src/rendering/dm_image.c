@@ -6,8 +6,8 @@
 
 dm_map* image_map = NULL;
 
-bool dm_create_texture_impl(dm_image* image);
-void dm_destroy_texture_impl(dm_image* image);
+extern bool dm_create_texture_impl(dm_image* image);
+extern void dm_destroy_texture_impl(dm_image* image);
 
 void dm_image_map_init()
 {
