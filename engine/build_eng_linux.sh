@@ -17,7 +17,7 @@ compiler_flags="-g -shared -std=gnu99 -fdiagnostics-absolute-paths -fdeclspec -f
 
 defines="-DDM_DEBUG -DDM_EXPORT -DDM_OPENGL"
 
-include_flags="-I$SRC_DIR/engine/src -I$SRC_DIR/engine/lib/stb_image/include -I$SRC_DIR/engine/lib/mt19937/include -I$SRC_DIR/engine/lib/glad/include"
+include_flags="-I$SRC_DIR/engine/src -I$SRC_DIR/engine/lib/stb_image/include -I$SRC_DIR/engine/lib/mt19937/include -I$SRC_DIR/engine/lib/glad/include -I$SRC_DIR/engine/lib/cgltf"
 
 linker_flags="-g -lX11 -lX11-xcb -lxkbcommon -lGL -L/usr/X11R6/lib -lm"
 

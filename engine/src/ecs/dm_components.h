@@ -3,7 +3,6 @@
 
 #include "core/dm_math_types.h"
 #include "rendering/dm_render_types.h"
-
 #include <stdint.h>
 
 typedef enum dm_component
@@ -60,8 +59,8 @@ typedef struct dm_light_src_component
 typedef struct dm_editor_camera
 {
     dm_vec3 pos;
-    dm_vec3 forward;
-    dm_vec3 up;
+    //dm_vec3 forward;
+    //dm_vec3 up;
 	float pitch, yaw, roll;
 	float move_velocity, look_sens;
 	uint32_t last_x, last_y;

@@ -10,9 +10,9 @@ in vec3 specular_color;
 out vec4 FragColor;
 
 uniform vec3 light_pos;
-uniform vec3 light_ambient;
-uniform vec3 light_diffuse;
-uniform vec3 light_specular;
+uniform vec4 light_ambient;
+uniform vec4 light_diffuse;
+uniform vec4 light_specular;
 uniform float shininess;
 
 uniform vec3 view_pos;
@@ -24,13 +24,13 @@ void main()
 	vec3 view_dir = normalize(view_pos - frag_pos);
 	vec3 reflect_dir = reflect(-light_dir, norm_normal);
 
-	vec3 ambient = light_ambient * diffuse_color;
+	vec3 ambient = light_ambient.rgb * diffuse_color;
 
 	float diff = max(dot(norm_normal, light_dir), 0.0);
-	vec3 diffuse = diff * diffuse_color * light_diffuse;
+	vec3 diffuse = diff * diffuse_color * light_diffuse.rgb;
 
 	float spec = pow(max(dot(view_dir, reflect_dir), 0.0), shininess);
-	vec3 specular = spec * specular_color * light_specular;
+	vec3 specular = spec * specular_color * light_specular.rgb;
 
 	FragColor = vec4((ambient + diffuse + specular), 1);
 }

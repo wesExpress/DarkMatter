@@ -20,6 +20,9 @@
 
 #define DM_GLUINT_FAIL UINT_MAX
 
+bool dm_opengl_bind_pipeline(dm_render_pipeline_state* pipeline);
+bool dm_opengl_create_render_pipeline(dm_render_pipeline_state* pipeline);
+
 /*
 STRUCTS
 */
@@ -56,14 +59,14 @@ typedef struct dm_internal_pipeline
 {
 	GLenum blend_src, blend_dest;
 	GLenum blend_func, depth_func, stencil_func;
+    GLenum primitive;
+    GLenum min_filter, mag_filter, s_wrap, t_wrap;
+    GLenum cull, winding;
 } dm_internal_pipeline;
 
 typedef struct dm_opengl_render_pass
 {
 	GLuint vao;
-	GLenum cull, winding;
-	GLenum primitive;
-	GLenum min_filter, mag_filter, s_wrap, t_wrap;
 } dm_opengl_render_pass;
 
 typedef enum dm_opengl_uniform
@@ -342,10 +345,26 @@ bool dm_opengl_create_shader(dm_shader* shader)
     shader->internal_shader = dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDERER_SHADER);
     dm_internal_shader* internal_shader = shader->internal_shader;
     
-    GLuint vertex_shader = dm_opengl_compile_shader(shader->vertex_desc);
-    if(vertex_shader == DM_GLUINT_FAIL) return false;
+    GLuint vertex_shader = DM_GLUINT_FAIL;
+    GLuint frag_shader = DM_GLUINT_FAIL;
     
-    GLuint frag_shader = dm_opengl_compile_shader(shader->pixel_desc);
+    for(uint32_t i=0; i<shader->num_stages; i++)
+    {
+        dm_shader_desc stage = shader->stages[i];
+        
+        switch(stage.type)
+        {
+            case DM_SHADER_TYPE_VERTEX: vertex_shader = dm_opengl_compile_shader(stage);
+            break;
+            case DM_SHADER_TYPE_PIXEL: frag_shader = dm_opengl_compile_shader(stage);
+            break;
+            default:
+            DM_LOG_ERROR("Shouldn't be here...");
+            break;
+        }
+    }
+    
+    if(vertex_shader == DM_GLUINT_FAIL) return false;
     if(frag_shader == DM_GLUINT_FAIL) return false;
     
     DM_LOG_DEBUG("Linking shader...");
@@ -419,144 +438,54 @@ bool dm_opengl_bind_uniform(dm_uniform* uniform)
 {
     dm_internal_uniform* internal_uniform = uniform->internal_uniform;
     
-    switch (uniform->desc.data_t)
+    switch (uniform->type)
     {
-        case DM_UNIFORM_DATA_T_INT:
-        {
-            switch (uniform->desc.count)
-            {
-                case 1:
-                {
-                    int data = *(int*)uniform->data;
-                    glUniform1i(internal_uniform->location, data);
-                    glCheckErrorReturn();
-                } break;
-                case 2:
-                {
-                    dm_vec2 data = *(dm_vec2*)uniform->data;
-                    glUniform2i(internal_uniform->location, (GLint)data.x, (GLint)data.y);
-                    glCheckErrorReturn();
-                } break;
-                case 3:
-                {
-                    dm_vec3 data = *(dm_vec3*)uniform->data;
-                    glUniform3i(internal_uniform->location, (GLint)data.x, (GLint)data.y, (GLint)data.z);
-                    glCheckErrorReturn();
-                } break;
-                case 4:
-                {
-                    dm_vec4 data = *(dm_vec4*)uniform->data;
-                    glUniform4i(internal_uniform->location, (GLint)data.x, (GLint)data.y, (GLint)data.z, (GLint)data.w);
-                    glCheckErrorReturn();
-                } break;
-                default:
-                DM_LOG_FATAL("Trying to upload to uniform with wrong size of ints");
-                return false;
-            }
-        } break;
-        
         case DM_UNIFORM_DATA_T_BOOL:
         case DM_UNIFORM_DATA_T_UINT:
         {
-            switch (uniform->desc.count)
-            {
-                case 1:
-                {
-                    uint32_t data = *(uint32_t*)uniform->data;
-                    glUniform1ui(internal_uniform->location, data);
-                    glCheckErrorReturn();
-                } break;
-                case 2:
-                {
-                    dm_vec2 data = *(dm_vec2*)uniform->data;
-                    glUniform2ui(internal_uniform->location, (GLint)data.x, (GLint)data.y);
-                    glCheckErrorReturn();
-                } break;
-                case 3:
-                {
-                    dm_vec3 data = *(dm_vec3*)uniform->data;
-                    glUniform3ui(internal_uniform->location, (GLint)data.x, (GLint)data.y, (GLint)data.z);
-                    glCheckErrorReturn();
-                } break;
-                case 4:
-                {
-                    dm_vec4 data = *(dm_vec4*)uniform->data;
-                    glUniform4ui(internal_uniform->location, (GLint)data.x, (GLint)data.y, (GLint)data.z, (GLint)data.w);
-                    glCheckErrorReturn();
-                } break;
-                default:
-                DM_LOG_FATAL("Trying to upload to uniform with wrong size of uints");
-                return false;
-            }
+            uint32_t* data = uniform->data;
+            glUniform1ui(internal_uniform->location, *data);
+            glCheckErrorReturn();
         } break;
-        
+        case DM_UNIFORM_DATA_T_INT:
+        {
+            int* data = uniform->data;
+            glUniform1i(internal_uniform->location, *data);
+            glCheckErrorReturn();
+        } break;
         case DM_UNIFORM_DATA_T_FLOAT:
         {
-            switch (uniform->desc.count)
-            {
-                case 1:
-                {
-                    float data = *(float*)uniform->data;
-                    glUniform1f(internal_uniform->location, data);
-                    glCheckErrorReturn();
-                } break;
-                case 2:
-                {
-                    dm_vec2 data = *(dm_vec2*)uniform->data;
-                    glUniform2f(internal_uniform->location, data.x, data.y);
-                    glCheckErrorReturn();
-                } break;
-                case 3:
-                {
-                    dm_vec3* data = (dm_vec3*)uniform->data;
-                    glUniform3f(internal_uniform->location, data->x, data->y, data->z);
-                    glCheckErrorReturn();
-                } break;
-                case 4:
-                {
-                    dm_vec4 data = *(dm_vec4*)uniform->data;
-                    glUniform4f(internal_uniform->location, data.x, data.y, data.z, data.w);
-                    glCheckErrorReturn();
-                } break;
-                default:
-                DM_LOG_FATAL("Trying to upload to uniform with wrong size of floats");
-                return false;
-            }
+            float* data = uniform->data;
+            glUniform1f(internal_uniform->location, *data);
+            glCheckErrorReturn();
         } break;
-        
-        case DM_UNIFORM_DATA_T_MATRIX_INT:
-        case DM_UNIFORM_DATA_T_MATRIX_FLOAT:
+        case DM_UNIFORM_DATA_T_VEC2:
         {
-            switch (uniform->desc.count)
-            {
-                case 2:
-                {
-                    dm_mat2 data = *(dm_mat2*)uniform->data;
-                    glUniformMatrix2fv(internal_uniform->location, 1, GL_FALSE, &data.m[0]);
-                    glCheckErrorReturn();
-                } break;
-                case 3:
-                {
-                    dm_mat3 data = *(dm_mat3*)uniform->data;
-                    glUniformMatrix3fv(internal_uniform->location, 1, GL_FALSE, &data.m[0]);
-                    glCheckErrorReturn();
-                } break;
-                case 4:
-                {
-                    dm_mat4 data = *(dm_mat4*)uniform->data;
-                    glUniformMatrix4fv(internal_uniform->location, 1, GL_FALSE, &data.m[0]);
-                    glCheckErrorReturn();
-                } break;
-                default:
-                DM_LOG_FATAL("Trying to upload to uniform with wrong size of matrices");
-                return false;
-            }
+            dm_vec2* data = uniform->data;
+            glUniform2fv(internal_uniform->location, 1, &data->v[0]);
+            glCheckErrorReturn();
         } break;
-        
+        case DM_UNIFORM_DATA_T_VEC3:
+        {
+            dm_vec3* data = uniform->data;
+            glUniform3fv(internal_uniform->location, 1, &data->v[0]);
+            glCheckErrorReturn();
+        } break;
+        case DM_UNIFORM_DATA_T_VEC4:
+        {
+            dm_vec4* data = uniform->data;
+            glUniform4fv(internal_uniform->location, 1, &data->v[0]);
+            glCheckErrorReturn();
+        } break;
+        case DM_UNIFORM_DATA_T_MAT4:
+        {
+            dm_mat4* data = uniform->data;
+            glUniformMatrix4fv(internal_uniform->location, 1, GL_FALSE, &data->m[0]);
+        } break;
         default:
-        DM_LOG_FATAL("Unknown constant buffer data type!");
+        DM_LOG_ERROR("Shouldn't be here...");
         return false;
-    } 
+    }
     
     return true;
 }
@@ -570,13 +499,13 @@ GLuint dm_opengl_compile_shader(dm_shader_desc desc)
     GLuint shader = glCreateShader(shader_type);
     glCheckError();
     
-    DM_LOG_DEBUG("Compiling shader: %s", desc.path);
+    DM_LOG_DEBUG("Compiling shader: %s", desc.source);
     
-    FILE* file = fopen(desc.path, "r");
+    FILE* file = fopen(desc.source, "r");
     //DM_ASSERT_MSG(file, "Could not fopen file: %s", desc.path);
     if(!file)
     {
-        DM_LOG_FATAL("Could not fopen file: %s", desc.path);
+        DM_LOG_FATAL("Could not fopen file: %s", desc.source);
         return DM_GLUINT_FAIL;
     }
     
@@ -725,44 +654,25 @@ bool dm_opengl_bind_texture(dm_image* image, uint32_t slot)
 RENDERPASS
 */
 
-bool dm_opengl_create_render_pass(dm_render_pass* render_pass, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
+bool dm_opengl_create_render_pass(dm_render_pass* render_pass, dm_vertex_layout v_layout)
 {
-    render_pass->internal_render_pass = dm_alloc(sizeof(dm_opengl_render_pass), DM_MEM_RENDER_PASS);
-    dm_opengl_render_pass* internal_pass = render_pass->internal_render_pass;
+    render_pass->internal_pass = dm_alloc(sizeof(dm_opengl_render_pass), DM_MEM_RENDER_PASS);
+    dm_opengl_render_pass* internal_pass = render_pass->internal_pass;
     
-    // face culling
-    internal_pass->cull = dm_cull_to_opengl_cull(render_pass->raster_desc.cull_mode);
-    if (internal_pass->cull == DM_CULL_UNKNOWN) return false;
-    
-    internal_pass->winding = dm_wind_top_opengl_wind(render_pass->raster_desc.winding_order);
-    if (internal_pass->winding == DM_WINDING_UNKNOWN) return false;
-    
-    // primitive
-    internal_pass->primitive = dm_topology_to_opengl_primitive(render_pass->raster_desc.primitive_topology);
-    if (internal_pass->primitive == DM_TOPOLOGY_UNKNOWN) return false;
-    
-    // sampler
-    internal_pass->min_filter = dm_filter_to_opengl_filter(render_pass->sampler_desc.filter);
-    if (internal_pass->min_filter == DM_FILTER_UNKNOWN) return false;
-    internal_pass->mag_filter = dm_filter_to_opengl_filter(render_pass->sampler_desc.filter);
-    if (internal_pass->mag_filter == DM_FILTER_UNKNOWN) return false;
-    internal_pass->s_wrap = dm_texture_mode_to_opengl_mode(render_pass->sampler_desc.u);
-    if (internal_pass->s_wrap == DM_TEXTURE_MODE_UNKNOWN) return false;
-    internal_pass->t_wrap = dm_texture_mode_to_opengl_mode(render_pass->sampler_desc.v);
-    if (internal_pass->t_wrap == DM_TEXTURE_MODE_UNKNOWN) return false;
+    if(!dm_opengl_create_render_pipeline(&render_pass->pipeline_state)) return false;
     
     // vertex array object
     glGenVertexArrays(1, &internal_pass->vao);
     glCheckErrorReturn();
     
     // shader
-    if (!dm_opengl_create_shader(render_pass->shader)) return false;
+    if (!dm_opengl_create_shader(&render_pass->shader)) return false;
     
     // vertex attributes
     uint32_t count = 0;
     glBindVertexArray(internal_pass->vao);
     
-    dm_opengl_bind_buffer(pipeline->index_buffer);
+    dm_opengl_bind_buffer(render_pass->index_buffer);
     
     for (int i = 0; i < v_layout.num; i++)
     {
@@ -772,11 +682,11 @@ bool dm_opengl_create_render_pass(dm_render_pass* render_pass, dm_vertex_layout 
         {
             case DM_VERTEX_ATTRIB_CLASS_VERTEX:
             {
-                dm_opengl_bind_buffer(pipeline->vertex_buffer);
+                dm_opengl_bind_buffer(render_pass->vertex_buffer);
             } break;
             case DM_VERTEX_ATTRIB_CLASS_INSTANCE:
             {
-                dm_opengl_bind_buffer(pipeline->inst_buffer);
+                dm_opengl_bind_buffer(render_pass->instance_buffer);
             } break;
             default: break; 
         }
@@ -835,7 +745,7 @@ bool dm_opengl_create_render_pass(dm_render_pass* render_pass, dm_vertex_layout 
     {
         dm_uniform* uniform = item->value;
         
-        if (!dm_opengl_create_uniform(uniform, render_pass->shader)) return false;
+        if (!dm_opengl_create_uniform(uniform, &render_pass->shader)) return false;
     }
     
     return true;
@@ -843,12 +753,12 @@ bool dm_opengl_create_render_pass(dm_render_pass* render_pass, dm_vertex_layout 
 
 void dm_opengl_destroy_render_pass(dm_render_pass* render_pass)
 {
-    dm_opengl_render_pass* internal_pass = render_pass->internal_render_pass;
+    dm_opengl_render_pass* internal_pass = render_pass->internal_pass;
     
     glDeleteVertexArrays(1, &internal_pass->vao);
     glCheckError();
     
-    dm_opengl_delete_shader(render_pass->shader);
+    dm_opengl_delete_shader(&render_pass->shader);
     
     dm_for_map_item(render_pass->uniforms)
     {
@@ -857,52 +767,27 @@ void dm_opengl_destroy_render_pass(dm_render_pass* render_pass)
         dm_opengl_destroy_uniform(uniform);
     }
     
-    dm_free(render_pass->internal_render_pass, sizeof(dm_opengl_render_pass), DM_MEM_RENDER_PASS);
+    dm_free(render_pass->pipeline_state.internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+    dm_free(render_pass->internal_pass, sizeof(dm_opengl_render_pass), DM_MEM_RENDER_PASS);
 }
 
 bool dm_opengl_begin_render_pass(dm_render_pass* render_pass)
 {
-    dm_opengl_render_pass* internal_pass = render_pass->internal_render_pass;
+    dm_opengl_render_pass* internal_pass = render_pass->internal_pass;
+    
+    if(!dm_opengl_bind_pipeline(&render_pass->pipeline_state)) return false;
     
     // vertex array
     glBindVertexArray(internal_pass->vao);
     glCheckErrorReturn();
     
-    // sampler state
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, internal_pass->s_wrap);
-    glCheckErrorReturn();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, internal_pass->t_wrap);
-    glCheckErrorReturn();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, internal_pass->min_filter);
-    glCheckErrorReturn();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, internal_pass->mag_filter);
-    glCheckErrorReturn();
-    
-    // face culling
-    glEnable(GL_CULL_FACE);
-    glCullFace(internal_pass->cull);
-    glCheckErrorReturn();
-    
-    //glFrontFace(internal_pipe->winding);
-    //glCheckErrorReturn();
-    
-    // wireframe
-    if (render_pass->wireframe)
-    {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    }
-    else
-    {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    }
-    
     // shader
-    dm_opengl_bind_shader(render_pass->shader);
+    dm_opengl_bind_shader(&render_pass->shader);
     
     // uniforms
     dm_for_map_item(render_pass->uniforms)
     {
-        dm_opengl_bind_uniform((dm_uniform*)item->value);
+        if(!dm_opengl_bind_uniform((dm_uniform*)item->value)) return false;
     }
     
     return true;
@@ -912,7 +797,7 @@ bool dm_opengl_begin_render_pass(dm_render_pass* render_pass)
 RENDERER
 */
 
-bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* renderer_data)
+bool dm_renderer_init_impl(dm_platform_data* platform_data)
 {
     DM_LOG_DEBUG("Initializing OpenGL render backend...");
     
@@ -932,17 +817,17 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_renderer_data* re
 #endif
 #endif
     
-    glViewport(renderer_data->viewport.x, renderer_data->viewport.y, renderer_data->viewport.width, renderer_data->viewport.height);
+    //glViewport(renderer_data->viewport.x, renderer_data->viewport.y, renderer_data->viewport.width, renderer_data->viewport.height);
     
     return true;
 }
 
-void dm_renderer_shutdown_impl(dm_renderer_data* renderer_data)
+void dm_renderer_shutdown_impl()
 {
     dm_platform_shutdown_opengl();
 }
 
-bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data)
+bool dm_renderer_end_frame_impl()
 {
     //glBindFramebuffer(GL_FRAMEBUFFER, 0);
     glBindVertexArray(0);
@@ -958,10 +843,31 @@ bool dm_renderer_end_frame_impl(dm_renderer_data* renderer_data)
     return true;
 }
 
-bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
-{
+bool dm_opengl_create_render_pipeline(dm_render_pipeline_state* pipeline)
+{ 
     pipeline->internal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
     dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
+    
+    // face culling
+    internal_pipe->cull = dm_cull_to_opengl_cull(pipeline->raster_desc.cull_mode);
+    if (internal_pipe->cull == DM_CULL_UNKNOWN) return false;
+    
+    internal_pipe->winding = dm_wind_top_opengl_wind(pipeline->raster_desc.winding_order);
+    if (internal_pipe->winding == DM_WINDING_UNKNOWN) return false;
+    
+    // primitive
+    internal_pipe->primitive = dm_topology_to_opengl_primitive(pipeline->raster_desc.primitive_topology);
+    if (internal_pipe->primitive == DM_TOPOLOGY_UNKNOWN) return false;
+    
+    // sampler
+    internal_pipe->min_filter = dm_filter_to_opengl_filter(pipeline->sampler_desc.filter);
+    if (internal_pipe->min_filter == DM_FILTER_UNKNOWN) return false;
+    internal_pipe->mag_filter = dm_filter_to_opengl_filter(pipeline->sampler_desc.filter);
+    if (internal_pipe->mag_filter == DM_FILTER_UNKNOWN) return false;
+    internal_pipe->s_wrap = dm_texture_mode_to_opengl_mode(pipeline->sampler_desc.u);
+    if (internal_pipe->s_wrap == DM_TEXTURE_MODE_UNKNOWN) return false;
+    internal_pipe->t_wrap = dm_texture_mode_to_opengl_mode(pipeline->sampler_desc.v);
+    if (internal_pipe->t_wrap == DM_TEXTURE_MODE_UNKNOWN) return false;
     
     if (pipeline->blend_desc.is_enabled)
     {
@@ -990,29 +896,21 @@ bool dm_renderer_create_render_pipeline_impl(dm_render_pipeline* pipeline)
     return true;
 }
 
-void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
+void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline_state* pipeline)
 {
-    dm_opengl_delete_buffer(pipeline->vertex_buffer);
-    dm_opengl_delete_buffer(pipeline->index_buffer);
-    dm_opengl_delete_buffer(pipeline->inst_buffer);
-    
     dm_free(pipeline->internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
 }
 
-bool dm_renderer_init_pipeline_data_impl(void* vb_data, void* ib_data, dm_render_pipeline* pipeline)
+bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data)
 {
-    if (!dm_opengl_create_buffer(pipeline->vertex_buffer, vb_data)) return false;
-    if (!dm_opengl_create_buffer(pipeline->index_buffer, ib_data)) return false;
-    if (!dm_opengl_create_buffer(pipeline->inst_buffer, NULL)) return false;
-    
-    return true;
+    return dm_opengl_create_buffer(buffer, data);
 }
 
 // render pass stuff
 
-bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout v_layout, dm_render_pipeline* pipeline)
+bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout v_layout)
 {
-    return dm_opengl_create_render_pass(render_pass, v_layout, pipeline);
+    return dm_opengl_create_render_pass(render_pass, v_layout);
 }
 
 void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
@@ -1030,7 +928,7 @@ void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass)
     
 }
 
-bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
+bool dm_opengl_bind_pipeline(dm_render_pipeline_state* pipeline)
 {
     dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
     
@@ -1070,6 +968,34 @@ bool dm_renderer_bind_pipeline_impl(dm_render_pipeline* pipeline)
     {
         glDisable(GL_STENCIL_TEST);
     }
+    
+    // wireframe
+    if (pipeline->wireframe)
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+    else
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+    
+    // sampler state
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, internal_pipe->s_wrap);
+    glCheckErrorReturn();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, internal_pipe->t_wrap);
+    glCheckErrorReturn();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, internal_pipe->min_filter);
+    glCheckErrorReturn();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, internal_pipe->mag_filter);
+    glCheckErrorReturn();
+    
+    // face culling
+    glEnable(GL_CULL_FACE);
+    glCullFace(internal_pipe->cull);
+    glCheckErrorReturn();
+    
+    //glFrontFace(internal_pipe->winding);
+    //glCheckErrorReturn();
     
     return true;
 }
@@ -1115,6 +1041,11 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
     return true;
 }
 
+void dm_renderer_delete_buffer_impl(dm_buffer* buffer)
+{
+    dm_opengl_delete_buffer(buffer);
+}
+
 bool dm_create_texture_impl(dm_image* image)
 {
     return dm_opengl_create_texture(image);
@@ -1141,37 +1072,40 @@ void dm_renderer_set_viewport_impl(dm_viewport viewport)
     glCheckError();
 }
 
-void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline* pipeline)
+void dm_renderer_clear_impl(dm_color clear_color)
 {
-    glClearColor(clear_color->x, clear_color->y, clear_color->z, clear_color->w);
+    glClearColor(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
     glCheckError();
     
-    glClear(GL_COLOR_BUFFER_BIT);
-    if(pipeline->depth_desc.is_enabled) glClear(GL_DEPTH_BUFFER_BIT);
+    GLuint clear_bit = GL_COLOR_BUFFER_BIT;
+    
+    clear_bit |= GL_DEPTH_BUFFER_BIT;
+    
+    glClear(clear_bit);
     glCheckError();
 }
 
 void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass)
 {
-    dm_opengl_render_pass* internal_pass = render_pass->internal_render_pass;
+    dm_internal_pipeline* internal_pipe = render_pass->pipeline_state.internal_pipeline;
     
-    glDrawArrays(internal_pass->primitive, start, count);
+    glDrawArrays(internal_pipe->primitive, start, count);
     glCheckError();
 }
 
 void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass)
 {
-    dm_opengl_render_pass* internal_pass = render_pass->internal_render_pass;
+    dm_internal_pipeline* internal_pipe = render_pass->pipeline_state.internal_pipeline;
     
-    glDrawElements(internal_pass->primitive, num_indices, GL_UNSIGNED_INT, index_offset);
+    glDrawElements(internal_pipe->primitive, num_indices, GL_UNSIGNED_INT, index_offset);
     glCheckError();
 }
 
 void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pass* render_pass)
 {
-    dm_opengl_render_pass* internal_pass = render_pass->internal_render_pass;
+    dm_internal_pipeline* internal_pipe = render_pass->pipeline_state.internal_pipeline;
     
-    glDrawElementsInstanced(internal_pass->primitive, num_indices, GL_UNSIGNED_INT, 0, num_insts);
+    glDrawElementsInstanced(internal_pipe->primitive, num_indices, GL_UNSIGNED_INT, 0, num_insts);
     glCheckError();
 }
 

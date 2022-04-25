@@ -8,7 +8,7 @@ extern bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass);
 extern void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass);
 extern bool dm_renderer_bind_pipeline_impl(dm_render_pipeline_state* pipeline);
 extern void dm_renderer_set_viewport_impl(dm_viewport viewport);
-extern void dm_renderer_clear_impl(dm_color* clear_color, dm_render_pipeline_state* pipeline);
+extern void dm_renderer_clear_impl(dm_color clear_color);
 
 extern void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass);
 extern void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass);
@@ -58,14 +58,20 @@ void dm_render_command_bind_pipeline(dm_render_pipeline_state* pipeline)
 	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, NULL);
 }
 
-void dm_render_command_set_viewport(dm_viewport* viewport)
+void dm_render_command_set_viewport(dm_viewport viewport)
 {
-	dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, viewport);
+    dm_viewport* viewport_command = dm_alloc(sizeof(dm_viewport), DM_MEM_RENDER_COMMAND);
+    *viewport_command = viewport;
+	
+    dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, viewport_command);
 }
 
-void dm_render_command_clear(dm_color* color)
+void dm_render_command_clear(dm_color color)
 {
-	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, color);
+    dm_color* color_command = dm_alloc(sizeof(dm_color), DM_MEM_RENDER_COMMAND);
+    *color_command = color;
+    
+	dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, color_command);
 }
 
 void dm_render_command_update_buffer(dm_buffer* buffer, void* data, size_t data_size)
@@ -157,6 +163,14 @@ void dm_renderer_clear_command_buffer()
 		dm_render_command* command = dm_list_at(render_commands, i);
 		switch (command->type)
 		{
+            case DM_RENDER_COMMAND_CLEAR:
+            {
+                dm_free(command->data, sizeof(dm_color), DM_MEM_RENDER_COMMAND);
+            } break;
+            case DM_RENDER_COMMAND_SET_VIEWPORT:
+            {
+                dm_free(command->data, sizeof(dm_viewport), DM_MEM_RENDER_COMMAND);
+            } break;
             case DM_RENDER_COMMAND_BIND_BUFFER:
             {
                 dm_buffer_bind_packet* packet = command->data;
@@ -224,7 +238,7 @@ bool dm_renderer_submit_command_buffer()
             } break;
             case DM_RENDER_COMMAND_CLEAR:
             {
-                dm_renderer_clear_impl((dm_color*)command->data, NULL);
+                dm_renderer_clear_impl(*(dm_color*)command->data);
             } break;
             case DM_RENDER_COMMAND_BIND_PIPELINE:
             {

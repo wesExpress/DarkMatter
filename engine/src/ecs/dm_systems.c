@@ -29,24 +29,24 @@ void dm_ecs_update_editor_camera(float delta_time)
 	// camera position
 	if (dm_input_is_key_pressed(DM_KEY_A))
 	{
-        delta_pos = dm_vec3_cross(camera->forward, camera->up);
+        delta_pos = dm_vec3_cross(forward, dm_renderer_api_get_camera_up());
 		delta_pos = dm_vec3_norm(delta_pos);
 		delta_pos = dm_vec3_scale(delta_pos, -camera->move_velocity * delta_time);
 	}
 	else if (dm_input_is_key_pressed(DM_KEY_D))
 	{
-        delta_pos = dm_vec3_cross(camera->forward, camera->up);
+        delta_pos = dm_vec3_cross(forward, dm_renderer_api_get_camera_up());
 		delta_pos = dm_vec3_norm(delta_pos);
 		delta_pos = dm_vec3_scale(delta_pos, camera->move_velocity * delta_time);
 	}
     
 	if (dm_input_is_key_pressed(DM_KEY_W))
 	{
-        delta_pos = dm_vec3_add_vec3(delta_pos, dm_vec3_scale(camera->forward, camera->move_velocity * delta_time));
+        delta_pos = dm_vec3_add_vec3(delta_pos, dm_vec3_scale(forward, camera->move_velocity * delta_time));
 	}
 	else if (dm_input_is_key_pressed(DM_KEY_S))
 	{
-		delta_pos = dm_vec3_add_vec3(delta_pos, dm_vec3_scale(camera->forward, -camera->move_velocity * delta_time));
+		delta_pos = dm_vec3_add_vec3(delta_pos, dm_vec3_scale(forward, -camera->move_velocity * delta_time));
 	}
     
     // vertical movement
@@ -60,9 +60,8 @@ void dm_ecs_update_editor_camera(float delta_time)
 	}
     
 	// update the camera
-	camera->pos = dm_vec3_add_vec3(camera->pos, delta_pos);
-    camera->forward = forward;
+    camera->pos = dm_vec3_add_vec3(camera->pos, delta_pos);
     
-    dm_renderer_api_set_camera_forward(camera->forward);
+    dm_renderer_api_set_camera_forward(forward);
     dm_renderer_api_set_camera_pos(camera->pos);
 }

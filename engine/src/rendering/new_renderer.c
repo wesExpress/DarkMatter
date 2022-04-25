@@ -35,8 +35,9 @@ extern bool dm_renderer_begin_frame_impl();
 extern bool dm_renderer_end_frame_impl();
 
 //extern bool dm_renderer_create_pipeline_impl(dm_render_pipeline_state* pipeline);
-extern void dm_renderer_destroy_pipeline_impl(dm_render_pipeline_state* pipeline);
+//extern void dm_renderer_destroy_pipeline_impl(dm_render_pipeline_state* pipeline);
 extern bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data);
+extern void dm_renderer_delete_buffer_impl(dm_buffer* buffer);
 
 // vertex data
 dm_list* vertices = NULL;
@@ -47,27 +48,16 @@ dm_map* mesh_map = NULL;
 
 // render passes and pipelines
 dm_map* render_passes = NULL;
-dm_map* pipelines = NULL;
 
+// default data
 dm_buffer_data static_buffer = {
     .vertex_buffer = {.desc= { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .usage=DM_BUFFER_USAGE_DEFAULT , .name = "vertex"}},
     .index_buffer = {.desc= { .type = DM_BUFFER_TYPE_INDEX, .data_t = DM_BUFFER_DATA_T_UINT, .usage=DM_BUFFER_USAGE_DEFAULT, .name = "index"}},
     .instance_buffer = {.desc= { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = sizeof(dm_inst_data) * DM_MAX_INSTANCES, .elem_size=sizeof(dm_vertex_inst), .usage = DM_BUFFER_USAGE_DYNAMIC, .cpu_access = DM_BUFFER_CPU_WRITE, .name = "instance"}}
 };
 
-/*********************
-RENDER PIPELINE STATE
-***********************/
-/*
-bool dm_renderer_create_pipeline_state()
-{
-    return dm_renderer_create_pipeline_impl(NULL);
-}
-*/
-void dm_renderer_destroy_pipeline(dm_render_pipeline_state* pipeline)
-{
-	dm_renderer_destroy_pipeline_impl(pipeline);
-}
+dm_viewport default_viewport = {0};
+dm_camera camera;
 
 /***********
 RENDER PASS
@@ -99,6 +89,11 @@ bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, d
         dm_map_insert(render_pass.uniforms, uniforms[i].name, &uniforms[i]);
     }
     
+    // TODO: need better way of assigning buffer pointers
+    render_pass.vertex_buffer = &static_buffer.vertex_buffer;
+    render_pass.index_buffer = &static_buffer.index_buffer;
+    render_pass.instance_buffer = &static_buffer.instance_buffer;
+    
     if(!dm_renderer_create_render_pass_impl(&render_pass, layout)) return false;
     
     dm_map_insert(render_passes, (void*)tag, &render_pass);
@@ -125,12 +120,9 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
 	//r_data.clear_color = clear_color;
     
-	dm_viewport viewport = {
-		.x = 0, .y = 0,
-		.width = platform_data->window_width,
-		.height = platform_data->window_height,
-		.max_depth = 1.0f
-	};
+	default_viewport.width = platform_data->window_width;
+    default_viewport.height = platform_data->window_height;
+    default_viewport.max_depth = 1.0f;
     
 	if(!dm_renderer_init_impl(platform_data))
 	{
@@ -148,31 +140,14 @@ bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
     // mesh
 	mesh_map = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_mesh), 0);
     
-    // pipelines
-    pipelines = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_render_pipeline_state), 0);
-    
     dm_render_command_init();
     
     // images/textures
     dm_image_map_init();
     
     // camera
-    /*
-    dm_camera_init(
-                   &r_data.camera, (dm_vec3) { 0, 0, 0 },
-                   70.0f,
-                   platform_data->window_width,
-                   platform_data->window_height,
-                   0.01f, 10000,
-                   DM_CAMERA_PERSPECTIVE
-                   );
+    dm_camera_init(&camera, (dm_vec3){0,0,0}, 70.0f, platform_data->window_width, platform_data->window_height, 0.01f, 10000.0f, DM_CAMERA_PERSPECTIVE);
     
-    if (!dm_renderer_init_render_pipeline(r_data.pipeline))
-    {
-        DM_LOG_FATAL("Failed to create render pipeline!");
-        return false;
-    }
-    */
     // primitives
     dm_model_loader_init();
     
@@ -207,14 +182,12 @@ void dm_renderer_shutdown()
     }
     dm_map_destroy(render_passes);
     
-    // pipelines
-    dm_for_map_item(pipelines)
-    {
-        dm_render_pipeline_state* pipeline = item->value;
-        dm_renderer_destroy_pipeline(pipeline);
-    }
-    dm_map_destroy(pipelines);
+    // buffers
+    dm_renderer_delete_buffer_impl(&static_buffer.vertex_buffer);
+    dm_renderer_delete_buffer_impl(&static_buffer.index_buffer);
+    dm_renderer_delete_buffer_impl(&static_buffer.instance_buffer);
     
+    // structs
     dm_model_loader_shutdown();
     
     dm_render_command_shutdown();
@@ -227,7 +200,7 @@ void dm_renderer_shutdown()
 
 void dm_renderer_resize(int new_width, int new_height)
 {
-	dm_viewport viewport = {
+	dm_viewport new_viewport = {
 		.x = 0,
 		.y = new_height,
 		.width = new_width,
@@ -235,7 +208,9 @@ void dm_renderer_resize(int new_width, int new_height)
 		.max_depth = 1.0f
 	};
     
-    dm_render_command_set_viewport(&viewport);
+    default_viewport = new_viewport;
+    
+    //dm_render_command_set_viewport(viewport);
 }
 
 bool dm_renderer_begin_frame()
@@ -249,8 +224,118 @@ bool dm_renderer_begin_frame()
 	*******************************/
     //if(!dm_renderer_render_materials()) return false;
     //if(!dm_renderer_render_colored_materials()) return false;
+    
+    dm_render_command_clear((dm_color){0,0,0,1});
+    dm_render_command_set_viewport(default_viewport);
 	
-	return true;
+    dm_list* lights = dm_ecs_get_entity_registry(DM_COMPONENT_LIGHT_SRC);
+    dm_entity* light_id = dm_list_at(lights, 0);
+    dm_light_src_component* light = dm_ecs_get_component(*light_id, DM_COMPONENT_LIGHT_SRC);
+    dm_transform_component* light_trans = dm_ecs_get_component(*light_id, DM_COMPONENT_TRANSFORM);
+    
+    // material
+    dm_render_pass* material_pass = dm_map_get(render_passes, "material");
+    if(!material_pass) return false;
+    
+    if(!dm_set_uniform("light_ambient", &light->ambient, material_pass)) return false;
+    if(!dm_set_uniform("light_diffuse", &light->diffuse, material_pass)) return false;
+    if(!dm_set_uniform("light_specular", &light->specular, material_pass)) return false;
+    if(!dm_set_uniform("light_pos", &light_trans->position, material_pass)) return false;
+    
+    if(!dm_set_uniform("view_pos", &camera.pos, material_pass)) return false;
+    if(!dm_set_uniform("view_proj", &camera.view_proj, material_pass)) return false;
+    
+    dm_render_command_begin_renderpass(material_pass);
+    // for each mesh
+    dm_for_map_item(mesh_map)
+    {
+        dm_mesh* mesh = item->value;
+        //uint32_t count = 0;
+        
+        // for each entity
+        dm_for_list_item(mesh->entities, dm_entity, entity)
+        {
+            if(dm_ecs_entity_has_component(*entity, DM_COMPONENT_MATERIAL) && !dm_ecs_entity_has_component(*entity, DM_COMPONENT_LIGHT_SRC))
+            {
+                dm_transform_component* transform = dm_ecs_get_component(*entity, DM_COMPONENT_TRANSFORM);
+                dm_material_component* material = dm_ecs_get_component(*entity, DM_COMPONENT_MATERIAL);
+                
+                dm_vertex_inst inst = { 0 };
+                
+                inst.model = dm_mat4_identity();
+                inst.model = dm_mat_translate(inst.model, transform->position);
+                inst.model = dm_mat_scale(inst.model, transform->scale);
+#ifdef DM_DIRECTX
+                inst.model = dm_mat4_transpose(inst.model);
+#endif
+                
+                dm_image* diffuse_map = dm_image_get(material->diffuse_map);
+                dm_image* specular_map = dm_image_get(material->specular_map);
+                
+                if(!dm_set_uniform("shininess", &material->shininess, material_pass)) return false;
+                
+                dm_render_command_update_buffer(material_pass->instance_buffer, &inst, sizeof(dm_vertex_inst));
+                dm_render_command_bind_texture(diffuse_map, 0);
+                dm_render_command_bind_texture(specular_map, 1);
+                //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
+                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_pass);
+            }
+        }
+    }
+    
+    dm_render_command_end_renderpass(material_pass);
+	
+    // material color
+    dm_render_pass* material_color_pass = dm_map_get(render_passes, "material_color");
+    if(!material_color_pass) return false;
+    
+    if(!dm_set_uniform("light_ambient", &light->ambient, material_color_pass)) return false;
+    if(!dm_set_uniform("light_diffuse", &light->diffuse, material_color_pass)) return false;
+    if(!dm_set_uniform("light_specular", &light->specular, material_color_pass)) return false;
+    if(!dm_set_uniform("light_pos", &light_trans->position, material_color_pass)) return false;
+    
+    if(!dm_set_uniform("view_pos", &camera.pos, material_color_pass)) return false;
+    if(!dm_set_uniform("view_proj", &camera.view_proj, material_color_pass)) return false;
+    
+    dm_render_command_begin_renderpass(material_color_pass);
+    // for each mesh
+    dm_for_map_item(mesh_map)
+    {
+        dm_mesh* mesh = item->value;
+        //uint32_t count = 0;
+        
+        // for each entity
+        dm_for_list_item(mesh->entities, dm_entity, entity)
+        {
+            if(dm_ecs_entity_has_component(*entity, DM_COMPONENT_COLOR) && !dm_ecs_entity_has_component(*entity, DM_COMPONENT_LIGHT_SRC))
+            {
+                dm_transform_component* transform = dm_ecs_get_component(*entity, DM_COMPONENT_TRANSFORM);
+                dm_color_component* color = dm_ecs_get_component(*entity, DM_COMPONENT_COLOR);
+                
+                dm_vertex_inst inst = { 0 };
+                
+                inst.model = dm_mat4_identity();
+                inst.model = dm_mat_translate(inst.model, transform->position);
+                inst.model = dm_mat_scale(inst.model, transform->scale);
+#ifdef DM_DIRECTX
+                inst.model = dm_mat4_transpose(inst.model);
+#endif
+                
+                inst.diffuse = color->diffuse;
+                inst.specular = color->specular;
+                
+                if(!dm_set_uniform("shininess", &color->shininess, material_color_pass)) return false;
+                
+                dm_render_command_update_buffer(material_color_pass->instance_buffer, &inst, sizeof(dm_vertex_inst));
+                //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
+                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass);
+            }
+        }
+    }
+    
+    dm_render_command_end_renderpass(material_color_pass);
+    
+    return true;
 }
 
 bool dm_renderer_end_frame()
@@ -258,9 +343,51 @@ bool dm_renderer_end_frame()
 	/**********************
 	  light source render pass
 	****************************/
-	//dm_render_light_sources();
+    dm_render_pass* light_src_pass = dm_map_get(render_passes, "light_src");
+    if(!light_src_pass) return false;
     
-	return dm_renderer_end_frame_impl();
+    if(!dm_set_uniform("view_proj", &camera.view_proj, light_src_pass)) return false;
+    
+    dm_render_command_begin_renderpass(light_src_pass);
+    // for each mesh
+    dm_for_map_item(mesh_map)
+    {
+        dm_mesh* mesh = item->value;
+        //uint32_t count = 0;
+        
+        // for each entity
+        dm_for_list_item(mesh->entities, dm_entity, entity)
+        {
+            if(dm_ecs_entity_has_component(*entity, DM_COMPONENT_LIGHT_SRC))
+            {
+                dm_transform_component* transform = dm_ecs_get_component(*entity, DM_COMPONENT_TRANSFORM);
+                dm_light_src_component* light_src = dm_ecs_get_component(*entity, DM_COMPONENT_LIGHT_SRC);
+                
+                dm_vertex_inst inst = { 0 };
+                
+                inst.model = dm_mat4_identity();
+                inst.model = dm_mat_translate(inst.model, transform->position);
+                inst.model = dm_mat_scale(inst.model, transform->scale);
+#ifdef DM_DIRECTX
+                inst.model = dm_mat4_transpose(inst.model);
+#endif
+                
+                inst.diffuse = light_src->diffuse;
+                
+                dm_render_command_update_buffer(light_src_pass->instance_buffer, &inst, sizeof(dm_vertex_inst));
+                //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
+                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
+            }
+        }
+    }
+    
+    dm_render_command_end_renderpass(light_src_pass);
+    
+    //
+    dm_renderer_submit_command_buffer();
+	dm_renderer_clear_command_buffer();
+    
+    return dm_renderer_end_frame_impl();
 }
 
 bool dm_renderer_init_buffer_data()
@@ -275,7 +402,7 @@ bool dm_renderer_init_buffer_data()
     
     if(!dm_renderer_init_buffer_data_impl( &static_buffer.index_buffer, indices->data)) return false;
     
-    if(!dm_renderer_init_buffer_data_impl( &static_buffer.vertex_buffer, NULL)) return false;
+    if(!dm_renderer_init_buffer_data_impl( &static_buffer.instance_buffer, NULL)) return false;
     
     return true;
 }
@@ -368,51 +495,42 @@ bool dm_renderer_api_deregister_mesh(dm_entity entity)
     return true;
 }
 
-bool dm_renderer_api_register_camera(dm_entity entity, dm_editor_camera* component)
-{
-    //camera = dm_ecs_get_component(entity, DM_COMPONENT_EDITOR_CAMERA);
-    
-    return true;
-}
-
 void dm_renderer_api_set_camera_pos(dm_vec3 pos)
 {
-	//dm_camera_set_pos(&r_data.camera, pos);
+	dm_camera_set_pos(&camera, pos);
 }
 
 void dm_renderer_api_update_camera_pos(dm_vec3 delta_pos)
 {
-	//dm_vec3 pos = dm_vec3_add_vec3(r_data.camera.pos, delta_pos);
-	//dm_camera_set_pos(&r_data.camera, pos);
+	dm_vec3 pos = dm_vec3_add_vec3(camera.pos, delta_pos);
+	dm_camera_set_pos(&camera, pos);
 }
 
 void dm_renderer_api_set_camera_forward(dm_vec3 forward)
 {
-	//dm_camera_set_forward(&r_data.camera, forward);
+	dm_camera_set_forward(&camera, forward);
 }
 
 void dm_renderer_api_update_camera_forward(dm_vec3 delta_forward)
 {
-    /*
-	dm_vec3 forward = dm_vec3_add_vec3(r_data.camera.forward, delta_forward);
+	dm_vec3 forward = dm_vec3_add_vec3(camera.forward, delta_forward);
 	forward.x = DM_CLAMP(forward.x, -89, 89);
 	forward.y = DM_CLAMP(forward.y, -89, 89);
 	forward.z = DM_CLAMP(forward.z, -89, 89);
-	dm_camera_set_forward(&r_data.camera, forward);
-*/
+	dm_camera_set_forward(&camera, forward);
 }
 
 dm_vec3 dm_renderer_api_get_camera_forward()
 {
-	//return r_data.camera.forward;
+	return camera.forward;
 }
 
 dm_vec3 dm_renderer_api_get_camera_up()
 {
-	//return r_data.camera.up;
+	return camera.up;
 }
 
 dm_vec3 dm_renderer_api_get_camera_pos()
 {
-	//return r_data.camera.pos;
+	return camera.pos;
 }

@@ -159,7 +159,7 @@ bool dm_ecs_add_editor_camera(dm_entity entity, dm_editor_camera* camera)
         dm_editor_camera default_camera = {0};
         
         default_camera.pos = dm_vec3_set(1,1,1);
-        default_camera.up = dm_vec3_set(0,1,0);
+        //default_camera.up = dm_vec3_set(0,1,0);
         
         default_camera.yaw = -90;
         

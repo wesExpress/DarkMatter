@@ -180,7 +180,7 @@ void* dm_list_at(dm_list* list, uint32_t index)
     {
         if(index<list->count) return ((char*)list->data + index * list->element_size);
         
-        DM_LOG_ERROR("Trying to retrieve from list of count: %d with invalid index: %d", list->count, index);
+        //DM_LOG_ERROR("Trying to retrieve from list of count: %d with invalid index: %d", list->count, index);
     }
     else DM_LOG_ERROR("Trying to retrieve from NULL list! Returning NULL...");
     

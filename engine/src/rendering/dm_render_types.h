@@ -103,8 +103,7 @@ typedef enum dm_uniform_data_t
     DM_UNIFORM_DATA_T_VEC2,
     DM_UNIFORM_DATA_T_VEC3,
     DM_UNIFORM_DATA_T_VEC4,
-    DM_UNIFORM_DATA_T_MAT4_INT,
-    DM_UNIFORM_DATA_T_MAT4_FLOAT,
+    DM_UNIFORM_DATA_T_MAT4,
     DM_UNIFORM_DATA_T_UNKNOWN
 } dm_uniform_data_t;
 
@@ -460,6 +459,9 @@ typedef struct dm_render_pass
     dm_viewport viewport;
     dm_shader shader;
     dm_map* uniforms;
+    dm_buffer* vertex_buffer;
+    dm_buffer* index_buffer;
+    dm_buffer* instance_buffer;
     char* name;
     void* internal_pass;
 } dm_render_pass;

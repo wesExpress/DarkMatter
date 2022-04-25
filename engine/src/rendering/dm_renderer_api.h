@@ -21,8 +21,6 @@ DM_API bool dm_renderer_api_deregister_mesh(dm_entity entity);
 
 DM_API bool dm_renderer_api_register_image(dm_image_desc desc);
 
-DM_API bool dm_renderer_api_register_camera(dm_entity entity, dm_editor_camera* component);
-
 // updating functions
 
 DM_API void dm_renderer_api_set_camera_pos(dm_vec3 pos);
@@ -30,9 +28,6 @@ DM_API void dm_renderer_api_update_camera_pos(dm_vec3 delta_pos);
 
 DM_API void dm_renderer_api_set_camera_forward(dm_vec3 forward);
 DM_API void dm_renderer_api_update_camera_forward(dm_vec3 delta_forward);
-
-DM_API void dm_renderer_api_set_camera_euler(dm_vec3 delta_euler);
-DM_API void dm_renderer_api_update_camera_euler(dm_vec3 delta_euler);
 
 // getting functions
 

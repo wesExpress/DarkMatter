@@ -55,4 +55,9 @@ DM_API void dm_list_clear(dm_list* list, size_t new_capacity);
 
 DM_API bool dm_list_is_empty(dm_list* list);
 
+#define dm_for_list_item(LIST, TYPE, ITEM)\
+uint32_t i=0;\
+TYPE* ITEM = dm_list_at(LIST, i);\
+for(i=0, ITEM=dm_list_at(LIST,i); i<(LIST)->count; ITEM=dm_list_at(LIST,++i))\
+
 #endif

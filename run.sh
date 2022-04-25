@@ -2,4 +2,5 @@
 
 set echo on
 
-./build/DarkMatterApp
+cd build
+./DarkMatterApp

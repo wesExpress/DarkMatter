@@ -51,12 +51,12 @@ bool dm_application_init(dm_application* app)
     if(!dm_renderer_api_register_image(image_desc)) return false;
     
     // models
-    if(!dm_load_model("assets/fox.gltf", true)) return false;
-    if(!dm_load_model("assets/duck.gltf", false)) return false;
+    //if(!dm_load_model("assets/fox.gltf", true)) return false;
+    //if(!dm_load_model("assets/duck.gltf", false)) return false;
     
     // camera
     editor_camera = dm_ecs_create_entity();
-    if(!dm_ecs_add_editor_camera(editor_camera, &(dm_editor_camera){.pos={0,0,4}, .up={0,1,0}, .yaw=-90.0f, .move_velocity=2.5f, .look_sens=0.1f})) return false;
+    if(!dm_ecs_add_editor_camera(editor_camera, &(dm_editor_camera){.pos={0,0,4}, .yaw=-90.0f, .move_velocity=2.5f, .look_sens=0.1f})) return false;
     dm_editor_camera* c = dm_ecs_get_component(editor_camera, DM_COMPONENT_EDITOR_CAMERA);
     
     dm_input_get_mouse_pos(&c->last_x, &c->last_y);
@@ -73,7 +73,7 @@ bool dm_application_init(dm_application* app)
     
     if(!dm_ecs_add_transform(light, &(dm_transform_component){.position={1.2f,1.0f,2.0f}, .scale={0.2f,0.2f,0.2f}})) return false;
     if(!dm_ecs_add_mesh(light, &(dm_mesh_component){.name="cube"})) return false;
-    if(!dm_ecs_add_light_src(light,&(dm_light_src_component){.ambient={0.2f,0.2f,0.2f}, .diffuse={0.5f,0.5f,0.5f}, .specular={1.0f,1.0f,1.0f}, .strength=1.0f})) return false;
+    if(!dm_ecs_add_light_src(light,&(dm_light_src_component){.ambient={0.2f,0.2f,0.2f,1.0f}, .diffuse={0.5f,0.5f,0.5f,1.0f}, .specular={1.0f,1.0f,1.0f,1.0f}, .strength=1.0f})) return false;
     
     // blue cube
     cube2 = dm_ecs_create_entity();
