@@ -306,6 +306,7 @@ typedef struct dm_uniform_desc
 typedef struct dm_unifom
 {
     dm_uniform_data_t type;
+    size_t data_size;
     char* name;
     void* internal_uniform;
     void* data;

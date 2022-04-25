@@ -4,6 +4,7 @@
 
 #include "core/dm_logger.h"
 #include "dm_metal_shader.h"
+#include "structures/dm_map.h"
 
 @implementation dm_metal_render_pass
 
@@ -21,7 +22,10 @@
         pass->shader.internal_shader = [[dm_metal_shader_library alloc] createShader: &pass->shader withPath: shader_file andRenderer: renderer];
         if(!pass->shader.internal_shader) return NULL;
         [shader_file release];
-    }
+    
+		// uniforms
+		
+	}
 
     return self;
 }

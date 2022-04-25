@@ -25,13 +25,13 @@ bool dm_renderer_create_material_pass()
         .num = sizeof(attribs) / sizeof(attribs[0])
     };
     
-    dm_uniform vp = dm_create_uniform("view_proj", DM_UNIFORM_DATA_T_MAT4_FLOAT);
-    dm_uniform shiny = dm_create_uniform("shininess", DM_UNIFORM_DATA_T_FLOAT);
-    dm_uniform light_pos = dm_create_uniform("light_pos", DM_UNIFORM_DATA_T_VEC3);
-    dm_uniform light_ambient = dm_create_uniform("light_ambent", DM_UNIFORM_DATA_T_VEC4);
-    dm_uniform light_diffuse = dm_create_uniform("light_diffuse", DM_UNIFORM_DATA_T_VEC4);
-    dm_uniform light_specular = dm_create_uniform("light_specular", DM_UNIFORM_DATA_T_VEC4);
-    dm_uniform view_pos = dm_create_uniform("view_pos", DM_UNIFORM_DATA_T_VEC3);
+    dm_uniform vp = dm_create_uniform("view_proj", DM_UNIFORM_DATA_T_MAT4_FLOAT, sizeof(dm_mat4));
+    dm_uniform shiny = dm_create_uniform("shininess", DM_UNIFORM_DATA_T_FLOAT, sizeof(float));
+    dm_uniform light_pos = dm_create_uniform("light_pos", DM_UNIFORM_DATA_T_VEC3, sizeof(dm_vec3));
+    dm_uniform light_ambient = dm_create_uniform("light_ambent", DM_UNIFORM_DATA_T_VEC4, sizeof(dm_vec4));
+    dm_uniform light_diffuse = dm_create_uniform("light_diffuse", DM_UNIFORM_DATA_T_VEC4, sizeof(dm_vec4));
+    dm_uniform light_specular = dm_create_uniform("light_specular", DM_UNIFORM_DATA_T_VEC4, sizeof(dm_vec4));
+    dm_uniform view_pos = dm_create_uniform("view_pos", DM_UNIFORM_DATA_T_VEC3, sizeof(dm_vec3));
     
     dm_shader_desc vertex_stage = { 0 };
     vertex_stage.type = DM_SHADER_TYPE_VERTEX;
@@ -93,13 +93,13 @@ bool dm_renderer_create_material_color_pass()
         .num = sizeof(attribs) / sizeof(attribs[0])
     };
     
-    dm_uniform vp = dm_create_uniform("view_proj", DM_UNIFORM_DATA_T_MAT4_FLOAT);
-    dm_uniform shiny = dm_create_uniform("shininess", DM_UNIFORM_DATA_T_FLOAT);
-    dm_uniform light_pos = dm_create_uniform("light_pos", DM_UNIFORM_DATA_T_VEC3);
-    dm_uniform light_ambient = dm_create_uniform("light_ambent", DM_UNIFORM_DATA_T_VEC4);
-    dm_uniform light_diffuse = dm_create_uniform("light_diffuse", DM_UNIFORM_DATA_T_VEC4);
-    dm_uniform light_specular = dm_create_uniform("light_specular", DM_UNIFORM_DATA_T_VEC4);
-    dm_uniform view_pos = dm_create_uniform("view_pos", DM_UNIFORM_DATA_T_VEC3);
+    dm_uniform vp = dm_create_uniform("view_proj", DM_UNIFORM_DATA_T_MAT4_FLOAT, sizeof(dm_mat4));
+    dm_uniform shiny = dm_create_uniform("shininess", DM_UNIFORM_DATA_T_FLOAT, sizeof(float));
+    dm_uniform light_pos = dm_create_uniform("light_pos", DM_UNIFORM_DATA_T_VEC3, sizeof(dm_vec3));
+    dm_uniform light_ambient = dm_create_uniform("light_ambent", DM_UNIFORM_DATA_T_VEC4, sizeof(dm_vec4));
+    dm_uniform light_diffuse = dm_create_uniform("light_diffuse", DM_UNIFORM_DATA_T_VEC4, sizeof(dm_vec4));
+    dm_uniform light_specular = dm_create_uniform("light_specular", DM_UNIFORM_DATA_T_VEC4, sizeof(dm_vec4));
+    dm_uniform view_pos = dm_create_uniform("view_pos", DM_UNIFORM_DATA_T_VEC3, sizeof(dm_vec3));
     
     dm_shader_desc vertex_stage = { 0 };
     vertex_stage.type = DM_SHADER_TYPE_VERTEX;
@@ -159,7 +159,7 @@ bool dm_renderer_create_light_src_pass()
         .num = sizeof(attribs) / sizeof(attribs[0])
     };
     
-    dm_uniform vp = dm_create_uniform("view_proj", DM_UNIFORM_DATA_T_MAT4_FLOAT);
+    dm_uniform vp = dm_create_uniform("view_proj", DM_UNIFORM_DATA_T_MAT4_FLOAT, sizeof(dm_mat4));
     
     dm_shader_desc vertex_stage = { 0 };
     vertex_stage.type = DM_SHADER_TYPE_VERTEX;

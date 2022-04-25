@@ -31,9 +31,10 @@ extern void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass);
 // forward declaration of the implementation, or backend, functionality
 extern bool dm_renderer_init_impl(dm_platform_data* platform_data);
 extern void dm_renderer_shutdown_impl();
+extern bool dm_renderer_begin_frame_impl();
 extern bool dm_renderer_end_frame_impl();
 
-extern bool dm_renderer_create_pipeline_impl(dm_render_pipeline_state* pipeline);
+//extern bool dm_renderer_create_pipeline_impl(dm_render_pipeline_state* pipeline);
 extern void dm_renderer_destroy_pipeline_impl(dm_render_pipeline_state* pipeline);
 extern bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data);
 
@@ -57,12 +58,12 @@ dm_buffer_data static_buffer = {
 /*********************
 RENDER PIPELINE STATE
 ***********************/
-
+/*
 bool dm_renderer_create_pipeline_state()
 {
     return dm_renderer_create_pipeline_impl(NULL);
 }
-
+*/
 void dm_renderer_destroy_pipeline(dm_render_pipeline_state* pipeline)
 {
 	dm_renderer_destroy_pipeline_impl(pipeline);
