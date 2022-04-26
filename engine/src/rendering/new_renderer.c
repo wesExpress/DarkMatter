@@ -34,8 +34,6 @@ extern void dm_renderer_shutdown_impl();
 extern bool dm_renderer_begin_frame_impl();
 extern bool dm_renderer_end_frame_impl();
 
-//extern bool dm_renderer_create_pipeline_impl(dm_render_pipeline_state* pipeline);
-//extern void dm_renderer_destroy_pipeline_impl(dm_render_pipeline_state* pipeline);
 extern bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data);
 extern void dm_renderer_delete_buffer_impl(dm_buffer* buffer);
 
@@ -209,24 +207,15 @@ void dm_renderer_resize(int new_width, int new_height)
 	};
     
     default_viewport = new_viewport;
-    
-    //dm_render_command_set_viewport(viewport);
 }
 
 bool dm_renderer_begin_frame()
 {
-	//dm_render_command_clear(&r_data.clear_color, r_data.render_commands);
-	//dm_render_command_set_viewport(&r_data.viewport, r_data.render_commands);
-	//dm_render_command_bind_pipeline(r_data.pipeline, r_data.render_commands);
-    
 	/************************
 	    material render passes
 	*******************************/
     //if(!dm_renderer_render_materials()) return false;
     //if(!dm_renderer_render_colored_materials()) return false;
-    
-    dm_render_command_clear((dm_color){0,0,0,1});
-    dm_render_command_set_viewport(default_viewport);
 	
     dm_list* lights = dm_ecs_get_entity_registry(DM_COMPONENT_LIGHT_SRC);
     dm_entity* light_id = dm_list_at(lights, 0);
@@ -246,6 +235,10 @@ bool dm_renderer_begin_frame()
     if(!dm_set_uniform("view_proj", &camera.view_proj, material_pass)) return false;
     
     dm_render_command_begin_renderpass(material_pass);
+    
+    dm_render_command_clear((dm_color){0,0,0,1});
+    dm_render_command_set_viewport(default_viewport);
+    
     // for each mesh
     dm_for_map_item(mesh_map)
     {
@@ -298,6 +291,10 @@ bool dm_renderer_begin_frame()
     if(!dm_set_uniform("view_proj", &camera.view_proj, material_color_pass)) return false;
     
     dm_render_command_begin_renderpass(material_color_pass);
+    
+    dm_render_command_clear((dm_color){0,0,0,1});
+    dm_render_command_set_viewport(default_viewport);
+    
     // for each mesh
     dm_for_map_item(mesh_map)
     {
@@ -349,6 +346,10 @@ bool dm_renderer_end_frame()
     if(!dm_set_uniform("view_proj", &camera.view_proj, light_src_pass)) return false;
     
     dm_render_command_begin_renderpass(light_src_pass);
+    
+    dm_render_command_clear((dm_color){0,0,0,1});
+    dm_render_command_set_viewport(default_viewport);
+    
     // for each mesh
     dm_for_map_item(mesh_map)
     {
@@ -420,7 +421,7 @@ void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_dat
     mesh.is_indexed = is_indexed;
     mesh.entities = dm_list_create(sizeof(uint32_t), 0);
     
-    dm_map_insert(mesh_map, tag, &mesh);
+    dm_map_insert(mesh_map, (void*)tag, &mesh);
     
 	for (uint32_t i = 0; i < num_vertices; i++)
 	{
