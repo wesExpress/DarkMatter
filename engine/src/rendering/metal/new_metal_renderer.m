@@ -475,14 +475,8 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 {
 	dm_internal_pass* internal_pass = render_pass->internal_pass;
 
-	id<MTLTexture> texture = renderer.metal_view.drawable.texture;
-
     // render pass descriptor
-    MTLRenderPassDescriptor* passDescriptor = [MTLRenderPassDescriptor new];
-    passDescriptor.colorAttachments[0].texture = texture;
-    passDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
-    passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-    passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(renderer.metal_view.clear_color.x, renderer.metal_view.clear_color.y, renderer.metal_view.clear_color.z, renderer.metal_view.clear_color.w);
+    MTLRenderPassDescriptor* passDescriptor = [renderer.metal_view currentRenderPassDescriptor];
 
     renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
 	

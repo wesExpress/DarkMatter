@@ -21,8 +21,8 @@ typedef struct dm_vertex
 typedef struct dm_vertex_inst
 {
     dm_mat4 model;
-    dm_color diffuse;
-    dm_color specular;
+    //dm_color diffuse;
+    //dm_color specular;
 } dm_vertex_inst;
 
 typedef uint32_t             dm_index_t;

@@ -313,10 +313,9 @@ bool dm_material_color_pass()
                 inst.model = dm_mat4_transpose(inst.model);
 #endif
                 
-                inst.diffuse = color->diffuse;
-                inst.specular = color->specular;
-                
                 if(!dm_set_uniform("shininess", &color->shininess, material_color_pass)) return false;
+                if(!dm_set_uniform("object_diffuse", &color->diffuse, material_color_pass)) return false;
+                if(!dm_set_uniform("object_specular", &color->specular, material_color_pass)) return false;
                 
                 dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
                 dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0);
@@ -365,11 +364,12 @@ bool dm_light_src_pass()
                 inst.model = dm_mat4_transpose(inst.model);
 #endif
                 
-                inst.diffuse = light_src->diffuse;
+                if(!dm_set_uniform("object_diffuse", &light_src->diffuse, light_src_pass)) return false;
                 
-                //dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
-                //dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0);
-                //dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1);
+                dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
+                dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0);
+                dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1);
+                dm_render_command_bind_uniforms(light_src_pass);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
                 dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
             }
