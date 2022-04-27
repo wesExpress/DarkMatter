@@ -342,7 +342,9 @@ bool dm_renderer_begin_frame()
 	    material render passes
 	*******************************/
     //if(!dm_material_pass()) return false;
-    return dm_material_color_pass();
+    //if(!dm_material_color_pass()) return false;
+    
+    return true;
 }
 
 bool dm_renderer_end_frame()
@@ -386,7 +388,7 @@ bool dm_renderer_end_frame()
                 dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0);
                 dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
-                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
+                //dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
             }
         }
     }

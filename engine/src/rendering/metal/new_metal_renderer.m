@@ -112,30 +112,27 @@ BUFFER
 
 bool dm_metal_create_buffer(dm_buffer* buffer, void* data)
 {
-	@autoreleasepool
+	buffer->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
+	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
+
+	if(data)
 	{
-		buffer->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
-		dm_internal_buffer* internal_buffer = buffer->internal_buffer;
+		internal_buffer->buffer = [renderer.device newBufferWithBytes:data length:buffer->desc.buffer_size options:MTLResourceOptionCPUCacheModeDefault];
+	}
+	else
+	{
+		internal_buffer->buffer = [renderer.device newBufferWithLength:buffer->desc.buffer_size options:MTLResourceOptionCPUCacheModeDefault];
+	}
 
-		if(data)
-		{
-			internal_buffer->buffer = [renderer.device newBufferWithBytes:data length:buffer->desc.buffer_size options:MTLResourceOptionCPUCacheModeDefault];
-		}
-		else
-		{
-			internal_buffer->buffer = [renderer.device newBufferWithLength:buffer->desc.buffer_size options:MTLResourceOptionCPUCacheModeDefault];
-		}
+	if(!internal_buffer->buffer)
+	{
+		DM_LOG_FATAL("Could not create metal buffer!");
+		return false;
+	}
 
-		if(!internal_buffer->buffer)
-		{
-			DM_LOG_FATAL("Could not create metal buffer!");
-			return false;
-		}
-
-		if (buffer->desc.type == DM_BUFFER_TYPE_INDEX)
-		{
-			renderer.active_index_buffer = buffer;
-		}
+	if (buffer->desc.type == DM_BUFFER_TYPE_INDEX)
+	{
+		renderer.active_index_buffer = buffer;
 	}
 
 	return true;
@@ -152,53 +149,50 @@ SHADER
 
 bool dm_metal_create_shader(dm_shader* shader)
 {
-	@autoreleasepool
-	{
-		char file_buffer[256];
-		sprintf(file_buffer, "shaders/metal/%s.metallib", shader->pass);
+	char file_buffer[256];
+	sprintf(file_buffer, "shaders/metal/%s.metallib", shader->pass);
 
-		NSString* shader_file = [NSString stringWithUTF8String:file_buffer];
-		shader->internal_shader = dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDER_PASS);
-		dm_internal_shader* internal_shader = shader->internal_shader;
+	NSString* shader_file = [NSString stringWithUTF8String:file_buffer];
+	shader->internal_shader = dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDER_PASS);
+	dm_internal_shader* internal_shader = shader->internal_shader;
 		
-		internal_shader->library = [renderer.device newLibraryWithFile:shader_file error:NULL];
-		if(!internal_shader->library)
+	internal_shader->library = [renderer.device newLibraryWithFile:shader_file error:NULL];
+	if(!internal_shader->library)
+	{
+		DM_LOG_FATAL("Could not create metal library from file %s", [shader_file UTF8String]);
+		return false;
+	}
+
+	for(uint32_t i=0; i<shader->num_stages; i++)
+	{
+		dm_shader_desc stage = shader->stages[i];
+
+		NSString* func_name = [[NSString alloc] initWithUTF8String:stage.source];
+
+		switch(stage.type)
 		{
-			DM_LOG_FATAL("Could not create metal library from file %s", [shader_file UTF8String]);
-			return false;
+			case DM_SHADER_TYPE_VERTEX:
+				internal_shader->vertex_func = [internal_shader->library newFunctionWithName:func_name];
+				break;
+			case DM_SHADER_TYPE_PIXEL:
+				internal_shader->fragment_func = [internal_shader->library newFunctionWithName:func_name];
+				break;
+			default:
+				DM_LOG_ERROR("Unknown shader type, shouldn't be here...");
+				break;
 		}
+	}
 
-		for(uint32_t i=0; i<shader->num_stages; i++)
-		{
-			dm_shader_desc stage = shader->stages[i];
+	if(!internal_shader->vertex_func)
+	{
+		DM_LOG_FATAL("Could not create vertex function from shader: %s", shader->pass);
+		return false;
+	}
 
-			NSString* func_name = [[NSString alloc] initWithUTF8String:stage.source];
-
-			switch(stage.type)
-			{
-				case DM_SHADER_TYPE_VERTEX:
-					internal_shader->vertex_func = [internal_shader->library newFunctionWithName:func_name];
-					break;
-				case DM_SHADER_TYPE_PIXEL:
-					internal_shader->fragment_func = [internal_shader->library newFunctionWithName:func_name];
-					break;
-				default:
-					DM_LOG_ERROR("Unknown shader type, shouldn't be here...");
-					break;
-			}
-		}
-
-		if(!internal_shader->vertex_func)
-		{
-			DM_LOG_FATAL("Could not create vertex function from shader: %s", shader->pass);
-			return false;
-		}
-
-		if(!internal_shader->fragment_func)
-		{
-			DM_LOG_FATAL("Could not create fragment function from shader: %s", shader->pass);
-			return false;
-		}
+	if(!internal_shader->fragment_func)
+	{
+		DM_LOG_FATAL("Could not create fragment function from shader: %s", shader->pass);
+		return false;
 	}
 
 	return true;
@@ -210,40 +204,34 @@ TEXTURE
 
 bool dm_metal_create_texture(dm_image* image)
 {
-	@autoreleasepool
-	{
-		image->internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
-		dm_internal_texture* internal_texture = image->internal_texture;
+	image->internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
+	dm_internal_texture* internal_texture = image->internal_texture;
 
-		MTLTextureDescriptor* texture_desc = [[MTLTextureDescriptor alloc] init];
+	MTLTextureDescriptor* texture_desc = [[MTLTextureDescriptor alloc] init];
 
-        texture_desc.pixelFormat = MTLPixelFormatRGBA8Unorm;
-        texture_desc.width = image->desc.width;
-        texture_desc.height = image->desc.height;
-        texture_desc.usage = MTLTextureUsageShaderRead;
+	texture_desc.pixelFormat = MTLPixelFormatRGBA8Unorm;
+	texture_desc.width = image->desc.width;
+	texture_desc.height = image->desc.height;
+	texture_desc.usage = MTLTextureUsageShaderRead;
 
-        internal_texture->texture = [renderer.device newTextureWithDescriptor:texture_desc];
-        if(!internal_texture)
-        {
-            DM_LOG_FATAL("Could not create metal texture from image: %s", image->desc.path);
-            return false;
-        }
-
-        MTLRegion region = MTLRegionMake2D(0, 0, image->desc.width, image->desc.height);
-
-        NSUInteger bytes_per_row = 4 * image->desc.width;
-
-        [internal_texture->texture replaceRegion: region
-                                   mipmapLevel: 0
-                                   withBytes: image->data
-                                   bytesPerRow: bytes_per_row];
-
-        id <MTLCommandBuffer> command_buffer = [renderer.command_queue commandBuffer];
-        id <MTLBlitCommandEncoder> blit_encoder = [command_buffer blitCommandEncoder];
-        [blit_encoder generateMipmapsForTexture: internal_texture->texture];
-        [blit_encoder endEncoding];
-        [command_buffer commit];
+	internal_texture->texture = [renderer.device newTextureWithDescriptor:texture_desc];
+	if(!internal_texture)
+    {
+		DM_LOG_FATAL("Could not create metal texture from image: %s", image->desc.path);
+	return false;
 	}
+
+	MTLRegion region = MTLRegionMake2D(0, 0, image->desc.width, image->desc.height);
+
+	NSUInteger bytes_per_row = 4 * image->desc.width;
+
+	[internal_texture->texture replaceRegion:region mipmapLevel:0 withBytes:image->data bytesPerRow:bytes_per_row];
+
+	id <MTLCommandBuffer> command_buffer = [renderer.command_queue commandBuffer];
+	id <MTLBlitCommandEncoder> blit_encoder = [command_buffer blitCommandEncoder];
+	[blit_encoder generateMipmapsForTexture: internal_texture->texture];
+	[blit_encoder endEncoding];
+	[command_buffer commit];
 
 	return true;
 }
@@ -259,68 +247,65 @@ MAIN RENDERER
 
 bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_render_pipeline* pipeline)
 {
-	@autoreleasepool
+	DM_LOG_DEBUG("Initializing Metal render backend...");
+
+	dm_internal_apple_data* internal_data = platform_data->internal_data;
+	NSRect frame = [internal_data->content_view getWindowFrame];
+
+	renderer.device = MTLCreateSystemDefaultDevice();
+	renderer.metal_view = [[dm_metal_view alloc] init];
+	if(!renderer.metal_view)
 	{
-		DM_LOG_DEBUG("Initializing Metal render backend...");
-
-		dm_internal_apple_data* internal_data = platform_data->internal_data;
-		NSRect frame = [internal_data->content_view getWindowFrame];
-
-		renderer.device = MTLCreateSystemDefaultDevice();
-		renderer.metal_view = [[dm_metal_view alloc] init];
-		if(!renderer.metal_view)
-		{
-			DM_LOG_FATAL("Could not create metal view!");
-			return false;
-		}
-
-		renderer.metal_view.metal_layer.device = renderer.device;
-		renderer.metal_view.metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
-
-		[renderer.metal_view setFrame:frame];
-		[renderer.metal_view.metal_layer setFrame:frame];
-
-		renderer.command_queue = [renderer.device newCommandQueue];
-		if(!renderer.command_queue)
-		{
-			DM_LOG_FATAL("Could not create metal command queue!");
-			return false;
-		}
-
-		// content view is the main view for our NSWindow
-    	// must add our view to the subviews
-    	[internal_data->content_view addSubview:renderer.metal_view];
-
-    	// must set the content view's layer to our metal layer
-    	[internal_data->content_view setWantsLayer: YES];
-    	[internal_data->content_view setLayer:renderer.metal_view.metal_layer];
-	
-		// depth stencil
-    	MTLDepthStencilDescriptor* depth_stencil_desc = [MTLDepthStencilDescriptor new];
-    	depth_stencil_desc.depthCompareFunction = MTLCompareFunctionLess;
-    	depth_stencil_desc.depthWriteEnabled = YES;
-    	renderer.depth_stencil_state = [renderer.device newDepthStencilStateWithDescriptor:depth_stencil_desc];
-    	if(!renderer.depth_stencil_state)
-    	{
-        	DM_LOG_FATAL("Could not create metal depth stencil state!");
-			return false;
-		}
-
-		// sampler
-    	MTLSamplerDescriptor* sampler_desc = [MTLSamplerDescriptor new];
-    	sampler_desc.minFilter = MTLSamplerMinMagFilterNearest;
-    	sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
-    	sampler_desc.mipFilter = MTLSamplerMipFilterLinear;
-    	sampler_desc.sAddressMode = MTLSamplerAddressModeClampToEdge;
-    	sampler_desc.tAddressMode = MTLSamplerAddressModeClampToEdge;
-
-    	renderer.sampler_state = [renderer.device newSamplerStateWithDescriptor:sampler_desc];
-    	if(!renderer.sampler_state)
-    	{
-        	DM_LOG_FATAL("Could not create metal sampler state!");
-        	return false;
-    	}
+		DM_LOG_FATAL("Could not create metal view!");
+		return false;
 	}
+
+	renderer.metal_view.metal_layer.device = renderer.device;
+	renderer.metal_view.metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
+
+	[renderer.metal_view setFrame:frame];
+	[renderer.metal_view.metal_layer setFrame:frame];
+
+	renderer.command_queue = [renderer.device newCommandQueue];
+	if(!renderer.command_queue)
+	{
+		DM_LOG_FATAL("Could not create metal command queue!");
+		return false;
+	}
+
+	// content view is the main view for our NSWindow
+    // must add our view to the subviews
+    [internal_data->content_view addSubview:renderer.metal_view];
+
+    // must set the content view's layer to our metal layer
+    [internal_data->content_view setWantsLayer: YES];
+    [internal_data->content_view setLayer:renderer.metal_view.metal_layer];
+	
+	// depth stencil
+    MTLDepthStencilDescriptor* depth_stencil_desc = [MTLDepthStencilDescriptor new];
+    depth_stencil_desc.depthCompareFunction = MTLCompareFunctionLess;
+    depth_stencil_desc.depthWriteEnabled = YES;
+    renderer.depth_stencil_state = [renderer.device newDepthStencilStateWithDescriptor:depth_stencil_desc];
+    if(!renderer.depth_stencil_state)
+    {
+    	DM_LOG_FATAL("Could not create metal depth stencil state!");
+		return false;
+	}
+
+	// sampler
+    MTLSamplerDescriptor* sampler_desc = [MTLSamplerDescriptor new];
+    sampler_desc.minFilter = MTLSamplerMinMagFilterNearest;
+    sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+    sampler_desc.mipFilter = MTLSamplerMipFilterLinear;
+    sampler_desc.sAddressMode = MTLSamplerAddressModeClampToEdge;
+    sampler_desc.tAddressMode = MTLSamplerAddressModeClampToEdge;
+
+    renderer.sampler_state = [renderer.device newSamplerStateWithDescriptor:sampler_desc];
+    if(!renderer.sampler_state)
+    {
+        DM_LOG_FATAL("Could not create metal sampler state!");
+        return false;
+    }
 
 	return true;
 }
@@ -347,49 +332,43 @@ bool dm_renderer_end_frame_impl()
 
 bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout layout)
 {
-	@autoreleasepool
+	render_pass->internal_pass = dm_alloc(sizeof(dm_internal_pass), DM_MEM_RENDER_PASS);
+	dm_internal_pass* internal_pass = render_pass->internal_pass;
+
+	if(!dm_metal_create_shader(&render_pass->shader)) return false;
+	dm_internal_shader* internal_shader = render_pass->shader.internal_shader;
+
+	// pipeline state
+	MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
+	pipe_desc.vertexFunction = internal_shader->vertex_func;
+	pipe_desc.fragmentFunction = internal_shader->fragment_func;
+
+	pipe_desc.colorAttachments[0].pixelFormat = renderer.metal_view.metal_layer.pixelFormat;
+	pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
+
+    renderer.pipeline_state = [renderer.device newRenderPipelineStateWithDescriptor:pipe_desc error:NULL];
+    if(!renderer.pipeline_state)
+    {
+        DM_LOG_FATAL("Could not create metal pipeline state");
+        return NULL;
+    }
+
+	// uniform buffer
+	size_t buffer_size = 0;
+	dm_for_map_item(render_pass->uniforms)
 	{
-		render_pass->internal_pass = dm_alloc(sizeof(dm_internal_pass), DM_MEM_RENDER_PASS);
-		dm_internal_pass* internal_pass = render_pass->internal_pass;
-
-		if(!dm_metal_create_shader(&render_pass->shader)) return false;
-		dm_internal_shader* internal_shader = render_pass->shader.internal_shader;
-
-		// pipeline state
-		MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
-		pipe_desc.vertexFunction = internal_shader->vertex_func;
-		pipe_desc.fragmentFunction = internal_shader->fragment_func;
-
-        pipe_desc.colorAttachments[0].pixelFormat = renderer.metal_view.metal_layer.pixelFormat;
-        pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
-
-        renderer.pipeline_state = [renderer.device newRenderPipelineStateWithDescriptor:pipe_desc error:NULL];
-        if(!renderer.pipeline_state)
-        {
-            DM_LOG_FATAL("Could not create metal pipeline state");
-            return NULL;
-        }
-
-		// uniform buffer
-		size_t buffer_size = 0;
-		dm_for_map_item(render_pass->uniforms)
-		{
-			dm_uniform* uniform = item->value;
-			buffer_size += uniform->data_size;
-		}
-		internal_pass->uniform_buffer = [renderer.device newBufferWithLength:buffer_size options:MTLResourceOptionCPUCacheModeDefault];
+		dm_uniform* uniform = item->value;
+		buffer_size += uniform->data_size;
 	}
+	internal_pass->uniform_buffer = [renderer.device newBufferWithLength:buffer_size options:MTLResourceOptionCPUCacheModeDefault];
 
 	return true;
 }
 
 void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
 {
-	@autoreleasepool
-	{
-		dm_free(render_pass->shader.internal_shader, sizeof(dm_internal_shader), DM_MEM_RENDER_PASS);
-		dm_free(render_pass->internal_pass, sizeof(dm_internal_pass), DM_MEM_RENDER_PASS);
-	}
+	dm_free(render_pass->shader.internal_shader, sizeof(dm_internal_shader), DM_MEM_RENDER_PASS);
+	dm_free(render_pass->internal_pass, sizeof(dm_internal_pass), DM_MEM_RENDER_PASS);
 }
 
 bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data)
@@ -409,6 +388,7 @@ bool dm_create_texture_impl(dm_image* image)
 
 void dm_destroy_texture_impl(dm_image* image)
 {
+	dm_metal_destroy_texture(image);
 }
 
 /***************
@@ -435,15 +415,16 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 	[renderer.command_encoder setFragmentSamplerState:renderer.sampler_state atIndex:0];
 	[renderer.command_encoder setViewport:renderer.active_viewport];
 
+	// uniform buffer
+	dm_internal_pass* internal_pass = render_pass->internal_pass;
+	[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:2];
+
 	return true;
 }
 
 void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass)
 {
-	@autoreleasepool
-	{
-		[renderer.command_encoder endEncoding];
-	}
+	[renderer.command_encoder endEncoding];
 }
 
 void dm_renderer_set_viewport_impl(dm_viewport viewport)
@@ -496,7 +477,8 @@ bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_s
 {
 	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
 
-	dm_memcpy([internal_buffer->buffer contents], data, dm_metal_align(data_size, DM_METAL_BUFFER_ALIGNMENT));
+	size_t aligned_size = dm_metal_align(data_size, DM_METAL_BUFFER_ALIGNMENT);
+	dm_memcpy([internal_buffer->buffer contents], data, data_size);
 
 	return true;
 }
@@ -511,6 +493,9 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
 
 bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot)
 {
+	dm_internal_texture* internal_texture = image->internal_texture;
+	[renderer.command_encoder setFragmentTexture:internal_texture->texture atIndex:slot];
+
 	return true;
 }
 
