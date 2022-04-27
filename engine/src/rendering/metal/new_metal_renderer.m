@@ -34,6 +34,7 @@ typedef struct dm_internal_shader
 
 typedef struct dm_internal_pass
 {
+	id<MTLRenderPipelineState> pipeline_state;
 	id<MTLBuffer> uniform_buffer;
 } dm_internal_pass;
 
@@ -41,8 +42,10 @@ typedef struct dm_internal_pass
 
 @property (nonatomic, strong) CAMetalLayer* metal_layer;
 @property (nonatomic, strong) id<CAMetalDrawable> drawable;
+@property (nonatomic) dm_color clear_color;
 
 - (id) init;
+- (MTLRenderPassDescriptor*)currentRenderPassDescriptor;
 
 @end
 
@@ -66,6 +69,18 @@ typedef struct dm_internal_pass
 	return self;
 }
 
+- (MTLRenderPassDescriptor*)currentRenderPassDescriptor
+{
+	MTLRenderPassDescriptor* desc = [MTLRenderPassDescriptor renderPassDescriptor];
+	
+	desc.colorAttachments[0].texture = [_drawable texture];
+	desc.colorAttachments[0].clearColor = MTLClearColorMake(_clear_color.x, _clear_color.y, _clear_color.z, _clear_color.w);
+	desc.colorAttachments[0].storeAction = MTLStoreActionStore;
+	desc.colorAttachments[0].loadAction = MTLLoadActionClear;
+
+	return desc;
+}
+
 @end
 
 typedef struct dm_metal_renderer
@@ -78,7 +93,7 @@ typedef struct dm_metal_renderer
 	id<MTLCommandBuffer> command_buffer;
 	id<MTLRenderCommandEncoder> command_encoder;
 
-	id<MTLRenderPipelineState> pipeline_state;
+	
 	id<MTLDepthStencilState> depth_stencil_state;
 	id<MTLSamplerState> sampler_state;
 
@@ -86,7 +101,6 @@ typedef struct dm_metal_renderer
 
 	MTLViewport active_viewport;
 
-	dm_color clear_color;
 } dm_metal_renderer;
 
 /*******
@@ -350,8 +364,9 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	pipe_desc.colorAttachments[0].pixelFormat = renderer.metal_view.metal_layer.pixelFormat;
 	pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
 
-    renderer.pipeline_state = [renderer.device newRenderPipelineStateWithDescriptor:pipe_desc error:NULL];
-    if(!renderer.pipeline_state)
+	NSError* error = NULL;
+    internal_pass->pipeline_state = [renderer.device newRenderPipelineStateWithDescriptor:pipe_desc error:&error];
+    if(!internal_pass->pipeline_state)
     {
         DM_LOG_FATAL("Could not create metal pipeline state");
         return NULL;
@@ -395,12 +410,35 @@ void dm_destroy_texture_impl(dm_image* image)
 	dm_metal_destroy_texture(image);
 }
 
+bool dm_renderer_test_func(dm_render_pass* render_pass)
+{
+	dm_internal_pass* internal_pass = render_pass->internal_pass;
+
+	MTLRenderPassDescriptor* pass_desc = [renderer.metal_view currentRenderPassDescriptor];
+    renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:pass_desc];
+	
+	[renderer.command_encoder setRenderPipelineState:internal_pass->pipeline_state];
+	//[renderer.command_encoder setDepthStencilState:renderer.depth_stencil_state];
+	[renderer.command_encoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
+    [renderer.command_encoder setCullMode:MTLCullModeBack];
+	//[renderer.command_encoder setFragmentSamplerState:renderer.sampler_state atIndex:0];
+	//[renderer.command_encoder setViewport:renderer.active_viewport];
+
+	dm_internal_buffer* index_buffer = renderer.active_index_buffer->internal_buffer;
+	[renderer.command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:0 indexType:MTLIndexTypeUInt32 indexBuffer:index_buffer->buffer indexBufferOffset:0];
+	[renderer.command_encoder endEncoding];
+
+	return true;
+}
+
 /***************
 RENDER COMMANDS
 *****************/
 
 bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 {
+	dm_internal_pass* internal_pass = render_pass->internal_pass;
+
 	id<MTLTexture> texture = renderer.metal_view.drawable.texture;
 
     // render pass descriptor
@@ -408,11 +446,11 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
     passDescriptor.colorAttachments[0].texture = texture;
     passDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
     passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
-    passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(renderer.clear_color.x, renderer.clear_color.y, renderer.clear_color.z, renderer.clear_color.w);
+    passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(renderer.metal_view.clear_color.x, renderer.metal_view.clear_color.y, renderer.metal_view.clear_color.z, renderer.metal_view.clear_color.w);
 
     renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
 	
-	[renderer.command_encoder setRenderPipelineState:renderer.pipeline_state];
+	[renderer.command_encoder setRenderPipelineState:internal_pass->pipeline_state];
 	[renderer.command_encoder setDepthStencilState:renderer.depth_stencil_state];
 	[renderer.command_encoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
     [renderer.command_encoder setCullMode:MTLCullModeBack];
@@ -432,9 +470,8 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 		buffer_size += uniform->data_size;
 	}
 
-	dm_internal_pass* internal_pass = render_pass->internal_pass;
 	dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, buffer_size);
-	[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:2];
+	//[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:2];
 
 	return true;
 }
@@ -462,7 +499,7 @@ void dm_renderer_set_viewport_impl(dm_viewport viewport)
 
 void dm_renderer_clear_impl(dm_color clear_color)
 {
-	renderer.clear_color = clear_color;
+	renderer.metal_view.clear_color = clear_color;
 }
 
 void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass)

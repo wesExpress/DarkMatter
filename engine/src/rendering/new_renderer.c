@@ -33,11 +33,12 @@ extern bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_render_pip
 extern void dm_renderer_shutdown_impl();
 extern bool dm_renderer_begin_frame_impl();
 extern bool dm_renderer_end_frame_impl();
+extern bool dm_renderer_test_func(dm_render_pass* render_pass);
 
-//extern bool dm_renderer_create_pipeline_impl(dm_render_pipeline_state* pipeline);
-//extern void dm_renderer_destroy_pipeline_impl(dm_render_pipeline_state* pipeline);
 extern bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data);
 extern void dm_renderer_delete_buffer_impl(dm_buffer* buffer);
+
+
 
 // vertex data
 dm_list* vertices = NULL;
@@ -331,27 +332,8 @@ bool dm_material_color_pass()
     return true;
 }
 
-bool dm_renderer_begin_frame()
+bool dm_light_src_pass()
 {
-    if(!dm_renderer_begin_frame_impl()) return false;
-    
-    dm_render_command_clear((dm_color){0,0,0,1});
-    dm_render_command_set_viewport(default_viewport);
-	
-	/************************
-	    material render passes
-	*******************************/
-    if(!dm_material_pass()) return false;
-    if(!dm_material_color_pass()) return false;
-    
-    return true;
-}
-
-bool dm_renderer_end_frame()
-{
-	/**********************
-	  light source render pass
-	****************************/
     dm_render_pass* light_src_pass = dm_map_get(render_passes, "light_src");
     if(!light_src_pass) return false;
     
@@ -384,9 +366,9 @@ bool dm_renderer_end_frame()
                 
                 inst.diffuse = light_src->diffuse;
                 
-                dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
-                dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0);
-                dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1);
+                //dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
+                //dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0);
+                //dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
                 dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
             }
@@ -398,6 +380,35 @@ bool dm_renderer_end_frame()
     //
     dm_renderer_submit_command_buffer();
 	dm_renderer_clear_command_buffer();
+    
+    return true;
+}
+
+bool dm_renderer_begin_frame()
+{
+    if(!dm_renderer_begin_frame_impl()) return false;
+    
+    dm_render_command_clear((dm_color){0,0,0,1});
+    dm_render_command_set_viewport(default_viewport);
+	
+	/************************
+	    material render passes
+	*******************************/
+    //if(!dm_material_pass()) return false;
+    //if(!dm_material_color_pass()) return false;
+    
+    dm_render_pass* pass = dm_map_get(render_passes, "material");
+    dm_renderer_test_func(pass);
+    
+    return true;
+}
+
+bool dm_renderer_end_frame()
+{
+	/**********************
+	  light source render pass
+	****************************/
+    //if(!dm_light_src_pass()) return false;
     
     return dm_renderer_end_frame_impl();
 }
