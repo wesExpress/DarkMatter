@@ -232,6 +232,7 @@ bool dm_metal_create_texture(dm_image* image)
 	[blit_encoder generateMipmapsForTexture: internal_texture->texture];
 	[blit_encoder endEncoding];
 	[command_buffer commit];
+	[command_buffer waitUntilCompleted];
 
 	return true;
 }
@@ -316,8 +317,11 @@ void dm_renderer_shutdown_impl()
 
 bool dm_renderer_begin_frame_impl()
 {
+	MTLCommandBufferDescriptor* desc = [MTLCommandBufferDescriptor new];
+	desc.errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
+ 
 	renderer.metal_view.drawable = [renderer.metal_view.metal_layer nextDrawable];
-	renderer.command_buffer = [renderer.command_queue commandBuffer];
+	renderer.command_buffer = [renderer.command_queue commandBufferWithDescriptor:desc];
 
 	return true;
 }
@@ -416,7 +420,20 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 	[renderer.command_encoder setViewport:renderer.active_viewport];
 
 	// uniform buffer
+	size_t buffer_size = 0;
+	void* buffer_data = NULL;
+	dm_for_map_item(render_pass->uniforms)
+	{
+		dm_uniform* uniform = item->value;
+		
+		buffer_data = dm_realloc(buffer_data, buffer_size + uniform->data_size);
+		void* dest = (char*)buffer_data + buffer_size;
+		dm_memcpy(dest, uniform->data, uniform->data_size);
+		buffer_size += uniform->data_size;
+	}
+
 	dm_internal_pass* internal_pass = render_pass->internal_pass;
+	dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, buffer_size);
 	[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:2];
 
 	return true;
