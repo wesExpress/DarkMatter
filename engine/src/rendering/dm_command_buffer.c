@@ -11,7 +11,7 @@ extern void dm_renderer_clear_impl(dm_color clear_color);
 
 extern void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass);
 extern void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass);
-void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pass* render_pass);
+extern void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pass* render_pass);
 
 extern bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_size);
 extern bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot);
