@@ -6,7 +6,6 @@ void dm_renderer_submit_command(dm_render_command_type command_type, void* data)
 
 extern bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass);
 extern void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass);
-extern bool dm_renderer_bind_pipeline_impl(dm_render_pipeline_state* pipeline);
 extern void dm_renderer_set_viewport_impl(dm_viewport viewport);
 extern void dm_renderer_clear_impl(dm_color clear_color);
 
@@ -51,11 +50,6 @@ void dm_render_command_begin_renderpass(dm_render_pass* render_pass)
 void dm_render_command_end_renderpass(dm_render_pass* render_pass)
 {
 	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, render_pass);
-}
-
-void dm_render_command_bind_pipeline(dm_render_pipeline_state* pipeline)
-{
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_PIPELINE, NULL);
 }
 
 void dm_render_command_set_viewport(dm_viewport viewport)
@@ -239,10 +233,6 @@ bool dm_renderer_submit_command_buffer()
             case DM_RENDER_COMMAND_CLEAR:
             {
                 dm_renderer_clear_impl(*(dm_color*)command->data);
-            } break;
-            case DM_RENDER_COMMAND_BIND_PIPELINE:
-            {
-                if (!dm_renderer_bind_pipeline_impl(NULL)) return false;
             } break;
             case DM_RENDER_COMMAND_UPDATE_BUFFER:
             {

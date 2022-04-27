@@ -19,8 +19,13 @@
 @property (strong, nonatomic) id<MTLCommandQueue> command_queue;
 @property (strong, nonatomic) id<MTLCommandBuffer> command_buffer;
 @property (strong, nonatomic) id<MTLRenderCommandEncoder> command_encoder;
+
 @property (strong, nonatomic) id<MTLBuffer> index_buffer;
 @property (strong, nonatomic) dm_metal_view* view;
+@property (strong, nonatomic) id<CAMetalDrawable> drawable;
+
+@property (strong, nonatomic) id<MTLDepthStencilState> depth_stencil;
+@property (strong, nonatomic) id<MTLSamplerState> sampler_state;
 
 @property (nonatomic) dm_vec4 clear_color;
 

@@ -2,7 +2,7 @@
 #include "dm_vertex_attribs.h"
 #include "core/dm_logger.h"
 
-dm_render_pipeline_state default_pipeline_state = {
+dm_render_pipeline default_pipeline = {
     .blend_desc = {.is_enabled = true, .src = DM_BLEND_FUNC_SRC_ALPHA, .dest = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA},
     .depth_desc = {.is_enabled = true, .comparison = DM_COMPARISON_LESS},
     .stencil_desc = { 0 },
@@ -67,7 +67,6 @@ bool dm_renderer_create_material_pass()
     };
     
     if(!dm_renderer_create_render_pass(shader, layout, uniforms, sizeof(uniforms) / sizeof(dm_uniform),
-                                       default_pipeline_state,
                                        "material"))
     {
         DM_LOG_FATAL("Could not create default material pass!");
@@ -134,7 +133,7 @@ bool dm_renderer_create_material_color_pass()
         vp, light_ambient, light_diffuse, light_specular, light_pos, shiny, view_pos
     };
     
-    if(!dm_renderer_create_render_pass(shader, layout, uniforms, sizeof(uniforms) / sizeof(dm_uniform), default_pipeline_state,  "material_color"))
+    if(!dm_renderer_create_render_pass(shader, layout, uniforms, sizeof(uniforms) / sizeof(dm_uniform),  "material_color"))
     {
         DM_LOG_FATAL("Could not create default material color pass!");
         return false;
@@ -192,7 +191,7 @@ bool dm_renderer_create_light_src_pass()
     
     dm_uniform uniforms[] = { vp };
     
-    if(!dm_renderer_create_render_pass(shader, layout, uniforms, sizeof(uniforms) / sizeof(dm_uniform), default_pipeline_state,  "light_src"))
+    if(!dm_renderer_create_render_pass(shader, layout, uniforms, sizeof(uniforms) / sizeof(dm_uniform),  "light_src"))
     {
         DM_LOG_FATAL("Could not create default light source pass!");
         return false;

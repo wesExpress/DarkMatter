@@ -29,7 +29,7 @@ extern bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_
 extern void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass);
 
 // forward declaration of the implementation, or backend, functionality
-extern bool dm_renderer_init_impl(dm_platform_data* platform_data);
+extern bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_render_pipeline* pipeline);
 extern void dm_renderer_shutdown_impl();
 extern bool dm_renderer_begin_frame_impl();
 extern bool dm_renderer_end_frame_impl();
@@ -72,13 +72,10 @@ bool dm_renderer_create_default_render_passes()
     return true;
 }
 
-bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, dm_uniform* uniforms, uint32_t num_uniforms,
-                                    dm_render_pipeline_state pipeline_state, char* tag)
+bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, dm_uniform* uniforms, uint32_t num_uniforms, char* tag)
 {
     dm_render_pass render_pass = { 0 };
-    render_pass.name = tag;
     
-    render_pass.pipeline_state = pipeline_state;
     render_pass.shader = shader;
     render_pass.shader.pass = tag;
     
@@ -88,11 +85,6 @@ bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, d
     {
         dm_map_insert(render_pass.uniforms, uniforms[i].name, &uniforms[i]);
     }
-    
-    // TODO: need better way of assigning buffer pointers
-    render_pass.vertex_buffer = &static_buffer.vertex_buffer;
-    render_pass.index_buffer = &static_buffer.index_buffer;
-    render_pass.instance_buffer = &static_buffer.instance_buffer;
     
     if(!dm_renderer_create_render_pass_impl(&render_pass, layout)) return false;
     
@@ -118,13 +110,11 @@ MAIN RENDERER
 ***************/
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
-	//r_data.clear_color = clear_color;
-    
 	default_viewport.width = platform_data->window_width;
     default_viewport.height = platform_data->window_height;
     default_viewport.max_depth = 1.0f;
     
-	if(!dm_renderer_init_impl(platform_data))
+	if(!dm_renderer_init_impl(platform_data, &default_pipeline))
 	{
 		DM_LOG_FATAL("Renderer backend could not be initialized!");
 		return false;
@@ -213,21 +203,8 @@ void dm_renderer_resize(int new_width, int new_height)
     //dm_render_command_set_viewport(viewport);
 }
 
-bool dm_renderer_begin_frame()
+bool dm_material_pass()
 {
-	//dm_render_command_clear(&r_data.clear_color, r_data.render_commands);
-	//dm_render_command_set_viewport(&r_data.viewport, r_data.render_commands);
-	//dm_render_command_bind_pipeline(r_data.pipeline, r_data.render_commands);
-    
-	/************************
-	    material render passes
-	*******************************/
-    //if(!dm_renderer_render_materials()) return false;
-    //if(!dm_renderer_render_colored_materials()) return false;
-    
-    dm_render_command_clear((dm_color){0,0,0,1});
-    dm_render_command_set_viewport(default_viewport);
-	
     dm_list* lights = dm_ecs_get_entity_registry(DM_COMPONENT_LIGHT_SRC);
     dm_entity* light_id = dm_list_at(lights, 0);
     dm_light_src_component* light = dm_ecs_get_component(*light_id, DM_COMPONENT_LIGHT_SRC);
@@ -274,7 +251,7 @@ bool dm_renderer_begin_frame()
                 
                 if(!dm_set_uniform("shininess", &material->shininess, material_pass)) return false;
                 
-                dm_render_command_update_buffer(material_pass->instance_buffer, &inst, sizeof(dm_vertex_inst));
+                dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
                 dm_render_command_bind_texture(diffuse_map, 0);
                 dm_render_command_bind_texture(specular_map, 1);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
@@ -285,6 +262,16 @@ bool dm_renderer_begin_frame()
     
     dm_render_command_end_renderpass(material_pass);
 	
+    return true;
+}
+
+bool dm_material_color_pass()
+{
+    dm_list* lights = dm_ecs_get_entity_registry(DM_COMPONENT_LIGHT_SRC);
+    dm_entity* light_id = dm_list_at(lights, 0);
+    dm_light_src_component* light = dm_ecs_get_component(*light_id, DM_COMPONENT_LIGHT_SRC);
+    dm_transform_component* light_trans = dm_ecs_get_component(*light_id, DM_COMPONENT_TRANSFORM);
+    
     // material color
     dm_render_pass* material_color_pass = dm_map_get(render_passes, "material_color");
     if(!material_color_pass) return false;
@@ -326,7 +313,7 @@ bool dm_renderer_begin_frame()
                 
                 if(!dm_set_uniform("shininess", &color->shininess, material_color_pass)) return false;
                 
-                dm_render_command_update_buffer(material_color_pass->instance_buffer, &inst, sizeof(dm_vertex_inst));
+                dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
                 dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass);
             }
@@ -336,6 +323,19 @@ bool dm_renderer_begin_frame()
     dm_render_command_end_renderpass(material_color_pass);
     
     return true;
+}
+
+bool dm_renderer_begin_frame()
+{
+	/************************
+	    material render passes
+	*******************************/
+    
+    dm_render_command_clear((dm_color){0,0,0,1});
+    dm_render_command_set_viewport(default_viewport);
+	
+    //if(!dm_material_pass()) return false;
+    return dm_material_color_pass();
 }
 
 bool dm_renderer_end_frame()
@@ -374,7 +374,7 @@ bool dm_renderer_end_frame()
                 
                 inst.diffuse = light_src->diffuse;
                 
-                dm_render_command_update_buffer(light_src_pass->instance_buffer, &inst, sizeof(dm_vertex_inst));
+                dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
                 dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
             }

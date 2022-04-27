@@ -442,7 +442,7 @@ typedef struct dm_render_pass
     void* internal_render_pass;
 } dm_render_pass;
 */
-typedef struct dm_render_pipeline_state
+typedef struct dm_render_pipeline
 {
     dm_blend_state_desc blend_desc;
     dm_depth_state_desc depth_desc;
@@ -451,18 +451,13 @@ typedef struct dm_render_pipeline_state
     dm_sampler_desc sampler_desc;
     bool wireframe;
     void* internal_pipeline;
-} dm_render_pipeline_state;
+} dm_render_pipeline;
 
 typedef struct dm_render_pass
 {
-    dm_render_pipeline_state pipeline_state;
-    dm_viewport viewport;
     dm_shader shader;
+    dm_viewport viewport;
     dm_map* uniforms;
-    dm_buffer* vertex_buffer;
-    dm_buffer* index_buffer;
-    dm_buffer* instance_buffer;
-    char* name;
     void* internal_pass;
 } dm_render_pass;
 
