@@ -493,22 +493,6 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 	[renderer.command_encoder setFragmentSamplerState:renderer.sampler_state atIndex:0];
 	[renderer.command_encoder setViewport:renderer.active_viewport];
 
-	// uniform buffer
-	size_t buffer_size = 0;
-	void* buffer_data = NULL;
-	dm_for_map_item(render_pass->uniforms)
-	{
-		dm_uniform* uniform = item->value;
-		
-		buffer_data = dm_realloc(buffer_data, buffer_size + uniform->data_size);
-		void* dest = (char*)buffer_data + buffer_size;
-		dm_memcpy(dest, uniform->data, uniform->data_size);
-		buffer_size += uniform->data_size;
-	}
-
-	dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT));
-	//[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:2];
-
 	return true;
 }
 
@@ -588,8 +572,25 @@ bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot)
 	return true;
 }
 
-bool dm_renderer_bind_uniform_impl(dm_uniform* uniform)
+bool dm_renderer_bind_uniforms_impl(dm_render_pass* render_pass)
 {
+	dm_internal_pass* internal_pass = render_pass->internal_pass;
+
+	size_t buffer_size = 0;
+	void* buffer_data = NULL;
+	dm_for_map_item(render_pass->uniforms)
+	{
+		dm_uniform* uniform = item->value;
+		
+		buffer_data = dm_realloc(buffer_data, buffer_size + uniform->data_size);
+		void* dest = (char*)buffer_data + buffer_size;
+		dm_memcpy(dest, uniform->data, uniform->data_size);
+		buffer_size += uniform->data_size;
+	}
+
+	dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT));
+	[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:2];
+
 	return true;
 }
 

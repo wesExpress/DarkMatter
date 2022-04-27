@@ -12,6 +12,8 @@ struct vertex_in
 struct vertex_inst
 {
 	float4x4 model;
+	float4 pad;
+	float4 pad2;
 };
 
 struct vertex_out
