@@ -360,8 +360,7 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
 	pipe_desc.vertexFunction = internal_shader->vertex_func;
 	pipe_desc.fragmentFunction = internal_shader->fragment_func;
-
-	pipe_desc.colorAttachments[0].pixelFormat = renderer.metal_view.metal_layer.pixelFormat;
+	pipe_desc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
 	pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
 
 	NSError* error = NULL;
@@ -379,7 +378,7 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 		dm_uniform* uniform = item->value;
 		buffer_size += uniform->data_size;
 	}
-	internal_pass->uniform_buffer = [renderer.device newBufferWithLength:buffer_size options:MTLResourceOptionCPUCacheModeDefault];
+	internal_pass->uniform_buffer = [renderer.device newBufferWithLength:dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT) options:MTLResourceOptionCPUCacheModeDefault];
 
 	return true;
 }
@@ -410,23 +409,60 @@ void dm_destroy_texture_impl(dm_image* image)
 	dm_metal_destroy_texture(image);
 }
 
-bool dm_renderer_test_func(dm_render_pass* render_pass)
+bool dm_renderer_test_func()
 {
-	dm_internal_pass* internal_pass = render_pass->internal_pass;
+	// vertices
+	float vertices[] = {
+		-0.5f, -0.5f, 0.0f, 1.0f,
+		 0.5f, -0.5f, 0.0f, 1.0f,
+		 0.0f,  0.5f, 0.0f, 1.0f
+	};
+	id<MTLBuffer> vertex_buffer = [renderer.device newBufferWithBytes:vertices length:sizeof(vertices) options:MTLResourceOptionCPUCacheModeDefault];
 
+	// shader library
+	NSError* error = NULL;
+	id<MTLLibrary> lib = [renderer.device newLibraryWithFile:@"shaders/metal/test.metallib" error:&error];
+	if(!lib)
+	{
+		DM_LOG_FATAL("%d", error.code);
+	}
+
+	// drawable
+	renderer.metal_view.drawable = [renderer.metal_view.metal_layer nextDrawable];
+ 
+	// command buffer
+	MTLCommandBufferDescriptor* desc = [MTLCommandBufferDescriptor new];
+	desc.errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
+	renderer.command_buffer = [renderer.command_queue commandBufferWithDescriptor:desc];
+
+	// pass descriptor
 	MTLRenderPassDescriptor* pass_desc = [renderer.metal_view currentRenderPassDescriptor];
     renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:pass_desc];
-	
-	[renderer.command_encoder setRenderPipelineState:internal_pass->pipeline_state];
+
+	// pipeline
+	MTLRenderPipelineDescriptor *pipelineDescriptor = [MTLRenderPipelineDescriptor new];
+    pipelineDescriptor.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+    pipelineDescriptor.vertexFunction = [lib newFunctionWithName:@"vertex_main"];
+    pipelineDescriptor.fragmentFunction = [lib newFunctionWithName:@"fragment_main"];
+
+	id<MTLRenderPipelineState> pipeline = [renderer.device newRenderPipelineStateWithDescriptor:pipelineDescriptor error:&error];
+
+	[renderer.command_encoder setRenderPipelineState:pipeline];
 	//[renderer.command_encoder setDepthStencilState:renderer.depth_stencil_state];
 	[renderer.command_encoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
     [renderer.command_encoder setCullMode:MTLCullModeBack];
-	//[renderer.command_encoder setFragmentSamplerState:renderer.sampler_state atIndex:0];
-	//[renderer.command_encoder setViewport:renderer.active_viewport];
+	[renderer.command_encoder setViewport:renderer.active_viewport];
 
-	dm_internal_buffer* index_buffer = renderer.active_index_buffer->internal_buffer;
-	[renderer.command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:0 indexType:MTLIndexTypeUInt32 indexBuffer:index_buffer->buffer indexBufferOffset:0];
+	// bind the vertex buffer
+	[renderer.command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:0];
+
+	//dm_internal_buffer* index_buffer = renderer.active_index_buffer->internal_buffer;
+	//[renderer.command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:36 indexType:MTLIndexTypeUInt32 indexBuffer:index_buffer->buffer indexBufferOffset:0];
+	[renderer.command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:3];
 	[renderer.command_encoder endEncoding];
+
+	[renderer.command_buffer presentDrawable:renderer.metal_view.drawable];
+	[renderer.command_buffer commit];
 
 	return true;
 }
@@ -470,7 +506,7 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 		buffer_size += uniform->data_size;
 	}
 
-	dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, buffer_size);
+	dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT));
 	//[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:2];
 
 	return true;
@@ -531,7 +567,6 @@ bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_s
 {
 	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
 
-	size_t aligned_size = dm_metal_align(data_size, DM_METAL_BUFFER_ALIGNMENT);
 	dm_memcpy([internal_buffer->buffer contents], data, data_size);
 
 	return true;
