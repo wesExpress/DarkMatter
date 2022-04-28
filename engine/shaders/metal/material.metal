@@ -12,13 +12,11 @@ struct vertex_in
 struct vertex_inst
 {
 	float4x4 model;
-	float4 pad;
-	float4 pad2;
 };
 
 struct vertex_out
 {
-	float4 position[[position]];
+	float4 position [[position]];
 	float3 normal;
 	float2 tex_coords;
 	float3 frag_pos;
@@ -35,12 +33,7 @@ struct Uniform
 	float3 view_pos;
 };
 
-vertex vertex_out vertex_main(
-	const device vertex_in* vertices[[buffer(0)]],
-	const device vertex_inst* instance_data [[buffer(1)]],
-	constant Uniform& uniforms [[buffer(2)]],
-	uint vid[[vertex_id]],
-	uint instid[[instance_id]]
+vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], const device vertex_inst* instance_data [[buffer(1)]], constant Uniform& uniforms [[buffer(2)]], uint vid[[vertex_id]], uint instid[[instance_id]]
 )
 {
 	vertex_out v_out;

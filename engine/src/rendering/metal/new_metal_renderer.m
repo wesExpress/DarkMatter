@@ -92,7 +92,6 @@ typedef struct dm_metal_renderer
 	id<MTLCommandQueue> command_queue;
 	id<MTLCommandBuffer> command_buffer;
 	id<MTLRenderCommandEncoder> command_encoder;
-
 	
 	id<MTLDepthStencilState> depth_stencil_state;
 	id<MTLSamplerState> sampler_state;
@@ -101,6 +100,8 @@ typedef struct dm_metal_renderer
 
 	MTLViewport active_viewport;
 
+	MTLCullMode cull_mode;
+	MTLWinding winding;
 } dm_metal_renderer;
 
 /*******
@@ -119,6 +120,76 @@ dm_metal_renderer renderer = { 0 };
 /***************
 ENUM CONVERSION
 *****************/
+
+MTLWinding dm_winding_to_metal_winding(dm_winding_order winding)
+{
+	switch(winding)
+	{
+		case DM_WINDING_CLOCK: return MTLWindingClockwise;
+		case DM_WINDING_COUNTER_CLOCK: return MTLWindingCounterClockwise;
+		default:
+			DM_LOG_WARN("Unknown winding order. Returning \"MTLWindingCounterClockwise\"");
+			return MTLWindingCounterClockwise;
+	}
+}
+
+MTLCullMode dm_cull_to_metal_cull(dm_cull_mode cull)
+{
+	switch(cull)
+	{
+		case DM_CULL_FRONT_BACK:
+		case DM_CULL_FRONT: return MTLCullModeFront;
+		case DM_CULL_BACK: return MTLCullModeBack;
+		default:
+			DM_LOG_ERROR("Unknown cull mode. Returning \"MTLCullModeBack\"");
+			return MTLCullModeBack;
+	}
+}
+
+MTLCompareFunction dm_compare_to_metal_compare(dm_comparison comp)
+{
+	switch(comp)
+	{
+		case DM_COMPARISON_ALWAYS: return MTLCompareFunctionAlways;
+		case DM_COMPARISON_NEVER: return MTLCompareFunctionNever;
+		case DM_COMPARISON_EQUAL: return MTLCompareFunctionEqual;
+		case DM_COMPARISON_NOTEQUAL: return MTLCompareFunctionNotEqual;
+		case DM_COMPARISON_LESS: return MTLCompareFunctionLess;
+		case DM_COMPARISON_LEQUAL: return MTLCompareFunctionLessEqual;
+		case DM_COMPARISON_GREATER: return MTLCompareFunctionGreater;
+		case DM_COMPARISON_GEQUAL: return MTLCompareFunctionGreaterEqual;
+		default:
+			DM_LOG_ERROR("Unknown comparison function. Returning \"MTLCompareFunctionLess\"");
+			return MTLCompareFunctionLess;
+	}
+}
+
+MTLSamplerAddressMode dm_tex_mode_to_metal_sampler_mode(dm_texture_mode mode)
+{
+	switch(mode)
+	{
+		case DM_TEXTURE_MODE_WRAP: return MTLSamplerAddressModeRepeat;
+		case DM_TEXTURE_MODE_EDGE: return MTLSamplerAddressModeClampToEdge;
+		case DM_TEXTURE_MODE_BORDER: return MTLSamplerAddressModeClampToBorderColor;
+		case DM_TEXTURE_MODE_MIRROR_REPEAT: return MTLSamplerAddressModeMirrorRepeat;
+		case DM_TEXTURE_MODE_MIRROR_EDGE: return MTLSamplerAddressModeMirrorClampToEdge;
+		default:
+			DM_LOG_ERROR("Unknown sampler mode. Returning \"MTLSamplerAddressModeRepeat\"");
+			return MTLSamplerAddressModeRepeat;
+	}
+}
+
+MTLSamplerMinMagFilter dm_minmagfilter_to_metal_minmagfilter(dm_filter filter)
+{
+	switch(filter)
+	{
+		case DM_FILTER_NEAREST: return MTLSamplerMinMagFilterNearest;
+		case DM_FILTER_LINEAR: return MTLSamplerMinMagFilterLinear;
+		default:
+			DM_LOG_ERROR("Unknown min mag filter. Returning \"MTLSamplerMinMagFilterNearest\"");
+			return MTLSamplerMinMagFilterNearest;
+	}
+}
 
 /******
 BUFFER
@@ -295,7 +366,7 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_render_pipeline* 
 	
 	// depth stencil
     MTLDepthStencilDescriptor* depth_stencil_desc = [MTLDepthStencilDescriptor new];
-    depth_stencil_desc.depthCompareFunction = MTLCompareFunctionLess;
+    depth_stencil_desc.depthCompareFunction = dm_compare_to_metal_compare(pipeline->depth_desc.comparison);
     depth_stencil_desc.depthWriteEnabled = YES;
     renderer.depth_stencil_state = [renderer.device newDepthStencilStateWithDescriptor:depth_stencil_desc];
     if(!renderer.depth_stencil_state)
@@ -306,11 +377,11 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_render_pipeline* 
 
 	// sampler
     MTLSamplerDescriptor* sampler_desc = [MTLSamplerDescriptor new];
-    sampler_desc.minFilter = MTLSamplerMinMagFilterNearest;
-    sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+    sampler_desc.minFilter = dm_minmagfilter_to_metal_minmagfilter(pipeline->sampler_desc.filter);
+    sampler_desc.magFilter = dm_minmagfilter_to_metal_minmagfilter(pipeline->sampler_desc.filter);
     sampler_desc.mipFilter = MTLSamplerMipFilterLinear;
-    sampler_desc.sAddressMode = MTLSamplerAddressModeClampToEdge;
-    sampler_desc.tAddressMode = MTLSamplerAddressModeClampToEdge;
+    sampler_desc.sAddressMode = dm_tex_mode_to_metal_sampler_mode(pipeline->sampler_desc.u);
+    sampler_desc.tAddressMode = dm_tex_mode_to_metal_sampler_mode(pipeline->sampler_desc.v);
 
     renderer.sampler_state = [renderer.device newSamplerStateWithDescriptor:sampler_desc];
     if(!renderer.sampler_state)
@@ -318,6 +389,10 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_render_pipeline* 
         DM_LOG_FATAL("Could not create metal sampler state!");
         return false;
     }
+
+	// raster stuff
+	renderer.winding = dm_winding_to_metal_winding(pipeline->raster_desc.winding_order);
+	renderer.cull_mode = dm_cull_to_metal_cull(pipeline->raster_desc.cull_mode);
 
 	return true;
 }
@@ -507,8 +582,8 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 	
 		[renderer.command_encoder setRenderPipelineState:internal_pass->pipeline_state];
 		[renderer.command_encoder setDepthStencilState:renderer.depth_stencil_state];
-		[renderer.command_encoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
-		[renderer.command_encoder setCullMode:MTLCullModeBack];
+		[renderer.command_encoder setFrontFacingWinding:renderer.winding]; 
+		[renderer.command_encoder setCullMode:renderer.cull_mode];
 		[renderer.command_encoder setFragmentSamplerState:renderer.sampler_state atIndex:0];
 		[renderer.command_encoder setViewport:renderer.active_viewport];
 	}
