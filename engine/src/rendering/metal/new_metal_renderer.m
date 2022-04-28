@@ -367,12 +367,12 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
 
 	NSError* error = NULL;
-    internal_pass->pipeline_state = [renderer.device newRenderPipelineStateWithDescriptor:pipe_desc error:&error];
-    if(!internal_pass->pipeline_state)
-    {
-        DM_LOG_FATAL("Could not create metal pipeline state");
-        return NULL;
-    }
+	internal_pass->pipeline_state = [renderer.device newRenderPipelineStateWithDescriptor:pipe_desc error:&error];
+	if(!internal_pass->pipeline_state)
+	{
+		DM_LOG_FATAL("Could not create metal pipeline state");
+		return NULL;
+	}
 
 	// uniform buffer
 	size_t buffer_size = 0;
@@ -383,7 +383,7 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	}
 	
 	size_t aligned_size = dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT);
-	internal_pass->uniform_buffer = [renderer.device newBufferWithLength:aligned_size options:MTLResourceOptionCPUCacheModeDefault];
+	//internal_pass->uniform_buffer = [renderer.device newBufferWithLength:aligned_size options:MTLResourceOptionCPUCacheModeDefault];
 
 	return true;
 }
@@ -454,7 +454,7 @@ bool dm_renderer_test_func()
 
 	// pass descriptor
 	MTLRenderPassDescriptor* pass_desc = [renderer.metal_view currentRenderPassDescriptor];
-    renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:pass_desc];
+	renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:pass_desc];
 
 	// pipeline
 	MTLRenderPipelineDescriptor *pipelineDescriptor = [MTLRenderPipelineDescriptor new];
@@ -467,7 +467,7 @@ bool dm_renderer_test_func()
 	[renderer.command_encoder setRenderPipelineState:pipeline];
 	//[renderer.command_encoder setDepthStencilState:renderer.depth_stencil_state];
 	[renderer.command_encoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
-    [renderer.command_encoder setCullMode:MTLCullModeBack];
+	[renderer.command_encoder setCullMode:MTLCullModeBack];
 	[renderer.command_encoder setViewport:renderer.active_viewport];
 
 	// bind the vertex buffers
@@ -497,18 +497,18 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 		dm_internal_pass* internal_pass = render_pass->internal_pass;
 
 		// render pass descriptor
-    	MTLRenderPassDescriptor* passDescriptor = [renderer.metal_view currentRenderPassDescriptor];
+		MTLRenderPassDescriptor* passDescriptor = [renderer.metal_view currentRenderPassDescriptor];
 		if(!passDescriptor)
 		{
 			DM_LOG_ERROR("NULL pass descriptor!");
 		}
 
-    	renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
+		renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
 	
 		[renderer.command_encoder setRenderPipelineState:internal_pass->pipeline_state];
 		[renderer.command_encoder setDepthStencilState:renderer.depth_stencil_state];
 		[renderer.command_encoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
-    	[renderer.command_encoder setCullMode:MTLCullModeBack];
+		[renderer.command_encoder setCullMode:MTLCullModeBack];
 		[renderer.command_encoder setFragmentSamplerState:renderer.sampler_state atIndex:0];
 		[renderer.command_encoder setViewport:renderer.active_viewport];
 	}
@@ -525,14 +525,14 @@ void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass)
 
 void dm_renderer_set_viewport_impl(dm_viewport viewport)
 {
-    MTLViewport new_viewport;
-    new_viewport.originX = viewport.x;
-    new_viewport.originY = viewport.y;
-    new_viewport.width = viewport.width;
-    new_viewport.height = viewport.height;
-    new_viewport.znear = viewport.min_depth;
-    new_viewport.zfar = viewport.max_depth;
-	
+	MTLViewport new_viewport;
+	new_viewport.originX = viewport.x;
+	new_viewport.originY = viewport.y;
+	new_viewport.width = viewport.width;
+	new_viewport.height = viewport.height;
+	new_viewport.znear = viewport.min_depth;
+	new_viewport.zfar = viewport.max_depth;
+
 	renderer.active_viewport = new_viewport;
 }
 
@@ -618,7 +618,8 @@ bool dm_renderer_bind_uniforms_impl(uint32_t slot, dm_render_pass* render_pass)
 		}
 
 		size_t aligned_size = dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT);
-		dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, aligned_size);
+		//dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, aligned_size);
+		internal_pass->uniform_buffer = [renderer.device newBufferWithBytes:buffer_data length:aligned_size options:MTLResourceOptionCPUCacheModeDefault];
 		[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:slot];
 	}
 

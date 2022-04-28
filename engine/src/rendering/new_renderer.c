@@ -384,7 +384,7 @@ bool dm_light_src_pass()
 
 bool dm_renderer_begin_frame()
 {
-    //if(!dm_renderer_begin_frame_impl()) return false;
+    if(!dm_renderer_begin_frame_impl()) return false;
     
     dm_render_command_clear((dm_color){0,0,0,1});
     dm_render_command_set_viewport(default_viewport);
@@ -395,7 +395,7 @@ bool dm_renderer_begin_frame()
     //if(!dm_material_pass()) return false;
     //if(!dm_material_color_pass()) return false;
     
-    dm_renderer_test_func();
+    //dm_renderer_test_func();
     
     return true;
 }
@@ -405,13 +405,13 @@ bool dm_renderer_end_frame()
 	/**********************
 	  light source render pass
 	****************************/
-    //if(!dm_light_src_pass()) return false;
+    if(!dm_light_src_pass()) return false;
     
     dm_renderer_submit_command_buffer();
 	dm_renderer_clear_command_buffer();
     
-    //return dm_renderer_end_frame_impl();
-    return true;
+    return dm_renderer_end_frame_impl();
+    //return true;
 }
 
 bool dm_renderer_init_buffer_data()

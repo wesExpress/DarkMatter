@@ -21,7 +21,7 @@ struct vertex_out
 
 struct Uniform
 {
-    float4x4 view_proj;
+	float4x4 view_proj;
 	float4 object_diffuse;
 };
 
@@ -36,6 +36,7 @@ vertex vertex_out vertex_main(
 	vertex_out v_out;
 
 	v_out.position = uniforms.view_proj * instance_data[instid].model * float4(vertices[vid].position, 1);
+	//v_out.position =  float4(vertices[vid].position, 1);
 
 	return v_out;
 }
@@ -46,4 +47,5 @@ fragment float4 fragment_main(
 )
 {
 	return uniforms.object_diffuse;
+	//return float4(0,1,0,1);
 }

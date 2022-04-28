@@ -17,7 +17,7 @@ vertex Vertex vertex_main(const device Vertex *vertices [[buffer(0)]], constant 
 	return vertices[vid];
 }
 
-fragment float4 fragment_main(Vertex inVertex [[stage_in]])
+fragment float4 fragment_main(Vertex inVertex [[stage_in]], constant Uniform& uniforms [[buffer(0)]])
 {
 	return float4(1,0,0,0);
 }
