@@ -16,7 +16,11 @@ extern void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_i
 extern bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_size);
 extern bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot);
 extern bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot);
-extern bool dm_renderer_bind_uniforms_impl(dm_render_pass* render_pass);
+extern bool dm_renderer_bind_uniforms_impl(uint32_t slot, dm_render_pass* render_pass);
+
+/*******
+STRUCTS
+*********/
 
 typedef struct dm_draw_command
 {
@@ -30,7 +34,21 @@ typedef struct dm_texture_command
     uint32_t slot;
 } dm_texture_command;
 
+typedef struct dm_uniform_command
+{
+    uint32_t slot;
+    dm_render_pass* render_pass;
+} dm_uniform_command;
+
+/*******
+GLOBALS
+*********/
+
 dm_list* render_commands = NULL;
+
+/********
+COMMANDS
+**********/
 
 void dm_render_command_init()
 {
@@ -95,9 +113,12 @@ void dm_render_command_bind_texture(dm_image* image, uint32_t slot)
     dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_TEXTURE, texture_command);
 }
 
-void dm_render_command_bind_uniforms(dm_render_pass* render_pass)
+void dm_render_command_bind_uniforms(uint32_t slot, dm_render_pass* render_pass)
 {
-    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_UNIFORMS, render_pass);
+    dm_uniform_command* uniform_command = dm_alloc(sizeof(dm_uniform_command), DM_MEM_RENDER_COMMAND);
+    uniform_command->slot = slot;
+    uniform_command->render_pass = render_pass;
+    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_UNIFORMS, uniform_command);
 }
 
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_render_pass* render_pass)
@@ -169,6 +190,11 @@ void dm_renderer_clear_command_buffer()
             {
                 dm_buffer_bind_packet* packet = command->data;
                 dm_free(packet, sizeof(dm_buffer_bind_packet), DM_MEM_RENDER_COMMAND);
+            } break;
+            case DM_RENDER_COMMAND_BIND_UNIFORMS:
+            {
+                dm_uniform_command* uni_command = command->data;
+                dm_free(uni_command, sizeof(dm_uniform_command), DM_MEM_RENDER_COMMAND);
             } break;
             case DM_RENDER_COMMAND_BIND_TEXTURE:
             {
@@ -251,7 +277,8 @@ bool dm_renderer_submit_command_buffer()
             } break;
             case DM_RENDER_COMMAND_BIND_UNIFORMS:
             {
-                if(!dm_renderer_bind_uniforms_impl((dm_render_pass*)command->data)) return false;
+                dm_uniform_command* uni_command = command->data;
+                if(!dm_renderer_bind_uniforms_impl(uni_command->slot, uni_command->render_pass)) return false;
             } break;
             case DM_RENDER_COMMAND_DRAW_ARRAYS:
             {

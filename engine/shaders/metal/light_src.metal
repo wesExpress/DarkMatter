@@ -26,7 +26,7 @@ struct Uniform
 };
 
 vertex vertex_out vertex_main(
-	const device vertex_in* vertices[[buffer(0)]],
+	const device vertex_in* vertices [[buffer(0)]],
 	const device vertex_inst* instance_data [[buffer(1)]],
 	constant Uniform& uniforms [[buffer(2)]],
 	uint vid[[vertex_id]],
@@ -36,9 +36,6 @@ vertex vertex_out vertex_main(
 	vertex_out v_out;
 
 	v_out.position = uniforms.view_proj * instance_data[instid].model * float4(vertices[vid].position, 1);
-	//v_out.position = instance_data[instid].model * float4(vertices[vid].position, 1);
-	//v_out.position = float4(vertices[vid].position, 1);
-	//v_out.position = float4(1,2,3,1);
 
 	return v_out;
 }
@@ -49,5 +46,4 @@ fragment float4 fragment_main(
 )
 {
 	return uniforms.object_diffuse;
-	//return float4(1,0,0,1);
 }

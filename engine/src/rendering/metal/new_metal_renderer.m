@@ -381,7 +381,9 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 		dm_uniform* uniform = item->value;
 		buffer_size += uniform->data_size;
 	}
-	internal_pass->uniform_buffer = [renderer.device newBufferWithLength:dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT) options:MTLResourceOptionCPUCacheModeDefault];
+	
+	size_t aligned_size = dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT);
+	internal_pass->uniform_buffer = [renderer.device newBufferWithLength:aligned_size options:MTLResourceOptionCPUCacheModeDefault];
 
 	return true;
 }
@@ -426,6 +428,14 @@ bool dm_renderer_test_func()
 	};
 	id<MTLBuffer> vertex_buffer = [renderer.device newBufferWithBytes:vertices length:sizeof(vertices) options:MTLResourceOptionCPUCacheModeDefault];
 
+	// uniform
+	typedef struct uniforms
+	{
+		dm_vec3 blah;
+	} uniforms;
+	uniforms uniform = { .blah = {1,2,3} };
+	id<MTLBuffer> uniform_buffer = [renderer.device newBufferWithLength:sizeof(uniforms) options:MTLResourceOptionCPUCacheModeDefault];
+
 	// shader library
 	NSError* error = NULL;
 	id<MTLLibrary> lib = [renderer.device newLibraryWithFile:@"shaders/metal/test.metallib" error:&error];
@@ -460,8 +470,10 @@ bool dm_renderer_test_func()
     [renderer.command_encoder setCullMode:MTLCullModeBack];
 	[renderer.command_encoder setViewport:renderer.active_viewport];
 
-	// bind the vertex buffer
+	// bind the vertex buffers
 	[renderer.command_encoder setVertexBuffer:vertex_buffer offset:0 atIndex:0];
+	dm_memcpy([uniform_buffer contents], &uniform, sizeof(uniforms));
+	[renderer.command_encoder setVertexBuffer:uniform_buffer offset:0 atIndex:1];
 
 	//dm_internal_buffer* index_buffer = renderer.active_index_buffer->internal_buffer;
 	//[renderer.command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:36 indexType:MTLIndexTypeUInt32 indexBuffer:index_buffer->buffer indexBufferOffset:0];
@@ -587,7 +599,7 @@ bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot)
 	return true;
 }
 
-bool dm_renderer_bind_uniforms_impl(dm_render_pass* render_pass)
+bool dm_renderer_bind_uniforms_impl(uint32_t slot, dm_render_pass* render_pass)
 {
 	if(renderer.metal_view.drawable)
 	{
@@ -605,8 +617,9 @@ bool dm_renderer_bind_uniforms_impl(dm_render_pass* render_pass)
 			buffer_size += uniform->data_size;
 		}
 
-		dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT));
-		[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:2];
+		size_t aligned_size = dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT);
+		dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, aligned_size);
+		[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:slot];
 	}
 
 	return true;

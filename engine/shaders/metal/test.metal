@@ -7,7 +7,12 @@ struct Vertex
 	float4 position [[position]];
 };
 
-vertex Vertex vertex_main(const device Vertex *vertices [[buffer(0)]], uint vid [[vertex_id]])
+struct Uniform
+{
+	float3 blah;
+};
+
+vertex Vertex vertex_main(const device Vertex *vertices [[buffer(0)]], constant Uniform& uniform [[buffer(1)]], uint vid [[vertex_id]])
 {
 	return vertices[vid];
 }

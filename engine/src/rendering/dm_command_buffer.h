@@ -19,7 +19,7 @@ void dm_render_command_bind_buffer(dm_buffer* buffer, uint32_t slot);
 
 void dm_render_command_bind_texture(dm_image* image, uint32_t slot);
 
-void dm_render_command_bind_uniforms(dm_render_pass* render_pass);
+void dm_render_command_bind_uniforms(uint32_t slot, dm_render_pass* render_pass);
 
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_render_pass* render_pass);
 void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass);
