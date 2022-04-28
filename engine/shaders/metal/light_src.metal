@@ -42,10 +42,10 @@ vertex vertex_out vertex_main(
 }
 
 fragment float4 fragment_main(
-	vertex_out v_in [[stage_in]],
-	constant Uniform& uniforms [[buffer(2)]]
+	vertex_out v_in [[stage_in]]
+	//constant Uniform& uniforms [[buffer(2)]]
 )
 {
-	return uniforms.object_diffuse;
-	//return float4(0,1,0,1);
+	//return uniforms.object_diffuse;
+	return float4(0,1,0,1);
 }
