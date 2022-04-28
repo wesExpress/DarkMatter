@@ -621,6 +621,7 @@ bool dm_renderer_bind_uniforms_impl(uint32_t slot, dm_render_pass* render_pass)
 		//dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, aligned_size);
 		internal_pass->uniform_buffer = [renderer.device newBufferWithBytes:buffer_data length:aligned_size options:MTLResourceOptionCPUCacheModeDefault];
 		[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:slot];
+		[renderer.command_encoder setFragmentBuffer:internal_pass->uniform_buffer offset:0 atIndex:0];
 	}
 
 	return true;
