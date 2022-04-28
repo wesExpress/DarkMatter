@@ -371,7 +371,8 @@ bool dm_light_src_pass()
                 dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1);
                 dm_render_command_bind_uniforms(light_src_pass);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
-                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
+                //dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
+                dm_render_command_draw_arrays(mesh->vertex_offset, 36);
             }
         }
     }

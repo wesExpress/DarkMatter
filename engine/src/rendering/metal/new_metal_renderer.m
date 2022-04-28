@@ -518,7 +518,7 @@ void dm_renderer_clear_impl(dm_color clear_color)
 
 void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass)
 {
-	
+	[renderer.command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:start vertexCount:count];
 }
 
 void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass)
