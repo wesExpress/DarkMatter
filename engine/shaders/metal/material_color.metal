@@ -4,9 +4,9 @@ using namespace metal;
 
 struct vertex_in
 {
-	float3 position;
-	float3 normal;
-	float2 tex_coords;
+	packed_float3 position;
+	packed_float3 normal;
+	packed_float2 tex_coords;
 };
 
 struct vertex_inst
@@ -72,5 +72,6 @@ fragment float4 fragment_main(vertex_out v_in [[stage_in]], constant Uniform& un
 	float spec = pow(max(dot(view_dir, reflect_dir), 0.0f), uniforms.shininess);
 	float3 specular = (uniforms.light_specular * spec * uniforms.object_specular).rgb;
 
-	return float4((ambient + diffuse + specular), 1.0f);
+	//return float4((ambient + diffuse + specular), 1.0f);
+	return uniforms.object_diffuse;
 }

@@ -394,7 +394,7 @@ bool dm_renderer_begin_frame()
 	    material render passes
 	*******************************/
     if(!dm_material_pass()) return false;
-    if(!dm_material_color_pass()) return false;
+    //if(!dm_material_color_pass()) return false;
     
     //dm_renderer_test_func();
     
@@ -406,7 +406,7 @@ bool dm_renderer_end_frame()
 	/**********************
 	  light source render pass
 	****************************/
-    if(!dm_light_src_pass()) return false;
+    //if(!dm_light_src_pass()) return false;
     
     dm_renderer_submit_command_buffer();
 	dm_renderer_clear_command_buffer();
