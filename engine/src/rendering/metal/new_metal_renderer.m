@@ -124,10 +124,9 @@ ENUM CONVERSION
 BUFFER
 ********/
 
-bool dm_metal_create_buffer(dm_buffer* buffer, void* data)
+dm_internal_buffer* dm_metal_create_buffer(dm_buffer* buffer, void* data)
 {
-	buffer->internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
-	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
+	dm_internal_buffer* internal_buffer = dm_alloc(sizeof(dm_internal_buffer), DM_MEM_RENDERER_BUFFER);
 
 	if(data)
 	{
@@ -149,7 +148,7 @@ bool dm_metal_create_buffer(dm_buffer* buffer, void* data)
 		renderer.active_index_buffer = buffer;
 	}
 
-	return true;
+	return internal_buffer;
 }
 
 void dm_metal_destroy_buffer(dm_buffer* buffer)
@@ -161,20 +160,19 @@ void dm_metal_destroy_buffer(dm_buffer* buffer)
 SHADER
 ********/
 
-bool dm_metal_create_shader(dm_shader* shader)
+dm_internal_shader* dm_metal_create_shader(dm_shader* shader)
 {
 	char file_buffer[256];
 	sprintf(file_buffer, "shaders/metal/%s.metallib", shader->pass);
 
 	NSString* shader_file = [NSString stringWithUTF8String:file_buffer];
-	shader->internal_shader = dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDER_PASS);
-	dm_internal_shader* internal_shader = shader->internal_shader;
+	dm_internal_shader* internal_shader = dm_alloc(sizeof(dm_internal_shader), DM_MEM_RENDER_PASS);
 		
 	internal_shader->library = [renderer.device newLibraryWithFile:shader_file error:NULL];
 	if(!internal_shader->library)
 	{
 		DM_LOG_FATAL("Could not create metal library from file %s", [shader_file UTF8String]);
-		return false;
+		return NULL;
 	}
 
 	for(uint32_t i=0; i<shader->num_stages; i++)
@@ -200,26 +198,25 @@ bool dm_metal_create_shader(dm_shader* shader)
 	if(!internal_shader->vertex_func)
 	{
 		DM_LOG_FATAL("Could not create vertex function from shader: %s", shader->pass);
-		return false;
+		return NULL;
 	}
 
 	if(!internal_shader->fragment_func)
 	{
 		DM_LOG_FATAL("Could not create fragment function from shader: %s", shader->pass);
-		return false;
+		return NULL;
 	}
 
-	return true;
+	return internal_shader;
 }
 
 /*******
 TEXTURE
 *********/
 
-bool dm_metal_create_texture(dm_image* image)
+dm_internal_texture* dm_metal_create_texture(dm_image* image)
 {
-	image->internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
-	dm_internal_texture* internal_texture = image->internal_texture;
+	dm_internal_texture* internal_texture = dm_alloc(sizeof(dm_internal_texture), DM_MEM_RENDERER_TEXTURE);
 
 	MTLTextureDescriptor* texture_desc = [[MTLTextureDescriptor alloc] init];
 
@@ -248,7 +245,7 @@ bool dm_metal_create_texture(dm_image* image)
 	[command_buffer commit];
 	[command_buffer waitUntilCompleted];
 
-	return true;
+	return internal_texture;
 }
 
 void dm_metal_destroy_texture(dm_image* image)
@@ -333,19 +330,22 @@ bool dm_renderer_begin_frame_impl()
 {
 	MTLCommandBufferDescriptor* desc = [MTLCommandBufferDescriptor new];
 	desc.errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
- 
-	renderer.metal_view.drawable = [renderer.metal_view.metal_layer nextDrawable];
 	renderer.command_buffer = [renderer.command_queue commandBufferWithDescriptor:desc];
+	renderer.metal_view.drawable = [renderer.metal_view.metal_layer nextDrawable];
 
 	return true;
 }
 
 bool dm_renderer_end_frame_impl()
 {
-	[renderer.command_buffer presentDrawable:renderer.metal_view.drawable];
-	[renderer.command_buffer commit];
+	if(renderer.metal_view.drawable)
+	{
+		[renderer.command_buffer presentDrawable:renderer.metal_view.drawable];
+	}
 
-	return true;
+	[renderer.command_buffer commit];
+	
+return true;
 }
 
 bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout layout)
@@ -353,7 +353,10 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	render_pass->internal_pass = dm_alloc(sizeof(dm_internal_pass), DM_MEM_RENDER_PASS);
 	dm_internal_pass* internal_pass = render_pass->internal_pass;
 
-	if(!dm_metal_create_shader(&render_pass->shader)) return false;
+	render_pass->shader.internal_shader = dm_metal_create_shader(&render_pass->shader);
+	//if(!dm_metal_create_shader(&render_pass->shader)) return false;
+	if (!render_pass->shader.internal_shader) return false;
+
 	dm_internal_shader* internal_shader = render_pass->shader.internal_shader;
 
 	// pipeline state
@@ -391,7 +394,9 @@ void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
 
 bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data)
 {
-	return dm_metal_create_buffer(buffer, data);
+	buffer->internal_buffer = dm_metal_create_buffer(buffer, data);
+
+	return (buffer->internal_buffer != NULL);
 }
 
 void dm_renderer_delete_buffer_impl(dm_buffer* buffer)
@@ -401,7 +406,9 @@ void dm_renderer_delete_buffer_impl(dm_buffer* buffer)
 
 bool dm_create_texture_impl(dm_image* image)
 {
-	return dm_metal_create_texture(image);
+	image->internal_texture = dm_metal_create_texture(image);
+	
+	return (image->internal_texture != NULL);
 }
 
 void dm_destroy_texture_impl(dm_image* image)
@@ -473,42 +480,48 @@ RENDER COMMANDS
 
 bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 {
-	dm_internal_pass* internal_pass = render_pass->internal_pass;
+	if(renderer.metal_view.drawable)
+	{
+		dm_internal_pass* internal_pass = render_pass->internal_pass;
 
-    // render pass descriptor
-    MTLRenderPassDescriptor* passDescriptor = [renderer.metal_view currentRenderPassDescriptor];
+		// render pass descriptor
+    	MTLRenderPassDescriptor* passDescriptor = [renderer.metal_view currentRenderPassDescriptor];
+		if(!passDescriptor)
+		{
+			DM_LOG_ERROR("NULL pass descriptor!");
+		}
 
-    renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
+    	renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
 	
-	[renderer.command_encoder setRenderPipelineState:internal_pass->pipeline_state];
-	[renderer.command_encoder setDepthStencilState:renderer.depth_stencil_state];
-	[renderer.command_encoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
-    [renderer.command_encoder setCullMode:MTLCullModeBack];
-	[renderer.command_encoder setFragmentSamplerState:renderer.sampler_state atIndex:0];
-	[renderer.command_encoder setViewport:renderer.active_viewport];
-
+		[renderer.command_encoder setRenderPipelineState:internal_pass->pipeline_state];
+		[renderer.command_encoder setDepthStencilState:renderer.depth_stencil_state];
+		[renderer.command_encoder setFrontFacingWinding:MTLWindingCounterClockwise]; 
+    	[renderer.command_encoder setCullMode:MTLCullModeBack];
+		[renderer.command_encoder setFragmentSamplerState:renderer.sampler_state atIndex:0];
+		[renderer.command_encoder setViewport:renderer.active_viewport];
+	}
 	return true;
 }
 
 void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass)
 {
-	[renderer.command_encoder endEncoding];
+	if(renderer.metal_view.drawable)
+	{
+		[renderer.command_encoder endEncoding];
+	}
 }
 
 void dm_renderer_set_viewport_impl(dm_viewport viewport)
 {
-	if(renderer.metal_view.drawable)
-	{
-    	MTLViewport new_viewport;
-    	new_viewport.originX = viewport.x;
-    	new_viewport.originY = viewport.y;
-    	new_viewport.width = viewport.width;
-    	new_viewport.height = viewport.height;
-    	new_viewport.znear = viewport.min_depth;
-    	new_viewport.zfar = viewport.max_depth;
-		
-		renderer.active_viewport = new_viewport;
-	}
+    MTLViewport new_viewport;
+    new_viewport.originX = viewport.x;
+    new_viewport.originY = viewport.y;
+    new_viewport.width = viewport.width;
+    new_viewport.height = viewport.height;
+    new_viewport.znear = viewport.min_depth;
+    new_viewport.zfar = viewport.max_depth;
+	
+	renderer.active_viewport = new_viewport;
 }
 
 void dm_renderer_clear_impl(dm_color clear_color)
@@ -518,7 +531,10 @@ void dm_renderer_clear_impl(dm_color clear_color)
 
 void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass)
 {
-	[renderer.command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:start vertexCount:count];
+	if(renderer.metal_view.drawable)
+	{
+		[renderer.command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:start vertexCount:count];
+	}
 }
 
 void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass)
@@ -552,38 +568,46 @@ bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_s
 
 bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
 {
-	dm_internal_buffer* internal_buffer = buffer->internal_buffer;
-	[renderer.command_encoder setVertexBuffer:internal_buffer->buffer offset:0 atIndex:slot];
-
+	if(renderer.metal_view.drawable)
+	{
+		dm_internal_buffer* internal_buffer = buffer->internal_buffer;
+		[renderer.command_encoder setVertexBuffer:internal_buffer->buffer offset:0 atIndex:slot];
+	}
 	return true;
 }
 
 bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot)
 {
-	dm_internal_texture* internal_texture = image->internal_texture;
-	[renderer.command_encoder setFragmentTexture:internal_texture->texture atIndex:slot];
+	if(renderer.metal_view.drawable)
+	{
+		dm_internal_texture* internal_texture = image->internal_texture;
+		[renderer.command_encoder setFragmentTexture:internal_texture->texture atIndex:slot];
+	}
 
 	return true;
 }
 
 bool dm_renderer_bind_uniforms_impl(dm_render_pass* render_pass)
 {
-	dm_internal_pass* internal_pass = render_pass->internal_pass;
-
-	size_t buffer_size = 0;
-	void* buffer_data = NULL;
-	dm_for_map_item(render_pass->uniforms)
+	if(renderer.metal_view.drawable)
 	{
-		dm_uniform* uniform = item->value;
-		
-		buffer_data = dm_realloc(buffer_data, buffer_size + uniform->data_size);
-		void* dest = (char*)buffer_data + buffer_size;
-		dm_memcpy(dest, uniform->data, uniform->data_size);
-		buffer_size += uniform->data_size;
-	}
+		dm_internal_pass* internal_pass = render_pass->internal_pass;
 
-	dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT));
-	[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:2];
+		size_t buffer_size = 0;
+		void* buffer_data = NULL;
+		dm_for_map_item(render_pass->uniforms)
+		{
+			dm_uniform* uniform = item->value;
+		
+			buffer_data = dm_realloc(buffer_data, buffer_size + uniform->data_size);
+			void* dest = (char*)buffer_data + buffer_size;
+			dm_memcpy(dest, uniform->data, uniform->data_size);
+			buffer_size += uniform->data_size;
+		}
+
+		dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT));
+		[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:2];
+	}
 
 	return true;
 }
