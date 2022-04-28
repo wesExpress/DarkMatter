@@ -53,7 +53,7 @@ vertex vertex_out vertex_main(
 	return v_out;
 }
 
-fragment float4 fragment_main(vertex_out v_in [[stage_in]], texture2d<float> diffuse_map[[texture(0)]], texture2d<float> specular_map[[texture(1)]], constant Uniform& uniforms [[buffer(2)]], sampler samplr [[sampler(0)]])
+fragment float4 fragment_main(vertex_out v_in [[stage_in]], texture2d<float> diffuse_map[[texture(0)]], texture2d<float> specular_map[[texture(1)]], constant Uniform& uniforms [[buffer(0)]], sampler samplr [[sampler(0)]])
 {
 	float3 norm_normal = normalize(v_in.normal);
 	float3 light_dir = normalize(uniforms.light_pos - v_in.frag_pos);

@@ -383,7 +383,7 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	}
 	
 	size_t aligned_size = dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT);
-	//internal_pass->uniform_buffer = [renderer.device newBufferWithLength:aligned_size options:MTLResourceOptionCPUCacheModeDefault];
+	internal_pass->uniform_buffer = [renderer.device newBufferWithLength:aligned_size options:MTLResourceOptionCPUCacheModeDefault];
 
 	return true;
 }
@@ -618,8 +618,7 @@ bool dm_renderer_bind_uniforms_impl(uint32_t slot, dm_render_pass* render_pass)
 		}
 
 		size_t aligned_size = dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT);
-		//dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, aligned_size);
-		internal_pass->uniform_buffer = [renderer.device newBufferWithBytes:buffer_data length:aligned_size options:MTLResourceOptionCPUCacheModeDefault];
+		dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, aligned_size);
 		[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:slot];
 		[renderer.command_encoder setFragmentBuffer:internal_pass->uniform_buffer offset:0 atIndex:0];
 	}
