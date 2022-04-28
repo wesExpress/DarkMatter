@@ -367,12 +367,12 @@ bool dm_light_src_pass()
                 if(!dm_set_uniform("object_diffuse", &light_src->diffuse, light_src_pass)) return false;
                 
                 dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
-                dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0);
-                dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1);
-                dm_render_command_bind_uniforms(light_src_pass);
+                //dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0);
+                //dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1);
+                //dm_render_command_bind_uniforms(light_src_pass);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
                 //dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
-                dm_render_command_draw_arrays(mesh->vertex_offset, 36);
+                dm_render_command_draw_arrays(mesh->vertex_offset, 36, light_src_pass);
             }
         }
     }
