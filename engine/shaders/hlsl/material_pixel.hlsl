@@ -28,13 +28,13 @@ float4 p_main(PS_INPUT input) : SV_Target
     float3 view_dir = normalize(view_pos - input.frag_pos);
     float3 reflect_dir = reflect(-light_dir, norm_normal);
     
-    float3 ambient = light_ambient * diffuse_map.Sample(sample_state, input.tex_coords);
+    float3 ambient = (light_ambient * diffuse_map.Sample(sample_state, input.tex_coords)).xyz;
 
     float diff = max(dot(norm_normal, light_dir), 0.0f);
-    float3 diffuse = light_diffuse * diff * diffuse_map.Sample(sample_state, input.tex_coords);
+    float3 diffuse = (light_diffuse * diff * diffuse_map.Sample(sample_state, input.tex_coords)).xyz;
     
     float spec = pow(max(dot(view_dir, reflect_dir), 0.0), shininess);
-    float3 specular = light_specular * spec * specular_map.Sample(sample_state, input.tex_coords);
+    float3 specular = (light_specular * spec * specular_map.Sample(sample_state, input.tex_coords)).xyz;
     
     return float4((ambient + diffuse + specular), 1.0f);
 }

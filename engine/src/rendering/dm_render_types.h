@@ -420,7 +420,6 @@ typedef struct dm_render_pipeline
     dm_raster_state_desc raster_desc;
     dm_sampler_desc sampler_desc;
     bool wireframe;
-    void* internal_pipeline;
 } dm_render_pipeline;
 
 typedef struct dm_render_pass

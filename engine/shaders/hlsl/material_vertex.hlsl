@@ -35,7 +35,7 @@ VS_OUTPUT v_main(VS_INPUT input)
     
 	output.normal = input.normal;    
 	output.tex_coords = input.tex_coords;
-    output.frag_pos = mul(float4(input.position, 1.0f), input.model);
+    output.frag_pos = mul(float4(input.position, 1.0f), input.model).xyz;
     
     return output;
 }

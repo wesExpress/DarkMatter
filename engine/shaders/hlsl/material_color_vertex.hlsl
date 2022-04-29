@@ -4,8 +4,6 @@ struct VS_INPUT
     float3 normal      : NORMAL;
     float2 tex_coords  : TEXCOORD;
     matrix model       : MODEL;
-	float3 diffuse     : COLOR;
-	float3 specular    : COLOR1;
     uint   instance_id : SV_InstanceID;
 };
 
@@ -15,8 +13,6 @@ struct VS_OUTPUT
     float3 normal     : NORMAL2;
     float2 tex_coords : TEXCOORD2;
     float3 frag_pos   : POSITION2;
-	float3 diffuse    : COLOR2;
-	float3 specular   : COLOR3;
 };
 
 cbuffer object_uniform : register(b0)
@@ -25,6 +21,8 @@ cbuffer object_uniform : register(b0)
     float4 light_ambient;
     float4 light_diffuse;
     float4 light_specular;
+	float4 object_diffuse;
+	float4 object_specular;
     float3 light_pos;
 	float shininess;
 	float3 view_pos;
@@ -39,10 +37,7 @@ VS_OUTPUT v_main(VS_INPUT input)
     
     output.normal = input.normal;
     output.tex_coords = input.tex_coords;
-    output.frag_pos = mul(float4(input.position, 1.0f), input.model);
+    output.frag_pos = mul(float4(input.position, 1.0f), input.model).xyz;
  
-	output.diffuse = input.diffuse;
-	output.specular = input.specular;
-   
     return output;
 }
