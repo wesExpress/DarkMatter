@@ -318,7 +318,7 @@ bool dm_material_color_pass()
                 if(!dm_set_uniform("object_diffuse", &color->diffuse, material_color_pass)) return false;
                 if(!dm_set_uniform("object_specular", &color->specular, material_color_pass)) return false;
                 
-                dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
+                //dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
                 dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0, material_color_pass);
                 dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1, material_color_pass);
                 dm_render_command_bind_uniforms(2, material_color_pass);
