@@ -100,14 +100,23 @@
 
 - (void) keyDown: (NSEvent*) event
 {
-    dm_key_code key = dm_translate_key_code((uint32_t)[event keyCode]);
-    dm_event_dispatch((dm_event){ DM_KEY_DOWN_EVENT, NULL, &key });
+	dm_key_code key = dm_translate_key_code((uint32_t)[event keyCode]);
+	dm_event_dispatch((dm_event){ DM_KEY_DOWN_EVENT, NULL, &key });
 }
 
 - (void) keyUp: (NSEvent*) event
 {
     dm_key_code key = dm_translate_key_code((uint32_t)[event keyCode]);
     dm_event_dispatch((dm_event){ DM_KEY_UP_EVENT, NULL, &key});
+}
+
+- (void) flagsChanged:(NSEvent*)event
+{
+	dm_key_code key;
+	if([event modifierFlags] & NSEventModifierFlagShift)
+	{
+		key = DM_KEY_LSHIFT;
+	}
 }
 
 - (void) scrollWheel: (NSEvent*) event
