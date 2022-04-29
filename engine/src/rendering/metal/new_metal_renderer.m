@@ -35,6 +35,7 @@ typedef struct dm_internal_shader
 typedef struct dm_internal_pass
 {
 	id<MTLRenderPipelineState> pipeline_state;
+	id<MTLRenderCommandEncoder> command_encoder;
 	id<MTLBuffer> uniform_buffer;
 } dm_internal_pass;
 
@@ -74,9 +75,8 @@ typedef struct dm_internal_pass
 	MTLRenderPassDescriptor* desc = [MTLRenderPassDescriptor renderPassDescriptor];
 	
 	desc.colorAttachments[0].texture = [_drawable texture];
-	desc.colorAttachments[0].clearColor = MTLClearColorMake(_clear_color.x, _clear_color.y, _clear_color.z, _clear_color.w);
 	desc.colorAttachments[0].storeAction = MTLStoreActionStore;
-	desc.colorAttachments[0].loadAction = MTLLoadActionClear;
+	desc.colorAttachments[0].loadAction = MTLLoadActionLoad;
 
 	return desc;
 }
@@ -91,7 +91,6 @@ typedef struct dm_metal_renderer
 	
 	id<MTLCommandQueue> command_queue;
 	id<MTLCommandBuffer> command_buffer;
-	id<MTLRenderCommandEncoder> command_encoder;
 	
 	id<MTLDepthStencilState> depth_stencil_state;
 	id<MTLSamplerState> sampler_state;
@@ -493,6 +492,7 @@ void dm_destroy_texture_impl(dm_image* image)
 	dm_metal_destroy_texture(image);
 }
 
+/*
 bool dm_renderer_test_func()
 {
 	// vertices
@@ -560,6 +560,7 @@ bool dm_renderer_test_func()
 
 	return true;
 }
+*/
 
 /***************
 RENDER COMMANDS
@@ -573,19 +574,14 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 
 		// render pass descriptor
 		MTLRenderPassDescriptor* passDescriptor = [renderer.metal_view currentRenderPassDescriptor];
-		if(!passDescriptor)
-		{
-			DM_LOG_ERROR("NULL pass descriptor!");
-		}
 
-		renderer.command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
+		internal_pass->command_encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
 	
-		[renderer.command_encoder setRenderPipelineState:internal_pass->pipeline_state];
-		[renderer.command_encoder setDepthStencilState:renderer.depth_stencil_state];
-		[renderer.command_encoder setFrontFacingWinding:renderer.winding]; 
-		[renderer.command_encoder setCullMode:renderer.cull_mode];
-		[renderer.command_encoder setFragmentSamplerState:renderer.sampler_state atIndex:0];
-		[renderer.command_encoder setViewport:renderer.active_viewport];
+		[internal_pass->command_encoder setRenderPipelineState:internal_pass->pipeline_state];
+		[internal_pass->command_encoder setDepthStencilState:renderer.depth_stencil_state];
+		[internal_pass->command_encoder setFrontFacingWinding:renderer.winding]; 
+		[internal_pass->command_encoder setCullMode:renderer.cull_mode];
+		[internal_pass->command_encoder setFragmentSamplerState:renderer.sampler_state atIndex:0];
 	}
 	return true;
 }
@@ -594,33 +590,53 @@ void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass)
 {
 	if(renderer.metal_view.drawable)
 	{
-		[renderer.command_encoder endEncoding];
+		dm_internal_pass* internal_pass = render_pass->internal_pass;
+
+		[internal_pass->command_encoder endEncoding];
 	}
 }
 
 void dm_renderer_set_viewport_impl(dm_viewport viewport)
 {
-	MTLViewport new_viewport;
-	new_viewport.originX = viewport.x;
-	new_viewport.originY = viewport.y;
-	new_viewport.width = viewport.width;
-	new_viewport.height = viewport.height;
-	new_viewport.znear = viewport.min_depth;
-	new_viewport.zfar = viewport.max_depth;
+	if(renderer.metal_view.drawable)
+	{
+		MTLViewport new_viewport;
+		new_viewport.originX = viewport.x;
+		new_viewport.originY = viewport.y;
+		new_viewport.width = viewport.width;
+		new_viewport.height = viewport.height;
+		new_viewport.znear = viewport.min_depth;
+		new_viewport.zfar = viewport.max_depth;
 
-	renderer.active_viewport = new_viewport;
+		MTLRenderPassDescriptor* pass_descriptor = [renderer.metal_view currentRenderPassDescriptor];
+		id<MTLRenderCommandEncoder> encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:pass_descriptor];
+		[encoder setViewport:new_viewport];
+		[encoder endEncoding];
+	}
 }
 
 void dm_renderer_clear_impl(dm_color clear_color)
 {
-	renderer.metal_view.clear_color = clear_color;
+	if(renderer.metal_view.drawable)
+	{
+		MTLRenderPassDescriptor *passDescriptor = [MTLRenderPassDescriptor renderPassDescriptor];
+		passDescriptor.colorAttachments[0].texture = [renderer.metal_view.drawable texture];
+		passDescriptor.colorAttachments[0].loadAction = MTLLoadActionClear;
+		passDescriptor.colorAttachments[0].storeAction = MTLStoreActionStore;
+		passDescriptor.colorAttachments[0].clearColor = MTLClearColorMake(clear_color.x, clear_color.y, clear_color.z, clear_color.w);
+
+		id<MTLRenderCommandEncoder> encoder = [renderer.command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
+		[encoder endEncoding];
+	}
 }
 
 void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass)
 {
 	if(renderer.metal_view.drawable)
 	{
-		[renderer.command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:start vertexCount:count];
+		dm_internal_pass* internal_pass = render_pass->internal_pass;
+
+		[internal_pass->command_encoder drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:start vertexCount:count];
 	}
 }
 
@@ -628,9 +644,10 @@ void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, 
 {
 	if(renderer.metal_view.drawable)
 	{
+		dm_internal_pass* internal_pass = render_pass->internal_pass;
 		dm_internal_buffer* index_buffer = renderer.active_index_buffer->internal_buffer;
 
-		[renderer.command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:index_buffer->buffer indexBufferOffset:index_offset];
+		[internal_pass->command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:index_buffer->buffer indexBufferOffset:index_offset*sizeof(dm_index_t)];
 	}
 }
 
@@ -638,9 +655,10 @@ void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, u
 {
 	if(renderer.metal_view.drawable)
 	{
+		dm_internal_pass* internal_pass = render_pass->internal_pass;
 		dm_internal_buffer* index_buffer = renderer.active_index_buffer->internal_buffer;
 
-		[renderer.command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:index_buffer->buffer indexBufferOffset:index_offset instanceCount:num_insts];
+		[internal_pass->command_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:index_buffer->buffer indexBufferOffset:index_offset instanceCount:num_insts];
 	}
 }
 
@@ -653,22 +671,26 @@ bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_s
 	return true;
 }
 
-bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
+bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot, dm_render_pass* render_pass)
 {
 	if(renderer.metal_view.drawable)
 	{
+		dm_internal_pass* internal_pass = render_pass->internal_pass;
 		dm_internal_buffer* internal_buffer = buffer->internal_buffer;
-		[renderer.command_encoder setVertexBuffer:internal_buffer->buffer offset:0 atIndex:slot];
+		
+		[internal_pass->command_encoder setVertexBuffer:internal_buffer->buffer offset:0 atIndex:slot];
 	}
 	return true;
 }
 
-bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot)
+bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot, dm_render_pass* render_pass)
 {
 	if(renderer.metal_view.drawable)
 	{
+		dm_internal_pass* internal_pass = render_pass->internal_pass;
 		dm_internal_texture* internal_texture = image->internal_texture;
-		[renderer.command_encoder setFragmentTexture:internal_texture->texture atIndex:slot];
+		
+		[internal_pass->command_encoder setFragmentTexture:internal_texture->texture atIndex:slot];
 	}
 
 	return true;
@@ -694,8 +716,8 @@ bool dm_renderer_bind_uniforms_impl(uint32_t slot, dm_render_pass* render_pass)
 
 		size_t aligned_size = dm_metal_align(buffer_size, DM_METAL_BUFFER_ALIGNMENT);
 		dm_memcpy([internal_pass->uniform_buffer contents], buffer_data, aligned_size);
-		[renderer.command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:slot];
-		[renderer.command_encoder setFragmentBuffer:internal_pass->uniform_buffer offset:0 atIndex:0];
+		[internal_pass->command_encoder setVertexBuffer:internal_pass->uniform_buffer offset:0 atIndex:slot];
+		[internal_pass->command_encoder setFragmentBuffer:internal_pass->uniform_buffer offset:0 atIndex:0];
 	}
 
 	return true;

@@ -12,17 +12,15 @@ struct vertex_in
 struct vertex_inst
 {
 	float4x4 model;
-	//float3 diffuse;
-	//float3 specular;
 };
 
 struct vertex_out
 {
 	float4 position[[position]];
 	float3 normal;
+	float3 diffuse;
 	float2 tex_coords;
 	float3 frag_pos;
-	float3 diffuse;
 	float3 specular;
 };
 
@@ -32,10 +30,10 @@ struct Uniform
 	float4 light_ambient;
 	float4 light_diffuse;
 	float4 light_specular;
-	float3 light_pos;
-	float shininess;
 	float4 object_diffuse;
 	float4 object_specular;
+	float3 light_pos;
+	float shininess;
 	float3 view_pos;
 };
 
@@ -72,6 +70,6 @@ fragment float4 fragment_main(vertex_out v_in [[stage_in]], constant Uniform& un
 	float spec = pow(max(dot(view_dir, reflect_dir), 0.0f), uniforms.shininess);
 	float3 specular = (uniforms.light_specular * spec * uniforms.object_specular).rgb;
 
-	//return float4((ambient + diffuse + specular), 1.0f);
-	return uniforms.object_diffuse;
+	return float4((ambient + diffuse + specular), 1.0f);
+	//return uniforms.object_diffuse;
 }

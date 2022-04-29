@@ -254,10 +254,10 @@ bool dm_material_pass()
                 if(!dm_set_uniform("shininess", &material->shininess, material_pass)) return false;
                 
                 dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
-                dm_render_command_bind_texture(diffuse_map, 0);
-                dm_render_command_bind_texture(specular_map, 1);
-                dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0);
-                dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1);
+                dm_render_command_bind_texture(diffuse_map, 0, material_pass);
+                dm_render_command_bind_texture(specular_map, 1, material_pass);
+                dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0, material_pass);
+                dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1, material_pass);
                 dm_render_command_bind_uniforms(2, material_pass);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
                 dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_pass);
@@ -319,8 +319,8 @@ bool dm_material_color_pass()
                 if(!dm_set_uniform("object_specular", &color->specular, material_color_pass)) return false;
                 
                 dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
-                dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0);
-                dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1);
+                dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0, material_color_pass);
+                dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1, material_color_pass);
                 dm_render_command_bind_uniforms(2, material_color_pass);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
                 dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass);
@@ -368,8 +368,8 @@ bool dm_light_src_pass()
                 if(!dm_set_uniform("object_diffuse", &light_src->diffuse, light_src_pass)) return false;
                 
                 dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
-                dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0);
-                dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1);
+                dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0, light_src_pass);
+                dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1, light_src_pass);
                 dm_render_command_bind_uniforms(2, light_src_pass);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
                 dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
@@ -445,7 +445,7 @@ void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_dat
     mesh.is_indexed = is_indexed;
     mesh.entities = dm_list_create(sizeof(uint32_t), 0);
     
-    dm_map_insert(mesh_map, tag, &mesh);
+    dm_map_insert(mesh_map, (void*)tag, &mesh);
     
 	for (uint32_t i = 0; i < num_vertices; i++)
 	{

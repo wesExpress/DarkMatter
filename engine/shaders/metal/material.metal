@@ -61,6 +61,6 @@ fragment float4 fragment_main(vertex_out v_in [[stage_in]], texture2d<float> dif
 	float spec = pow(max(dot(view_dir, reflect_dir), 0.0f), uniforms.shininess);
 	float3 specular = (uniforms.light_specular * spec * specular_map.sample(samplr, v_in.tex_coords)).rgb;
 
-	//return float4((ambient + diffuse + specular), 1.0f);
-	return diffuse_map.sample(samplr, v_in.tex_coords);
+	return float4((ambient + diffuse + specular), 1.0f);
+	//return diffuse_map.sample(samplr, v_in.tex_coords);
 }

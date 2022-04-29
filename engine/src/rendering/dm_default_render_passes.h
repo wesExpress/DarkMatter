@@ -130,7 +130,7 @@ bool dm_renderer_create_material_color_pass()
     shader.num_stages = sizeof(stages) / sizeof(stages[0]);
     
     dm_uniform uniforms[] = {
-        vp, light_ambient, light_diffuse, light_specular, light_pos, shiny, obj_diffuse, obj_specular, view_pos
+        vp, light_ambient, light_diffuse, light_specular, obj_diffuse, obj_specular, light_pos, shiny, view_pos
     };
     
     if(!dm_renderer_create_render_pass(shader, layout, uniforms, sizeof(uniforms) / sizeof(dm_uniform),  "material_color"))

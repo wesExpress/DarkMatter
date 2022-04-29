@@ -286,12 +286,6 @@ typedef struct dm_buffer_update_packet
     void* data;
 } dm_buffer_update_packet;
 
-typedef struct dm_buffer_bind_packet
-{
-    dm_buffer* buffer;
-    uint32_t slot;
-} dm_buffer_bind_packet;
-
 // uniform
 
 typedef struct dm_uniform_desc
