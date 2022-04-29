@@ -68,6 +68,7 @@ dm_vertex_attrib_desc model_attrib_desc = {
 	.normalized = false
 };
 
+/*
 // diffuse
 dm_vertex_attrib_desc diffuse_attrib_desc = {
 #ifdef DM_OPENGL
@@ -97,5 +98,5 @@ dm_vertex_attrib_desc specular_attrib_desc = {
     .index = 1,
 	.normalized = false,
 };
-
+*/
 #endif

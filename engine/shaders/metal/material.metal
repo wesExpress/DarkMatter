@@ -4,9 +4,9 @@ using namespace metal;
 
 struct vertex_in
 {
-	float3 position;
-	float3 normal;
-	float2 tex_coords;
+	packed_float3 position;
+	packed_float3 normal;
+	packed_float2 tex_coords;
 };
 
 struct vertex_inst
@@ -16,7 +16,7 @@ struct vertex_inst
 
 struct vertex_out
 {
-	float4 position[[position]];
+	float4 position [[position]];
 	float3 normal;
 	float2 tex_coords;
 	float3 frag_pos;
@@ -33,12 +33,7 @@ struct Uniform
 	float3 view_pos;
 };
 
-vertex vertex_out vertex_main(
-	const device vertex_in* vertices[[buffer(0)]],
-	const device vertex_inst* instance_data [[buffer(1)]],
-	constant Uniform& uniforms [[buffer(2)]],
-	uint vid[[vertex_id]],
-	uint instid[[instance_id]]
+vertex vertex_out vertex_main(const device vertex_in* vertices [[buffer(0)]], const device vertex_inst* instance_data [[buffer(1)]], constant Uniform& uniforms [[buffer(2)]], uint vid[[vertex_id]], uint instid[[instance_id]]
 )
 {
 	vertex_out v_out;
@@ -51,7 +46,7 @@ vertex vertex_out vertex_main(
 	return v_out;
 }
 
-fragment float4 fragment_main(vertex_out v_in [[stage_in]], texture2d<float> diffuse_map[[texture(0)]], texture2d<float> specular_map[[texture(1)]], constant Uniform& uniforms [[buffer(2)]], sampler samplr [[sampler(0)]])
+fragment float4 fragment_main(vertex_out v_in [[stage_in]], texture2d<float> diffuse_map[[texture(0)]], texture2d<float> specular_map[[texture(1)]], constant Uniform& uniforms [[buffer(0)]], sampler samplr [[sampler(0)]])
 {
 	float3 norm_normal = normalize(v_in.normal);
 	float3 light_dir = normalize(uniforms.light_pos - v_in.frag_pos);
@@ -67,4 +62,5 @@ fragment float4 fragment_main(vertex_out v_in [[stage_in]], texture2d<float> dif
 	float3 specular = (uniforms.light_specular * spec * specular_map.sample(samplr, v_in.tex_coords)).rgb;
 
 	return float4((ambient + diffuse + specular), 1.0f);
+	//return diffuse_map.sample(samplr, v_in.tex_coords);
 }

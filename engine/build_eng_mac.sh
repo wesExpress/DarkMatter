@@ -60,4 +60,8 @@ if [ "$opengl" -eq 0 ]; then
 	echo "Compiling light source shader..."
 	xcrun -sdk macosx metal $SRC_DIR/engine/shaders/metal/light_src.metal -c -o $SRC_DIR/engine/shaders/metal/light_src.air
 	xcrun -sdk macosx metallib $SRC_DIR/engine/shaders/metal/light_src.air -o $SRC_DIR/engine/shaders/metal/light_src.metallib
+
+	echo "Compiling test shader..."
+	xcrun -sdk macosx metal $SRC_DIR/engine/shaders/metal/test.metal -c -o $SRC_DIR/engine/shaders/metal/test.air
+	xcrun -sdk macosx metallib $SRC_DIR/engine/shaders/metal/test.air -o $SRC_DIR/engine/shaders/metal/test.metallib
 fi

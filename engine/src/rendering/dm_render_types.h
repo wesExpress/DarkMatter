@@ -21,8 +21,8 @@ typedef struct dm_vertex
 typedef struct dm_vertex_inst
 {
     dm_mat4 model;
-    dm_color diffuse;
-    dm_color specular;
+    //dm_color diffuse;
+    //dm_color specular;
 } dm_vertex_inst;
 
 typedef uint32_t             dm_index_t;
@@ -228,7 +228,7 @@ typedef enum dm_render_command_type
     DM_RENDER_COMMAND_UPDATE_BUFFER,
     DM_RENDER_COMMAND_BIND_BUFFER,
     DM_RENDER_COMMAND_BIND_TEXTURE,
-    DM_RENDER_COMMAND_BIND_UNIFORM,
+    DM_RENDER_COMMAND_BIND_UNIFORMS,
     DM_RENDER_COMMAND_DRAW_ARRAYS,
     DM_RENDER_COMMAND_DRAW_INDEXED,
     DM_RENDER_COMMAND_DRAW_INSTANCED,
@@ -285,12 +285,6 @@ typedef struct dm_buffer_update_packet
     size_t data_size;
     void* data;
 } dm_buffer_update_packet;
-
-typedef struct dm_buffer_bind_packet
-{
-    dm_buffer* buffer;
-    uint32_t slot;
-} dm_buffer_bind_packet;
 
 // uniform
 
@@ -418,51 +412,22 @@ typedef struct dm_render_command
     void* data;
 } dm_render_command;
 
-/*
 typedef struct dm_render_pipeline
 {
     dm_blend_state_desc blend_desc;
     dm_depth_state_desc depth_desc;
     dm_stencil_state_desc stencil_desc;
-    dm_render_packet render_packet;
-    dm_buffer* vertex_buffer;
-    dm_buffer* index_buffer;
-    dm_buffer* inst_buffer;
+    dm_raster_state_desc raster_desc;
+    dm_sampler_desc sampler_desc;
+    bool wireframe;
     void* internal_pipeline;
 } dm_render_pipeline;
 
 typedef struct dm_render_pass
 {
-    dm_raster_state_desc raster_desc;
-    dm_shader* shader;
-    dm_sampler_desc sampler_desc;
-    dm_map* uniforms;
-    bool wireframe;
-    const char* name;
-    void* internal_render_pass;
-} dm_render_pass;
-*/
-typedef struct dm_render_pipeline_state
-{
-    dm_blend_state_desc blend_desc;
-    dm_depth_state_desc depth_desc;
-    dm_stencil_state_desc stencil_desc;
-    dm_raster_state_desc raster_desc;
-    dm_sampler_desc sampler_desc;
-    bool wireframe;
-    void* internal_pipeline;
-} dm_render_pipeline_state;
-
-typedef struct dm_render_pass
-{
-    dm_render_pipeline_state pipeline_state;
-    dm_viewport viewport;
     dm_shader shader;
+    dm_viewport viewport;
     dm_map* uniforms;
-    dm_buffer* vertex_buffer;
-    dm_buffer* index_buffer;
-    dm_buffer* instance_buffer;
-    char* name;
     void* internal_pass;
 } dm_render_pass;
 

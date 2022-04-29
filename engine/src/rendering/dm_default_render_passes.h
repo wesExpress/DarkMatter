@@ -2,7 +2,7 @@
 #include "dm_vertex_attribs.h"
 #include "core/dm_logger.h"
 
-dm_render_pipeline_state default_pipeline_state = {
+dm_render_pipeline default_pipeline = {
     .blend_desc = {.is_enabled = true, .src = DM_BLEND_FUNC_SRC_ALPHA, .dest = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA},
     .depth_desc = {.is_enabled = true, .comparison = DM_COMPARISON_LESS},
     .stencil_desc = { 0 },
@@ -67,7 +67,6 @@ bool dm_renderer_create_material_pass()
     };
     
     if(!dm_renderer_create_render_pass(shader, layout, uniforms, sizeof(uniforms) / sizeof(dm_uniform),
-                                       default_pipeline_state,
                                        "material"))
     {
         DM_LOG_FATAL("Could not create default material pass!");
@@ -83,9 +82,7 @@ bool dm_renderer_create_material_color_pass()
 		pos_attrib_desc,
 		norm_attrib_desc,
 		tex_coord_desc,
-		model_attrib_desc,
-        diffuse_attrib_desc,
-        specular_attrib_desc,
+		model_attrib_desc
 	};
     
     dm_vertex_layout layout = {
@@ -100,6 +97,8 @@ bool dm_renderer_create_material_color_pass()
     dm_uniform light_diffuse = dm_create_uniform("light_diffuse", DM_UNIFORM_DATA_T_VEC4, sizeof(dm_vec4));
     dm_uniform light_specular = dm_create_uniform("light_specular", DM_UNIFORM_DATA_T_VEC4, sizeof(dm_vec4));
     dm_uniform view_pos = dm_create_uniform("view_pos", DM_UNIFORM_DATA_T_VEC3, sizeof(dm_vec3));
+    dm_uniform obj_diffuse = dm_create_uniform("object_diffuse", DM_UNIFORM_DATA_T_VEC4, sizeof(dm_vec4));
+    dm_uniform obj_specular = dm_create_uniform("object_specular", DM_UNIFORM_DATA_T_VEC4, sizeof(dm_vec4));
     
     dm_shader_desc vertex_stage = { 0 };
     vertex_stage.type = DM_SHADER_TYPE_VERTEX;
@@ -131,10 +130,10 @@ bool dm_renderer_create_material_color_pass()
     shader.num_stages = sizeof(stages) / sizeof(stages[0]);
     
     dm_uniform uniforms[] = {
-        vp, light_ambient, light_diffuse, light_specular, light_pos, shiny, view_pos
+        vp, light_ambient, light_diffuse, light_specular, obj_diffuse, obj_specular, light_pos, shiny, view_pos
     };
     
-    if(!dm_renderer_create_render_pass(shader, layout, uniforms, sizeof(uniforms) / sizeof(dm_uniform), default_pipeline_state,  "material_color"))
+    if(!dm_renderer_create_render_pass(shader, layout, uniforms, sizeof(uniforms) / sizeof(dm_uniform),  "material_color"))
     {
         DM_LOG_FATAL("Could not create default material color pass!");
         return false;
@@ -150,8 +149,6 @@ bool dm_renderer_create_light_src_pass()
 		norm_attrib_desc,
 		tex_coord_desc,
 		model_attrib_desc,
-        diffuse_attrib_desc,
-        specular_attrib_desc,
 	};
     
     dm_vertex_layout layout = {
@@ -160,6 +157,7 @@ bool dm_renderer_create_light_src_pass()
     };
     
     dm_uniform vp = dm_create_uniform("view_proj", DM_UNIFORM_DATA_T_MAT4, sizeof(dm_mat4));
+    dm_uniform obj_diffuse = dm_create_uniform("object_diffuse", DM_UNIFORM_DATA_T_VEC4, sizeof(dm_vec4));
     
     dm_shader_desc vertex_stage = { 0 };
     vertex_stage.type = DM_SHADER_TYPE_VERTEX;
@@ -190,9 +188,9 @@ bool dm_renderer_create_light_src_pass()
     shader.stages = stages;
     shader.num_stages = sizeof(stages) / sizeof(stages[0]);
     
-    dm_uniform uniforms[] = { vp };
+    dm_uniform uniforms[] = { vp, obj_diffuse };
     
-    if(!dm_renderer_create_render_pass(shader, layout, uniforms, sizeof(uniforms) / sizeof(dm_uniform), default_pipeline_state,  "light_src"))
+    if(!dm_renderer_create_render_pass(shader, layout, uniforms, sizeof(uniforms) / sizeof(dm_uniform),  "light_src"))
     {
         DM_LOG_FATAL("Could not create default light source pass!");
         return false;
