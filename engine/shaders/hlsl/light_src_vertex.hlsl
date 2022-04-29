@@ -22,8 +22,9 @@ VS_OUTPUT v_main(VS_INPUT input)
 {
     VS_OUTPUT output;
     
-    output.position = mul(float4(input.position, 1.0f), input.model);
-    output.position = mul(output.position, view_proj);
-    
+    //output.position = mul(float4(input.position, 1.0f), input.model);
+    //output.position = mul(output.position, view_proj);
+	output.position = float4(input.position, 1);    
+
     return output;
 }

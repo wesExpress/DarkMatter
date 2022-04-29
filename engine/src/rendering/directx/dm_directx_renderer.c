@@ -1097,22 +1097,12 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 	HRESULT hr;
     
 	ID3D11DeviceContext* context = directx_renderer.context;
-    
-	dm_directx_render_pass* internal_pass = render_pass->internal_pass;
-    directx_renderer.active_pass = internal_pass;
-    
-	ID3D11RasterizerState* raster_state = directx_renderer.active_pipeline.rasterizer_state;
 	dm_directx_shader* internal_shader = render_pass->shader.internal_shader;
     
 	// shader
 	context->lpVtbl->VSSetShader(context, internal_shader->vertex_shader, NULL, 0);
 	context->lpVtbl->PSSetShader(context, internal_shader->pixel_shader, NULL, 0);
 	context->lpVtbl->IASetInputLayout(context, internal_shader->input_layout);
-    
-    // buffers
-    //dm_directx_bind_buffer(render_pass->index_buffer, 0);
-    //dm_directx_bind_buffer(render_pass->vertex_buffer, 0);
-    //dm_directx_bind_buffer(render_pass->instance_buffer, 1);
     
     return true;
 }
