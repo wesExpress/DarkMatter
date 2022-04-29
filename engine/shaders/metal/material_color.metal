@@ -5,7 +5,7 @@ using namespace metal;
 struct vertex_in
 {
 	packed_float3 position;
-	packed_float3 normal;
+	float3 normal;
 	packed_float2 tex_coords;
 };
 
@@ -16,12 +16,12 @@ struct vertex_inst
 
 struct vertex_out
 {
-	float4 position[[position]];
+	float4 position [[position]];
 	float3 normal;
 	float3 diffuse;
-	float2 tex_coords;
 	float3 frag_pos;
 	float3 specular;
+	float2 tex_coords;
 };
 
 struct Uniform

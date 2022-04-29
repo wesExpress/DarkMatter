@@ -110,14 +110,29 @@
     dm_event_dispatch((dm_event){ DM_KEY_UP_EVENT, NULL, &key});
 }
 
+/*
 - (void) flagsChanged:(NSEvent*)event
 {
 	dm_key_code key;
+	bool key_pressed = false;
+
+	// shift
 	if([event modifierFlags] & NSEventModifierFlagShift)
 	{
+		key_pressed = true;
 		key = DM_KEY_LSHIFT;
 	}
+	else if(!([event modifierFlags] & NSEventModifierFlagShift) && dm_input_is_key_pressed(DM_KEY_LSHIFT))
+	{
+		dm_event_dispatch((dm_event){ DM_KEY_UP_EVENT, NULL, &key });
+	}
+
+	if(key_pressed)
+	{
+		dm_event_dispatch((dm_event){ DM_KEY_DOWN_EVENT, NULL, &key });
+	}
 }
+*/
 
 - (void) scrollWheel: (NSEvent*) event
 {
