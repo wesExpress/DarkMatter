@@ -678,7 +678,8 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot, dm_render_pa
 		dm_internal_pass* internal_pass = render_pass->internal_pass;
 		dm_internal_buffer* internal_buffer = buffer->internal_buffer;
 		
-		[internal_pass->command_encoder setVertexBuffer:internal_buffer->buffer offset:0 atIndex:slot];
+		id<MTLBuffer> bind_buffer = [renderer.device newBufferWithBytes:[internal_buffer->buffer contents] length:buffer->desc.buffer_size options:MTLResourceOptionCPUCacheModeDefault];
+		[internal_pass->command_encoder setVertexBuffer:bind_buffer offset:0 atIndex:slot];
 	}
 	return true;
 }

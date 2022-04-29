@@ -318,12 +318,12 @@ bool dm_material_color_pass()
                 if(!dm_set_uniform("object_diffuse", &color->diffuse, material_color_pass)) return false;
                 if(!dm_set_uniform("object_specular", &color->specular, material_color_pass)) return false;
                 
-                //dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
+                dm_render_command_update_buffer(&static_buffer.instance_buffer, &inst, sizeof(dm_vertex_inst));
                 dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0, material_color_pass);
                 dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1, material_color_pass);
                 dm_render_command_bind_uniforms(2, material_color_pass);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
-                //dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass);
+                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass);
             }
         }
     }
@@ -373,7 +373,6 @@ bool dm_light_src_pass()
                 dm_render_command_bind_uniforms(2, light_src_pass);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
                 dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
-                //dm_render_command_draw_arrays(mesh->vertex_offset, 36, light_src_pass);
             }
         }
     }
@@ -406,7 +405,7 @@ bool dm_renderer_end_frame()
 	/**********************
 	  light source render pass
 	****************************/
-    //if(!dm_light_src_pass()) return false;
+    if(!dm_light_src_pass()) return false;
     
     dm_renderer_submit_command_buffer();
 	dm_renderer_clear_command_buffer();
