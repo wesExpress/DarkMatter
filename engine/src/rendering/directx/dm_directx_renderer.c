@@ -378,6 +378,8 @@ void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t slot)
 	UINT stride = buffer->desc.elem_size;
 	UINT offset = 0;
     
+    
+    
 	switch (buffer->desc.type)
 	{
         case DM_BUFFER_TYPE_VERTEX: 
@@ -1187,8 +1189,8 @@ bool dm_renderer_bind_uniforms_impl(uint32_t slot, dm_render_pass* render_pass)
 	free(buffer_data);
     
 	// constant buffer
-	context->lpVtbl->VSSetConstantBuffers(context, 0, 1, &internal_pass->constant_buffer);
-	context->lpVtbl->PSSetConstantBuffers(context, 0, 1, &internal_pass->constant_buffer);
+	context->lpVtbl->VSSetConstantBuffers(context, slot, 1, &internal_pass->constant_buffer);
+	context->lpVtbl->PSSetConstantBuffers(context, slot, 1, &internal_pass->constant_buffer);
     
     return true;
 }

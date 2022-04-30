@@ -29,13 +29,14 @@ typedef uint32_t             dm_index_t;
 typedef dm_vertex            dm_vertex_t;
 typedef dm_vertex_inst       dm_vertex_inst_t;
 
+/*
 typedef struct dm_inst_data
 {
     uint32_t index_offset;
     uint32_t vertex_offset;
     uint32_t index_count;
 } dm_inst_data;
-
+*/
 typedef struct dm_mesh
 {
     uint32_t index_offset;

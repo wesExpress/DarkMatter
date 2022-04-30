@@ -51,7 +51,7 @@ dm_map* render_passes = NULL;
 dm_buffer_data static_buffer = {
     .vertex_buffer = {.desc= { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .usage=DM_BUFFER_USAGE_DEFAULT , .name = "vertex"}},
     .index_buffer = {.desc= { .type = DM_BUFFER_TYPE_INDEX, .data_t = DM_BUFFER_DATA_T_UINT, .usage=DM_BUFFER_USAGE_DEFAULT, .name = "index"}},
-    .instance_buffer = {.desc= { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = sizeof(dm_inst_data) * DM_MAX_INSTANCES, .elem_size=sizeof(dm_vertex_inst), .usage = DM_BUFFER_USAGE_DYNAMIC, .cpu_access = DM_BUFFER_CPU_WRITE, .name = "instance"}}
+    .instance_buffer = {.desc= { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = sizeof(dm_vertex_inst) * DM_MAX_INSTANCES, .elem_size=sizeof(dm_vertex_inst), .usage = DM_BUFFER_USAGE_DYNAMIC, .cpu_access = DM_BUFFER_CPU_WRITE, .name = "instance"}}
 };
 
 dm_viewport default_viewport = {0};
@@ -319,7 +319,7 @@ bool dm_material_color_pass()
                 dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0, material_color_pass);
                 dm_render_command_bind_buffer(&static_buffer.index_buffer, 0, material_color_pass);
                 dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1, material_color_pass);
-                dm_render_command_bind_uniforms(2, material_color_pass);
+                dm_render_command_bind_uniforms(0, material_color_pass);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
                 dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass);
             }
@@ -369,7 +369,7 @@ bool dm_light_src_pass()
                 dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0, light_src_pass);
                 dm_render_command_bind_buffer(&static_buffer.index_buffer, 0, light_src_pass);
                 dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1, light_src_pass);
-                dm_render_command_bind_uniforms(2, light_src_pass);
+                dm_render_command_bind_uniforms(0, light_src_pass);
                 //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
                 dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
                 //dm_render_command_draw_arrays(0, 25, light_src_pass); 
@@ -393,7 +393,7 @@ bool dm_renderer_begin_frame()
 	    material render passes
 	*******************************/
     //if(!dm_material_pass()) return false;
-    //if(!dm_material_color_pass()) return false;
+    if(!dm_material_color_pass()) return false;
     
     return true;
 }
