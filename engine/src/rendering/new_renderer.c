@@ -420,7 +420,7 @@ void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_dat
     mesh.is_indexed = is_indexed;
     mesh.entities = dm_list_create(sizeof(uint32_t), 0);
     
-    dm_map_insert(mesh_map, tag, &mesh);
+    dm_map_insert(mesh_map, (void*)tag, &mesh);
     
 	for (uint32_t i = 0; i < num_vertices; i++)
 	{
