@@ -18,7 +18,13 @@ typedef struct dm_default_pass_scene_cb
     dm_vec4 light_diffuse;
     dm_vec4 light_specular;
     dm_vec3 light_pos;
+#ifdef DM_DIRECTX
+    float padding;
+#endif
     dm_vec3 view_pos;
+#ifdef DM_DIRECTX
+    float padding2;
+#endif
 } dm_default_pass_scene_cb;
 
 typedef struct dm_default_pass_inst_cb
@@ -26,7 +32,9 @@ typedef struct dm_default_pass_inst_cb
     uint32_t is_light;
     uint32_t has_texture;
     float shininess;
+#ifdef DM_DIRECTX
     float padding;
+#endif
 } dm_default_pass_inst_cb;
 
 bool dm_renderer_create_default_pass()

@@ -17,7 +17,9 @@ struct VS_OUTPUT
 	float4 object_diffuse  : COLOR2;
 	float4 object_specular : COLOR3;
 	float3 frag_pos   	 : POSITION1;
-	uint   instance_id 	: TESTNAME;
+	uint   is_light		: LIGHT;
+	uint   has_texture	  : TEXTURE;
+	float  shininess       : SHININESS;
 };
 
 struct inst_data
@@ -37,6 +39,7 @@ cbuffer scene_cb : register(b0)
 	float3 light_pos;
 	float padding;
 	float3 view_pos;
+	float padding2;
 };
 
 cbuffer inst_cb : register(b1)
@@ -50,7 +53,6 @@ VS_OUTPUT v_main(VS_INPUT input)
     
     output.position = mul(float4(input.position, 1.0f), input.model);
     output.position = mul(output.position, view_proj);
-	output.instance_id = input.instance_id;
 
 	inst_data inst = inst_data_array[input.instance_id];
 
@@ -69,6 +71,10 @@ VS_OUTPUT v_main(VS_INPUT input)
 		output.object_diffuse = input.object_diffuse;
 		output.object_specular = input.object_specular;
 	}
+
+	output.is_light = inst.is_light;
+	output.has_texture = inst.has_texture;
+	output.shininess = inst.shininess;
 
     return output;
 }

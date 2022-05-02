@@ -220,7 +220,6 @@ bool dm_default_pass()
         dm_for_list_item(mesh->entities, dm_entity, entity)
         {
             dm_transform_component* transform = dm_ecs_get_component(*entity, DM_COMPONENT_TRANSFORM);
-            dm_light_src_component* light_src = dm_ecs_get_component(*entity, DM_COMPONENT_LIGHT_SRC);
             
             dm_vertex_inst inst = { 0 };
             dm_default_pass_inst_cb inst_cb = { 0 };
@@ -251,8 +250,7 @@ bool dm_default_pass()
                 inst.specular = color->specular;
                 inst_cb.shininess = color->shininess;
             }
-            
-            if(dm_ecs_entity_has_component(*entity, DM_COMPONENT_LIGHT_SRC))
+            else if(dm_ecs_entity_has_component(*entity, DM_COMPONENT_LIGHT_SRC))
             {
                 dm_light_src_component* light_src = dm_ecs_get_component(*entity, DM_COMPONENT_LIGHT_SRC);
                 
@@ -274,7 +272,6 @@ bool dm_default_pass()
         dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1, default_pass);
         dm_render_command_bind_uniforms(0, default_pass);
         dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, default_pass);
-        //dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, default_pass);
         
         dm_list_destroy(instance_buffer);
         dm_list_destroy(instance_array_buffer);
@@ -306,7 +303,7 @@ bool dm_renderer_end_frame()
       light source render pass
     ****************************/
     
-    //dm_renderer_submit_command_buffer();
+    dm_renderer_submit_command_buffer();
     dm_renderer_clear_command_buffer();
     
     return dm_renderer_end_frame_impl();

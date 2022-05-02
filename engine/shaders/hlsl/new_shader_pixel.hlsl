@@ -6,7 +6,9 @@ struct PS_INPUT
 	float4 object_diffuse  : COLOR2;
 	float4 object_specular : COLOR3;
     float3 frag_pos   	 : POSITION1;
-	uint   instance_id	 : TESTNAME;
+	uint   is_light		: LIGHT;
+	uint   has_texture	  : TEXTURE;
+	float  shininess       : SHININESS;
 };
 
 struct inst_data
@@ -26,6 +28,7 @@ cbuffer scene_cb : register(b0)
 	float3 light_pos;
 	float padding;
 	float3 view_pos;
+	float padding2;
 };
 
 cbuffer inst_cb : register(b1)
@@ -39,9 +42,9 @@ Texture2D specular_map : register(t1);
 
 float4 p_main(PS_INPUT input) : SV_Target
 {
-	inst_data inst = inst_data_array[input.instance_id];
+	//inst_data inst = inst_data_array[input.instance_id];
 
-	if(inst.is_light == 0)
+	if(input.is_light == 0)
 	{
 		float3 norm_normal = normalize(input.normal);
 		float3 light_dir = normalize(light_pos - input.frag_pos);
@@ -53,19 +56,19 @@ float4 p_main(PS_INPUT input) : SV_Target
 		float3 specular;
 
     	float diff = max(dot(norm_normal, light_dir), 0.0f);
-		float spec = pow(max(dot(view_dir, reflect_dir), 0.0), inst.shininess);
+		float spec = pow(max(dot(view_dir, reflect_dir), 0.0), input.shininess);
 
-		if(inst.has_texture == 1)
+		if(input.has_texture == 0)
 		{
-    		ambient = (light_ambient * diffuse_map.Sample(sample_state, input.tex_coords)).rgb;
-	    	diffuse = (light_diffuse * diff * diffuse_map.Sample(sample_state, input.tex_coords)).rgb;
-	    	specular = (light_specular * spec * specular_map.Sample(sample_state, input.tex_coords)).rgb;
+    		ambient = (light_ambient * input.object_diffuse).rgb;
+	    	diffuse = (light_diffuse * diff * input.object_diffuse).rgb;
+	    	specular = (light_specular * spec * input.object_specular).rgb;
 		}
 		else
 		{
-			ambient = (light_ambient * input.object_diffuse).rgb;
-	    	diffuse = (light_diffuse * diff * input.object_diffuse).rgb;
-	    	specular = (light_specular * spec * input.object_specular).rgb;
+			ambient = (light_ambient * diffuse_map.Sample(sample_state, input.tex_coords)).rgb;
+	    	diffuse = (light_diffuse * diff * diffuse_map.Sample(sample_state, input.tex_coords)).rgb;
+	    	specular = (light_specular * spec * specular_map.Sample(sample_state, input.tex_coords)).rgb;
 		}
     
     	return float4((ambient + diffuse + specular), 1.0f);

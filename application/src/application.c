@@ -61,6 +61,13 @@ bool dm_application_init(dm_application* app)
     
     dm_input_get_mouse_pos(&c->last_x, &c->last_y);
     
+    // textured cube
+    textured_cube = dm_ecs_create_entity();
+    
+    if(!dm_ecs_add_transform(textured_cube, &(dm_transform_component){.position={-2.0f,-2.0f,-2.0f}, .scale={1.0f,1.0f,1.0f}})) return false;
+    if(!dm_ecs_add_mesh(textured_cube, &(dm_mesh_component){.name="cube"})) return false;
+    if(!dm_ecs_add_material(textured_cube, &(dm_material_component){.diffuse_map="container_diffuse", .specular_map="container_specular", .shininess=64})) return false;
+    
     // orange cube
     cube = dm_ecs_create_entity();
     
@@ -82,12 +89,7 @@ bool dm_application_init(dm_application* app)
     if(!dm_ecs_add_mesh(cube2, &(dm_mesh_component){.name="cube"})) return false;
     if(!dm_ecs_add_color(cube2, &(dm_color_component){.diffuse={0.31f, 0.5f, 1.f}, .specular={0.31f, 0.5f, 1.f}, .shininess=32})) return false;
     
-    // textured cube
-    textured_cube = dm_ecs_create_entity();
     
-    if(!dm_ecs_add_transform(textured_cube, &(dm_transform_component){.position={-2.0f,-2.0f,-2.0f}, .scale={1.0f,1.0f,1.0f}})) return false;
-    if(!dm_ecs_add_mesh(textured_cube, &(dm_mesh_component){.name="cube"})) return false;
-    if(!dm_ecs_add_material(textured_cube, &(dm_material_component){.diffuse_map="container_diffuse", .specular_map="container_specular", .shininess=64})) return false;
     
     // model 
     model_load= dm_ecs_create_entity();

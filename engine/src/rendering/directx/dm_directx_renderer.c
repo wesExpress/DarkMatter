@@ -981,21 +981,6 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	// shader
 	if (!dm_directx_create_shader(&render_pass->shader, v_layout)) return false;
 	
-    /*
-	// uniforms
-	size_t buffer_size = 0;
-	void* buffer_data = NULL;
-	dm_for_map_item(render_pass->uniforms)
-	{
-		dm_uniform* uniform = item->value;
-        
-		buffer_data = dm_realloc(buffer_data, buffer_size + uniform->data_size);
-		void* dest = (char*)buffer_data + buffer_size;
-		dm_memcpy(dest, uniform->data, uniform->data_size);
-		buffer_size += uniform->data_size;
-	}
-    */
-    
     // constant buffers
 	D3D11_USAGE usage = D3D11_USAGE_DYNAMIC;
 	D3D11_BIND_FLAG type = D3D11_BIND_CONSTANT_BUFFER;
