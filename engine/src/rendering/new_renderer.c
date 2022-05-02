@@ -4,7 +4,6 @@
 #include "dm_command_buffer.h"
 #include "dm_image.h"
 #include "dm_geometry.h"
-#include "dm_uniform.h"
 #include "dm_model.h"
 #include "dm_default_render_passes.h"
 
@@ -25,17 +24,15 @@ typedef struct dm_buffer_data
 } dm_buffer_data;
 
 // render pass and pipeline
-extern bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout layout);
+extern bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout layout, size_t scene_cb_size, size_t object_cb_size);
 extern void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass);
 
 // forward declaration of the implementation, or backend, functionality
-extern bool dm_renderer_init_impl(dm_platform_data* platform_data);
+extern bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_render_pipeline* pipeline);
 extern void dm_renderer_shutdown_impl();
 extern bool dm_renderer_begin_frame_impl();
 extern bool dm_renderer_end_frame_impl();
 
-//extern bool dm_renderer_create_pipeline_impl(dm_render_pipeline_state* pipeline);
-//extern void dm_renderer_destroy_pipeline_impl(dm_render_pipeline_state* pipeline);
 extern bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data);
 extern void dm_renderer_delete_buffer_impl(dm_buffer* buffer);
 
@@ -53,7 +50,7 @@ dm_map* render_passes = NULL;
 dm_buffer_data static_buffer = {
     .vertex_buffer = {.desc= { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .usage=DM_BUFFER_USAGE_DEFAULT , .name = "vertex"}},
     .index_buffer = {.desc= { .type = DM_BUFFER_TYPE_INDEX, .data_t = DM_BUFFER_DATA_T_UINT, .usage=DM_BUFFER_USAGE_DEFAULT, .name = "index"}},
-    .instance_buffer = {.desc= { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = sizeof(dm_inst_data) * DM_MAX_INSTANCES, .elem_size=sizeof(dm_vertex_inst), .usage = DM_BUFFER_USAGE_DYNAMIC, .cpu_access = DM_BUFFER_CPU_WRITE, .name = "instance"}}
+    .instance_buffer = {.desc= { .type = DM_BUFFER_TYPE_VERTEX, .data_t = DM_BUFFER_DATA_T_FLOAT, .buffer_size = sizeof(dm_vertex_inst) * DM_MAX_INSTANCES, .elem_size=sizeof(dm_vertex_inst), .usage = DM_BUFFER_USAGE_DYNAMIC, .cpu_access = DM_BUFFER_CPU_WRITE, .name = "instance"}}
 };
 
 dm_viewport default_viewport = {0};
@@ -65,36 +62,19 @@ RENDER PASS
 
 bool dm_renderer_create_default_render_passes()
 {
-    if(!dm_renderer_create_material_pass()) return false;
-    if(!dm_renderer_create_material_color_pass()) return false;
-    if(!dm_renderer_create_light_src_pass()) return false;
+    if(!dm_renderer_create_default_pass()) return false;
     
     return true;
 }
 
-bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, dm_uniform* uniforms, uint32_t num_uniforms,
-                                    dm_render_pipeline_state pipeline_state, char* tag)
+bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, size_t scene_cb_size, size_t object_cb_size, char* tag)
 {
     dm_render_pass render_pass = { 0 };
-    render_pass.name = tag;
     
-    render_pass.pipeline_state = pipeline_state;
     render_pass.shader = shader;
     render_pass.shader.pass = tag;
     
-    render_pass.uniforms = dm_map_create(DM_MAP_KEY_STRING, sizeof(dm_uniform), 0);
-    
-    for(uint32_t i=0; i<num_uniforms; i++)
-    {
-        dm_map_insert(render_pass.uniforms, uniforms[i].name, &uniforms[i]);
-    }
-    
-    // TODO: need better way of assigning buffer pointers
-    render_pass.vertex_buffer = &static_buffer.vertex_buffer;
-    render_pass.index_buffer = &static_buffer.index_buffer;
-    render_pass.instance_buffer = &static_buffer.instance_buffer;
-    
-    if(!dm_renderer_create_render_pass_impl(&render_pass, layout)) return false;
+    if(!dm_renderer_create_render_pass_impl(&render_pass, layout, scene_cb_size, object_cb_size)) return false;
     
     dm_map_insert(render_passes, (void*)tag, &render_pass);
     
@@ -104,13 +84,6 @@ bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, d
 void dm_renderer_destroy_render_pass(dm_render_pass* render_pass)
 {
     dm_renderer_destroy_render_pass_impl(render_pass);
-    
-    dm_for_map_item(render_pass->uniforms)
-    {
-        dm_uniform* uniform = item->value;
-        dm_destroy_uniform(uniform);
-    }
-    dm_map_destroy(render_pass->uniforms);
 }
 
 /*************
@@ -118,13 +91,11 @@ MAIN RENDERER
 ***************/
 bool dm_renderer_init(dm_platform_data* platform_data, dm_color clear_color)
 {
-	//r_data.clear_color = clear_color;
-    
 	default_viewport.width = platform_data->window_width;
     default_viewport.height = platform_data->window_height;
     default_viewport.max_depth = 1.0f;
     
-	if(!dm_renderer_init_impl(platform_data))
+	if(!dm_renderer_init_impl(platform_data, &default_pipeline))
 	{
 		DM_LOG_FATAL("Renderer backend could not be initialized!");
 		return false;
@@ -209,183 +180,131 @@ void dm_renderer_resize(int new_width, int new_height)
 	};
     
     default_viewport = new_viewport;
-    
-    //dm_render_command_set_viewport(viewport);
 }
 
-bool dm_renderer_begin_frame()
+bool dm_default_pass()
 {
-	//dm_render_command_clear(&r_data.clear_color, r_data.render_commands);
-	//dm_render_command_set_viewport(&r_data.viewport, r_data.render_commands);
-	//dm_render_command_bind_pipeline(r_data.pipeline, r_data.render_commands);
+    dm_render_pass* default_pass = dm_map_get(render_passes, "default");
+    if(!default_pass) return false;
     
-	/************************
-	    material render passes
-	*******************************/
-    //if(!dm_renderer_render_materials()) return false;
-    //if(!dm_renderer_render_colored_materials()) return false;
+    dm_render_command_begin_renderpass(default_pass);
     
-    dm_render_command_clear((dm_color){0,0,0,1});
-    dm_render_command_set_viewport(default_viewport);
-	
+    dm_default_pass_scene_cb scene_cb = { 0 };
+#ifndef DM_DIRECTX
+    scene_cb.view_proj = camera.view_proj;
+#else
+    scene_cb.view_proj = dm_mat4_transpose(camera.view_proj);
+#endif
+    
+    scene_cb.view_pos = camera.pos;
+    
     dm_list* lights = dm_ecs_get_entity_registry(DM_COMPONENT_LIGHT_SRC);
     dm_entity* light_id = dm_list_at(lights, 0);
     dm_light_src_component* light = dm_ecs_get_component(*light_id, DM_COMPONENT_LIGHT_SRC);
     dm_transform_component* light_trans = dm_ecs_get_component(*light_id, DM_COMPONENT_TRANSFORM);
     
-    // material
-    dm_render_pass* material_pass = dm_map_get(render_passes, "material");
-    if(!material_pass) return false;
+    scene_cb.light_ambient = light->ambient;
+    scene_cb.light_diffuse = light->diffuse;
+    scene_cb.light_specular = light->specular;
+    scene_cb.light_pos = light_trans->position;
     
-    if(!dm_set_uniform("light_ambient", &light->ambient, material_pass)) return false;
-    if(!dm_set_uniform("light_diffuse", &light->diffuse, material_pass)) return false;
-    if(!dm_set_uniform("light_specular", &light->specular, material_pass)) return false;
-    if(!dm_set_uniform("light_pos", &light_trans->position, material_pass)) return false;
-    
-    if(!dm_set_uniform("view_pos", &camera.pos, material_pass)) return false;
-    if(!dm_set_uniform("view_proj", &camera.view_proj, material_pass)) return false;
-    
-    dm_render_command_begin_renderpass(material_pass);
     // for each mesh
     dm_for_map_item(mesh_map)
     {
         dm_mesh* mesh = item->value;
-        //uint32_t count = 0;
+        uint32_t count = 0;
+        dm_list* instance_buffer = dm_list_create(sizeof(dm_vertex_inst), 0);
+        dm_list* instance_array_buffer = dm_list_create(sizeof(dm_default_pass_inst_cb), 0);
         
-        // for each entity
+        // materials first
         dm_for_list_item(mesh->entities, dm_entity, entity)
         {
-            if(dm_ecs_entity_has_component(*entity, DM_COMPONENT_MATERIAL) && !dm_ecs_entity_has_component(*entity, DM_COMPONENT_LIGHT_SRC))
+            dm_transform_component* transform = dm_ecs_get_component(*entity, DM_COMPONENT_TRANSFORM);
+            
+            dm_vertex_inst inst = { 0 };
+            dm_default_pass_inst_cb inst_cb = { 0 };
+            
+            inst.model = dm_mat4_identity();
+            inst.model = dm_mat_translate(inst.model, transform->position);
+            inst.model = dm_mat_scale(inst.model, transform->scale);
+#ifdef DM_DIRECTX
+            inst.model = dm_mat4_transpose(inst.model);
+#endif
+            
+            if(dm_ecs_entity_has_component(*entity, DM_COMPONENT_MATERIAL))
             {
-                dm_transform_component* transform = dm_ecs_get_component(*entity, DM_COMPONENT_TRANSFORM);
                 dm_material_component* material = dm_ecs_get_component(*entity, DM_COMPONENT_MATERIAL);
                 
-                dm_vertex_inst inst = { 0 };
-                
-                inst.model = dm_mat4_identity();
-                inst.model = dm_mat_translate(inst.model, transform->position);
-                inst.model = dm_mat_scale(inst.model, transform->scale);
-#ifdef DM_DIRECTX
-                inst.model = dm_mat4_transpose(inst.model);
-#endif
-                
+                inst_cb.has_texture = 1;
+                inst_cb.shininess = material->shininess;
                 dm_image* diffuse_map = dm_image_get(material->diffuse_map);
                 dm_image* specular_map = dm_image_get(material->specular_map);
-                
-                if(!dm_set_uniform("shininess", &material->shininess, material_pass)) return false;
-                
-                dm_render_command_update_buffer(material_pass->instance_buffer, &inst, sizeof(dm_vertex_inst));
-                dm_render_command_bind_texture(diffuse_map, 0);
-                dm_render_command_bind_texture(specular_map, 1);
-                //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
-                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_pass);
+                dm_render_command_bind_texture(diffuse_map, 0, default_pass);
+                dm_render_command_bind_texture(specular_map, 1, default_pass);
             }
-        }
-    }
-    
-    dm_render_command_end_renderpass(material_pass);
-	
-    // material color
-    dm_render_pass* material_color_pass = dm_map_get(render_passes, "material_color");
-    if(!material_color_pass) return false;
-    
-    if(!dm_set_uniform("light_ambient", &light->ambient, material_color_pass)) return false;
-    if(!dm_set_uniform("light_diffuse", &light->diffuse, material_color_pass)) return false;
-    if(!dm_set_uniform("light_specular", &light->specular, material_color_pass)) return false;
-    if(!dm_set_uniform("light_pos", &light_trans->position, material_color_pass)) return false;
-    
-    if(!dm_set_uniform("view_pos", &camera.pos, material_color_pass)) return false;
-    if(!dm_set_uniform("view_proj", &camera.view_proj, material_color_pass)) return false;
-    
-    dm_render_command_begin_renderpass(material_color_pass);
-    // for each mesh
-    dm_for_map_item(mesh_map)
-    {
-        dm_mesh* mesh = item->value;
-        //uint32_t count = 0;
-        
-        // for each entity
-        dm_for_list_item(mesh->entities, dm_entity, entity)
-        {
-            if(dm_ecs_entity_has_component(*entity, DM_COMPONENT_COLOR) && !dm_ecs_entity_has_component(*entity, DM_COMPONENT_LIGHT_SRC))
+            else if(dm_ecs_entity_has_component(*entity, DM_COMPONENT_COLOR))
             {
-                dm_transform_component* transform = dm_ecs_get_component(*entity, DM_COMPONENT_TRANSFORM);
                 dm_color_component* color = dm_ecs_get_component(*entity, DM_COMPONENT_COLOR);
-                
-                dm_vertex_inst inst = { 0 };
-                
-                inst.model = dm_mat4_identity();
-                inst.model = dm_mat_translate(inst.model, transform->position);
-                inst.model = dm_mat_scale(inst.model, transform->scale);
-#ifdef DM_DIRECTX
-                inst.model = dm_mat4_transpose(inst.model);
-#endif
                 
                 inst.diffuse = color->diffuse;
                 inst.specular = color->specular;
-                
-                if(!dm_set_uniform("shininess", &color->shininess, material_color_pass)) return false;
-                
-                dm_render_command_update_buffer(material_color_pass->instance_buffer, &inst, sizeof(dm_vertex_inst));
-                //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
-                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, material_color_pass);
+                inst_cb.shininess = color->shininess;
             }
+            else if(dm_ecs_entity_has_component(*entity, DM_COMPONENT_LIGHT_SRC))
+            {
+                dm_light_src_component* light_src = dm_ecs_get_component(*entity, DM_COMPONENT_LIGHT_SRC);
+                
+                inst_cb.is_light = 1;
+                inst.diffuse = light_src->diffuse;
+            }
+            
+            dm_list_append(instance_buffer, &inst);
+            dm_list_append(instance_array_buffer, &inst_cb);
+            
+            count++;
         }
+        
+        dm_render_command_update_buffer(&static_buffer.instance_buffer, instance_buffer->data, sizeof(dm_vertex_inst) * instance_buffer->count);
+        dm_render_command_update_scene_cb(&scene_cb, sizeof(scene_cb), default_pass);
+        dm_render_command_update_inst_cb(&instance_array_buffer->data, sizeof(dm_default_pass_inst_cb) * instance_array_buffer->count, default_pass);
+        dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0, default_pass);
+        dm_render_command_bind_buffer(&static_buffer.index_buffer, 0, default_pass);
+        dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1, default_pass);
+        dm_render_command_bind_uniforms(0, default_pass);
+        dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, default_pass);
+        
+        dm_list_destroy(instance_buffer);
+        dm_list_destroy(instance_array_buffer);
     }
     
-    dm_render_command_end_renderpass(material_color_pass);
+    dm_render_command_end_renderpass(default_pass);
+    
+    return true;
+}
+
+bool dm_renderer_begin_frame()
+{
+    if(!dm_renderer_begin_frame_impl()) return false;
+    
+    dm_render_command_clear((dm_color){0,0,0,1});
+    dm_render_command_set_viewport(default_viewport);
+    
+    /************************
+        material render passes
+    *******************************/
+    if(!dm_default_pass()) return false;
     
     return true;
 }
 
 bool dm_renderer_end_frame()
 {
-	/**********************
-	  light source render pass
-	****************************/
-    dm_render_pass* light_src_pass = dm_map_get(render_passes, "light_src");
-    if(!light_src_pass) return false;
+    /**********************
+      light source render pass
+    ****************************/
     
-    if(!dm_set_uniform("view_proj", &camera.view_proj, light_src_pass)) return false;
-    
-    dm_render_command_begin_renderpass(light_src_pass);
-    // for each mesh
-    dm_for_map_item(mesh_map)
-    {
-        dm_mesh* mesh = item->value;
-        //uint32_t count = 0;
-        
-        // for each entity
-        dm_for_list_item(mesh->entities, dm_entity, entity)
-        {
-            if(dm_ecs_entity_has_component(*entity, DM_COMPONENT_LIGHT_SRC))
-            {
-                dm_transform_component* transform = dm_ecs_get_component(*entity, DM_COMPONENT_TRANSFORM);
-                dm_light_src_component* light_src = dm_ecs_get_component(*entity, DM_COMPONENT_LIGHT_SRC);
-                
-                dm_vertex_inst inst = { 0 };
-                
-                inst.model = dm_mat4_identity();
-                inst.model = dm_mat_translate(inst.model, transform->position);
-                inst.model = dm_mat_scale(inst.model, transform->scale);
-#ifdef DM_DIRECTX
-                inst.model = dm_mat4_transpose(inst.model);
-#endif
-                
-                inst.diffuse = light_src->diffuse;
-                
-                dm_render_command_update_buffer(light_src_pass->instance_buffer, &inst, sizeof(dm_vertex_inst));
-                //dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, material_pass);
-                dm_render_command_draw_indexed(mesh->index_count, mesh->index_offset, mesh->vertex_offset, light_src_pass);
-            }
-        }
-    }
-    
-    dm_render_command_end_renderpass(light_src_pass);
-    
-    //
     dm_renderer_submit_command_buffer();
-	dm_renderer_clear_command_buffer();
+    dm_renderer_clear_command_buffer();
     
     return dm_renderer_end_frame_impl();
 }
@@ -422,27 +341,27 @@ void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_dat
     
     dm_map_insert(mesh_map, (void*)tag, &mesh);
     
-	for (uint32_t i = 0; i < num_vertices; i++)
-	{
-		dm_list_append(vertices, &vertex_data[i]);
-	}
+    for (uint32_t i = 0; i < num_vertices; i++)
+    {
+        dm_list_append(vertices, &vertex_data[i]);
+    }
     
 #ifdef DM_DIRECTX
-	for (uint32_t i = 0; i < num_indices; )
-	{
-		dm_index_t swap = index_data[i + 2];
-		index_data[i + 2] = index_data[i + 1];
-		index_data[i + 1] = swap;
+    for (uint32_t i = 0; i < num_indices; )
+    {
+        dm_index_t swap = index_data[i + 2];
+        index_data[i + 2] = index_data[i + 1];
+        index_data[i + 1] = swap;
         
-		i += 3;
-	}
+        i += 3;
+    }
 #endif
     
-	for (uint32_t i = 0; i < num_indices; i++)
-	{
+    for (uint32_t i = 0; i < num_indices; i++)
+    {
         uint32_t offset_index = index_data[i] + mesh.index_offset;
-		dm_list_append(indices, &offset_index);
-	}
+        dm_list_append(indices, &offset_index);
+    }
 }
 
 bool dm_renderer_api_register_image(dm_image_desc desc)
@@ -452,7 +371,7 @@ bool dm_renderer_api_register_image(dm_image_desc desc)
 
 void dm_renderer_api_set_clear_color(dm_vec3 color)
 {
-	//r_data.clear_color = dm_vec4_set_from_vec3(color);
+    //r_data.clear_color = dm_vec4_set_from_vec3(color);
 }
 
 /*
@@ -497,40 +416,40 @@ bool dm_renderer_api_deregister_mesh(dm_entity entity)
 
 void dm_renderer_api_set_camera_pos(dm_vec3 pos)
 {
-	dm_camera_set_pos(&camera, pos);
+    dm_camera_set_pos(&camera, pos);
 }
 
 void dm_renderer_api_update_camera_pos(dm_vec3 delta_pos)
 {
-	dm_vec3 pos = dm_vec3_add_vec3(camera.pos, delta_pos);
-	dm_camera_set_pos(&camera, pos);
+    dm_vec3 pos = dm_vec3_add_vec3(camera.pos, delta_pos);
+    dm_camera_set_pos(&camera, pos);
 }
 
 void dm_renderer_api_set_camera_forward(dm_vec3 forward)
 {
-	dm_camera_set_forward(&camera, forward);
+    dm_camera_set_forward(&camera, forward);
 }
 
 void dm_renderer_api_update_camera_forward(dm_vec3 delta_forward)
 {
-	dm_vec3 forward = dm_vec3_add_vec3(camera.forward, delta_forward);
-	forward.x = DM_CLAMP(forward.x, -89, 89);
-	forward.y = DM_CLAMP(forward.y, -89, 89);
-	forward.z = DM_CLAMP(forward.z, -89, 89);
-	dm_camera_set_forward(&camera, forward);
+    dm_vec3 forward = dm_vec3_add_vec3(camera.forward, delta_forward);
+    forward.x = DM_CLAMP(forward.x, -89, 89);
+    forward.y = DM_CLAMP(forward.y, -89, 89);
+    forward.z = DM_CLAMP(forward.z, -89, 89);
+    dm_camera_set_forward(&camera, forward);
 }
 
 dm_vec3 dm_renderer_api_get_camera_forward()
 {
-	return camera.forward;
+    return camera.forward;
 }
 
 dm_vec3 dm_renderer_api_get_camera_up()
 {
-	return camera.up;
+    return camera.up;
 }
 
 dm_vec3 dm_renderer_api_get_camera_pos()
 {
-	return camera.pos;
+    return camera.pos;
 }

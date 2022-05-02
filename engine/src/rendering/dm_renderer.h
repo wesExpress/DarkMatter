@@ -55,6 +55,5 @@ default render passes:
 */
 bool dm_renderer_create_default_render_passes();
 
-bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, dm_uniform* uniforms, uint32_t num_uniforms,
-                                    dm_render_pipeline_state pipeline_state, char* tag);
+bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, size_t scene_cb_size, size_t object_cb_size, char* tag);
 #endif
