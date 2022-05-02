@@ -62,7 +62,8 @@ typedef struct dm_directx_pipeline
 
 typedef struct dm_directx_render_pass
 {
-	ID3D11Buffer* constant_buffer;
+	ID3D11Buffer* scene_cb;
+    ID3D11Buffer* inst_cb;
 	dm_list* vertex_buffers;
 } dm_directx_render_pass;
 
@@ -967,7 +968,7 @@ bool dm_directx_bind_pipeline(dm_directx_pipeline* pipeline)
 RENDER PASS
 *************/
 
-bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout v_layout)
+bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout v_layout, size_t scene_cb_size, size_t inst_cb_size)
 {
 	HRESULT hr;
     
@@ -980,6 +981,7 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 	// shader
 	if (!dm_directx_create_shader(&render_pass->shader, v_layout)) return false;
 	
+    /*
 	// uniforms
 	size_t buffer_size = 0;
 	void* buffer_data = NULL;
@@ -992,24 +994,29 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_
 		dm_memcpy(dest, uniform->data, uniform->data_size);
 		buffer_size += uniform->data_size;
 	}
+    */
     
+    // constant buffers
 	D3D11_USAGE usage = D3D11_USAGE_DYNAMIC;
 	D3D11_BIND_FLAG type = D3D11_BIND_CONSTANT_BUFFER;
 	D3D11_CPU_ACCESS_FLAG cpu_flag = D3D11_CPU_ACCESS_WRITE;
     
-	D3D11_BUFFER_DESC cb_desc = { 0 };
-	cb_desc.Usage = usage;
-	cb_desc.BindFlags = type;
-	cb_desc.CPUAccessFlags = cpu_flag;
-	cb_desc.ByteWidth = ((buffer_size + 15) / 16) * 16;
-	cb_desc.StructureByteStride = sizeof(float);
+	D3D11_BUFFER_DESC scene_cb_desc = { 0 };
+	scene_cb_desc.Usage = usage;
+	scene_cb_desc.BindFlags = type;
+	scene_cb_desc.CPUAccessFlags = cpu_flag;
+	scene_cb_desc.ByteWidth = ((scene_cb_size + 15) / 16) * 16;
+	scene_cb_desc.StructureByteStride = sizeof(float);
     
-	D3D11_SUBRESOURCE_DATA sd = { 0 };
-	sd.pSysMem = buffer_data;
+    D3D11_BUFFER_DESC inst_cb_desc = { 0 };
+	inst_cb_desc.Usage = usage;
+	inst_cb_desc.BindFlags = type;
+	inst_cb_desc.CPUAccessFlags = cpu_flag;
+	inst_cb_desc.ByteWidth = ((inst_cb_size + 15) / 16) * 16;
+	inst_cb_desc.StructureByteStride = sizeof(float);
     
-	DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &cb_desc, &sd, &internal_pass->constant_buffer), "ID3D11Device::CreateBuffer failed!");
-    
-	free(buffer_data);
+    DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &scene_cb_desc, 0, &internal_pass->scene_cb), "ID3D11Device::CreateBuffer failed!");
+    DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &inst_cb_desc, 0, &internal_pass->inst_cb), "ID3D11Device::CreateBuffer failed!");
     
 	return true;
 }
@@ -1020,7 +1027,8 @@ void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
     
 	dm_directx_delete_shader(&render_pass->shader);
     
-	DX_RELEASE(internal_pass->constant_buffer);
+	DX_RELEASE(internal_pass->scene_cb);
+    DX_RELEASE(internal_pass->inst_cb);
     
 	dm_free(internal_pass, sizeof(dm_directx_render_pass), DM_MEM_RENDER_PASS);
 }
@@ -1146,6 +1154,44 @@ bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_s
 	return true;
 }
 
+bool dm_renderer_update_scene_cb_impl(void* data, size_t data_size, dm_render_pass* render_pass)
+{
+    HRESULT hr;
+    
+    ID3D11DeviceContext* context = directx_renderer.context;
+    
+    dm_directx_render_pass* internal_pass = render_pass->internal_pass;
+    ID3D11Buffer* buffer = internal_pass->scene_cb;
+    
+    D3D11_MAPPED_SUBRESOURCE msr;
+    ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
+    
+    DX_ERROR_CHECK(context->lpVtbl->Map(context, (ID3D11Resource*)buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr), "ID3D11DeviceContext::Map failed!");
+    dm_memcpy(msr.pData, data, data_size);
+    context->lpVtbl->Unmap(context, (ID3D11Resource*)buffer, 0);
+    
+    return true;
+}
+
+bool dm_renderer_update_inst_cb_impl(void* data, size_t data_size, dm_render_pass* render_pass)
+{
+    HRESULT hr;
+    
+    ID3D11DeviceContext* context = directx_renderer.context;
+    
+    dm_directx_render_pass* internal_pass = render_pass->internal_pass;
+    ID3D11Buffer* buffer = internal_pass->inst_cb;
+    
+    D3D11_MAPPED_SUBRESOURCE msr;
+    ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
+    
+    DX_ERROR_CHECK(context->lpVtbl->Map(context, (ID3D11Resource*)buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr), "ID3D11DeviceContext::Map failed!");
+    dm_memcpy(msr.pData, data, data_size);
+    context->lpVtbl->Unmap(context, (ID3D11Resource*)buffer, 0);
+    
+    return true;
+}
+
 bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
 {
 	dm_directx_bind_buffer(buffer, slot);
@@ -1167,30 +1213,11 @@ bool dm_renderer_bind_uniforms_impl(uint32_t slot, dm_render_pass* render_pass)
     ID3D11DeviceContext* context = directx_renderer.context;
     dm_directx_render_pass* internal_pass = render_pass->internal_pass;
     
-    size_t buffer_size = 0;
-	void* buffer_data = NULL;
-	dm_for_map_item(render_pass->uniforms)
-	{
-		dm_uniform* uniform = item->value;
-        
-		buffer_data = dm_realloc(buffer_data, buffer_size + uniform->data_size);
-		void* dest = (char*)buffer_data + buffer_size;
-		dm_memcpy(dest, uniform->data, uniform->data_size);
-		buffer_size += uniform->data_size;
-	}
+    context->lpVtbl->VSSetConstantBuffers(context, 0, 1, &internal_pass->scene_cb);
+	context->lpVtbl->PSSetConstantBuffers(context, 0, 1, &internal_pass->scene_cb);
     
-	D3D11_MAPPED_SUBRESOURCE msr;
-	ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
-    
-	DX_ERROR_CHECK(context->lpVtbl->Map(context, (ID3D11Resource*)internal_pass->constant_buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr), "ID3D11DeviceContext::Map failed!");
-	dm_memcpy(msr.pData, buffer_data, buffer_size);
-	context->lpVtbl->Unmap(context, (ID3D11Resource*)internal_pass->constant_buffer, 0);
-    
-	free(buffer_data);
-    
-	// constant buffer
-	context->lpVtbl->VSSetConstantBuffers(context, slot, 1, &internal_pass->constant_buffer);
-	context->lpVtbl->PSSetConstantBuffers(context, slot, 1, &internal_pass->constant_buffer);
+    context->lpVtbl->VSSetConstantBuffers(context, 1, 1, &internal_pass->inst_cb);
+	context->lpVtbl->PSSetConstantBuffers(context, 1, 1, &internal_pass->inst_cb);
     
     return true;
 }

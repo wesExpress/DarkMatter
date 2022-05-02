@@ -21,22 +21,14 @@ typedef struct dm_vertex
 typedef struct dm_vertex_inst
 {
     dm_mat4 model;
-    //dm_color diffuse;
-    //dm_color specular;
+    dm_color diffuse;
+    dm_color specular;
 } dm_vertex_inst;
 
 typedef uint32_t             dm_index_t;
 typedef dm_vertex            dm_vertex_t;
 typedef dm_vertex_inst       dm_vertex_inst_t;
 
-/*
-typedef struct dm_inst_data
-{
-    uint32_t index_offset;
-    uint32_t vertex_offset;
-    uint32_t index_count;
-} dm_inst_data;
-*/
 typedef struct dm_mesh
 {
     uint32_t index_offset;
@@ -314,15 +306,6 @@ typedef struct dm_shader_desc
     char* source;
 } dm_shader_desc;
 
-/*
-typedef struct dm_shader
-{
-    dm_shader_desc vertex_desc;
-    dm_shader_desc pixel_desc;
-    char* name;
-    void* internal_shader;
-} dm_shader;
-*/
 typedef struct dm_shader
 {
     dm_shader_desc* stages;
@@ -427,7 +410,6 @@ typedef struct dm_render_pass
 {
     dm_shader shader;
     dm_viewport viewport;
-    dm_map* uniforms;
     void* internal_pass;
 } dm_render_pass;
 
