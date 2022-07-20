@@ -18,6 +18,7 @@ static const char* mem_tag_str[] = {
     "INPUT          ",
     "STRING         ",
     "LIST           ",
+    "BYTE BUFFER    ",
     "MAP            ",
     "RENDERER       ",
     "RENDER COMMAND ",

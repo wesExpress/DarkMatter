@@ -1,3 +1,5 @@
+#if 0
+
 #include "dm_command_buffer.h"
 #include "core/dm_logger.h"
 #include "core/dm_mem.h"
@@ -362,3 +364,5 @@ bool dm_renderer_submit_command_buffer()
     
 	return true;
 }
+
+#endif

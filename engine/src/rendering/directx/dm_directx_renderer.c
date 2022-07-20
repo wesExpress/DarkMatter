@@ -379,8 +379,6 @@ void dm_directx_bind_buffer(dm_buffer* buffer, uint32_t slot)
 	UINT stride = buffer->desc.elem_size;
 	UINT offset = 0;
     
-    
-    
 	switch (buffer->desc.type)
 	{
         case DM_BUFFER_TYPE_VERTEX: 
@@ -597,9 +595,9 @@ void dm_directx_destroy_texture(dm_image* image)
 	dm_free(image->internal_texture, sizeof(dm_directx_texture), DM_MEM_RENDERER_TEXTURE);
 }
 
-void dm_directx_bind_texture(dm_image* image, uint32_t slot)
+void dm_directx_bind_texture(dm_image image, uint32_t slot)
 {
-	dm_directx_texture* internal_texture = image->internal_texture;
+	dm_directx_texture* internal_texture = image.internal_texture;
 	
 	directx_renderer.context->lpVtbl->PSSetShaderResources(directx_renderer.context, slot, 1, &internal_texture->view);
 }
@@ -1087,7 +1085,7 @@ bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data)
 COMMANDS
 **********/
 
-bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
+bool dm_directx_begin_renderpass(dm_render_pass* render_pass)
 {
 	HRESULT hr;
     
@@ -1102,28 +1100,28 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
     return true;
 }
 
-void dm_renderer_end_rederpass_impl()
+void dm_directx_end_renderpass()
 {
     
 }
 
-void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass)
+void dm_directx_draw_arrays(uint32_t start, uint32_t count, dm_render_pass* render_pass)
 {
 	directx_renderer.context->lpVtbl->Draw(directx_renderer.context, count, start);
 }
 
-void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass)
+void dm_directx_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass)
 {
 	directx_renderer.context->lpVtbl->DrawIndexed(directx_renderer.context, num_indices, index_offset, vertex_offset);
 }
 
-void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pass* render_pass)
+void dm_directx_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pass* render_pass)
 {
 	directx_renderer.context->lpVtbl->DrawIndexedInstanced(directx_renderer.context, num_indices, num_insts, index_offset, vertex_offset, inst_offset);
 }
 
 
-bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_size)
+bool dm_directx_update_buffer(dm_buffer* buffer, void* data, size_t data_size)
 {
 	HRESULT hr;
     
@@ -1139,7 +1137,7 @@ bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t data_s
 	return true;
 }
 
-bool dm_renderer_update_scene_cb_impl(void* data, size_t data_size, dm_render_pass* render_pass)
+bool dm_directx_update_scene_cb(void* data, size_t data_size, dm_render_pass* render_pass)
 {
     HRESULT hr;
     
@@ -1158,7 +1156,7 @@ bool dm_renderer_update_scene_cb_impl(void* data, size_t data_size, dm_render_pa
     return true;
 }
 
-bool dm_renderer_update_inst_cb_impl(void* data, size_t data_size, dm_render_pass* render_pass)
+bool dm_directx_update_inst_cb(void* data, size_t data_size, dm_render_pass* render_pass)
 {
     HRESULT hr;
     
@@ -1177,21 +1175,7 @@ bool dm_renderer_update_inst_cb_impl(void* data, size_t data_size, dm_render_pas
     return true;
 }
 
-bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
-{
-	dm_directx_bind_buffer(buffer, slot);
-    
-	return true;
-}
-
-bool dm_renderer_bind_texture_impl(dm_image* image, uint32_t slot)
-{
-    dm_directx_bind_texture(image, slot);
-    
-    return true;
-}
-
-bool dm_renderer_bind_uniforms_impl(uint32_t slot, dm_render_pass* render_pass)
+bool dm_directx_bind_uniforms(uint32_t slot, dm_render_pass* render_pass)
 {
     HRESULT hr;
     
@@ -1207,7 +1191,7 @@ bool dm_renderer_bind_uniforms_impl(uint32_t slot, dm_render_pass* render_pass)
     return true;
 }
 
-void dm_renderer_set_viewport_impl(dm_viewport viewport)
+void dm_directx_set_viewport(dm_viewport viewport)
 {
 	ID3D11DeviceContext* context = directx_renderer.context;
     
@@ -1219,7 +1203,7 @@ void dm_renderer_set_viewport_impl(dm_viewport viewport)
 	context->lpVtbl->RSSetViewports(context, 1, &new_viewport);
 }
 
-void dm_renderer_clear_impl(dm_color* clear_color)
+void dm_directx_clear(dm_color* clear_color)
 {
 	ID3D11DeviceContext* context = directx_renderer.context;
 	ID3D11RenderTargetView* render_target = directx_renderer.active_pipeline.render_view;
@@ -1228,6 +1212,184 @@ void dm_renderer_clear_impl(dm_color* clear_color)
 	// clear framebuffer
 	context->lpVtbl->ClearRenderTargetView(context, render_target, &(clear_color->v[0]));
 	context->lpVtbl->ClearDepthStencilView(context, depth_stencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+}
+
+bool dm_renderer_submit_command_buffer_impl(dm_list* render_commands)
+{
+    bool complete_pass = true;
+    
+    dm_for_list_item(render_commands, dm_render_command, command)
+    {
+        switch(command->type)
+        {
+            case DM_RENDER_COMMAND_BEGIN_RENDER_PASS:
+            {
+                if(!complete_pass)
+                {
+                    DM_LOG_FATAL("Attempting to begin a renderpass without ending previous.");
+                    return false;
+                }
+                complete_pass = false;
+                if(!dm_directx_begin_renderpass((dm_render_pass*)command->data)) return false;
+            } break;
+            
+            case DM_RENDER_COMMAND_END_RENDER_PASS:
+            {
+                if(complete_pass)
+                {
+                    DM_LOG_FATAL("Attempting to end a renderpass without beginning.");
+                    return false;
+                }
+                complete_pass = true;
+                dm_directx_end_renderpass((dm_render_pass*)command->data);
+            } break;
+            
+            case DM_RENDER_COMMAND_SET_VIEWPORT:
+            {
+                dm_directx_set_viewport(*(dm_viewport*)command->data);
+            } break;
+            
+            case DM_RENDER_COMMAND_CLEAR:
+            {
+                dm_directx_clear((dm_color*)command->data);
+            } break;
+            
+            case DM_RENDER_COMMAND_UPDATE_BUFFER:
+            {
+                typedef struct
+                {
+                    dm_buffer* buffer;
+                    size_t data_size;
+                    void* data;
+                } update_packet;
+                
+                update_packet* packet = command->data;
+                
+                if(!dm_directx_update_buffer(packet->buffer, packet->data, packet->data_size)) return false;
+            } break;
+            
+            case DM_RENDER_COMMAND_UPDATE_SCENE_CB:
+            {
+                typedef struct
+                {
+                    size_t data_size;
+                    dm_render_pass* render_pass;
+                    void* data;
+                } update_packet;
+                
+                update_packet* packet = command->data;
+                
+                if(!dm_directx_update_scene_cb(packet->data, packet->data_size, packet->render_pass)) return false;
+            } break;
+            
+            case DM_RENDER_COMMAND_UPDATE_INST_CB:
+            {
+                typedef struct
+                {
+                    size_t data_size;
+                    dm_render_pass* render_pass;
+                    void* data;
+                } update_packet;
+                
+                update_packet* packet = command->data;
+                
+                if(!dm_directx_update_inst_cb(packet->data, packet->data_size, packet->render_pass)) return false;
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_BUFFER:
+            {
+                typedef struct 
+                {
+                    dm_buffer* buffer;
+                    uint32_t slot;
+                    dm_render_pass* render_pass;
+                } bind_packet;
+                
+                bind_packet* packet = command->data;
+                
+                dm_directx_bind_buffer(packet->buffer, packet->slot);
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_TEXTURE:
+            {
+                typedef struct
+                {
+                    dm_image image;
+                    uint32_t slot;
+                    dm_render_pass* render_pass;
+                } bind_packet;
+                
+                bind_packet* packet = command->data;
+                
+                dm_directx_bind_texture(packet->image, packet->slot);
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_UNIFORMS:
+            {
+                typedef struct
+                {
+                    uint32_t slot;
+                    dm_render_pass* render_pass;
+                } bind_packet;
+                
+                bind_packet* packet = command->data;
+                
+                if(!dm_directx_bind_uniforms(packet->slot, packet->render_pass)) return false;
+            } break;
+            
+            case DM_RENDER_COMMAND_DRAW_ARRAYS:
+            {
+                typedef struct
+                {
+                    uint32_t start;
+                    uint32_t count;
+                    dm_render_pass* render_pass;
+                } draw_packet;
+                
+                draw_packet* packet = command->data;
+                
+                dm_directx_draw_arrays(packet->start, packet->count, packet->render_pass);
+            } break;
+            
+            case DM_RENDER_COMMAND_DRAW_INDEXED:
+            {
+                typedef struct
+                {
+                    uint32_t num_indices;
+                    uint32_t index_offset;
+                    uint32_t vertex_offset;
+                    dm_render_pass* render_pass;
+                } draw_packet;
+                
+                draw_packet* packet = command->data;
+                
+                dm_directx_draw_indexed(packet->num_indices, packet->index_offset, packet->vertex_offset, packet->render_pass);
+            } break;
+            
+            case DM_RENDER_COMMAND_DRAW_INSTANCED:
+            {
+                typedef struct
+                {
+                    uint32_t num_indices;
+                    uint32_t num_insts;
+                    uint32_t index_offset;
+                    uint32_t vertex_offset;
+                    uint32_t inst_offset;
+                    dm_render_pass* render_pass;
+                } draw_packet;
+                
+                draw_packet* packet = command->data;
+                
+                dm_directx_draw_instanced(packet->num_indices, packet->num_insts, packet->index_offset, packet->vertex_offset, packet->inst_offset, packet->render_pass);
+            } break;
+            
+            default:
+            DM_LOG_ERROR("Unsupported render command for DirectX 11");
+            break;
+        }
+    }
+    
+    return true;
 }
 
 /*****************
