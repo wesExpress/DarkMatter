@@ -36,9 +36,10 @@ extern bool dm_renderer_end_frame_impl();
 extern bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data);
 extern void dm_renderer_delete_buffer_impl(dm_buffer* buffer);
 
-/*
+/*******
 GLOBALS
-*/
+*********/
+
 dm_list* vertices = NULL;
 dm_list* indices = NULL;
 dm_list* render_commands = NULL;
@@ -63,195 +64,125 @@ void dm_render_command_shutdown()
     dm_list_destroy(render_commands);
 }
 
-void dm_renderer_submit_command(dm_render_command_type command_type, void* data, size_t data_size, bool copy)
+void dm_renderer_submit_command(dm_render_command_type command_type, dm_byte_buffer* buffer)
 {
 	dm_render_command command = { 0 };
-	if(copy) command.data = dm_alloc(data_size, DM_MEM_RENDER_COMMAND);
-    else command.data = data;
-    command.data_size = data_size;
     command.type = command_type;
+    command.buffer = buffer;
     
 	dm_list_append(render_commands, &command);
 }
 
 void dm_render_command_begin_renderpass(dm_render_pass* render_pass)
 {
-	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, render_pass, 0, false);
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(buffer, render_pass, sizeof(dm_render_pass));
+	dm_renderer_submit_command(DM_RENDER_COMMAND_BEGIN_RENDER_PASS, buffer);
 }
 
 void dm_render_command_end_renderpass(dm_render_pass* render_pass)
 {
-	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, render_pass, 0, false);
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(buffer, render_pass, sizeof(dm_render_pass));
+	dm_renderer_submit_command(DM_RENDER_COMMAND_END_RENDER_PASS, buffer);
 }
 
 void dm_render_command_set_viewport(dm_viewport viewport)
 {
-    dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, &viewport, sizeof(dm_viewport), true);
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(buffer, &viewport, sizeof(dm_viewport));
+    dm_renderer_submit_command(DM_RENDER_COMMAND_SET_VIEWPORT, buffer);
 }
 
 void dm_render_command_clear(dm_color color)
 {
-    dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, &color, sizeof(dm_color), true);
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(buffer, &color, sizeof(dm_color));
+    dm_renderer_submit_command(DM_RENDER_COMMAND_CLEAR, buffer);
 }
 
 void dm_render_command_update_buffer(dm_buffer* buffer, void* data, size_t data_size)
 {
-    typedef struct
-    {
-        dm_buffer* buffer;
-        size_t data_size;
-        void* data;
-    } update_packet;
-    
-    update_packet packet = {0};
-    packet.buffer = buffer;
-    packet.data = dm_alloc(data_size, DM_MEM_RENDER_COMMAND);
-    dm_memcpy(packet.data, data, data_size);
-    packet.data_size = data_size;
-    
-    dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_BUFFER, &packet, sizeof(update_packet), true);
+    dm_byte_buffer* byte_buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(byte_buffer, buffer, sizeof(dm_buffer));
+    dm_byte_buffer_push(byte_buffer, data, data_size);
+    dm_byte_buffer_push(byte_buffer, &data_size, sizeof(data_size));
+    dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_BUFFER, byte_buffer);
 }
 
 void dm_render_command_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_render_pass* render_pass)
 {
-    typedef struct 
-    {
-        dm_buffer* buffer;
-        uint32_t slot;
-        dm_render_pass* render_pass;
-    } bind_packet;
-    
-    bind_packet packet = {0};
-    packet.buffer = buffer;
-    packet.slot = slot;
-    packet.render_pass = render_pass;
-    
-    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, &packet, sizeof(bind_packet), true);
+    dm_byte_buffer* byte_buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(byte_buffer, buffer, sizeof(dm_buffer));
+    dm_byte_buffer_push(byte_buffer, &slot, sizeof(slot));
+    dm_byte_buffer_push(byte_buffer, render_pass, sizeof(dm_render_pass));
+    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, byte_buffer);
 }
 
 void dm_render_command_update_scene_cb(void* data, size_t data_size, dm_render_pass* render_pass)
 {
-    typedef struct
-    {
-        size_t data_size;
-        dm_render_pass* render_pass;
-        void* data;
-    } update_packet;
-    
-    update_packet packet = {0};
-    packet.data_size = data_size;
-    packet.render_pass = render_pass;
-    packet.data = data;
-    
-    dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_SCENE_CB, &packet, sizeof(update_packet), true);
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(buffer, data, data_size);
+    dm_byte_buffer_push(buffer, render_pass, sizeof(dm_render_pass));
+    dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_SCENE_CB, buffer);
 }
 
 void dm_render_command_update_inst_cb(void* data, size_t data_size, dm_render_pass* render_pass)
 {
-    typedef struct
-    {
-        size_t data_size;
-        dm_render_pass* render_pass;
-        void* data;
-    } update_packet;
-    
-    update_packet packet = {0};
-    packet.data_size = data_size;
-    packet.render_pass = render_pass;
-    packet.data = data;
-    
-    dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_INST_CB, &packet, sizeof(update_packet), true);
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(buffer, data, data_size);
+    dm_byte_buffer_push(buffer, render_pass, sizeof(dm_render_pass));
+    dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_INST_CB, buffer);
 }
 
 void dm_render_command_bind_texture(dm_image* image, uint32_t slot, dm_render_pass* render_pass)
 {
-    typedef struct
-    {
-        dm_image image;
-        uint32_t slot;
-        dm_render_pass* render_pass;
-    } bind_packet;
-    
-    bind_packet packet = {0};
-    packet.image = *image;
-    packet.slot = slot;
-    packet.render_pass = render_pass;
-    
-    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_TEXTURE, &packet, sizeof(bind_packet), true);
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(buffer, image, sizeof(dm_image));
+    dm_byte_buffer_push(buffer, &slot, sizeof(slot));
+    dm_byte_buffer_push(buffer, render_pass, sizeof(dm_render_pass));
+    size_t test = sizeof(dm_image);
+    test = sizeof(dm_image_desc);
+    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_TEXTURE, buffer);
 }
 
 void dm_render_command_bind_uniforms(uint32_t slot, dm_render_pass* render_pass)
 {
-    typedef struct
-    {
-        uint32_t slot;
-        dm_render_pass* render_pass;
-    } bind_packet;
-    
-    bind_packet packet = {0};
-    packet.slot = slot;
-    packet.render_pass = render_pass;
-    
-    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_UNIFORMS, &packet, sizeof(bind_packet), true);
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(buffer, &slot, sizeof(slot));
+    dm_byte_buffer_push(buffer, render_pass, sizeof(dm_render_pass));
+    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_UNIFORMS, buffer);
 }
 
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_render_pass* render_pass)
 {
-    typedef struct
-    {
-        uint32_t start;
-        uint32_t count;
-        dm_render_pass* render_pass;
-    } draw_packet;
-    
-    draw_packet packet = {0};
-    packet.start = start;
-    packet.count = count;
-    packet.render_pass = render_pass;
-    
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_ARRAYS, &packet, sizeof(draw_packet), true);
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(buffer, &start, sizeof(start));
+    dm_byte_buffer_push(buffer, &count, sizeof(count));
+    dm_byte_buffer_push(buffer, render_pass, sizeof(dm_render_pass));
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_ARRAYS, buffer);
 }
 
 void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_render_pass* render_pass)
 {
-	typedef struct
-    {
-        uint32_t num_indices;
-        uint32_t index_offset;
-        uint32_t vertex_offset;
-        dm_render_pass* render_pass;
-    } draw_packet;
-    
-    draw_packet packet = {0};
-    packet.num_indices = num_indices;
-    packet.index_offset = index_offset;
-    packet.vertex_offset = vertex_offset;
-    packet.render_pass = render_pass;
-    
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, &packet, sizeof(draw_packet), true);
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(buffer, &num_indices, sizeof(num_indices));
+    dm_byte_buffer_push(buffer, &index_offset, sizeof(index_offset));
+    dm_byte_buffer_push(buffer, &vertex_offset, sizeof(vertex_offset));
+    dm_byte_buffer_push(buffer, render_pass, sizeof(dm_render_pass));
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, buffer);
 }
 
 void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_render_pass* render_pass)
 {
-	typedef struct
-    {
-        uint32_t num_indices;
-        uint32_t num_insts;
-        uint32_t index_offset;
-        uint32_t vertex_offset;
-        uint32_t inst_offset;
-        dm_render_pass* render_pass;
-    } draw_packet;
-    
-    draw_packet packet = {0};
-    packet.num_indices = num_indices;
-    packet.num_insts = num_insts;
-    packet.index_offset = index_offset;
-    packet.vertex_offset = vertex_offset;
-    packet.inst_offset = inst_offset;
-    packet.render_pass = render_pass;
-    
-	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INSTANCED, &packet, sizeof(draw_packet), true);
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    dm_byte_buffer_push(buffer, &num_indices, sizeof(num_indices));
+    dm_byte_buffer_push(buffer, &num_insts, sizeof(num_insts));
+    dm_byte_buffer_push(buffer, &index_offset, sizeof(index_offset));
+    dm_byte_buffer_push(buffer, &vertex_offset, sizeof(vertex_offset));
+    dm_byte_buffer_push(buffer, &inst_offset, sizeof(inst_offset));
+    dm_byte_buffer_push(buffer, render_pass, sizeof(dm_render_pass));
+	dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INSTANCED, buffer);
 }
 
 void dm_renderer_clear_command_buffer()
@@ -260,48 +191,7 @@ void dm_renderer_clear_command_buffer()
     {
         dm_for_list_item(render_commands, dm_render_command, command)
         {
-            switch(command->type)
-            {
-                case DM_RENDER_COMMAND_UPDATE_BUFFER:
-                {
-                    typedef struct
-                    {
-                        dm_buffer* buffer;
-                        size_t data_size;
-                        void* data;
-                    } update_packet;
-                    
-                    update_packet* packet = command->data;
-                    dm_free(packet->data, packet->data_size, DM_MEM_RENDER_COMMAND);
-                } break;
-                
-                case DM_RENDER_COMMAND_UPDATE_SCENE_CB:
-                {
-                    typedef struct
-                    {
-                        size_t data_size;
-                        dm_render_pass* render_pass;
-                        void* data;
-                    } update_packet;
-                    
-                    update_packet* packet = command->data;
-                    dm_free(packet->data, packet->data_size, DM_MEM_RENDER_COMMAND);
-                } break;
-                
-                case DM_RENDER_COMMAND_UPDATE_INST_CB:
-                {
-                    typedef struct
-                    {
-                        size_t data_size;
-                        dm_render_pass* render_pass;
-                        void* data;
-                    } update_packet;
-                    
-                    update_packet* packet = command->data;
-                    dm_free(packet->data, packet->data_size, DM_MEM_RENDER_COMMAND);
-                } break;
-            }
-            dm_free(command->data, command->data_size, DM_MEM_RENDER_COMMAND);
+            dm_byte_buffer_destroy(command->buffer);
         }
         dm_list_clear(render_commands, 0);
     }
@@ -497,7 +387,17 @@ bool dm_default_pass()
                 inst_cb.has_texture = 1;
                 inst_cb.shininess = material->shininess;
                 dm_image* diffuse_map = dm_image_get(material->diffuse_map);
+                if(!diffuse_map)
+                {
+                    DM_LOG_FATAL("Could not find diffuse map!");
+                    return false;
+                }
                 dm_image* specular_map = dm_image_get(material->specular_map);
+                if(!specular_map)
+                {
+                    DM_LOG_FATAL("Could not find specular map!");
+                    return false;
+                }
                 dm_render_command_bind_texture(diffuse_map, 0, default_pass);
                 dm_render_command_bind_texture(specular_map, 1, default_pass);
             }
@@ -623,9 +523,9 @@ void dm_renderer_api_submit_vertex_data(const char* tag, dm_vertex_t* vertex_dat
     }
 }
 
-bool dm_renderer_api_register_image(dm_image_desc desc)
+bool dm_renderer_api_register_image(const char* path, const char* name, bool flip, dm_texture_format format, dm_texture_format internal_format)
 {
-    return dm_load_image(desc);
+    return dm_load_image(path, name, flip, format, internal_format);
 }
 
 void dm_renderer_api_set_clear_color(dm_vec3 color)

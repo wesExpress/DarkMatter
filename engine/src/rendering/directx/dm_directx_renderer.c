@@ -13,6 +13,7 @@
 #include "platform/dm_platform.h"
 #include "structures/dm_list.h"
 #include "structures/dm_map.h"
+#include "structures/dm_byte_buffer.h"
 
 #include <d3d11_1.h>
 #include <dxgi.h>
@@ -1220,6 +1221,8 @@ bool dm_renderer_submit_command_buffer_impl(dm_list* render_commands)
     
     dm_for_list_item(render_commands, dm_render_command, command)
     {
+        dm_byte_buffer* byte_buffer = command->buffer;
+        
         switch(command->type)
         {
             case DM_RENDER_COMMAND_BEGIN_RENDER_PASS:
@@ -1230,7 +1233,9 @@ bool dm_renderer_submit_command_buffer_impl(dm_list* render_commands)
                     return false;
                 }
                 complete_pass = false;
-                if(!dm_directx_begin_renderpass((dm_render_pass*)command->data)) return false;
+                
+                dm_render_pass* render_pass = dm_byte_buffer_pop(byte_buffer, sizeof(dm_render_pass));
+                if(!dm_directx_begin_renderpass(render_pass)) return false;
             } break;
             
             case DM_RENDER_COMMAND_END_RENDER_PASS:
@@ -1241,146 +1246,96 @@ bool dm_renderer_submit_command_buffer_impl(dm_list* render_commands)
                     return false;
                 }
                 complete_pass = true;
-                dm_directx_end_renderpass((dm_render_pass*)command->data);
+                
+                dm_render_pass* render_pass = dm_byte_buffer_pop(byte_buffer, sizeof(dm_render_pass));
+                dm_directx_end_renderpass(render_pass);
             } break;
             
             case DM_RENDER_COMMAND_SET_VIEWPORT:
             {
-                dm_directx_set_viewport(*(dm_viewport*)command->data);
+                dm_viewport* viewport = dm_byte_buffer_pop(byte_buffer, sizeof(dm_viewport));
+                dm_directx_set_viewport(*viewport);
             } break;
             
             case DM_RENDER_COMMAND_CLEAR:
             {
-                dm_directx_clear((dm_color*)command->data);
+                dm_color* color = dm_byte_buffer_pop(byte_buffer, sizeof(dm_color));
+                dm_directx_clear(color);
             } break;
             
             case DM_RENDER_COMMAND_UPDATE_BUFFER:
             {
-                typedef struct
-                {
-                    dm_buffer* buffer;
-                    size_t data_size;
-                    void* data;
-                } update_packet;
-                
-                update_packet* packet = command->data;
-                
-                if(!dm_directx_update_buffer(packet->buffer, packet->data, packet->data_size)) return false;
+                size_t* data_size = dm_byte_buffer_pop(byte_buffer, sizeof(size_t));
+                void* data = dm_byte_buffer_pop(byte_buffer, *data_size);
+                dm_buffer* buffer = dm_byte_buffer_pop(byte_buffer, sizeof(dm_buffer));
+                if(!dm_directx_update_buffer(buffer, data, *data_size)) return false;
             } break;
             
             case DM_RENDER_COMMAND_UPDATE_SCENE_CB:
             {
-                typedef struct
-                {
-                    size_t data_size;
-                    dm_render_pass* render_pass;
-                    void* data;
-                } update_packet;
-                
-                update_packet* packet = command->data;
-                
-                if(!dm_directx_update_scene_cb(packet->data, packet->data_size, packet->render_pass)) return false;
+                dm_render_pass* render_pass = dm_byte_buffer_pop(byte_buffer, sizeof(dm_render_pass));
+                size_t* data_size = dm_byte_buffer_pop(byte_buffer, sizeof(size_t));
+                void* data = dm_byte_buffer_pop(byte_buffer, *data_size);
+                if(!dm_directx_update_scene_cb(data, *data_size, render_pass)) return false;
             } break;
             
             case DM_RENDER_COMMAND_UPDATE_INST_CB:
             {
-                typedef struct
-                {
-                    size_t data_size;
-                    dm_render_pass* render_pass;
-                    void* data;
-                } update_packet;
-                
-                update_packet* packet = command->data;
-                
-                if(!dm_directx_update_inst_cb(packet->data, packet->data_size, packet->render_pass)) return false;
+                dm_render_pass* render_pass = dm_byte_buffer_pop(byte_buffer, sizeof(dm_render_pass));
+                size_t* data_size = dm_byte_buffer_pop(byte_buffer, sizeof(size_t));
+                void* data = dm_byte_buffer_pop(byte_buffer, *data_size);
+                if(!dm_directx_update_inst_cb(data, *data_size, render_pass)) return false;
             } break;
             
             case DM_RENDER_COMMAND_BIND_BUFFER:
             {
-                typedef struct 
-                {
-                    dm_buffer* buffer;
-                    uint32_t slot;
-                    dm_render_pass* render_pass;
-                } bind_packet;
-                
-                bind_packet* packet = command->data;
-                
-                dm_directx_bind_buffer(packet->buffer, packet->slot);
+                dm_render_pass* render_pass = dm_byte_buffer_pop(byte_buffer, sizeof(dm_render_pass));
+                uint32_t* slot = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                dm_buffer* buffer = dm_byte_buffer_pop(byte_buffer, sizeof(dm_buffer));
+                dm_directx_bind_buffer(buffer, *slot);
             } break;
             
             case DM_RENDER_COMMAND_BIND_TEXTURE:
             {
-                typedef struct
-                {
-                    dm_image image;
-                    uint32_t slot;
-                    dm_render_pass* render_pass;
-                } bind_packet;
-                
-                bind_packet* packet = command->data;
-                
-                dm_directx_bind_texture(packet->image, packet->slot);
+                dm_render_pass* render_pass = dm_byte_buffer_pop(byte_buffer, sizeof(dm_render_pass));
+                uint32_t* slot = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                dm_image* image = dm_byte_buffer_pop(byte_buffer, sizeof(dm_image));
+                dm_directx_bind_texture(*image, *slot);
             } break;
             
             case DM_RENDER_COMMAND_BIND_UNIFORMS:
             {
-                typedef struct
-                {
-                    uint32_t slot;
-                    dm_render_pass* render_pass;
-                } bind_packet;
-                
-                bind_packet* packet = command->data;
-                
-                if(!dm_directx_bind_uniforms(packet->slot, packet->render_pass)) return false;
+                dm_render_pass* render_pass = dm_byte_buffer_pop(byte_buffer, sizeof(dm_render_pass));
+                uint32_t* slot = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                if(!dm_directx_bind_uniforms(*slot, render_pass)) return false;
             } break;
             
             case DM_RENDER_COMMAND_DRAW_ARRAYS:
             {
-                typedef struct
-                {
-                    uint32_t start;
-                    uint32_t count;
-                    dm_render_pass* render_pass;
-                } draw_packet;
-                
-                draw_packet* packet = command->data;
-                
-                dm_directx_draw_arrays(packet->start, packet->count, packet->render_pass);
+                dm_render_pass* render_pass = dm_byte_buffer_pop(byte_buffer, sizeof(dm_render_pass));
+                uint32_t* count = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t* start = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                dm_directx_draw_arrays(*start, *count, render_pass);
             } break;
             
             case DM_RENDER_COMMAND_DRAW_INDEXED:
             {
-                typedef struct
-                {
-                    uint32_t num_indices;
-                    uint32_t index_offset;
-                    uint32_t vertex_offset;
-                    dm_render_pass* render_pass;
-                } draw_packet;
-                
-                draw_packet* packet = command->data;
-                
-                dm_directx_draw_indexed(packet->num_indices, packet->index_offset, packet->vertex_offset, packet->render_pass);
+                dm_render_pass* render_pass = dm_byte_buffer_pop(byte_buffer, sizeof(dm_render_pass));
+                uint32_t* vertex_offset = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t* index_offset = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t* num_indices = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                dm_directx_draw_indexed(*num_indices, *index_offset, *vertex_offset, render_pass);
             } break;
             
             case DM_RENDER_COMMAND_DRAW_INSTANCED:
             {
-                typedef struct
-                {
-                    uint32_t num_indices;
-                    uint32_t num_insts;
-                    uint32_t index_offset;
-                    uint32_t vertex_offset;
-                    uint32_t inst_offset;
-                    dm_render_pass* render_pass;
-                } draw_packet;
-                
-                draw_packet* packet = command->data;
-                
-                dm_directx_draw_instanced(packet->num_indices, packet->num_insts, packet->index_offset, packet->vertex_offset, packet->inst_offset, packet->render_pass);
+                dm_render_pass* render_pass = dm_byte_buffer_pop(byte_buffer, sizeof(dm_render_pass));
+                uint32_t* inst_offset = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t* vertex_offset = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t* index_offset = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t* num_insts = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t* num_indices = dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                dm_directx_draw_instanced(*num_indices, *num_insts, *index_offset, *vertex_offset, *inst_offset, render_pass);
             } break;
             
             default:

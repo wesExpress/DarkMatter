@@ -29,7 +29,7 @@ IF defined opengl (
 	SET linker_flags=%linker_flags% d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib
 )
 
-SET compiler_flags=/W2 /Zi
+SET compiler_flags=/W2 /Z7
 SET assembly=DarkMatter
 
 if not exist "build\engine" mkdir build\engine

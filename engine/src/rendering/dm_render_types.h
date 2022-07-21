@@ -5,6 +5,7 @@
 #include "core/dm_string.h"
 #include "structures/dm_list.h"
 #include "structures/dm_map.h"
+#include "structures/dm_byte_buffer.h"
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -320,12 +321,12 @@ typedef struct dm_shader
 
 typedef struct dm_image_desc
 {
-    const char* path;
-    const char* name;
     int width, height, n_channels;
     bool flip;
     dm_texture_format format;
     dm_texture_format internal_format;
+    //const char* name;
+    //const char* path;
 } dm_image_desc;
 
 typedef struct dm_image
@@ -394,8 +395,7 @@ typedef struct dm_render_packet
 typedef struct dm_render_command
 {
     dm_render_command_type type;
-    size_t data_size;
-    void* data;
+    dm_byte_buffer* buffer;
 } dm_render_command;
 
 typedef struct dm_render_pipeline
