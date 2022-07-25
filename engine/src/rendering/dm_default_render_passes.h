@@ -53,36 +53,23 @@ bool dm_renderer_create_default_pass()
         .num = sizeof(attribs) / sizeof(attribs[0])
     };
     
-    dm_shader_desc vertex_stage = { 0 };
-    vertex_stage.type = DM_SHADER_TYPE_VERTEX;
 #ifdef DM_OPENGL
-    vertex_stage.source = "shaders/glsl/light_src_vertex.glsl";
+    const char* vertex_src = "shaders/glsl/light_src_vertex.glsl";
 #elif defined DM_DIRECTX
-    vertex_stage.source = "shaders/hlsl/new_shader_vertex.fxc";
+    const char* vertex_src = "shaders/hlsl/new_shader_vertex.fxc";
 #elif defined DM_METAL
-    vertex_stage.source = "vertex_main";
+    const char* vertex_src = "vertex_main";
 #endif
     
-    dm_shader_desc pixel_stage = { 0 };
-    pixel_stage.type = DM_SHADER_TYPE_PIXEL;
 #ifdef DM_OPENGL
-    pixel_stage.source = "shaders/glsl/light_src_pixel.glsl";
+    const char* pixel_src = "shaders/glsl/light_src_pixel.glsl";
 #elif defined DM_DIRECTX
-    pixel_stage.source = "shaders/hlsl/new_shader_pixel.fxc";
+    const char* pixel_src = "shaders/hlsl/new_shader_pixel.fxc";
 #elif defined DM_METAL
-    pixel_stage.source = "fragment_main";
+    const char* pixel_src = "fragment_main";
 #endif
     
-    dm_shader_desc stages[] = {
-        vertex_stage,
-        pixel_stage
-    };
-    
-    dm_shader shader = {0};
-    shader.stages = stages;
-    shader.num_stages = sizeof(stages) / sizeof(stages[0]);
-    
-    if(!dm_renderer_create_render_pass(shader, layout, sizeof(dm_default_pass_scene_cb), sizeof(dm_default_pass_inst_cb) * 1024,  "default"))
+    if(!dm_renderer_create_render_pass(vertex_src, pixel_src, layout, sizeof(dm_default_pass_scene_cb), sizeof(dm_default_pass_inst_cb) * 1024,  "default"))
     {
         DM_LOG_FATAL("Could not create default light source pass!");
         return false;

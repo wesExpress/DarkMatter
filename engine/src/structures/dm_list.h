@@ -14,6 +14,8 @@ typedef struct dm_list
     void* data;
 } dm_list;
 
+
+
 DM_API dm_list* dm_list_create(size_t element_size, size_t capacity);
 DM_API void dm_list_destroy(dm_list* list);
 
@@ -59,5 +61,7 @@ DM_API bool dm_list_is_empty(dm_list* list);
 uint32_t i=0;\
 TYPE* ITEM = dm_list_at(LIST, i);\
 for(i=0, ITEM=dm_list_at(LIST,i); i<(LIST)->count; ITEM=dm_list_at(LIST,++i))\
+
+
 
 #endif

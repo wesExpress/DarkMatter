@@ -18,6 +18,7 @@ static const char* mem_tag_str[] = {
     "INPUT          ",
     "STRING         ",
     "LIST           ",
+    "SLOT LIST      ",
     "BYTE BUFFER    ",
     "MAP            ",
     "RENDERER       ",
@@ -171,6 +172,12 @@ void dm_mem_all_freed()
 					break;
                     case DM_MEM_LIST:
 					strcpy(buffer, "list");
+					break;
+                    case DM_MEM_SLOT_LIST:
+					strcpy(buffer, "slot list");
+					break;
+                    case DM_MEM_BYTE_BUFFER:
+					strcpy(buffer, "byte buffer");
 					break;
                     case DM_MEM_MAP:
 					strcpy(buffer, "map");

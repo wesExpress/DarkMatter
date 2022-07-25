@@ -28,6 +28,7 @@ void dm_byte_buffer_push(dm_byte_buffer* buffer, void* data, size_t data_size)
     while((buffer->size + data_size) / buffer->capacity > DM_BYTE_BUFFER_LOAD_FACTOR)
     {
         buffer->data = dm_realloc(buffer->data, buffer->capacity * DM_BYTE_BUFFER_RESIZE_FACTOR);
+        dm_mem_db_adjust(buffer->capacity * DM_BYTE_BUFFER_RESIZE_FACTOR - buffer->capacity, DM_MEM_BYTE_BUFFER, DM_MEM_ADJUST_ADD);
         buffer->capacity *= DM_BYTE_BUFFER_RESIZE_FACTOR;
     }
     
@@ -42,6 +43,7 @@ void* dm_byte_buffer_pop(dm_byte_buffer* buffer, size_t data_size)
     if((buffer->size - data_size) / buffer->capacity < DM_BYTE_BUFFER_LOAD_FACTOR)
     {
         buffer->data = dm_realloc(buffer->data, buffer->capacity / DM_BYTE_BUFFER_RESIZE_FACTOR);
+        dm_mem_db_adjust(buffer->capacity * DM_BYTE_BUFFER_RESIZE_FACTOR - buffer->capacity, DM_MEM_BYTE_BUFFER, DM_MEM_ADJUST_SUBTRACT);
         buffer->capacity /= DM_BYTE_BUFFER_RESIZE_FACTOR;
     }
     buffer->size -= data_size;

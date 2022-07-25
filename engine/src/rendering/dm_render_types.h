@@ -272,7 +272,7 @@ typedef struct dm_buffer_desc
 typedef struct dm_buffer
 {
     dm_buffer_desc desc;
-    void* internal_buffer;
+    uint32_t internal_index;
 } dm_buffer;
 
 typedef struct dm_buffer_update_packet
@@ -296,25 +296,16 @@ typedef struct dm_unifom
 {
     dm_uniform_data_t type;
     size_t data_size;
+    uint32_t internal_index;
     char* name;
-    void* internal_uniform;
     void* data;
 } dm_uniform;
 
 // shader
 
-typedef struct dm_shader_desc
-{
-    dm_shader_type type;
-    char* source;
-} dm_shader_desc;
-
 typedef struct dm_shader
 {
-    dm_shader_desc* stages;
-    uint32_t num_stages;
-    char* pass;
-    void* internal_shader;
+    uint32_t internal_index;
 } dm_shader;
 
 // image
@@ -325,15 +316,13 @@ typedef struct dm_image_desc
     bool flip;
     dm_texture_format format;
     dm_texture_format internal_format;
-    //const char* name;
-    //const char* path;
 } dm_image_desc;
 
 typedef struct dm_image
 {
     dm_image_desc desc;
+    uint32_t internal_index;
     void* data;
-    void* internal_texture;
 } dm_image;
 
 typedef struct dm_sampler_desc
@@ -408,11 +397,14 @@ typedef struct dm_render_pipeline
     bool wireframe;
 } dm_render_pipeline;
 
+#define dm_get_render_pass_size(PASS)\
+sizeof(dm_render_pass) + ((PASS)->internal_size - sizeof(void*)) + ((PASS)->shader.internal_size - sizeof(void*))
+
 typedef struct dm_render_pass
 {
     dm_shader shader;
     dm_viewport viewport;
-    void* internal_pass;
+    uint32_t internal_index;
 } dm_render_pass;
 
 #endif

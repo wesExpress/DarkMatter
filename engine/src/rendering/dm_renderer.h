@@ -55,5 +55,7 @@ default render passes:
 */
 bool dm_renderer_create_default_render_passes();
 
-bool dm_renderer_create_render_pass(dm_shader shader, dm_vertex_layout layout, size_t scene_cb_size, size_t object_cb_size, char* tag);
+bool dm_renderer_create_render_pass(const char* vertex_src, const char* pixel_src, dm_vertex_layout layout, size_t scene_cb_size, size_t object_cb_size, char* tag);
+dm_render_pass* dm_renderer_get_render_pass(char* tag);
+
 #endif
