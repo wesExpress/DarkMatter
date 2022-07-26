@@ -1103,11 +1103,13 @@ bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data)
 COMMANDS
 **********/
 
-bool dm_directx_begin_renderpass(dm_directx_render_pass* internal_pass, dm_directx_shader* internal_shader)
+bool dm_directx_begin_renderpass(uint32_t shader_index)
 {
 	HRESULT hr;
     
 	ID3D11DeviceContext* context = directx_renderer.context;
+    
+    dm_directx_shader* internal_shader = dm_slot_list_at(directx_shaders, shader_index);
     
 	// shader
 	context->lpVtbl->VSSetShader(context, internal_shader->vertex_shader, NULL, 0);
@@ -1245,14 +1247,10 @@ bool dm_renderer_submit_command_buffer_impl(dm_list* render_commands)
                 }
                 complete_pass = false;
                 
-                dm_directx_shader* shader = dm_byte_buffer_pop(byte_buffer, sizeof(dm_directx_shader));
-                dm_directx_render_pass* render_pass = dm_byte_buffer_pop(byte_buffer, sizeof(dm_directx_render_pass));
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t shader_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
                 
-                size_t test = sizeof(ID3D11VertexShader);
-                test = sizeof(ID3D11PixelShader);
-                test = sizeof(ID3D11InputLayout);
-                
-                if(!dm_directx_begin_renderpass(render_pass, shader)) return false;
+                if(!dm_directx_begin_renderpass(shader_index)) return false;
             } break;
             
             case DM_RENDER_COMMAND_END_RENDER_PASS:

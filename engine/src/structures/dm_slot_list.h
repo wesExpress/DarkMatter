@@ -2,6 +2,8 @@
 #define __DM_SLOT_LIST_H__
 
 #include "core/dm_defines.h"
+#include "structures/dm_list.h"
+
 #include <stdlib.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -11,6 +13,7 @@ typedef struct dm_slot_list
     size_t capacity;
     size_t count;
     size_t element_size;
+    uint16_t* indices;
     void* data;
 } dm_slot_list;
 
@@ -21,6 +24,10 @@ DM_API void dm_slot_list_destroy(dm_slot_list* list);
 finds first open slot and inserts value, changes index to found index
 */
 DM_API void dm_slot_list_insert(dm_slot_list* list, void* value, uint32_t* index);
+
+/*
+*/
+DM_API void dm_slot_list_delete(dm_slot_list* list, uint32_t index);
 
 /*
 returns value from a slot list at specified index.

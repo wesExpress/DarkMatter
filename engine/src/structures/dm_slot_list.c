@@ -13,6 +13,7 @@ dm_slot_list* dm_slot_list_create(size_t element_size, size_t capacity)
     list->capacity = capacity;
     list->element_size = element_size;
     list->data = dm_alloc(list->capacity * list->element_size, DM_MEM_SLOT_LIST);
+    list->indices = dm_calloc(list->capacity, sizeof(uint32_t), DM_MEM_SLOT_LIST);
     
     return list;
 }
@@ -34,23 +35,40 @@ void dm_slot_list_insert(dm_slot_list* list, void* value, uint32_t* index)
 {
     for (uint32_t i=0; i<list->capacity; i++)
     {
-        void* item = (char*)list->data + i * list->element_size;
-        
-        if(!item)
+        if(list->indices[i] == 0)
         {
             *index = i;
+            break;
         }
     }
     
     if(*index / list->capacity > DM_SLOT_LIST_LOAD_FACTOR)
     {
-        dm_realloc(list->data, list->capacity * DM_SLOT_LIST_RESIZE_FACTOR);
-        dm_mem_db_adjust(list->capacity * DM_SLOT_LIST_RESIZE_FACTOR - list->capacity, DM_MEM_SLOT_LIST, DM_MEM_ADJUST_ADD);
+        dm_realloc(list->data, list->capacity * DM_SLOT_LIST_RESIZE_FACTOR * list->element_size);
+        dm_realloc(list->indices, list->capacity * DM_SLOT_LIST_RESIZE_FACTOR * sizeof(uint32_t));
+        dm_mem_db_adjust(list->element_size * (list->capacity * DM_SLOT_LIST_RESIZE_FACTOR - list->capacity), DM_MEM_SLOT_LIST, DM_MEM_ADJUST_ADD);
+        dm_mem_db_adjust(sizeof(uint32_t) * (list->capacity * DM_SLOT_LIST_RESIZE_FACTOR - list->capacity), DM_MEM_SLOT_LIST, DM_MEM_ADJUST_ADD); 
+        
+        for(uint32_t i=list->capacity; i<list->capacity * DM_SLOT_LIST_RESIZE_FACTOR; i++)
+        {
+            list->indices[i] = 0;
+        }
+        
+        list->capacity++;
     }
+    
     
     size_t offset = *index * list->element_size;
     dm_memcpy((char*)list->data + offset, value, list->element_size);
     list->count++;
+}
+
+void dm_slot_list_delete(dm_slot_list* list, uint32_t index)
+{
+    if(list && index < list->capacity)
+    {
+        list->indices[index] = 0;
+    }
 }
 
 void* dm_slot_list_at(dm_slot_list* list, uint32_t index)
