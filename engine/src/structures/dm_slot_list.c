@@ -33,30 +33,33 @@ void dm_slot_list_destroy(dm_slot_list* list)
 
 void dm_slot_list_insert(dm_slot_list* list, void* value, uint32_t* index)
 {
-    for (uint32_t i=0; i<list->capacity; i++)
+    uint32_t i = 0;
+    while(true)
     {
         if(list->indices[i] == 0)
         {
             *index = i;
+            list->indices[i] = 1;
             break;
         }
-    }
-    
-    if(*index / list->capacity > DM_SLOT_LIST_LOAD_FACTOR)
-    {
-        dm_realloc(list->data, list->capacity * DM_SLOT_LIST_RESIZE_FACTOR * list->element_size);
-        dm_realloc(list->indices, list->capacity * DM_SLOT_LIST_RESIZE_FACTOR * sizeof(uint32_t));
-        dm_mem_db_adjust(list->element_size * (list->capacity * DM_SLOT_LIST_RESIZE_FACTOR - list->capacity), DM_MEM_SLOT_LIST, DM_MEM_ADJUST_ADD);
-        dm_mem_db_adjust(sizeof(uint32_t) * (list->capacity * DM_SLOT_LIST_RESIZE_FACTOR - list->capacity), DM_MEM_SLOT_LIST, DM_MEM_ADJUST_ADD); 
         
-        for(uint32_t i=list->capacity; i<list->capacity * DM_SLOT_LIST_RESIZE_FACTOR; i++)
+        if(i / list->capacity > DM_SLOT_LIST_LOAD_FACTOR)
         {
-            list->indices[i] = 0;
+            dm_realloc(list->data, list->capacity * DM_SLOT_LIST_RESIZE_FACTOR * list->element_size);
+            dm_realloc(list->indices, list->capacity * DM_SLOT_LIST_RESIZE_FACTOR * sizeof(uint32_t));
+            dm_mem_db_adjust(list->element_size * (list->capacity * DM_SLOT_LIST_RESIZE_FACTOR - list->capacity), DM_MEM_SLOT_LIST, DM_MEM_ADJUST_ADD);
+            dm_mem_db_adjust(sizeof(uint32_t) * (list->capacity * DM_SLOT_LIST_RESIZE_FACTOR - list->capacity), DM_MEM_SLOT_LIST, DM_MEM_ADJUST_ADD); 
+            
+            for(uint32_t i=list->capacity; i<list->capacity * DM_SLOT_LIST_RESIZE_FACTOR; i++)
+            {
+                list->indices[i] = 0;
+            }
+            
+            list->capacity++;
         }
         
-        list->capacity++;
+        i++;
     }
-    
     
     size_t offset = *index * list->element_size;
     dm_memcpy((char*)list->data + offset, value, list->element_size);

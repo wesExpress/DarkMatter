@@ -58,8 +58,6 @@ dm_buffer_data static_buffer = {
 RENDER COMMANDS
 *****************/
 
-
-
 void dm_render_command_shutdown()
 {
     dm_list_destroy(render_commands);
@@ -115,9 +113,9 @@ void dm_render_command_update_buffer(dm_buffer* buffer, void* data, size_t data_
 {
     dm_byte_buffer* byte_buffer = dm_byte_buffer_create();
     
-    dm_byte_buffer_push(byte_buffer, &buffer->internal_index, sizeof(uint32_t));
     dm_byte_buffer_push(byte_buffer, data, data_size);
-    dm_byte_buffer_push(byte_buffer, &data_size, sizeof(size_t));
+    dm_byte_buffer_push(byte_buffer, &data_size, sizeof(data_size));
+    dm_byte_buffer_push(byte_buffer, &(buffer->internal_index), sizeof(buffer->internal_index));
     
     dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_BUFFER, byte_buffer);
 }
@@ -126,11 +124,13 @@ void dm_render_command_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_render_p
 {
     dm_byte_buffer* byte_buffer = dm_byte_buffer_create();
     
-    dm_byte_buffer_push(byte_buffer, &buffer->internal_index, sizeof(uint32_t));
-    dm_byte_buffer_push(byte_buffer, &slot, sizeof(uint32_t));
-    dm_byte_buffer_push(byte_buffer, &buffer->desc.type, sizeof(dm_buffer_type));
-    dm_byte_buffer_push(byte_buffer, &buffer->desc.elem_size, sizeof(uint32_t));
-    dm_byte_buffer_push(byte_buffer, &render_pass->internal_index, sizeof(uint32_t));
+    dm_byte_buffer_push(byte_buffer, &(buffer->internal_index), sizeof(buffer->internal_index));
+    dm_byte_buffer_push(byte_buffer, &slot, sizeof(slot));
+    dm_byte_buffer_push(byte_buffer, &(buffer->desc.type), sizeof(buffer->desc.type));
+    dm_byte_buffer_push(byte_buffer, &(buffer->desc.elem_size), sizeof(buffer->desc.elem_size));
+    dm_byte_buffer_push(byte_buffer, &(render_pass->internal_index), sizeof(render_pass->internal_index));
+    
+    size_t test = sizeof(buffer->internal_index) + sizeof(slot) + sizeof(buffer->desc.type) + sizeof(buffer->desc.elem_size) + sizeof(render_pass->internal_index);
     
     dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, byte_buffer);
 }
@@ -140,8 +140,8 @@ void dm_render_command_update_scene_cb(void* data, size_t data_size, dm_render_p
     dm_byte_buffer* buffer = dm_byte_buffer_create();
     
     dm_byte_buffer_push(buffer, data, data_size);
-    dm_byte_buffer_push(buffer, &data_size, sizeof(size_t));
-    dm_byte_buffer_push(buffer, &render_pass->internal_index, sizeof(uint32_t));
+    dm_byte_buffer_push(buffer, &data_size, sizeof(data_size));
+    dm_byte_buffer_push(buffer, &(render_pass->internal_index), sizeof(render_pass->internal_index));
     
     dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_SCENE_CB, buffer);
 }
@@ -151,8 +151,8 @@ void dm_render_command_update_inst_cb(void* data, size_t data_size, dm_render_pa
     dm_byte_buffer* buffer = dm_byte_buffer_create();
     
     dm_byte_buffer_push(buffer, data, data_size);
-    dm_byte_buffer_push(buffer, &data_size, sizeof(size_t));
-    dm_byte_buffer_push(buffer, &render_pass->internal_index, sizeof(uint32_t));
+    dm_byte_buffer_push(buffer, &data_size, sizeof(data_size));
+    dm_byte_buffer_push(buffer, &(render_pass->internal_index), sizeof(render_pass->internal_index));
     
     dm_renderer_submit_command(DM_RENDER_COMMAND_UPDATE_INST_CB, buffer);
 }
@@ -161,9 +161,9 @@ void dm_render_command_bind_texture(dm_image* image, uint32_t slot, dm_render_pa
 {
     dm_byte_buffer* buffer = dm_byte_buffer_create();
     
-    dm_byte_buffer_push(buffer, &image->internal_index, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &slot, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &render_pass->internal_index, sizeof(uint32_t));
+    dm_byte_buffer_push(buffer, &(image->internal_index), sizeof(image->internal_index));
+    dm_byte_buffer_push(buffer, &slot, sizeof(slot));
+    dm_byte_buffer_push(buffer, &(render_pass->internal_index), sizeof(render_pass->internal_index));
     
     dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_TEXTURE, buffer);
 }
@@ -172,8 +172,8 @@ void dm_render_command_bind_uniforms(uint32_t slot, dm_render_pass* render_pass)
 {
     dm_byte_buffer* buffer = dm_byte_buffer_create();
     
-    dm_byte_buffer_push(buffer, &slot, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &render_pass->internal_index, sizeof(uint32_t));
+    dm_byte_buffer_push(buffer, &slot, sizeof(slot));
+    dm_byte_buffer_push(buffer, &(render_pass->internal_index), sizeof(render_pass->internal_index));
     
     dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_UNIFORMS, buffer);
 }
@@ -182,9 +182,9 @@ void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_render_pas
 {
     dm_byte_buffer* buffer = dm_byte_buffer_create();
     
-    dm_byte_buffer_push(buffer, &start, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &count, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &render_pass->internal_index, sizeof(uint32_t));
+    dm_byte_buffer_push(buffer, &start, sizeof(start));
+    dm_byte_buffer_push(buffer, &count, sizeof(count));
+    dm_byte_buffer_push(buffer, &(render_pass->internal_index), sizeof(render_pass->internal_index));
     
     dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_ARRAYS, buffer);
 }
@@ -193,10 +193,10 @@ void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset,
 {
     dm_byte_buffer* buffer = dm_byte_buffer_create();
     
-    dm_byte_buffer_push(buffer, &num_indices, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &index_offset, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &vertex_offset, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &render_pass->internal_index, sizeof(uint32_t));
+    dm_byte_buffer_push(buffer, &num_indices, sizeof(num_indices));
+    dm_byte_buffer_push(buffer, &index_offset, sizeof(index_offset));
+    dm_byte_buffer_push(buffer, &vertex_offset, sizeof(vertex_offset));
+    dm_byte_buffer_push(buffer, &(render_pass->internal_index), sizeof(render_pass->internal_index));
     
     dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INDEXED, buffer);
 }
@@ -205,12 +205,12 @@ void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, 
 {
     dm_byte_buffer* buffer = dm_byte_buffer_create();
     
-    dm_byte_buffer_push(buffer, &num_indices, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &num_insts, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &index_offset, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &vertex_offset, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &inst_offset, sizeof(uint32_t));
-    dm_byte_buffer_push(buffer, &render_pass->internal_index, sizeof(uint32_t));
+    dm_byte_buffer_push(buffer, &num_indices, sizeof(num_indices));
+    dm_byte_buffer_push(buffer, &num_insts, sizeof(num_insts));
+    dm_byte_buffer_push(buffer, &index_offset, sizeof(index_offset));
+    dm_byte_buffer_push(buffer, &vertex_offset, sizeof(vertex_offset));
+    dm_byte_buffer_push(buffer, &inst_offset, sizeof(inst_offset));
+    dm_byte_buffer_push(buffer, &(render_pass->internal_index), sizeof(render_pass->internal_index));
     
     dm_renderer_submit_command(DM_RENDER_COMMAND_DRAW_INSTANCED, buffer);
 }
@@ -332,9 +332,9 @@ void dm_renderer_shutdown()
     dm_map_destroy(render_passes);
     
     // buffers
+    dm_renderer_delete_buffer_impl(&static_buffer.instance_buffer);
     dm_renderer_delete_buffer_impl(&static_buffer.vertex_buffer);
     dm_renderer_delete_buffer_impl(&static_buffer.index_buffer);
-    dm_renderer_delete_buffer_impl(&static_buffer.instance_buffer);
     
     // other globals
     dm_model_loader_shutdown();
