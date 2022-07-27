@@ -41,24 +41,6 @@ REM Shaders
 IF not defined opengl (
 	SET fxc_flags=/Fc /Od /Zi
 
-	REM ECHO Compiling shader: material_vertex.hlsl
-	REM fxc %fxc_flags% /E v_main /T vs_5_0 %SRC_DIR%/engine/shaders/hlsl/material_vertex.hlsl /Fo %SRC_DIR%/engine/shaders/hlsl/material_vertex.fxc
-
-	REM ECHO Compiling shader: material_pixel.hlsl
-	REM fxc %fxc_flags% /E p_main /T ps_5_0 %SRC_DIR%/engine/shaders/hlsl/material_pixel.hlsl /Fo %SRC_DIR%/engine/shaders/hlsl/material_pixel.fxc
-
-	REM ECHO Compiling shader: material_color_vertex.hlsl
-	REM fxc %fxc_flags% /E v_main /T vs_5_0 %SRC_DIR%/engine/shaders/hlsl/material_color_vertex.hlsl /Fo %SRC_DIR%/engine/shaders/hlsl/material_color_vertex.fxc
-
-	REM ECHO Compiling shader: material_color_pixel.hlsl
-	REM fxc %fxc_flags% /E p_main /T ps_5_0 %SRC_DIR%/engine/shaders/hlsl/material_color_pixel.hlsl /Fo %SRC_DIR%/engine/shaders/hlsl/material_color_pixel.fxc
-
-	REM ECHO Compiling shader: light_src_vertex.hlsl
-	REM fxc %fxc_flags% /E v_main /T vs_5_0 %SRC_DIR%/engine/shaders/hlsl/light_src_vertex.hlsl /Fo %SRC_DIR%/engine/shaders/hlsl/light_src_vertex.fxc
-
-	REM ECHO Compiling shader: light_src_pixel.hlsl
-	REM fxc %fxc_flags% /E p_main /T ps_5_0 %SRC_DIR%/engine/shaders/hlsl/light_src_pixel.hlsl /Fo %SRC_DIR%/engine/shaders/hlsl/light_src_pixel.fxc
-
 	ECHO Compiling shader: new_shader_vertex.hlsl
 	fxc %fxc_flags% /E v_main /T vs_5_0 %SRC_DIR%/engine/shaders/hlsl/new_shader_vertex.hlsl /Fo %SRC_DIR%/engine/shaders/hlsl/new_shader_vertex.fxc
 

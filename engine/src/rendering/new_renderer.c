@@ -452,7 +452,7 @@ bool dm_default_pass()
         
         dm_render_command_update_buffer(&static_buffer.instance_buffer, instance_buffer->data, instance_buffer->element_size * instance_buffer->count);
         dm_render_command_update_scene_cb(&scene_cb, sizeof(scene_cb), default_pass);
-        dm_render_command_update_inst_cb(&instance_array_buffer->data, sizeof(dm_default_pass_inst_cb) * instance_array_buffer->count, default_pass);
+        dm_render_command_update_inst_cb(instance_array_buffer->data, instance_array_buffer->element_size * instance_array_buffer->count, default_pass);
         dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0, default_pass);
         dm_render_command_bind_buffer(&static_buffer.index_buffer, 0, default_pass);
         dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1, default_pass);

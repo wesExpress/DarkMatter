@@ -1136,8 +1136,6 @@ bool dm_directx_update_buffer(uint32_t buffer_index, void* data, size_t data_siz
 {
 	HRESULT hr;
     
-    dm_vertex_inst* test = (dm_vertex_inst*)data + 1;
-    
 	D3D11_MAPPED_SUBRESOURCE msr;
 	ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
     
@@ -1171,6 +1169,18 @@ bool dm_directx_update_scene_cb(void* data, size_t data_size, uint32_t pass_inde
 bool dm_directx_update_inst_cb(void* data, size_t data_size, uint32_t pass_index)
 {
     HRESULT hr;
+    
+    typedef struct test
+    {
+        uint32_t is_light;
+        uint32_t has_texture;
+        float shininess;
+#ifdef DM_DIRECTX
+        float padding;
+#endif
+    } test;
+    
+    test* t = data;
     
     ID3D11DeviceContext* context = directx_renderer.context;
     
