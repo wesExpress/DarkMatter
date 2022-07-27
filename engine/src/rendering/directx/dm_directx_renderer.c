@@ -975,9 +975,7 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, const char
 	ID3D11Device* device = directx_renderer.device;
 	ID3D11DeviceContext* context = directx_renderer.context;
     
-    dm_directx_render_pass* internal_pass = dm_alloc(sizeof(dm_directx_render_pass), DM_MEM_RENDER_PASS);
-	//dm_directx_render_pass* internal_pass = render_pass->internal_pass;
-    //render_pass->internal_size = sizeof(dm_directx_render_pass);
+    dm_directx_render_pass internal_pass = {0};
     
 	// shader
 	if (!dm_directx_create_shader(&render_pass->shader, vertex_src, pixel_src, v_layout)) return false;
@@ -1001,10 +999,10 @@ bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, const char
 	inst_cb_desc.ByteWidth = ((inst_cb_size + 15) / 16) * 16;
 	inst_cb_desc.StructureByteStride = sizeof(float);
     
-    DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &scene_cb_desc, 0, &internal_pass->scene_cb), "ID3D11Device::CreateBuffer failed!");
-    DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &inst_cb_desc, 0, &internal_pass->inst_cb), "ID3D11Device::CreateBuffer failed!");
+    DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &scene_cb_desc, 0, &internal_pass.scene_cb), "ID3D11Device::CreateBuffer failed!");
+    DX_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &inst_cb_desc, 0, &internal_pass.inst_cb), "ID3D11Device::CreateBuffer failed!");
     
-    dm_slot_list_insert(directx_render_passes, internal_pass, &render_pass->internal_index);
+    dm_slot_list_insert(directx_render_passes, &internal_pass, &render_pass->internal_index);
     
 	return true;
 }
@@ -1017,8 +1015,6 @@ void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
     
 	DX_RELEASE(internal_pass->scene_cb);
     DX_RELEASE(internal_pass->inst_cb);
-    
-	//dm_free(internal_pass, sizeof(dm_directx_render_pass), DM_MEM_RENDER_PASS);
 }
 
 /********
@@ -1139,6 +1135,8 @@ void dm_directx_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_
 bool dm_directx_update_buffer(uint32_t buffer_index, void* data, size_t data_size)
 {
 	HRESULT hr;
+    
+    dm_vertex_inst* test = (dm_vertex_inst*)data + 1;
     
 	D3D11_MAPPED_SUBRESOURCE msr;
 	ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
