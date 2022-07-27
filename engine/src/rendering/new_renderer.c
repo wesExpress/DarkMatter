@@ -130,8 +130,6 @@ void dm_render_command_bind_buffer(dm_buffer* buffer, uint32_t slot, dm_render_p
     dm_byte_buffer_push(byte_buffer, &(buffer->desc.elem_size), sizeof(buffer->desc.elem_size));
     dm_byte_buffer_push(byte_buffer, &(render_pass->internal_index), sizeof(render_pass->internal_index));
     
-    size_t test = sizeof(buffer->internal_index) + sizeof(slot) + sizeof(buffer->desc.type) + sizeof(buffer->desc.elem_size) + sizeof(render_pass->internal_index);
-    
     dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_BUFFER, byte_buffer);
 }
 

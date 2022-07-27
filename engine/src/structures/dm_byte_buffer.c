@@ -40,7 +40,7 @@ void* dm_byte_buffer_pop(dm_byte_buffer* buffer, size_t data_size)
     void* val = (char*)buffer->data + buffer->size - data_size;
     
     buffer->size -= data_size;
-    if(buffer->size == 0) dm_byte_buffer_clear(buffer);
+    //if(buffer->size == 0) dm_byte_buffer_clear(buffer);
     
     return val;
 }
