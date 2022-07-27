@@ -229,9 +229,166 @@ void dm_renderer_clear_command_buffer()
     }
 }
 
+bool dm_renderer_begin_renderpass_impl(uint32_t pass_index, uint32_t shader_index);
+void dm_renderer_end_renderpass_impl(uint32_t pass_index);
+void dm_renderer_set_viewport_impl(dm_viewport viewport);
+void dm_renderer_clear(dm_color color);
+bool dm_renderer_update_buffer_impl(uint32_t buffer_index, void* data, size_t data_size);
+bool dm_renderer_update_scene_cb_impl(void* data, size_t data_size, uint32_t pass_index);
+bool dm_renderer_update_inst_cb_impl(void* data, size_t data_size, uint32_t pass_index);
+void dm_renderer_bind_buffer_impl(uint32_t buffer_index, uint32_t slot, dm_buffer_type type, size_t stride, uint32_t pass_index);
+void dm_renderer_bind_texture_impl(uint32_t texture_index, uint32_t slot, uint32_t pass_index);
+bool dm_renderer_bind_uniforms_impl(uint32_t slot, uint32_t pass_index);
+void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, uint32_t pass_index);
+void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, uint32_t pass_index);
+void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, uint32_t pass_index);
+
 bool dm_renderer_submit_command_buffer()
 {
-    return dm_renderer_submit_command_buffer_impl(render_commands);
+    bool complete_pass = true;
+    
+    dm_for_list_item(render_commands, dm_render_command, command)
+    {
+        dm_byte_buffer* byte_buffer = command->buffer;
+        
+        switch(command->type)
+        {
+            case DM_RENDER_COMMAND_BEGIN_RENDER_PASS:
+            {
+                if(!complete_pass)
+                {
+                    DM_LOG_FATAL("Attempting to begin a renderpass without ending previous.");
+                    return false;
+                }
+                complete_pass = false;
+                
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t shader_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                
+                if(!dm_renderer_begin_renderpass_impl(pass_index, shader_index)) return false;
+            } break;
+            
+            case DM_RENDER_COMMAND_END_RENDER_PASS:
+            {
+                if(complete_pass)
+                {
+                    DM_LOG_FATAL("Attempting to end a renderpass without beginning.");
+                    return false;
+                }
+                complete_pass = true;
+                
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                
+                dm_renderer_end_renderpass_impl(pass_index);
+            } break;
+            
+            case DM_RENDER_COMMAND_SET_VIEWPORT:
+            {
+                dm_viewport* viewport = dm_byte_buffer_pop(byte_buffer, sizeof(dm_viewport));
+                
+                dm_renderer_set_viewport_impl(*viewport);
+            } break;
+            
+            case DM_RENDER_COMMAND_CLEAR:
+            {
+                dm_color* color = dm_byte_buffer_pop(byte_buffer, sizeof(dm_color));
+                
+                dm_renderer_clear_impl(color);
+            } break;
+            
+            case DM_RENDER_COMMAND_UPDATE_BUFFER:
+            {
+                uint32_t buffer_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                size_t data_size = *(size_t*)dm_byte_buffer_pop(byte_buffer, sizeof(size_t));
+                void* data = dm_byte_buffer_pop(byte_buffer, data_size);
+                
+                if(!dm_renderer_update_buffer_impl(buffer_index, data, data_size)) return false;
+            } break;
+            
+            case DM_RENDER_COMMAND_UPDATE_SCENE_CB:
+            {
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                size_t data_size = *(size_t*)dm_byte_buffer_pop(byte_buffer, sizeof(size_t));
+                void* data = dm_byte_buffer_pop(byte_buffer, data_size);
+                
+                if(!dm_renderer_update_scene_cb_impl(data, data_size, pass_index)) return false;
+            } break;
+            
+            case DM_RENDER_COMMAND_UPDATE_INST_CB:
+            {
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                size_t data_size = *(size_t*)dm_byte_buffer_pop(byte_buffer, sizeof(size_t));
+                void* data = dm_byte_buffer_pop(byte_buffer, data_size);
+                
+                if(!dm_renderer_update_inst_cb_impl(data, data_size, pass_index)) return false;
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_BUFFER:
+            {
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                size_t stride = *(size_t*)dm_byte_buffer_pop(byte_buffer, sizeof(size_t));
+                dm_buffer_type type = *(dm_buffer_type*)dm_byte_buffer_pop(byte_buffer, sizeof(dm_buffer_type));
+                uint32_t slot = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t buffer_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                
+                dm_renderer_bind_buffer_impl(buffer_index, slot, type, stride, pass_index);
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_TEXTURE:
+            {
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t slot = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t texture_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                
+                dm_renderer_bind_texture_impl(texture_index, slot, pass_index);
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_UNIFORMS:
+            {
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t slot = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                
+                if(!dm_renderer_bind_uniforms_impl(slot, pass_index)) return false;
+            } break;
+            
+            case DM_RENDER_COMMAND_DRAW_ARRAYS:
+            {
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t count = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t start = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                
+                dm_renderer_draw_arrays_impl(start, count, pass_index);
+            } break;
+            
+            case DM_RENDER_COMMAND_DRAW_INDEXED:
+            {
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t vertex_offset = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t index_offset = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t num_indices = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                
+                dm_renderer_draw_indexed_impl(num_indices, index_offset, vertex_offset, pass_index);
+            } break;
+            
+            case DM_RENDER_COMMAND_DRAW_INSTANCED:
+            {
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t inst_offset = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t vertex_offset = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t index_offset = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t num_insts = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t num_indices = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                
+                dm_renderer_draw_instanced_impl(num_indices, num_insts, index_offset, vertex_offset, inst_offset, pass_index);
+            } break;
+            
+            default:
+            DM_LOG_ERROR("Unsupported render command for DirectX 11");
+            break;
+        }
+    }
+    
+    return true;
 }
 
 /***********

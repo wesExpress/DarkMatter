@@ -377,28 +377,6 @@ void dm_directx_delete_buffer(uint32_t internal_index)
 	DX_RELEASE(internal_buffer->buffer);
 }
 
-void dm_directx_bind_buffer(uint32_t buffer_index, uint32_t slot, dm_buffer_type type, size_t stride)
-{
-	ID3D11DeviceContext* context = directx_renderer.context;
-    dm_directx_buffer* internal_buffer = dm_slot_list_at(directx_buffers, buffer_index);
-    
-	UINT offset = 0;
-    uint32_t new_stride = (uint32_t)stride;
-    
-	switch (type)
-	{
-        case DM_BUFFER_TYPE_VERTEX: 
-		context->lpVtbl->IASetVertexBuffers(context, slot, 1, &internal_buffer->buffer, &new_stride, &offset);
-		break;
-        case DM_BUFFER_TYPE_INDEX: 
-		context->lpVtbl->IASetIndexBuffer(context, internal_buffer->buffer, DXGI_FORMAT_R32_UINT, 0);
-		break;
-        default:
-		DM_LOG_WARN("Trying to bind an invalid buffer type! Shouldn't be here...");
-		break;
-	}
-}
-
 void dm_directx_bind_vertex_buffers(dm_list* buffers)
 {
 	ID3D11DeviceContext* context = directx_renderer.context;
@@ -596,12 +574,6 @@ void dm_directx_destroy_texture(uint32_t internal_index)
     
 	DX_RELEASE(internal_texture->texture);
 	DX_RELEASE(internal_texture->view);
-}
-
-void dm_directx_bind_texture(uint32_t texture_index, uint32_t slot)
-{
-    dm_directx_texture* internal_texture = dm_slot_list_at(directx_textures, texture_index);
-	directx_renderer.context->lpVtbl->PSSetShaderResources(directx_renderer.context, slot, 1, &internal_texture->view);
 }
 
 bool dm_create_texture_impl(dm_image* image)
@@ -1096,7 +1068,7 @@ bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data)
 COMMANDS
 **********/
 
-bool dm_directx_begin_renderpass(uint32_t shader_index)
+bool dm_renderer_begin_renderpass_impl(uint32_t pass_index, uint32_t shader_index)
 {
 	HRESULT hr;
     
@@ -1112,27 +1084,55 @@ bool dm_directx_begin_renderpass(uint32_t shader_index)
     return true;
 }
 
-void dm_directx_end_renderpass()
+void dm_renderer_end_renderpass_impl(uint32_t pass_index)
 {
     
 }
 
-void dm_directx_draw_arrays(uint32_t start, uint32_t count)
+void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, uint32_t pass_index)
 {
 	directx_renderer.context->lpVtbl->Draw(directx_renderer.context, count, start);
 }
 
-void dm_directx_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset)
+void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, uint32_t pass_index)
 {
 	directx_renderer.context->lpVtbl->DrawIndexed(directx_renderer.context, num_indices, index_offset, vertex_offset);
 }
 
-void dm_directx_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset)
+void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, uint32_t pass_index)
 {
 	directx_renderer.context->lpVtbl->DrawIndexedInstanced(directx_renderer.context, num_indices, num_insts, index_offset, vertex_offset, inst_offset);
 }
 
-bool dm_directx_update_buffer(uint32_t buffer_index, void* data, size_t data_size)
+void dm_renderer_bind_texture_impl(uint32_t texture_index, uint32_t slot)
+{
+    dm_directx_texture* internal_texture = dm_slot_list_at(directx_textures, texture_index);
+	directx_renderer.context->lpVtbl->PSSetShaderResources(directx_renderer.context, slot, 1, &internal_texture->view);
+}
+
+void dm_renderer_bind_buffer_impl(uint32_t buffer_index, uint32_t slot, dm_buffer_type type, size_t stride)
+{
+	ID3D11DeviceContext* context = directx_renderer.context;
+    dm_directx_buffer* internal_buffer = dm_slot_list_at(directx_buffers, buffer_index);
+    
+	UINT offset = 0;
+    uint32_t new_stride = (uint32_t)stride;
+    
+	switch (type)
+	{
+        case DM_BUFFER_TYPE_VERTEX: 
+		context->lpVtbl->IASetVertexBuffers(context, slot, 1, &internal_buffer->buffer, &new_stride, &offset);
+		break;
+        case DM_BUFFER_TYPE_INDEX: 
+		context->lpVtbl->IASetIndexBuffer(context, internal_buffer->buffer, DXGI_FORMAT_R32_UINT, 0);
+		break;
+        default:
+		DM_LOG_WARN("Trying to bind an invalid buffer type! Shouldn't be here...");
+		break;
+	}
+}
+
+bool dm_renderer_update_buffer_impl(uint32_t buffer_index, void* data, size_t data_size, uint32_t pass_index)
 {
 	HRESULT hr;
     
@@ -1147,7 +1147,7 @@ bool dm_directx_update_buffer(uint32_t buffer_index, void* data, size_t data_siz
 	return true;
 }
 
-bool dm_directx_update_scene_cb(void* data, size_t data_size, uint32_t pass_index)
+bool dm_renderer_update_scene_cb_impl(void* data, size_t data_size, uint32_t pass_index)
 {
     HRESULT hr;
     
@@ -1166,21 +1166,9 @@ bool dm_directx_update_scene_cb(void* data, size_t data_size, uint32_t pass_inde
     return true;
 }
 
-bool dm_directx_update_inst_cb(void* data, size_t data_size, uint32_t pass_index)
+bool dm_renderer_update_inst_cb_impl(void* data, size_t data_size, uint32_t pass_index)
 {
     HRESULT hr;
-    
-    typedef struct test
-    {
-        uint32_t is_light;
-        uint32_t has_texture;
-        float shininess;
-#ifdef DM_DIRECTX
-        float padding;
-#endif
-    } test;
-    
-    test* t = data;
     
     ID3D11DeviceContext* context = directx_renderer.context;
     
@@ -1197,7 +1185,7 @@ bool dm_directx_update_inst_cb(void* data, size_t data_size, uint32_t pass_index
     return true;
 }
 
-bool dm_directx_bind_uniforms(uint32_t slot, uint32_t pass_index)
+bool dm_renderer_bind_uniforms_impl(uint32_t slot, uint32_t pass_index)
 {
     HRESULT hr;
     
@@ -1213,7 +1201,7 @@ bool dm_directx_bind_uniforms(uint32_t slot, uint32_t pass_index)
     return true;
 }
 
-void dm_directx_set_viewport(dm_viewport viewport)
+void dm_renderer_set_viewport_impl(dm_viewport viewport)
 {
 	ID3D11DeviceContext* context = directx_renderer.context;
     
@@ -1225,163 +1213,15 @@ void dm_directx_set_viewport(dm_viewport viewport)
 	context->lpVtbl->RSSetViewports(context, 1, &new_viewport);
 }
 
-void dm_directx_clear(dm_color* clear_color)
+void dm_renderer_clear_impl(dm_color clear_color)
 {
 	ID3D11DeviceContext* context = directx_renderer.context;
 	ID3D11RenderTargetView* render_target = directx_renderer.active_pipeline.render_view;
 	ID3D11DepthStencilView* depth_stencil = directx_renderer.active_pipeline.depth_stencil_view;
 	
 	// clear framebuffer
-	context->lpVtbl->ClearRenderTargetView(context, render_target, &(clear_color->v[0]));
+	context->lpVtbl->ClearRenderTargetView(context, render_target, &(clear_color.v[0]));
 	context->lpVtbl->ClearDepthStencilView(context, depth_stencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
-}
-
-bool dm_renderer_submit_command_buffer_impl(dm_list* render_commands)
-{
-    bool complete_pass = true;
-    
-    dm_for_list_item(render_commands, dm_render_command, command)
-    {
-        dm_byte_buffer* byte_buffer = command->buffer;
-        
-        switch(command->type)
-        {
-            case DM_RENDER_COMMAND_BEGIN_RENDER_PASS:
-            {
-                if(!complete_pass)
-                {
-                    DM_LOG_FATAL("Attempting to begin a renderpass without ending previous.");
-                    return false;
-                }
-                complete_pass = false;
-                
-                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t shader_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                
-                if(!dm_directx_begin_renderpass(shader_index)) return false;
-            } break;
-            
-            case DM_RENDER_COMMAND_END_RENDER_PASS:
-            {
-                if(complete_pass)
-                {
-                    DM_LOG_FATAL("Attempting to end a renderpass without beginning.");
-                    return false;
-                }
-                complete_pass = true;
-                
-                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                
-                dm_directx_end_renderpass();
-            } break;
-            
-            case DM_RENDER_COMMAND_SET_VIEWPORT:
-            {
-                dm_viewport* viewport = dm_byte_buffer_pop(byte_buffer, sizeof(dm_viewport));
-                
-                dm_directx_set_viewport(*viewport);
-            } break;
-            
-            case DM_RENDER_COMMAND_CLEAR:
-            {
-                dm_color* color = dm_byte_buffer_pop(byte_buffer, sizeof(dm_color));
-                
-                dm_directx_clear(color);
-            } break;
-            
-            case DM_RENDER_COMMAND_UPDATE_BUFFER:
-            {
-                uint32_t buffer_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                size_t data_size = *(size_t*)dm_byte_buffer_pop(byte_buffer, sizeof(size_t));
-                void* data = dm_byte_buffer_pop(byte_buffer, data_size);
-                
-                if(!dm_directx_update_buffer(buffer_index, data, data_size)) return false;
-            } break;
-            
-            case DM_RENDER_COMMAND_UPDATE_SCENE_CB:
-            {
-                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                size_t data_size = *(size_t*)dm_byte_buffer_pop(byte_buffer, sizeof(size_t));
-                void* data = dm_byte_buffer_pop(byte_buffer, data_size);
-                
-                if(!dm_directx_update_scene_cb(data, data_size, pass_index)) return false;
-            } break;
-            
-            case DM_RENDER_COMMAND_UPDATE_INST_CB:
-            {
-                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                size_t data_size = *(size_t*)dm_byte_buffer_pop(byte_buffer, sizeof(size_t));
-                void* data = dm_byte_buffer_pop(byte_buffer, data_size);
-                
-                if(!dm_directx_update_inst_cb(data, data_size, pass_index)) return false;
-            } break;
-            
-            case DM_RENDER_COMMAND_BIND_BUFFER:
-            {
-                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                size_t stride = *(size_t*)dm_byte_buffer_pop(byte_buffer, sizeof(size_t));
-                dm_buffer_type type = *(dm_buffer_type*)dm_byte_buffer_pop(byte_buffer, sizeof(dm_buffer_type));
-                uint32_t slot = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t buffer_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                
-                dm_directx_bind_buffer(buffer_index, slot, type, stride);
-            } break;
-            
-            case DM_RENDER_COMMAND_BIND_TEXTURE:
-            {
-                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t slot = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t texture_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                
-                dm_directx_bind_texture(texture_index, slot);
-            } break;
-            
-            case DM_RENDER_COMMAND_BIND_UNIFORMS:
-            {
-                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t slot = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                
-                if(!dm_directx_bind_uniforms(slot, pass_index)) return false;
-            } break;
-            
-            case DM_RENDER_COMMAND_DRAW_ARRAYS:
-            {
-                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t count = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t start = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                
-                dm_directx_draw_arrays(start, count);
-            } break;
-            
-            case DM_RENDER_COMMAND_DRAW_INDEXED:
-            {
-                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t vertex_offset = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t index_offset = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t num_indices = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                
-                dm_directx_draw_indexed(num_indices, index_offset, vertex_offset);
-            } break;
-            
-            case DM_RENDER_COMMAND_DRAW_INSTANCED:
-            {
-                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t inst_offset = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t vertex_offset = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t index_offset = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t num_insts = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                uint32_t num_indices = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
-                
-                dm_directx_draw_instanced(num_indices, num_insts, index_offset, vertex_offset, inst_offset);
-            } break;
-            
-            default:
-            DM_LOG_ERROR("Unsupported render command for DirectX 11");
-            break;
-        }
-    }
-    
-    return true;
 }
 
 /*****************
