@@ -11,14 +11,6 @@ struct PS_INPUT
 	float  shininess       : SHININESS;
 };
 
-struct inst_data
-{
-	uint is_light;
-	uint has_texture;
-	float shininess;
-	float padding;
-};
-
 cbuffer scene_cb : register(b0)
 {
 	matrix view_proj;
@@ -31,18 +23,13 @@ cbuffer scene_cb : register(b0)
 	float padding2;
 };
 
-cbuffer inst_cb : register(b1)
-{
-	inst_data inst_data_array[1024];
-};
-
 SamplerState sample_state;
 Texture2D diffuse_map : register(t0);
 Texture2D specular_map : register(t1);
 
 float4 p_main(PS_INPUT input) : SV_Target
 {
-	//inst_data inst = inst_data_array[input.instance_id];
+	//return float4(1,1,1,1);
 
 	if(input.is_light == 0)
 	{

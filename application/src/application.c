@@ -18,37 +18,10 @@ bool dm_application_init(dm_application* app)
     dm_renderer_api_set_clear_color((dm_vec3) { 0, 0, 0 });
     
     // images
-	dm_image_desc image_desc = { 0 };
-	image_desc.path = "assets/container.jpg";
-	image_desc.name = "uTexture1";
-	image_desc.format = DM_TEXTURE_FORMAT_RGB;
-	image_desc.internal_format = DM_TEXTURE_FORMAT_RGB;
-    
-    if(!dm_renderer_api_register_image(image_desc)) return false;
-    
-	image_desc.path = "assets/awesomeface.png";
-	image_desc.name = "uTexture2";
-	image_desc.format = DM_TEXTURE_FORMAT_RGBA;
-	image_desc.internal_format = DM_TEXTURE_FORMAT_RGB;
-	image_desc.flip = true;
-    
-    if(!dm_renderer_api_register_image(image_desc)) return false;
-    
-	image_desc.path = "assets/container_diffuse.png";
-	image_desc.name = "container_diffuse";
-	image_desc.format = DM_TEXTURE_FORMAT_RGBA;
-	image_desc.internal_format = DM_TEXTURE_FORMAT_RGB;
-	image_desc.flip = true;
-    
-    if(!dm_renderer_api_register_image(image_desc)) return false;
-    
-    image_desc.path = "assets/container_specular.png";
-	image_desc.name = "container_specular";
-	image_desc.format = DM_TEXTURE_FORMAT_RGBA;
-	image_desc.internal_format = DM_TEXTURE_FORMAT_RGB;
-	image_desc.flip = true;
-    
-    if(!dm_renderer_api_register_image(image_desc)) return false;
+    if(!dm_renderer_api_register_image("assets/container.jpg", "uTexture1", false, DM_TEXTURE_FORMAT_RGB, DM_TEXTURE_FORMAT_RGB)) return false;
+    if(!dm_renderer_api_register_image("assets/awesomeface.png", "uTexture2", true, DM_TEXTURE_FORMAT_RGBA, DM_TEXTURE_FORMAT_RGB)) return false;
+    if(!dm_renderer_api_register_image("assets/container_diffuse.png", "container_diffuse", true, DM_TEXTURE_FORMAT_RGBA, DM_TEXTURE_FORMAT_RGB)) return false;
+    if(!dm_renderer_api_register_image("assets/container_specular.png", "container_specular", true, DM_TEXTURE_FORMAT_RGBA, DM_TEXTURE_FORMAT_RGB)) return false;
     
     // models
     //if(!dm_load_model("assets/fox.gltf", true)) return false;
