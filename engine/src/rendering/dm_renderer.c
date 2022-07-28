@@ -166,14 +166,24 @@ void dm_render_command_bind_texture(dm_image* image, uint32_t slot, dm_render_pa
     dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_TEXTURE, buffer);
 }
 
-void dm_render_command_bind_uniforms(uint32_t slot, dm_render_pass* render_pass)
+void dm_render_command_bind_scene_cb(uint32_t slot, dm_render_pass* render_pass)
 {
     dm_byte_buffer* buffer = dm_byte_buffer_create();
     
     dm_byte_buffer_push(buffer, &slot, sizeof(slot));
     dm_byte_buffer_push(buffer, &(render_pass->internal_index), sizeof(render_pass->internal_index));
     
-    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_UNIFORMS, buffer);
+    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_SCENE_CB, buffer);
+}
+
+void dm_render_command_bind_inst_cb(uint32_t slot, dm_render_pass* render_pass)
+{
+    dm_byte_buffer* buffer = dm_byte_buffer_create();
+    
+    dm_byte_buffer_push(buffer, &slot, sizeof(slot));
+    dm_byte_buffer_push(buffer, &(render_pass->internal_index), sizeof(render_pass->internal_index));
+    
+    dm_renderer_submit_command(DM_RENDER_COMMAND_BIND_INST_CB, buffer);
 }
 
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_render_pass* render_pass)
@@ -232,13 +242,14 @@ void dm_renderer_clear_command_buffer()
 bool dm_renderer_begin_renderpass_impl(uint32_t pass_index, uint32_t shader_index);
 void dm_renderer_end_renderpass_impl(uint32_t pass_index);
 void dm_renderer_set_viewport_impl(dm_viewport viewport);
-void dm_renderer_clear(dm_color color);
+void dm_renderer_clear_impl(dm_color color);
 bool dm_renderer_update_buffer_impl(uint32_t buffer_index, void* data, size_t data_size);
 bool dm_renderer_update_scene_cb_impl(void* data, size_t data_size, uint32_t pass_index);
 bool dm_renderer_update_inst_cb_impl(void* data, size_t data_size, uint32_t pass_index);
 void dm_renderer_bind_buffer_impl(uint32_t buffer_index, uint32_t slot, dm_buffer_type type, size_t stride, uint32_t pass_index);
 void dm_renderer_bind_texture_impl(uint32_t texture_index, uint32_t slot, uint32_t pass_index);
-bool dm_renderer_bind_uniforms_impl(uint32_t slot, uint32_t pass_index);
+bool dm_renderer_bind_scene_cb_impl(uint32_t slot, uint32_t pass_index);
+bool dm_renderer_bind_inst_cb_impl(uint32_t slot, uint32_t pass_index);
 void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, uint32_t pass_index);
 void dm_renderer_draw_indexed_impl(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, uint32_t pass_index);
 void dm_renderer_draw_instanced_impl(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, uint32_t pass_index);
@@ -293,7 +304,7 @@ bool dm_renderer_submit_command_buffer()
             {
                 dm_color* color = dm_byte_buffer_pop(byte_buffer, sizeof(dm_color));
                 
-                dm_renderer_clear_impl(color);
+                dm_renderer_clear_impl(*color);
             } break;
             
             case DM_RENDER_COMMAND_UPDATE_BUFFER:
@@ -343,12 +354,20 @@ bool dm_renderer_submit_command_buffer()
                 dm_renderer_bind_texture_impl(texture_index, slot, pass_index);
             } break;
             
-            case DM_RENDER_COMMAND_BIND_UNIFORMS:
+            case DM_RENDER_COMMAND_BIND_SCENE_CB:
             {
                 uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
                 uint32_t slot = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
                 
-                if(!dm_renderer_bind_uniforms_impl(slot, pass_index)) return false;
+                if(!dm_renderer_bind_scene_cb_impl(slot, pass_index)) return false;
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_INST_CB:
+            {
+                uint32_t pass_index = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                uint32_t slot = *(uint32_t*)dm_byte_buffer_pop(byte_buffer, sizeof(uint32_t));
+                
+                if(!dm_renderer_bind_inst_cb_impl(slot, pass_index)) return false;
             } break;
             
             case DM_RENDER_COMMAND_DRAW_ARRAYS:
@@ -568,8 +587,6 @@ bool dm_default_pass()
                 
                 inst_cb.has_texture = 1;
                 inst_cb.shininess = material->shininess;
-                char* test = material->diffuse_map;
-                size_t len = strlen(test) + 1;
                 dm_image* diffuse_map = dm_image_get(material->diffuse_map);
                 if(!diffuse_map)
                 {
@@ -613,7 +630,8 @@ bool dm_default_pass()
         dm_render_command_bind_buffer(&static_buffer.vertex_buffer, 0, default_pass);
         dm_render_command_bind_buffer(&static_buffer.index_buffer, 0, default_pass);
         dm_render_command_bind_buffer(&static_buffer.instance_buffer, 1, default_pass);
-        dm_render_command_bind_uniforms(0, default_pass);
+        dm_render_command_bind_scene_cb(0, default_pass);
+        dm_render_command_bind_inst_cb(1, default_pass);
         dm_render_command_draw_instanced(mesh->index_count, count, mesh->index_offset, mesh->vertex_offset, 0, default_pass);
         
         dm_list_destroy(instance_buffer);

@@ -54,7 +54,7 @@ bool dm_renderer_create_default_pass()
     };
     
 #ifdef DM_OPENGL
-    const char* vertex_src = "shaders/glsl/light_src_vertex.glsl";
+    const char* vertex_src = "shaders/glsl/new_shader_vertex.glsl";
 #elif defined DM_DIRECTX
     const char* vertex_src = "shaders/hlsl/new_shader_vertex.fxc";
 #elif defined DM_METAL
@@ -62,7 +62,7 @@ bool dm_renderer_create_default_pass()
 #endif
     
 #ifdef DM_OPENGL
-    const char* pixel_src = "shaders/glsl/light_src_pixel.glsl";
+    const char* pixel_src = "shaders/glsl/new_shader_pixel.glsl";
 #elif defined DM_DIRECTX
     const char* pixel_src = "shaders/hlsl/new_shader_pixel.fxc";
 #elif defined DM_METAL

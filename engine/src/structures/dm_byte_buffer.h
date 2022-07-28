@@ -8,6 +8,7 @@ https://github.com/MrFrenik/gunslinger/blob/master/gs.h
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stdlib.h>
 
 typedef struct dm_byte_buffer
 {

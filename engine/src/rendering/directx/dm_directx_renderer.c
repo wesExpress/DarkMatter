@@ -37,13 +37,6 @@ typedef struct dm_directx_buffer
 	ID3D11Buffer* buffer;
 } dm_directx_buffer;
 
-typedef struct dm_directx_shader
-{
-	ID3D11VertexShader* vertex_shader;
-	ID3D11PixelShader* pixel_shader;
-	ID3D11InputLayout* input_layout;
-} dm_directx_shader;
-
 typedef struct dm_directx_texture
 {
 	ID3D11Texture2D* texture;
@@ -64,7 +57,10 @@ typedef struct dm_directx_pipeline
 
 typedef struct dm_directx_render_pass
 {
-	ID3D11Buffer* scene_cb;
+	ID3D11VertexShader* vertex_shader;
+	ID3D11PixelShader* pixel_shader;
+	ID3D11InputLayout* input_layout;
+    ID3D11Buffer* scene_cb;
     ID3D11Buffer* inst_cb;
 	dm_list* vertex_buffers;
 } dm_directx_render_pass;
@@ -1185,18 +1181,28 @@ bool dm_renderer_update_inst_cb_impl(void* data, size_t data_size, uint32_t pass
     return true;
 }
 
-bool dm_renderer_bind_uniforms_impl(uint32_t slot, uint32_t pass_index)
+bool dm_renderer_bind_scene_cb_impl(uint32_t slot, uint32_t pass_index)
 {
     HRESULT hr;
     
     ID3D11DeviceContext* context = directx_renderer.context;
     dm_directx_render_pass* internal_pass = dm_slot_list_at(directx_render_passes, pass_index);
     
-    context->lpVtbl->VSSetConstantBuffers(context, 0, 1, &internal_pass->scene_cb);
-	context->lpVtbl->PSSetConstantBuffers(context, 0, 1, &internal_pass->scene_cb);
+    context->lpVtbl->VSSetConstantBuffers(context, slot, 1, &internal_pass->scene_cb);
+	context->lpVtbl->PSSetConstantBuffers(context, slot, 1, &internal_pass->scene_cb);
     
-    context->lpVtbl->VSSetConstantBuffers(context, 1, 1, &internal_pass->inst_cb);
-	context->lpVtbl->PSSetConstantBuffers(context, 1, 1, &internal_pass->inst_cb);
+    return true;
+}
+
+bool dm_renderer_bind_inst_cb_impl(uint32_t slot, uint32_t pass_index)
+{
+    HRESULT hr;
+    
+    ID3D11DeviceContext* context = directx_renderer.context;
+    dm_directx_render_pass* internal_pass = dm_slot_list_at(directx_render_passes, pass_index);
+    
+    context->lpVtbl->VSSetConstantBuffers(context, slot, 1, &internal_pass->inst_cb);
+	context->lpVtbl->PSSetConstantBuffers(context, slot, 1, &internal_pass->inst_cb);
     
     return true;
 }
