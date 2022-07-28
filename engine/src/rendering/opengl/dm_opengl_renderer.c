@@ -20,12 +20,12 @@
 
 #define DM_GLUINT_FAIL UINT_MAX
 
-bool dm_opengl_bind_pipeline(dm_render_pipeline_state* pipeline);
-bool dm_opengl_create_render_pipeline(dm_render_pipeline_state* pipeline);
+bool dm_opengl_bind_pipeline(dm_render_pipeline* pipeline);
+bool dm_opengl_create_render_pipeline(dm_render_pipeline* pipeline);
 
-/*
+/*******
 STRUCTS
-*/
+*********/
 
 typedef struct dm_internal_buffer
 {
@@ -55,6 +55,7 @@ typedef struct dm_internal_texture
 	GLint location;
 } dm_internal_texture;
 
+
 typedef struct dm_internal_pipeline
 {
 	GLenum blend_src, blend_dest;
@@ -63,6 +64,7 @@ typedef struct dm_internal_pipeline
     GLenum min_filter, mag_filter, s_wrap, t_wrap;
     GLenum cull, winding;
 } dm_internal_pipeline;
+
 
 typedef struct dm_opengl_render_pass
 {
@@ -83,6 +85,11 @@ typedef enum dm_opengl_uniform
 	DM_OPENGL_UNI_MAT3,
 	DM_OPENGL_UNI_MAT4
 } dm_opengl_uniform;
+
+typedef struct dm_opengl_renderer
+{
+    dm_internal_pipeline* active_pipeline;
+} dm_opengl_renderer;
 
 #if DM_DEBUG
 GLenum glCheckError_(const char* file, int line);
@@ -292,9 +299,9 @@ GLenum dm_texture_mode_to_opengl_mode(dm_texture_mode dm_mode)
     }
 }
 
-/*
+/******
 BUFFER
-*/
+********/
 
 bool dm_opengl_create_buffer(dm_buffer* buffer, void* data)
 {
@@ -332,9 +339,14 @@ void dm_opengl_bind_buffer(dm_buffer* buffer)
     glCheckError();
 }
 
-/*
+void dm_renderer_delete_buffer_impl(dm_buffer* buffer)
+{
+    dm_opengl_delete_buffer(buffer);
+}
+
+/******
 SHADER
-*/
+********/
 
 GLuint dm_opengl_compile_shader(dm_shader_desc desc);
 bool dm_opengl_validate_shader(GLuint shader);
@@ -598,9 +610,9 @@ bool dm_opengl_validate_program(GLuint program)
     return true;
 }
 
-/*
+/*******
 TEXTURE
-*/
+*********/
 
 bool dm_opengl_create_texture(dm_image* image)
 {
@@ -650,16 +662,150 @@ bool dm_opengl_bind_texture(dm_image* image, uint32_t slot)
 	return true;
 }
 
-/*
+/********
+PIPELINE
+**********/
+
+bool dm_opengl_bind_pipeline(dm_render_pipeline* pipeline)
+{
+    dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
+    
+    // blending
+    if (pipeline->blend_desc.is_enabled)
+    {
+        glEnable(GL_BLEND);
+        glBlendEquation(internal_pipe->blend_func);
+        glCheckErrorReturn();
+        glBlendFunc(internal_pipe->blend_src, internal_pipe->blend_dest);
+        glCheckErrorReturn();
+    }
+    else
+    {
+        glDisable(GL_BLEND);
+    }
+    
+    // depth testing
+    if (pipeline->depth_desc.is_enabled)
+    {
+        glEnable(GL_DEPTH_TEST);
+        glDepthFunc(internal_pipe->depth_func);
+        glCheckErrorReturn();
+    }
+    else
+    {
+        glDisable(GL_DEPTH_TEST);
+    }
+    
+    // stencil testing
+    // TODO needs to be fleshed out correctly
+    if (pipeline->stencil_desc.is_enabled)
+    {
+        glEnable(GL_STENCIL_TEST);
+    }
+    else
+    {
+        glDisable(GL_STENCIL_TEST);
+    }
+    
+    // wireframe
+    if (pipeline->wireframe)
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+    }
+    else
+    {
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+    }
+    
+    // sampler state
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, internal_pipe->s_wrap);
+    glCheckErrorReturn();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, internal_pipe->t_wrap);
+    glCheckErrorReturn();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, internal_pipe->min_filter);
+    glCheckErrorReturn();
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, internal_pipe->mag_filter);
+    glCheckErrorReturn();
+    
+    // face culling
+    glEnable(GL_CULL_FACE);
+    glCullFace(internal_pipe->cull);
+    glCheckErrorReturn();
+    
+    //glFrontFace(internal_pipe->winding);
+    //glCheckErrorReturn();
+    
+    return true;
+}
+
+bool dm_opengl_create_render_pipeline(dm_render_pipeline* pipeline)
+{ 
+    pipeline->internal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
+    
+    // face culling
+    internal_pipe->cull = dm_cull_to_opengl_cull(pipeline->raster_desc.cull_mode);
+    if (internal_pipe->cull == DM_CULL_UNKNOWN) return false;
+    
+    internal_pipe->winding = dm_wind_top_opengl_wind(pipeline->raster_desc.winding_order);
+    if (internal_pipe->winding == DM_WINDING_UNKNOWN) return false;
+    
+    // primitive
+    internal_pipe->primitive = dm_topology_to_opengl_primitive(pipeline->raster_desc.primitive_topology);
+    if (internal_pipe->primitive == DM_TOPOLOGY_UNKNOWN) return false;
+    
+    // sampler
+    internal_pipe->min_filter = dm_filter_to_opengl_filter(pipeline->sampler_desc.filter);
+    if (internal_pipe->min_filter == DM_FILTER_UNKNOWN) return false;
+    internal_pipe->mag_filter = dm_filter_to_opengl_filter(pipeline->sampler_desc.filter);
+    if (internal_pipe->mag_filter == DM_FILTER_UNKNOWN) return false;
+    internal_pipe->s_wrap = dm_texture_mode_to_opengl_mode(pipeline->sampler_desc.u);
+    if (internal_pipe->s_wrap == DM_TEXTURE_MODE_UNKNOWN) return false;
+    internal_pipe->t_wrap = dm_texture_mode_to_opengl_mode(pipeline->sampler_desc.v);
+    if (internal_pipe->t_wrap == DM_TEXTURE_MODE_UNKNOWN) return false;
+    
+    if (pipeline->blend_desc.is_enabled)
+    {
+        internal_pipe->blend_func = dm_blend_eq_to_opengl_func(pipeline->blend_desc.equation);
+        if (internal_pipe->blend_func == DM_BLEND_EQUATION_UNKNOWN) return false;
+        
+        internal_pipe->blend_src = dm_blend_func_to_opengl_func(pipeline->blend_desc.src);
+        if (internal_pipe->blend_src == DM_BLEND_FUNC_UNKNOWN) return false;
+        internal_pipe->blend_dest = dm_blend_func_to_opengl_func(pipeline->blend_desc.dest);
+        if (internal_pipe->blend_dest == DM_BLEND_FUNC_UNKNOWN) return false;
+    }
+    
+    if (pipeline->depth_desc.is_enabled)
+    {
+        internal_pipe->depth_func = dm_comp_to_opengl_comp(pipeline->depth_desc.comparison);
+        if (internal_pipe->depth_func == DM_COMPARISON_UNKNOWN) return false;
+    }
+    
+    // TODO needs to be fleshed out correctly
+    if (pipeline->stencil_desc.is_enabled)
+    {
+        internal_pipe->stencil_func = dm_comp_to_opengl_comp(pipeline->stencil_desc.comparison);
+        if (internal_pipe->stencil_func == DM_COMPARISON_UNKNOWN) return false;
+    }
+    
+    return true;
+}
+
+void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline* pipeline)
+{
+    dm_free(pipeline->internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
+}
+
+/**********
 RENDERPASS
-*/
+************/
 
 bool dm_opengl_create_render_pass(dm_render_pass* render_pass, dm_vertex_layout v_layout)
 {
     render_pass->internal_pass = dm_alloc(sizeof(dm_opengl_render_pass), DM_MEM_RENDER_PASS);
     dm_opengl_render_pass* internal_pass = render_pass->internal_pass;
     
-    if(!dm_opengl_create_render_pipeline(&render_pass->pipeline_state)) return false;
+    //if(!dm_opengl_create_render_pipeline(&render_pass->pipeline_state)) return false;
     
     // vertex array object
     glGenVertexArrays(1, &internal_pass->vao);
@@ -672,7 +818,7 @@ bool dm_opengl_create_render_pass(dm_render_pass* render_pass, dm_vertex_layout 
     uint32_t count = 0;
     glBindVertexArray(internal_pass->vao);
     
-    dm_opengl_bind_buffer(render_pass->index_buffer);
+    //dm_opengl_bind_buffer(render_pass->index_buffer);
     
     for (int i = 0; i < v_layout.num; i++)
     {
@@ -760,14 +906,6 @@ void dm_opengl_destroy_render_pass(dm_render_pass* render_pass)
     
     dm_opengl_delete_shader(&render_pass->shader);
     
-    dm_for_map_item(render_pass->uniforms)
-    {
-        dm_uniform* uniform = item->value;
-        
-        dm_opengl_destroy_uniform(uniform);
-    }
-    
-    dm_free(render_pass->pipeline_state.internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
     dm_free(render_pass->internal_pass, sizeof(dm_opengl_render_pass), DM_MEM_RENDER_PASS);
 }
 
@@ -775,7 +913,7 @@ bool dm_opengl_begin_render_pass(dm_render_pass* render_pass)
 {
     dm_opengl_render_pass* internal_pass = render_pass->internal_pass;
     
-    if(!dm_opengl_bind_pipeline(&render_pass->pipeline_state)) return false;
+    //if(!dm_opengl_bind_pipeline(&render_pass->pipeline_state)) return false;
     
     // vertex array
     glBindVertexArray(internal_pass->vao);
@@ -784,20 +922,24 @@ bool dm_opengl_begin_render_pass(dm_render_pass* render_pass)
     // shader
     dm_opengl_bind_shader(&render_pass->shader);
     
-    // uniforms
-    dm_for_map_item(render_pass->uniforms)
-    {
-        if(!dm_opengl_bind_uniform((dm_uniform*)item->value)) return false;
-    }
-    
     return true;
 }
 
-/*
-RENDERER
-*/
+bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout v_layout)
+{
+    return dm_opengl_create_render_pass(render_pass, v_layout);
+}
 
-bool dm_renderer_init_impl(dm_platform_data* platform_data)
+void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
+{
+    dm_opengl_destroy_render_pass(render_pass);
+}
+
+/********
+RENDERER
+**********/
+
+bool dm_renderer_init_impl(dm_platform_data* platform_data, dm_render_pipeline* pipeline)
 {
     DM_LOG_DEBUG("Initializing OpenGL render backend...");
     
@@ -816,6 +958,9 @@ bool dm_renderer_init_impl(dm_platform_data* platform_data)
     glDebugMessageControl(GL_DONT_CARE, GL_DONT_CARE, GL_DEBUG_SEVERITY_NOTIFICATION, 0, NULL, GL_FALSE);
 #endif
 #endif
+    
+    if(!dm_opengl_create_render_pipeline(pipeline)) return false;
+    opengl_renderer.active_pipeline = pipeline->internal_pipeline;
     
     //glViewport(renderer_data->viewport.x, renderer_data->viewport.y, renderer_data->viewport.width, renderer_data->viewport.height);
     
@@ -843,80 +988,15 @@ bool dm_renderer_end_frame_impl()
     return true;
 }
 
-bool dm_opengl_create_render_pipeline(dm_render_pipeline_state* pipeline)
-{ 
-    pipeline->internal_pipeline = dm_alloc(sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
-    dm_internal_pipeline* internal_pipe = pipeline->internal_pipeline;
-    
-    // face culling
-    internal_pipe->cull = dm_cull_to_opengl_cull(pipeline->raster_desc.cull_mode);
-    if (internal_pipe->cull == DM_CULL_UNKNOWN) return false;
-    
-    internal_pipe->winding = dm_wind_top_opengl_wind(pipeline->raster_desc.winding_order);
-    if (internal_pipe->winding == DM_WINDING_UNKNOWN) return false;
-    
-    // primitive
-    internal_pipe->primitive = dm_topology_to_opengl_primitive(pipeline->raster_desc.primitive_topology);
-    if (internal_pipe->primitive == DM_TOPOLOGY_UNKNOWN) return false;
-    
-    // sampler
-    internal_pipe->min_filter = dm_filter_to_opengl_filter(pipeline->sampler_desc.filter);
-    if (internal_pipe->min_filter == DM_FILTER_UNKNOWN) return false;
-    internal_pipe->mag_filter = dm_filter_to_opengl_filter(pipeline->sampler_desc.filter);
-    if (internal_pipe->mag_filter == DM_FILTER_UNKNOWN) return false;
-    internal_pipe->s_wrap = dm_texture_mode_to_opengl_mode(pipeline->sampler_desc.u);
-    if (internal_pipe->s_wrap == DM_TEXTURE_MODE_UNKNOWN) return false;
-    internal_pipe->t_wrap = dm_texture_mode_to_opengl_mode(pipeline->sampler_desc.v);
-    if (internal_pipe->t_wrap == DM_TEXTURE_MODE_UNKNOWN) return false;
-    
-    if (pipeline->blend_desc.is_enabled)
-    {
-        internal_pipe->blend_func = dm_blend_eq_to_opengl_func(pipeline->blend_desc.equation);
-        if (internal_pipe->blend_func == DM_BLEND_EQUATION_UNKNOWN) return false;
-        
-        internal_pipe->blend_src = dm_blend_func_to_opengl_func(pipeline->blend_desc.src);
-        if (internal_pipe->blend_src == DM_BLEND_FUNC_UNKNOWN) return false;
-        internal_pipe->blend_dest = dm_blend_func_to_opengl_func(pipeline->blend_desc.dest);
-        if (internal_pipe->blend_dest == DM_BLEND_FUNC_UNKNOWN) return false;
-    }
-    
-    if (pipeline->depth_desc.is_enabled)
-    {
-        internal_pipe->depth_func = dm_comp_to_opengl_comp(pipeline->depth_desc.comparison);
-        if (internal_pipe->depth_func == DM_COMPARISON_UNKNOWN) return false;
-    }
-    
-    // TODO needs to be fleshed out correctly
-    if (pipeline->stencil_desc.is_enabled)
-    {
-        internal_pipe->stencil_func = dm_comp_to_opengl_comp(pipeline->stencil_desc.comparison);
-        if (internal_pipe->stencil_func == DM_COMPARISON_UNKNOWN) return false;
-    }
-    
-    return true;
-}
-
-void dm_renderer_destroy_render_pipeline_impl(dm_render_pipeline_state* pipeline)
-{
-    dm_free(pipeline->internal_pipeline, sizeof(dm_internal_pipeline), DM_MEM_RENDER_PIPELINE);
-}
 
 bool dm_renderer_init_buffer_data_impl(dm_buffer* buffer, void* data)
 {
     return dm_opengl_create_buffer(buffer, data);
 }
 
-// render pass stuff
-
-bool dm_renderer_create_render_pass_impl(dm_render_pass* render_pass, dm_vertex_layout v_layout)
-{
-    return dm_opengl_create_render_pass(render_pass, v_layout);
-}
-
-void dm_renderer_destroy_render_pass_impl(dm_render_pass* render_pass)
-{
-    dm_opengl_destroy_render_pass(render_pass);
-}
+/********
+COMMANDS
+**********/
 
 bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 {
@@ -926,78 +1006,6 @@ bool dm_renderer_begin_renderpass_impl(dm_render_pass* render_pass)
 void dm_renderer_end_rederpass_impl(dm_render_pass* render_pass)
 {
     
-}
-
-bool dm_opengl_bind_pipeline(dm_render_pipeline_state* pipeline)
-{
-    dm_internal_pipeline* internal_pipe = (dm_internal_pipeline*)pipeline->internal_pipeline;
-    
-    // blending
-    if (pipeline->blend_desc.is_enabled)
-    {
-        glEnable(GL_BLEND);
-        glBlendEquation(internal_pipe->blend_func);
-        glCheckErrorReturn();
-        glBlendFunc(internal_pipe->blend_src, internal_pipe->blend_dest);
-        glCheckErrorReturn();
-    }
-    else
-    {
-        glDisable(GL_BLEND);
-    }
-    
-    // depth testing
-    if (pipeline->depth_desc.is_enabled)
-    {
-        glEnable(GL_DEPTH_TEST);
-        glDepthFunc(internal_pipe->depth_func);
-        glCheckErrorReturn();
-    }
-    else
-    {
-        glDisable(GL_DEPTH_TEST);
-    }
-    
-    // stencil testing
-    // TODO needs to be fleshed out correctly
-    if (pipeline->stencil_desc.is_enabled)
-    {
-        glEnable(GL_STENCIL_TEST);
-    }
-    else
-    {
-        glDisable(GL_STENCIL_TEST);
-    }
-    
-    // wireframe
-    if (pipeline->wireframe)
-    {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-    }
-    else
-    {
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-    }
-    
-    // sampler state
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, internal_pipe->s_wrap);
-    glCheckErrorReturn();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, internal_pipe->t_wrap);
-    glCheckErrorReturn();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, internal_pipe->min_filter);
-    glCheckErrorReturn();
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, internal_pipe->mag_filter);
-    glCheckErrorReturn();
-    
-    // face culling
-    glEnable(GL_CULL_FACE);
-    glCullFace(internal_pipe->cull);
-    glCheckErrorReturn();
-    
-    //glFrontFace(internal_pipe->winding);
-    //glCheckErrorReturn();
-    
-    return true;
 }
 
 bool dm_renderer_update_buffer_impl(dm_buffer* buffer, void* data, size_t size)
@@ -1041,10 +1049,7 @@ bool dm_renderer_bind_buffer_impl(dm_buffer* buffer, uint32_t slot)
     return true;
 }
 
-void dm_renderer_delete_buffer_impl(dm_buffer* buffer)
-{
-    dm_opengl_delete_buffer(buffer);
-}
+
 
 bool dm_create_texture_impl(dm_image* image)
 {
@@ -1087,7 +1092,7 @@ void dm_renderer_clear_impl(dm_color clear_color)
 
 void dm_renderer_draw_arrays_impl(uint32_t start, uint32_t count, dm_render_pass* render_pass)
 {
-    dm_internal_pipeline* internal_pipe = render_pass->pipeline_state.internal_pipeline;
+    //dm_internal_pipeline* internal_pipe = render_pass->pipeline_state.internal_pipeline;
     
     glDrawArrays(internal_pipe->primitive, start, count);
     glCheckError();
