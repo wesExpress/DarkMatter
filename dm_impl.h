@@ -461,6 +461,12 @@ PLATFORM
 **********/
 #ifdef DM_PLATFORM_WIN32
 #include "dm_platform_win32.h"
+#elif defined(DM_PLATFORM_APPLE)
+extern bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t window_w, uint32_t window_h, const char* title, dm_platform_data* platform_data);
+extern void dm_platform_shutdown(dm_platform_data* platform_data);
+extern double dm_platform_get_time(dm_platform_data* platform_data);
+extern void dm_platform_write(const char* message, uint8_t color);
+extern bool dm_platform_pump_events(dm_platform_data* platform_data);
 #endif
 
 /*******
@@ -506,6 +512,41 @@ RENDERING
 #include "dm_renderer_dx11.h"
 #elif defined(DM_OPENGL)
 #include "dm_renderer_opengl.h"
+#elif defined(DM_METAL)
+extern bool dm_renderer_backend_init(dm_context* context);
+extern void dm_renderer_backend_shutdown(dm_context* context);
+extern bool dm_renderer_backend_begin_frame(dm_renderer* renderer);
+extern bool dm_renderer_backend_end_frame(bool vsync, dm_context* context);
+
+extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_renderer* renderer);
+extern void dm_renderer_backend_destroy_buffer(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
+extern void dm_renderer_backend_destroy_uniform(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_shader(const char* shader_file, dm_vertex_attrib_desc* layout, uint32_t num_attribs, dm_render_handle* handle, dm_renderer* renderer);
+extern void dm_renderer_backend_destroy_shader(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
+extern void dm_renderer_backend_destroy_texture(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_handle, dm_render_handle* handle, dm_renderer* renderer);
+extern void dm_renderer_backend_destroy_pipeline(dm_render_handle handle, dm_renderer* renderer);
+
+extern void dm_render_command_backend_clear(float r, float g, float b, float a, dm_renderer* renderer);
+extern void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_set_primitive_topology(dm_primitive_topology topology, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_shader(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_uniform(dm_render_handle handle, dm_uniform_stage stage, uint32_t slot, uint32_t offset, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_uniform(dm_render_handle handle, void* data, size_t data_size, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_default_framebuffer(dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_framebuffer(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_framebuffer_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
+extern void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count, dm_renderer* renderer);
+extern void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
+extern void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer);
+extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer);
 #endif
 
 // renderer
@@ -589,14 +630,18 @@ void dm_renderer_destroy_buffer(dm_render_handle handle, dm_context* context)
 
 #ifdef DM_OPENGL
 bool dm_renderer_create_shader(const char* vertex_src, const char* pixel_src, dm_render_handle* vb_indices, uint32_t num_vb, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context)
-#else
+#elif defined(DM_DIRECTX)
 bool dm_renderer_create_shader(const char* vertex_src, const char* pixel_src, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context)
+#elif defined(DM_METAL)
+bool dm_renderer_create_shader(const char* shader_file, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context)
 #endif
 {
 #ifdef DM_OPENGL
     if(dm_renderer_backend_create_shader(vertex_src, pixel_src, vb_indices, num_vb, attrib_descs, num_attribs, handle, &context->renderer)) return true;
-#else
+#elif defined(DM_DIRECTX)
     if(dm_renderer_backend_create_shader(vertex_src, pixel_src, attrib_descs, num_attribs, handle, &context->renderer)) return true;
+#elif defined(DM_METAL)
+    if(dm_renderer_backend_create_shader(shader_file, attrib_descs, num_attribs, handle, &context->renderer)) return true;
 #endif
     
     DM_LOG_FATAL("Creating shader failed"); 
@@ -621,9 +666,17 @@ void dm_renderer_destroy_uniform(dm_render_handle handle, dm_context* context)
     dm_renderer_backend_destroy_uniform(handle, &context->renderer);
 }
 
+#ifdef DM_METAL
+bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_handle, dm_render_handle* handle, dm_context* context)
+#else
 bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context)
+#endif
 {
+#ifdef DM_METAL
+    if(dm_renderer_backend_create_pipeline(desc, shader_handle, handle, &context->renderer)) return true;
+#else
     if(dm_renderer_backend_create_pipeline(desc, handle, &context->renderer)) return true;
+#endif
     
     DM_LOG_FATAL("Creating pipeline failed");
     return false;
@@ -753,7 +806,8 @@ void __dm_renderer_submit_render_command(dm_render_command* command, dm_render_c
     dm_render_command* c = &manager->commands[manager->command_count++];
     c->type = command->type;
     c->params.size = command->params.size;
-    c->params.data = dm_alloc(command->params.size);
+    if(!c->params.data) c->params.data = dm_alloc(command->params.size);
+    else c->params.data = dm_realloc(c->params.data, command->params.size);
     dm_memcpy(c->params.data, command->params.data, command->params.size);
     
     dm_free(command->params.data);
@@ -878,7 +932,7 @@ void dm_render_command_bind_buffer(dm_render_handle handle, uint32_t slot, dm_co
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
-void dm_render_command_bind_uniform(dm_render_handle uniform_handle, uint32_t slot, dm_uniform_stage stage, uint32_t offset, dm_render_handle shader_handle, dm_context* context)
+void dm_render_command_bind_uniform(dm_render_handle uniform_handle, uint32_t slot, dm_uniform_stage stage, uint32_t offset, dm_context* context)
 {
     if(DM_TOO_MANY_COMMANDS) return;
     
@@ -889,7 +943,6 @@ void dm_render_command_bind_uniform(dm_render_handle uniform_handle, uint32_t sl
     DM_BYTE_POOL_INSERT(command.params, slot);
     DM_BYTE_POOL_INSERT(command.params, stage);
     DM_BYTE_POOL_INSERT(command.params, offset);
-    DM_BYTE_POOL_INSERT(command.params, shader_handle);
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
@@ -909,7 +962,7 @@ void dm_render_command_update_buffer(dm_render_handle handle, void* data, size_t
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
-void dm_render_command_update_uniform(dm_render_handle uniform_handle, void* data, size_t data_size, dm_render_handle shader_handle, dm_context* context)
+void dm_render_command_update_uniform(dm_render_handle uniform_handle, void* data, size_t data_size, dm_context* context)
 {
     if(DM_TOO_MANY_COMMANDS) return;
     
@@ -919,7 +972,6 @@ void dm_render_command_update_uniform(dm_render_handle uniform_handle, void* dat
     DM_BYTE_POOL_INSERT(command.params, uniform_handle);
     __dm_byte_pool_insert(&command.params, data, data_size);
     DM_BYTE_POOL_INSERT(command.params, data_size);
-    DM_BYTE_POOL_INSERT(command.params, shader_handle);
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
@@ -1128,7 +1180,6 @@ bool dm_renderer_submit_commands(dm_context* context)
             
             case DM_RENDER_COMMAND_BIND_UNIFORM:
             {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, shader_handle);
                 DM_BYTE_POOL_POP(command.params, uint32_t, offset);
                 DM_BYTE_POOL_POP(command.params, dm_uniform_stage, stage);
                 DM_BYTE_POOL_POP(command.params, uint32_t, slot);
@@ -1138,7 +1189,6 @@ bool dm_renderer_submit_commands(dm_context* context)
             } break;
             case DM_RENDER_COMMAND_UPDATE_UNIFORM:
             {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, shader_handle);
                 DM_BYTE_POOL_POP(command.params, size_t, data_size);
                 void* data = __dm_byte_pool_pop(&command.params, data_size);
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, uniform_handle);
@@ -1253,6 +1303,11 @@ dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t windo
 
 void dm_shutdown(dm_context* context)
 {
+    for(uint32_t i=0; i<context->renderer.command_manager.command_count; i++)
+    {
+        dm_free(context->renderer.command_manager.commands[i].params.data);
+    }
+    
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
     

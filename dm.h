@@ -1,21 +1,6 @@
 #ifndef DM_H
 #define DM_H
 
-/********
-INCLUDES
-**********/
-#include <stdlib.h>
-#include <stdio.h>
-#include <stdint.h>
-
-#ifndef  DM_PLATFORM_APPLE
-#include <immintrin.h>
-#include <emmintrin.h>
-#include <xmmintrin.h>
-#else
-#include "arm_neon.h"
-#endif
-
 /********************************************
 DETERMINE PLATFORM AND RENDERING BACKEND
 
@@ -59,6 +44,21 @@ depreciated
 #else
 #define DM_OPENGL_MINOR 6
 #endif
+#endif
+
+/********
+INCLUDES
+**********/
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdint.h>
+
+#ifndef  DM_PLATFORM_APPLE
+#include <immintrin.h>
+#include <emmintrin.h>
+#include <xmmintrin.h>
+#else
+//#include "arm_neon.h"
 #endif
 
 /*****
@@ -188,6 +188,8 @@ static const dm_vec3 dm_vec3_unit_z = { 0,0,1 };
 /****
 SIMD
 ******/
+// TODO: not apple supported yet
+#ifndef DM_PLATFORM_APPLE
 #ifdef DM_SIMD_256
 typedef __m256  dm_mm_float;
 typedef __m256i dm_mm_int;
@@ -196,6 +198,7 @@ typedef __m256i dm_mm_int;
 typedef __m128  dm_mm_float;
 typedef __m128i dm_mm_int;
 #define DM_SIMD_N 4
+#endif
 #endif
 
 /******
@@ -791,6 +794,9 @@ bool  dm_isnan(float x);
 
 #include "dm_math.h"
 
+// SIMD
+// TODO: no apple support yet
+#ifndef DM_PLATFORM_APPLE
 // casting
 dm_mm_int   dm_mm_cast_float_to_int(dm_mm_float mm);
 dm_mm_float dm_mm_cast_int_to_float(dm_mm_int mm);
@@ -826,6 +832,7 @@ dm_mm_int   dm_mm_hadd_i(dm_mm_int left, dm_mm_int right);
 // shifting
 dm_mm_int   dm_mm_shiftl_1(dm_mm_int mm);
 dm_mm_int   dm_mm_shiftr_1(dm_mm_int mm);
+#endif
 
 // memory
 void* dm_alloc(size_t size);
@@ -885,11 +892,17 @@ bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, dm_ren
 bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, dm_render_handle* handle, dm_context* context);
 #ifdef DM_OPENGL
 bool dm_renderer_create_shader(const char* vertex_src, const char* pixel_src, dm_render_handle* vb_indices, uint32_t num_vb, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context);
-#else
+#elif defined(DM_DIRECTX)
 bool dm_renderer_create_shader(const char* vertex_src, const char* pixel_src, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context);
+#elif defined(DM_METAL)
+bool dm_renderer_create_shader(const char* shader_file, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context);
 #endif
 bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context);
+#ifdef DM_METAL
+bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_handle, dm_render_handle* handle, dm_context* context);
+#else
 bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
+#endif
 bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, void* data, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context);
@@ -910,9 +923,9 @@ void dm_render_command_set_default_viewport(dm_context* context);
 void dm_render_command_set_primitive_topology(dm_primitive_topology topology, dm_context* context);
 void dm_render_command_bind_shader(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_buffer(dm_render_handle handle, uint32_t slot, dm_context* context);
-void dm_render_command_bind_uniform(dm_render_handle uniform_handle, uint32_t slot, dm_uniform_stage stage, uint32_t offset, dm_render_handle shader_handle, dm_context* context);
+void dm_render_command_bind_uniform(dm_render_handle uniform_handle, uint32_t slot, dm_uniform_stage stage, uint32_t offset, dm_context* context);
 void dm_render_command_update_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
-void dm_render_command_update_uniform(dm_render_handle uniform_handle, void* data, size_t data_size, dm_render_handle shader_handle, dm_context* context);
+void dm_render_command_update_uniform(dm_render_handle uniform_handle, void* data, size_t data_size, dm_context* context);
 void dm_render_command_bind_texture(dm_render_handle handle, uint32_t slot, dm_context* context);
 void dm_render_command_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_context* context);
 void dm_render_command_bind_default_framebuffer(dm_context* context);

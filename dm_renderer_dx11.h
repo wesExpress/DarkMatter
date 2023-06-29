@@ -1169,42 +1169,6 @@ bool dm_render_command_backend_set_primitive_topology(dm_primitive_topology topo
     return true;
 }
 
-#if 0
-bool dm_render_command_begin_renderpass_impl(dm_render_handle internal_index)
-{
-    DM_DX11_GET_RENDERER;
-    
-    HRESULT hr;
-    
-	ID3D11DeviceContext* context = dx11_renderer->context;
-    dm_dx11_renderpass* internal_pass = DM_DX11_GET_RESOURCE(DM_DX11_RESOURCE_RENDERPASS, internal_index);
-    
-    if(!internal_pass) { DM_LOG_FATAL("Trying to begin invalid dx11 render pass"); return false; }
-    
-    // bind pipeline
-    dm_render_command_bind_pipeline_impl(internal_pass->pipeline_index);
-    
-	// shader
-	context->lpVtbl->VSSetShader(context, internal_pass->vertex_shader, NULL, 0);
-	context->lpVtbl->PSSetShader(context, internal_pass->pixel_shader, NULL, 0);
-	context->lpVtbl->IASetInputLayout(context, internal_pass->input_layout);
-    
-    dx11_renderer.active_pass = internal_pass;
-    
-    return true;
-}
-
-bool dm_render_command_end_renderpass_impl(dm_render_handle internal_index)
-{
-    dm_dx11_renderpass* internal_pass = DM_DX11_GET_RESOURCE(DM_DX11_RESOURCE_RENDERPASS, internal_index);
-    if(!internal_pass) { DM_LOG_FATAL("Trying to end invalid DirectX11 renderpass"); return false; }
-    
-    dx11_renderer.active_pass = NULL;
-    
-    return true;
-}
-#endif
-
 bool dm_render_command_backend_bind_shader(dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX11_GET_RENDERER;

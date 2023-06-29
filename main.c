@@ -59,10 +59,17 @@ int main(int argc, char** argv)
 #ifdef DM_OPENGL
     dm_render_handle vbs[] = { vb };
     if(!dm_renderer_create_shader("assets/shaders/test_vertex.glsl", "assets/shaders/test_pixel.glsl", vbs, DM_ARRAY_LEN(vbs), attrib_descs, DM_ARRAY_LEN(attrib_descs), &shader, context)) e = ERROR_CODE_RESOURCE_CREATION_FAIL;
-#else
+#elif defined(DM_DIRECTX)
     if(!dm_renderer_create_shader("assets/shaders/test_vertex.fxc", "assets/shaders/test_pixel.fxc", attrib_descs, DM_ARRAY_LEN(attrib_descs), &shader, context)) e = ERROR_CODE_RESOURCE_CREATION_FAIL;
+#elif defined(DM_METAL)
+    if(!dm_renderer_create_shader("assets/shaders/test.metallib", attrib_descs, DM_ARRAY_LEN(attrib_descs), &shader, context)) e = ERROR_CODE_RESOURCE_CREATION_FAIL;
 #endif
+    
+#ifdef DM_METAL
+    if(!dm_renderer_create_pipeline(pipeline_desc, shader, &pipe, context)) e = ERROR_CODE_RESOURCE_CREATION_FAIL;
+#else
     if(!dm_renderer_create_pipeline(pipeline_desc, &pipe, context)) e = ERROR_CODE_RESOURCE_CREATION_FAIL;
+#endif
     
     if(e != ERROR_CODE_SUCCESS)
     {
@@ -86,8 +93,9 @@ int main(int argc, char** argv)
         dm_render_command_bind_shader(shader, context);
         dm_render_command_bind_pipeline(pipe, context);
         dm_render_command_bind_buffer(vb, 0, context);
-        dm_render_command_bind_buffer(ib, 0, context);
-        dm_render_command_draw_indexed(3,0,0, context);
+        //dm_render_command_bind_buffer(ib, 0, context);
+        //dm_render_command_draw_indexed(3,0,0, context);
+        dm_render_command_draw_arrays(0,3,context);
         
         if(!dm_renderer_end_frame(true, context)) e = ERROR_CODE_RENDER_END_FAIL;
     }
