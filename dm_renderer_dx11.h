@@ -539,9 +539,9 @@ void dm_renderer_backend_destroy_texture(dm_render_handle handle, dm_renderer* r
     
     if(handle > dx11_renderer->texture_count) { DM_LOG_FATAL("Trying to destroy invalid DirectX11 texture"); return; }
     
-	DM_DX11_RELEASE(dx11_renderer->textures[dx11_renderer->texture_count].texture);
-	DM_DX11_RELEASE(dx11_renderer->textures[dx11_renderer->texture_count].view);
-    DM_DX11_RELEASE(dx11_renderer->textures[dx11_renderer->texture_count].staging);
+	DM_DX11_RELEASE(dx11_renderer->textures[handle].texture);
+	DM_DX11_RELEASE(dx11_renderer->textures[handle].view);
+    DM_DX11_RELEASE(dx11_renderer->textures[handle].staging);
 }
 
 /****************
@@ -653,9 +653,9 @@ void dm_renderer_backend_destroy_shader(dm_render_handle handle, dm_renderer* re
     
     if(handle > dx11_renderer->shader_count) { DM_LOG_FATAL("Trying to destroy invalid DirectX shader"); return; }
     
-	DM_DX11_RELEASE(dx11_renderer->shaders[dx11_renderer->shader_count].vertex_shader);
-	DM_DX11_RELEASE(dx11_renderer->shaders[dx11_renderer->shader_count].pixel_shader);
-	DM_DX11_RELEASE(dx11_renderer->shaders[dx11_renderer->shader_count].input_layout);
+	DM_DX11_RELEASE(dx11_renderer->shaders[handle].vertex_shader);
+	DM_DX11_RELEASE(dx11_renderer->shaders[handle].pixel_shader);
+	DM_DX11_RELEASE(dx11_renderer->shaders[handle].input_layout);
 }
 
 /******************
@@ -782,7 +782,7 @@ void dm_renderer_backend_destroy_pipeline(dm_render_handle handle, dm_renderer* 
     
     if(handle > dx11_renderer->pipeline_count) { DM_LOG_FATAL("Trying to destroy invalid DirectX11 pipeline"); return; }
     
-    dm_dx11_pipeline* internal_pipeline = &dx11_renderer->pipelines[dx11_renderer->pipeline_count];
+    dm_dx11_pipeline* internal_pipeline = &dx11_renderer->pipelines[handle];
     
     if(internal_pipeline->depth || internal_pipeline->stencil) DM_DX11_RELEASE(internal_pipeline->depth_stencil_state);
     if(internal_pipeline->blend) DM_DX11_RELEASE(internal_pipeline->blend_state);
@@ -1044,7 +1044,7 @@ void dm_renderer_backend_shutdown(dm_context* context)
 #endif
     DM_DX11_RELEASE(dx11_renderer->device);
     
-    dm_free(renderer->internal_renderer);
+    dm_free(context->renderer.internal_renderer);
 }
 
 bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
@@ -1063,12 +1063,11 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 
 bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
 {
-    dm_dx11_renderer* dx11_renderer = &context->renderer.internal_renderer;
+    dm_dx11_renderer* dx11_renderer = context->renderer.internal_renderer;
     
     HRESULT hr;
     
 	IDXGISwapChain* swap_chain = dx11_renderer->swap_chain;
-	ID3D11DeviceContext* context = dx11_renderer->context;
     
     uint32_t v = vsync ? 1 : 0;
 	if (FAILED(hr = swap_chain->lpVtbl->Present(swap_chain, v, 0)))
