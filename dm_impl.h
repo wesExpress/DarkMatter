@@ -1306,6 +1306,7 @@ void dm_ecs_shutdown(dm_context* context)
         {
             dm_free(block_manager->blocks[j].block);
         }
+        dm_free(block_manager->blocks);
     }
     
     dm_free(context->ecs_manager.entity_ids);
@@ -1734,13 +1735,14 @@ dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t windo
 
 void dm_shutdown(dm_context* context)
 {
-    for(uint32_t i=0; i<context->renderer.command_manager.command_count; i++)
+    for(uint32_t i=0; i<DM_MAX_RENDER_COMMANDS; i++)
     {
-        dm_free(context->renderer.command_manager.commands[i].params.data);
+        if(context->renderer.command_manager.commands[i].params.data) dm_free(context->renderer.command_manager.commands[i].params.data);
     }
     
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
+    dm_physics_shutdown(context);
     dm_ecs_shutdown(context);
     
     dm_free(context);
