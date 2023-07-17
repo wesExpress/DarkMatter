@@ -818,7 +818,7 @@ typedef struct dm_ecs_manager_t
     dm_ecs_default_components default_components;
     
     dm_component_block_manager component_blocks[DM_ECS_MAX];
-    dm_entity_ids*             entity_ids; 
+    dm_entity_ids             entity_ids[100]; 
 } dm_ecs_manager;
 
 // components
@@ -1291,9 +1291,6 @@ void* dm_map_get_values(dm_map* map, uint32_t* num_values);
 #endif
 
 // ecs
-bool dm_ecs_init(dm_context* context);
-void dm_ecs_shutdown(dm_context* context);
-
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
 dm_ecs_id dm_ecs_register_system(dm_context* context);
 dm_entity dm_ecs_create_entity(dm_context* context);

@@ -1282,25 +1282,27 @@ ECS
 
 bool dm_ecs_init(dm_context* context)
 {
+    dm_ecs_manager* ecs_manager = &context->ecs_manager;
+    
     size_t block_size = sizeof(dm_entity_ids) * DM_ECS_MANAGER_ENTITY_CAPACITY;
     
-    context->ecs_manager.entity_ids = dm_alloc(block_size);
-    context->ecs_manager.entity_capacity = DM_ECS_MANAGER_ENTITY_CAPACITY;
-    dm_memset(context->ecs_manager.entity_ids, DM_ECS_INVALID_ID, block_size);
+    //ecs_manager->entity_ids = dm_alloc(block_size);
+    ecs_manager->entity_capacity = DM_ECS_MANAGER_ENTITY_CAPACITY;
+    dm_memset(ecs_manager->entity_ids, DM_ECS_INVALID_ID, block_size);
     
     // transform component
-    context->ecs_manager.default_components.transform = dm_ecs_register_component(sizeof(dm_component_transform_block), context);
-    if(context->ecs_manager.default_components.transform!=DM_ECS_INVALID_ID) return true;
+    ecs_manager->default_components.transform = dm_ecs_register_component(sizeof(dm_component_transform_block), context);
+    if(ecs_manager->default_components.transform!=DM_ECS_INVALID_ID) return true;
     
     DM_LOG_FATAL("Could not register transform component"); 
     return false;
 }
 
-void dm_ecs_shutdown(dm_context* context)
+void dm_ecs_shutdown(dm_ecs_manager* ecs_manager)
 {
-    for(uint32_t i=0; i<context->ecs_manager.num_registered_components; i++)
+    for(uint32_t i=0; i<ecs_manager->num_registered_components; i++)
     {
-        dm_component_block_manager* block_manager = &context->ecs_manager.component_blocks[i];
+        dm_component_block_manager* block_manager = &ecs_manager->component_blocks[i];
         
         for(uint32_t j=0; j<block_manager->block_count; j++)
         {
@@ -1309,7 +1311,7 @@ void dm_ecs_shutdown(dm_context* context)
         dm_free(block_manager->blocks);
     }
     
-    dm_free(context->ecs_manager.entity_ids);
+    dm_free(ecs_manager->entity_ids);
 }
 
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context)
@@ -1350,7 +1352,7 @@ dm_entity dm_ecs_create_entity(dm_context* context)
     if((float)entity / (float)context->ecs_manager.entity_capacity >= DM_ECS_MANAGER_LOAD_FACTOR)
     {
         context->ecs_manager.entity_capacity *= DM_ECS_MANAGER_RESIZE_FACTOR;
-        context->ecs_manager.entity_ids = dm_realloc(context->ecs_manager.entity_ids, sizeof(dm_entity_ids) * context->ecs_manager.entity_capacity);
+        //context->ecs_manager.entity_ids = dm_realloc(context->ecs_manager.entity_ids, sizeof(dm_entity_ids) * context->ecs_manager.entity_capacity);
     }
     
     return entity;
@@ -1722,7 +1724,7 @@ dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t windo
     {
         dm_renderer_shutdown(context);
         dm_platform_shutdown(&context->platform_data);
-        dm_ecs_shutdown(context);
+        dm_ecs_shutdown(&context->ecs_manager);
         dm_free(context);
         return NULL;
     }
@@ -1743,7 +1745,7 @@ void dm_shutdown(dm_context* context)
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
     dm_physics_shutdown(context);
-    dm_ecs_shutdown(context);
+    dm_ecs_shutdown(&context->ecs_manager);
     
     dm_free(context);
 }
