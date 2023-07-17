@@ -13,7 +13,7 @@ c_files="$SRC_DIR/main.c"
 
 objc_files="$SRC_DIR/dm_platform_mac.m $SRC_DIR/dm_renderer_metal.m"
 
-compiler_flags="-g -fPIC -MD -std=gnu99 -fdiagnostics-absolute-paths -fdeclspec -fPIC -Wall -Wno-missing-braces"
+compiler_flags="-g -fPIC -MD -std=gnu99 -fdiagnostics-absolute-paths -fPIC -Wall -Wno-missing-braces"
 
 if ((simd_256)); then
 	defines="$defines -DDM_SIMD_256"

@@ -486,11 +486,8 @@ DM_INLINE
 void dm_mat2_inverse(float mat[M2], float out[M2])
 {
 	float det = dm_mat2_det(mat);
-	if (det == 0)
-	{
-		DM_LOG_WARN("Trying to invert non-invertible 2x2 matrix (determinant is zero)!");
-		dm_memcpy(out, mat, sizeof(float) * M2);
-	}
+	if (det == 0) dm_memcpy(out, mat, sizeof(float) * M2);
+	
     
 	det = 1.0f / det;
 	for (int i = 0; i < N2; i++)
@@ -680,11 +677,8 @@ DM_INLINE
 void dm_mat3_inverse(float mat[M3], float out[M3])
 {
 	float det = dm_mat3_det(mat);
-	if (det == 0)
-	{
-		DM_LOG_WARN("Trying to invert non-invertible 3x3 matrix! Returning input...");
-        dm_memcpy(out, mat, sizeof(float) * M3);
-	}
+	if (det == 0) dm_memcpy(out, mat, sizeof(float) * M3);
+	
 	det = 1.0f / det;
     
 	// cofactors
@@ -1007,11 +1001,7 @@ DM_INLINE
 void dm_mat4_inverse(float mat[M4], float out[M4])
 {
 	float det = dm_mat4_det(mat);
-	if (det == 0)
-	{
-		DM_LOG_WARN("Trying to invert non-invertible 4x4 matrix! Returning input...");
-        dm_memcpy(out, mat, sizeof(float) * M4);
-	}
+	if (det == 0) dm_memcpy(out, mat, sizeof(float) * M4);
 	det = 1.0f / det;
     
 	// cofactors

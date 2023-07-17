@@ -461,6 +461,8 @@ PLATFORM
 **********/
 #ifdef DM_PLATFORM_WIN32
 #include "dm_platform_win32.h"
+#elif defined(DM_PLATFORM_LINUX)
+#include "dm_platform_linux.h"
 #elif defined(DM_PLATFORM_APPLE)
 extern bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t window_w, uint32_t window_h, const char* title, dm_platform_data* platform_data);
 extern void dm_platform_shutdown(dm_platform_data* platform_data);

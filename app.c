@@ -1,4 +1,5 @@
 #include "app.h"
+#include "render_pass.h"
 
 bool app_init(dm_context* context)
 {

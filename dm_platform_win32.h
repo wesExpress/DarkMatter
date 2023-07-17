@@ -30,148 +30,8 @@ typedef struct dm_internal_w32_data_t
 
 #define DM_WIN32_GET_DATA dm_internal_w32_data* w32_data = platform_data->internal_data
 
-LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam)
-{
-    dm_platform_data* platform_data = GetPropA(hwnd, "platform_data");
-    
-    switch (umsg)
-	{
-        case WM_ERASEBKGND:
-		return 1;
-        case WM_CLOSE:
-        {
-            dm_add_window_close_event(&platform_data->event_list);
-            return 0;
-        } break;
-        case WM_DESTROY:
-        {
-            PostQuitMessage(0);
-            return 0;
-        } break;
-        
-        case WM_SIZE:
-        {
-            RECT rect;
-            GetWindowRect(hwnd, &rect);
-            uint32_t width = rect.right - rect.left;
-            uint32_t height = rect.bottom - rect.top;
-            
-            dm_add_window_resize_event(width, height, &platform_data->event_list);
-        } break;
-        
-        case WM_KEYDOWN:
-        case WM_SYSKEYDOWN:
-        {
-            WPARAM vk = wparam;;
-            
-            UINT scancode = (lparam & 0x00ff0000) >> 16;
-            int extended = (lparam & 0x01000000) != 0;
-            
-            switch (vk)
-            {
-                case VK_SHIFT:
-                {
-                    vk = MapVirtualKey(scancode, MAPVK_VSC_TO_VK_EX);
-                } break;
-                case VK_CONTROL:
-                {
-                    vk = extended ? VK_RCONTROL : VK_LCONTROL;
-                } break;
-            }
-            
-            dm_add_key_down_event((dm_key_code)vk, &platform_data->event_list);
-        } break;
-        case WM_KEYUP:
-        case WM_SYSKEYUP:
-        {
-            WPARAM vk = wparam;;
-            
-            UINT scancode = (lparam & 0x00ff0000) >> 16;
-            int extended = (lparam & 0x01000000) != 0;
-            
-            switch (vk)
-            {
-                case VK_SHIFT:
-                {
-                    vk = MapVirtualKey(scancode, MAPVK_VSC_TO_VK_EX);
-                } break;
-                case VK_CONTROL:
-                {
-                    vk = extended ? VK_RCONTROL : VK_LCONTROL;
-                } break;
-                default: 
-                break;
-            }
-            
-            dm_add_key_up_event((dm_key_code)vk, &platform_data->event_list);
-        } break;
-        
-        case WM_MOUSEMOVE:
-        {
-            int32_t x = GET_X_LPARAM(lparam);
-            int32_t y = GET_Y_LPARAM(lparam);
-            int32_t coords[2] = { x, y };
-            
-            dm_add_mouse_move_event(x,y, &platform_data->event_list);
-        } break;
-        
-        case WM_MOUSEWHEEL:
-        {
-            int32_t delta = GET_WHEEL_DELTA_WPARAM(wparam);
-            if (delta != 0) delta = (delta < 0) ? -1 : 1;
-            
-            dm_add_mouse_scroll_event(delta, &platform_data->event_list);
-        } break;
-        
-        case WM_LBUTTONDOWN:
-        {
-            dm_add_mousebutton_down_event(DM_MOUSEBUTTON_L, &platform_data->event_list);
-        } break;
-        case WM_RBUTTONDOWN:
-        {
-            dm_add_mousebutton_down_event(DM_MOUSEBUTTON_R, &platform_data->event_list);
-        } break;
-        case WM_MBUTTONDOWN:
-        {
-            dm_add_mousebutton_down_event(DM_MOUSEBUTTON_M, &platform_data->event_list);
-        } break;
-        
-        case WM_LBUTTONUP:
-        {
-            dm_add_mousebutton_up_event(DM_MOUSEBUTTON_L, &platform_data->event_list);
-        } break;
-        case WM_RBUTTONUP:
-        {
-            dm_add_mousebutton_up_event(DM_MOUSEBUTTON_R, &platform_data->event_list);
-        } break;
-        case WM_MBUTTONUP:
-        {
-            dm_add_mousebutton_up_event(DM_MOUSEBUTTON_M, &platform_data->event_list);
-        } break;
-        
-        // unhandled Windows event
-        default:
-        break;
-	}
-    
-	return DefWindowProcA(hwnd, umsg, wparam, lparam);
-}
-
-LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
-{
-	switch (message)
-	{
-        case WM_CREATE:
-        {
-            return 0;
-        } 
-        case WM_DESTROY:
-		PostQuitMessage(0);
-		return 0;
-	}
-    
-	return DefWindowProc(hWnd, message, wParam, lParam);
-}
+LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
+LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_platform_data* platform_data)
 {
@@ -326,6 +186,149 @@ void dm_platform_write(const char* message, uint8_t color)
 	WriteConsoleA(console_handle, message, (DWORD)len, number_written, 0);
 	// resets to white
 	SetConsoleTextAttribute(console_handle, 7);
+}
+
+LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam)
+{
+    dm_platform_data* platform_data = GetPropA(hwnd, "platform_data");
+    
+    switch (umsg)
+	{
+        case WM_ERASEBKGND:
+		return 1;
+        case WM_CLOSE:
+        {
+            dm_add_window_close_event(&platform_data->event_list);
+            return 0;
+        } break;
+        case WM_DESTROY:
+        {
+            PostQuitMessage(0);
+            return 0;
+        } break;
+        
+        case WM_SIZE:
+        {
+            RECT rect;
+            GetWindowRect(hwnd, &rect);
+            uint32_t width = rect.right - rect.left;
+            uint32_t height = rect.bottom - rect.top;
+            
+            dm_add_window_resize_event(width, height, &platform_data->event_list);
+        } break;
+        
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+        {
+            WPARAM vk = wparam;;
+            
+            UINT scancode = (lparam & 0x00ff0000) >> 16;
+            int extended = (lparam & 0x01000000) != 0;
+            
+            switch (vk)
+            {
+                case VK_SHIFT:
+                {
+                    vk = MapVirtualKey(scancode, MAPVK_VSC_TO_VK_EX);
+                } break;
+                case VK_CONTROL:
+                {
+                    vk = extended ? VK_RCONTROL : VK_LCONTROL;
+                } break;
+            }
+            
+            dm_add_key_down_event((dm_key_code)vk, &platform_data->event_list);
+        } break;
+        case WM_KEYUP:
+        case WM_SYSKEYUP:
+        {
+            WPARAM vk = wparam;;
+            
+            UINT scancode = (lparam & 0x00ff0000) >> 16;
+            int extended = (lparam & 0x01000000) != 0;
+            
+            switch (vk)
+            {
+                case VK_SHIFT:
+                {
+                    vk = MapVirtualKey(scancode, MAPVK_VSC_TO_VK_EX);
+                } break;
+                case VK_CONTROL:
+                {
+                    vk = extended ? VK_RCONTROL : VK_LCONTROL;
+                } break;
+                default: 
+                break;
+            }
+            
+            dm_add_key_up_event((dm_key_code)vk, &platform_data->event_list);
+        } break;
+        
+        case WM_MOUSEMOVE:
+        {
+            int32_t x = GET_X_LPARAM(lparam);
+            int32_t y = GET_Y_LPARAM(lparam);
+            int32_t coords[2] = { x, y };
+            
+            dm_add_mouse_move_event(x,y, &platform_data->event_list);
+        } break;
+        
+        case WM_MOUSEWHEEL:
+        {
+            int32_t delta = GET_WHEEL_DELTA_WPARAM(wparam);
+            if (delta != 0) delta = (delta < 0) ? -1 : 1;
+            
+            dm_add_mouse_scroll_event(delta, &platform_data->event_list);
+        } break;
+        
+        case WM_LBUTTONDOWN:
+        {
+            dm_add_mousebutton_down_event(DM_MOUSEBUTTON_L, &platform_data->event_list);
+        } break;
+        case WM_RBUTTONDOWN:
+        {
+            dm_add_mousebutton_down_event(DM_MOUSEBUTTON_R, &platform_data->event_list);
+        } break;
+        case WM_MBUTTONDOWN:
+        {
+            dm_add_mousebutton_down_event(DM_MOUSEBUTTON_M, &platform_data->event_list);
+        } break;
+        
+        case WM_LBUTTONUP:
+        {
+            dm_add_mousebutton_up_event(DM_MOUSEBUTTON_L, &platform_data->event_list);
+        } break;
+        case WM_RBUTTONUP:
+        {
+            dm_add_mousebutton_up_event(DM_MOUSEBUTTON_R, &platform_data->event_list);
+        } break;
+        case WM_MBUTTONUP:
+        {
+            dm_add_mousebutton_up_event(DM_MOUSEBUTTON_M, &platform_data->event_list);
+        } break;
+        
+        // unhandled Windows event
+        default:
+        break;
+	}
+    
+	return DefWindowProcA(hwnd, umsg, wparam, lparam);
+}
+
+LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+	switch (message)
+	{
+        case WM_CREATE:
+        {
+            return 0;
+        } 
+        case WM_DESTROY:
+		PostQuitMessage(0);
+		return 0;
+	}
+    
+	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
 const char* dm_get_win32_error_msg(HRESULT hr)

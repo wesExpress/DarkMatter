@@ -1,6 +1,8 @@
 #ifndef DM_RENDERER_OPENGL_H
 #define DM_RENDERER_OPENGL_H
 
+#include <glad/glad.h>
+
 #define DM_GLUINT_FAIL UINT_MAX
 
 #if DM_DEBUG

@@ -52,6 +52,8 @@ INCLUDES
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
+#include <stddef.h>
+#include <string.h>
 
 #ifndef  DM_PLATFORM_APPLE
 #include <immintrin.h>
@@ -1238,6 +1240,7 @@ void dm_render_command_set_viewport(uint32_t width, uint32_t height, dm_context*
 void dm_render_command_set_default_viewport(dm_context* context);
 void dm_render_command_set_primitive_topology(dm_primitive_topology topology, dm_context* context);
 void dm_render_command_bind_shader(dm_render_handle handle, dm_context* context);
+void dm_render_command_bind_pipeline(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_buffer(dm_render_handle handle, uint32_t slot, dm_context* context);
 void dm_render_command_bind_uniform(dm_render_handle uniform_handle, uint32_t slot, dm_uniform_stage stage, uint32_t offset, dm_context* context);
 void dm_render_command_update_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
