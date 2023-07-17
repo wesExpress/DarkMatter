@@ -30,10 +30,10 @@ typedef struct dm_plane
 // impl
 bool dm_physics_init(dm_ecs_id* physics_id, dm_ecs_id* collision_id, dm_context* context)
 {
-    *physics_id = dm_ecs_register_component(sizeof(dm_component_physics), context);
+    *physics_id = dm_ecs_register_component(sizeof(dm_component_physics_block), context);
     if(*physics_id==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register physics component"); return true; }
     
-    *collision_id = dm_ecs_register_component(sizeof(dm_component_collision), context);
+    *collision_id = dm_ecs_register_component(sizeof(dm_component_collision_block), context);
     if(*collision_id==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register collision component"); return true; }
     
     context->physics_manager.possible_collisions = dm_alloc(sizeof(dm_collision_pair) * DM_PHYSICS_DEFAULT_COLLISION_CAPACITY);
@@ -119,8 +119,8 @@ void dm_support(dm_entity entity_a, dm_entity entity_b, float direction[3], floa
     dm_component_collision collision_a = dm_ecs_entity_get_collision(entity_a, context);
     dm_component_collision collision_b = dm_ecs_entity_get_collision(entity_b, context);
     
-    dm_physics_gjk_support(transform_a.pos, transform_a.rot, collision_a.center, collision_a.internal, collision_a.shape, direction, support_a);
-    dm_physics_gjk_support(transform_b.pos, transform_b.rot, collision_b.center, collision_b.internal, collision_b.shape, direction, support_b);
+    //dm_physics_gjk_support(transform_a.pos, transform_a.rot, collision_a.center, collision_a.internal, collision_a.shape, direction, support_a);
+    //dm_physics_gjk_support(transform_b.pos, transform_b.rot, collision_b.center, collision_b.internal, collision_b.shape, direction, support_b);
     
     dm_vec3_sub_vec3(support_a, support_b, out);
 }

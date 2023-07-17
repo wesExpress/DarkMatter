@@ -818,7 +818,7 @@ typedef struct dm_ecs_manager_t
     dm_ecs_default_components default_components;
     
     dm_component_block_manager component_blocks[DM_ECS_MAX];
-    dm_entity_ids             entity_ids[100]; 
+    dm_entity_ids*             entity_ids; 
 } dm_ecs_manager;
 
 // components
@@ -1043,7 +1043,12 @@ typedef struct dm_component_collision_block_t
     float center_y[DM_ECS_COMPONENT_BLOCK_SIZE];
     float center_z[DM_ECS_COMPONENT_BLOCK_SIZE];
     
-    float internal[6][DM_ECS_COMPONENT_BLOCK_SIZE];
+    float internal_0[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float internal_1[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float internal_2[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float internal_3[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float internal_4[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float internal_5[DM_ECS_COMPONENT_BLOCK_SIZE];
     
     dm_collision_shape shape[DM_ECS_COMPONENT_BLOCK_SIZE];
     dm_collision_flag  flag[DM_ECS_COMPONENT_BLOCK_SIZE];
@@ -1051,14 +1056,14 @@ typedef struct dm_component_collision_block_t
 
 typedef struct dm_component_collision_t
 {
-    float aabb_local_min[3];
-    float aabb_local_max[3];
-    float aabb_global_min[3];
-    float aabb_global_max[3];
+    float aabb_local_min_x, aabb_local_min_y, aabb_local_min_z;
+    float aabb_local_max_x, aabb_local_max_y, aabb_local_max_z;
+    float aabb_global_min_x, aabb_global_min_y, aabb_global_min_z;
+    float aabb_global_max_x, aabb_global_max_y, aabb_global_max_z;
     
-    float center[3];
+    float center_x, center_y, center_z;
     
-    float internal[6];
+    float internal_0, internal_1, internal_2, internal_3, internal_4, internal_5;
     
     dm_collision_shape shape;
     dm_collision_flag  flag;

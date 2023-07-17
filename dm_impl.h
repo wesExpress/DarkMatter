@@ -1286,7 +1286,8 @@ bool dm_ecs_init(dm_context* context)
     
     size_t block_size = sizeof(dm_entity_ids) * DM_ECS_MANAGER_ENTITY_CAPACITY;
     
-    //ecs_manager->entity_ids = dm_alloc(block_size);
+    ecs_manager->entity_ids = dm_alloc(block_size);
+    if(!ecs_manager->entity_ids) return false;
     ecs_manager->entity_capacity = DM_ECS_MANAGER_ENTITY_CAPACITY;
     dm_memset(ecs_manager->entity_ids, DM_ECS_INVALID_ID, block_size);
     
@@ -1352,7 +1353,7 @@ dm_entity dm_ecs_create_entity(dm_context* context)
     if((float)entity / (float)context->ecs_manager.entity_capacity >= DM_ECS_MANAGER_LOAD_FACTOR)
     {
         context->ecs_manager.entity_capacity *= DM_ECS_MANAGER_RESIZE_FACTOR;
-        //context->ecs_manager.entity_ids = dm_realloc(context->ecs_manager.entity_ids, sizeof(dm_entity_ids) * context->ecs_manager.entity_capacity);
+        context->ecs_manager.entity_ids = dm_realloc(context->ecs_manager.entity_ids, sizeof(dm_entity_ids) * context->ecs_manager.entity_capacity);
     }
     
     return entity;
@@ -1493,36 +1494,37 @@ void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision collis
 {
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add collision to invalid entity"); return; }
     
+    
     uint32_t entity_count, block_count;
     dm_ecs_id collision_id = context->ecs_manager.default_components.collision;
     dm_component_collision_block* collision_block = dm_ecs_get_current_component_block(collision_id, &block_count, &entity_count, context);
     
-    collision_block->aabb_local_min_x[entity_count] = collision.aabb_local_min[0];
-    collision_block->aabb_local_min_y[entity_count] = collision.aabb_local_min[1];
-    collision_block->aabb_local_min_z[entity_count] = collision.aabb_local_min[2];
+    collision_block->aabb_local_min_x[entity_count] = collision.aabb_local_min_x;
+    collision_block->aabb_local_min_y[entity_count] = collision.aabb_local_min_y;
+    collision_block->aabb_local_min_z[entity_count] = collision.aabb_local_min_z;
     
-    collision_block->aabb_local_max_x[entity_count] = collision.aabb_local_max[0];
-    collision_block->aabb_local_max_y[entity_count] = collision.aabb_local_max[1];
-    collision_block->aabb_local_max_z[entity_count] = collision.aabb_local_max[2];
+    collision_block->aabb_local_max_x[entity_count] = collision.aabb_local_max_x;
+    collision_block->aabb_local_max_y[entity_count] = collision.aabb_local_max_y;
+    collision_block->aabb_local_max_z[entity_count] = collision.aabb_local_max_z;
     
-    collision_block->aabb_global_min_x[entity_count] = collision.aabb_global_min[0];
-    collision_block->aabb_global_min_y[entity_count] = collision.aabb_global_min[1];
-    collision_block->aabb_global_min_z[entity_count] = collision.aabb_global_min[2];
+    collision_block->aabb_global_min_x[entity_count] = collision.aabb_global_min_x;
+    collision_block->aabb_global_min_y[entity_count] = collision.aabb_global_min_y;
+    collision_block->aabb_global_min_z[entity_count] = collision.aabb_global_min_z;
     
-    collision_block->aabb_global_max_x[entity_count] = collision.aabb_global_max[0];
-    collision_block->aabb_global_max_y[entity_count] = collision.aabb_global_max[1];
-    collision_block->aabb_global_max_z[entity_count] = collision.aabb_global_max[2];
+    collision_block->aabb_global_max_x[entity_count] = collision.aabb_global_max_x;
+    collision_block->aabb_global_max_y[entity_count] = collision.aabb_global_max_z;
+    collision_block->aabb_global_max_z[entity_count] = collision.aabb_global_max_x;
     
-    collision_block->center_x[entity_count] = collision.center[0];
-    collision_block->center_y[entity_count] = collision.center[1];
-    collision_block->center_z[entity_count] = collision.center[2];
+    collision_block->center_x[entity_count] = collision.center_x;
+    collision_block->center_y[entity_count] = collision.center_y;
+    collision_block->center_z[entity_count] = collision.center_z;
     
-    collision_block->internal[0][entity_count] = collision.internal[0];
-    collision_block->internal[1][entity_count] = collision.internal[1];
-    collision_block->internal[2][entity_count] = collision.internal[2];
-    collision_block->internal[3][entity_count] = collision.internal[3];
-    collision_block->internal[4][entity_count] = collision.internal[4];
-    collision_block->internal[5][entity_count] = collision.internal[5];
+    collision_block->internal_0[entity_count] = collision.internal_0;
+    collision_block->internal_1[entity_count] = collision.internal_1;
+    collision_block->internal_2[entity_count] = collision.internal_2;
+    collision_block->internal_3[entity_count] = collision.internal_3;
+    collision_block->internal_4[entity_count] = collision.internal_4;
+    collision_block->internal_5[entity_count] = collision.internal_5;
     
     collision_block->shape[entity_count] = collision.shape;
     collision_block->flag[entity_count]  = collision.flag;
@@ -1532,26 +1534,38 @@ void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision collis
 
 void dm_ecs_entity_add_box_collider(dm_entity entity, float center[3], float dim[3], dm_context* context)
 {
-    dm_component_collision c = {
-        .center={ center[0],center[1],center[2] },
-        .internal={ center[0]-dim[0], center[1]-dim[1], center[2]-dim[2], center[0]+dim[0], center[1]+dim[1], center[2]+dim[2] }, .shape=DM_COLLISION_SHAPE_BOX,
-    };
+    float min[3];
+    float max[3];
     
-    dm_vec3_sub_vec3(center, dim, c.aabb_local_min);
-    dm_vec3_add_vec3(center, dim, c.aabb_local_max);
+    dm_vec3_sub_vec3(center, dim, min);
+    dm_vec3_add_vec3(center, dim, max);
+    
+    dm_component_collision c = {
+        .aabb_local_min_x=min[0], .aabb_local_min_y=min[1], .aabb_local_min_z=min[2],
+        .aabb_global_min_x=max[0], .aabb_global_min_y=max[1], .aabb_global_min_z=max[2],
+        .center_x=center[0], .center_y=center[1], .center_z=center[2],
+        .internal_0=min[0], .internal_1=min[1], .internal_2=min[2], 
+        .internal_3=max[0], .internal_4=max[1], .internal_5=max[2], 
+        .shape=DM_COLLISION_SHAPE_BOX,
+    };
     
     dm_ecs_entity_add_collision(entity, c, context);
 }
 
 void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center[3], float radius, dm_context* context)
 {
-    dm_component_collision c = {
-        .center={ center[0],center[1],center[2] },
-        .internal={ radius }, .shape=DM_COLLISION_SHAPE_SPHERE,
-    };
+    float min[3];
+    float max[3];
     
-    dm_vec3_sub_scalar(center, radius, c.aabb_local_min);
-    dm_vec3_add_scalar(center, radius, c.aabb_local_max);
+    dm_vec3_sub_scalar(center, radius, min);
+    dm_vec3_add_scalar(center, radius, max);
+    
+    dm_component_collision c = {
+        .aabb_local_min_x=min[0], .aabb_local_min_y=min[1], .aabb_local_min_z=min[2],
+        .aabb_global_min_x=max[0], .aabb_global_min_y=max[1], .aabb_global_min_z=max[2],
+        .center_x=center[0], .center_y=center[1], .center_z=center[2],
+        .internal_0=radius, .shape=DM_COLLISION_SHAPE_SPHERE,
+    };
     
     dm_ecs_entity_add_collision(entity, c, context);
 }
@@ -1592,32 +1606,32 @@ const dm_component_collision dm_ecs_entity_get_collision(dm_entity entity, dm_co
     
     dm_component_collision collision = { 0 };
     
-    collision.aabb_local_min[0] = collision_block->aabb_local_min_x[index];
-    collision.aabb_local_min[1] = collision_block->aabb_local_min_y[index];
-    collision.aabb_local_min[2] = collision_block->aabb_local_min_z[index];
+    collision.aabb_local_min_x = collision_block->aabb_local_min_x[index];
+    collision.aabb_local_min_y = collision_block->aabb_local_min_y[index];
+    collision.aabb_local_min_z = collision_block->aabb_local_min_z[index];
     
-    collision.aabb_local_max[0] = collision_block->aabb_local_max_x[index];
-    collision.aabb_local_max[1] = collision_block->aabb_local_max_y[index];
-    collision.aabb_local_max[2] = collision_block->aabb_local_max_z[index];
+    collision.aabb_local_max_x = collision_block->aabb_local_max_x[index];
+    collision.aabb_local_max_y = collision_block->aabb_local_max_y[index];
+    collision.aabb_local_max_z = collision_block->aabb_local_max_z[index];
     
-    collision.aabb_global_min[0] = collision_block->aabb_local_min_x[index];
-    collision.aabb_global_min[1] = collision_block->aabb_local_min_y[index];
-    collision.aabb_global_min[2] = collision_block->aabb_local_min_z[index];
+    collision.aabb_global_min_x = collision_block->aabb_local_min_x[index];
+    collision.aabb_global_min_y = collision_block->aabb_local_min_y[index];
+    collision.aabb_global_min_z = collision_block->aabb_local_min_z[index];
     
-    collision.aabb_global_max[0] = collision_block->aabb_global_max_x[index];
-    collision.aabb_global_max[1] = collision_block->aabb_global_max_y[index];
-    collision.aabb_global_max[2] = collision_block->aabb_global_max_z[index];
+    collision.aabb_global_max_x = collision_block->aabb_global_max_x[index];
+    collision.aabb_global_max_y = collision_block->aabb_global_max_y[index];
+    collision.aabb_global_max_z = collision_block->aabb_global_max_z[index];
     
-    collision.center[0] = collision_block->center_x[index];
-    collision.center[1] = collision_block->center_y[index];
-    collision.center[2] = collision_block->center_z[index];
+    collision.center_x = collision_block->center_x[index];
+    collision.center_y = collision_block->center_y[index];
+    collision.center_z = collision_block->center_z[index];
     
-    collision.internal[0] = collision_block->internal[0][index];
-    collision.internal[1] = collision_block->internal[1][index];
-    collision.internal[2] = collision_block->internal[2][index];
-    collision.internal[3] = collision_block->internal[3][index];
-    collision.internal[4] = collision_block->internal[4][index];
-    collision.internal[5] = collision_block->internal[5][index];
+    collision.internal_0 = collision_block->internal_0[index];
+    collision.internal_1 = collision_block->internal_1[index];
+    collision.internal_2 = collision_block->internal_2[index];
+    collision.internal_3 = collision_block->internal_3[index];
+    collision.internal_4 = collision_block->internal_4[index];
+    collision.internal_5 = collision_block->internal_5[index];
     
     collision.shape = collision_block->shape[index];
     collision.flag = collision_block->flag[index];

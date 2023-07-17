@@ -17,7 +17,7 @@ FOR /R %%f IN (*.c) do (
 
 SET linker_flags=/link user32.lib gdi32.lib
 SET include_flags=/I%SRC_DIR%\lib
-SET compiler_flags=/arch:AVX2 /Wall /WL /TC /std:c99
+SET compiler_flags=/arch:AVX2 /Wall /WL /TC /std:c99 /RTCsu
 
 IF /I "%simd_256%" EQU "1" (
 	SET defines="/DDM_SIMD_256"
@@ -36,7 +36,7 @@ IF /I "%debug%" EQU "1" (
 	SET compiler_flags=/W2 /Z7 /Od /Ob0
 ) ELSE (
 	SET defines=%defines% /DDM_RELEASE
-	SET compiler_flags=/Zi /O2 /Ob2
+	SET compiler_flags=/Zi /O2 /Ob2 /DEBUG
 )
 
 IF /I "%opengl%" EQU "1" (
