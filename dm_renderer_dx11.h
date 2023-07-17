@@ -91,8 +91,7 @@ const char* dm_dx11_decode_category(D3D11_MESSAGE_CATEGORY category);
 const char* dm_dx11_decode_severity(D3D11_MESSAGE_SEVERITY severity);
 #endif
 
-#define DM_DX11_ERROR_CHECK(HRCALL, ERROR_MSG) hr = HRCALL; if(hr!=S_OK){ DM_LOG_FATAL(ERROR_MSG); DM_LOG_FATAL(dm_get_win32_error_msg(hr)); return false; }
-#define DM_DX11_RELEASE(OBJ) if(OBJ) { OBJ->lpVtbl->Release(OBJ); }
+#define DM_DX11_RELEASE(OBJ) OBJ->lpVtbl->Release(OBJ)
 
 #define DM_DX11_GET_RENDERER dm_dx11_renderer* dx11_renderer = renderer->internal_renderer
 
@@ -411,17 +410,18 @@ bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_rende
 	buffer_desc.StructureByteStride = desc.elem_size;
 	if (usage == D3D11_USAGE_DYNAMIC) buffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
     
-	D3D11_SUBRESOURCE_DATA sd = { 0 };
-	sd.pSysMem = data;
-    
-	if (data)
-	{
-		DM_DX11_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &buffer_desc, &sd, &internal_buffer.buffer), "ID3D11Device::CreateBuffer failed!");
-	}
+	if (data) 
+    {
+        D3D11_SUBRESOURCE_DATA sd = { 0 };
+        sd.pSysMem = data;
+        
+        hr = device->lpVtbl->CreateBuffer(device, &buffer_desc, &sd, &internal_buffer.buffer);
+    }
 	else
-	{
-		DM_DX11_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &buffer_desc, 0, &internal_buffer.buffer), "ID3D11Device::CreateBuffer failed!");
-	}
+    {
+        hr = device->lpVtbl->CreateBuffer(device, &buffer_desc, 0, &internal_buffer.buffer);
+    }
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateBuffer failed"); return false; }
     
     internal_buffer.type = type;
     internal_buffer.stride = desc.elem_size;
@@ -457,7 +457,8 @@ bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_
     uni_desc.StructureByteStride = sizeof(float);
     
     dm_dx11_buffer internal_uniform = { 0 };
-    DM_DX11_ERROR_CHECK(device->lpVtbl->CreateBuffer(device, &uni_desc, 0, &internal_uniform.buffer), "ID3D11Device::CreateBuffer failed!");
+    hr = device->lpVtbl->CreateBuffer(device, &uni_desc, 0, &internal_uniform.buffer);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateBuffer failed!"); return false; }
     
     dm_memcpy(dx11_renderer->buffers + dx11_renderer->buffer_count, &internal_uniform, sizeof(dm_dx11_buffer));
     *handle = dx11_renderer->buffer_count++;
@@ -494,7 +495,8 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
     //tex_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	tex_desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
     
-	DM_DX11_ERROR_CHECK(dx11_renderer->device->lpVtbl->CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture.texture), "ID3D11Device::CreateTexture2D failed!");
+	hr = dx11_renderer->device->lpVtbl->CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture.texture);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateTexture2D failed!"); return false; }
     
 	dx11_renderer->context->lpVtbl->UpdateSubresource(dx11_renderer->context, (ID3D11Resource*)internal_texture.texture, 0, NULL, data, width * 4, 0);
     
@@ -505,7 +507,8 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
 	//view_desc.Texture2D.MipLevels = -1;
     view_desc.Texture2D.MipLevels = tex_desc.MipLevels;
     
-	DM_DX11_ERROR_CHECK(dx11_renderer->device->lpVtbl->CreateShaderResourceView(dx11_renderer->device, (ID3D11Resource*)internal_texture.texture, &view_desc, &internal_texture.view), "ID3D11Device::CreateShaderResourceView failed!");
+	hr = dx11_renderer->device->lpVtbl->CreateShaderResourceView(dx11_renderer->device, (ID3D11Resource*)internal_texture.texture, &view_desc, &internal_texture.view);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateShaderResourceView failed!"); return false; }
     
 	dx11_renderer->context->lpVtbl->GenerateMips(dx11_renderer->context, internal_texture.view);
     
@@ -515,17 +518,19 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
     tex_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
     tex_desc.MiscFlags = 0;
     
-    DM_DX11_ERROR_CHECK(dx11_renderer->device->lpVtbl->CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture.staging), "ID3D11Device::CreateTexture2D failed!");
+    hr = dx11_renderer->device->lpVtbl->CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture.staging);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateTexture2D failed!"); return false; }
+    
     /*
-    D3D11_MAPPED_SUBRESOURCE msr;
-	ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
-    
-    DX11_ERROR_CHECK(dx11_renderer.context->lpVtbl->Map(dx11_renderer.context, (ID3D11Resource*)internal_texture.staging, 0, D3D11_MAP_WRITE, 0, &msr), "ID3D11DeviceContext::Map failed!");
-	dm_memcpy(msr.pData, data, width * height * sizeof(uint32_t));
-	dx11_renderer.context->lpVtbl->Unmap(dx11_renderer.context, (ID3D11Resource*)internal_texture.staging, 0);
-    
-    dx11_renderer.context->lpVtbl->CopyResource(dx11_renderer.context, (ID3D11Resource*)internal_texture.texture, (ID3D11Resource*)internal_texture.staging);
-    */
+        D3D11_MAPPED_SUBRESOURCE msr;
+        ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
+        
+        DX11_ERROR_CHECK(dx11_renderer.context->lpVtbl->Map(dx11_renderer.context, (ID3D11Resource*)internal_texture.staging, 0, D3D11_MAP_WRITE, 0, &msr), "ID3D11DeviceContext::Map failed!");
+        dm_memcpy(msr.pData, data, width * height * sizeof(uint32_t));
+        dx11_renderer.context->lpVtbl->Unmap(dx11_renderer.context, (ID3D11Resource*)internal_texture.staging, 0);
+        
+        dx11_renderer.context->lpVtbl->CopyResource(dx11_renderer.context, (ID3D11Resource*)internal_texture.texture, (ID3D11Resource*)internal_texture.staging);
+        */
     
     dm_memcpy(dx11_renderer->textures + dx11_renderer->texture_count, &internal_texture, sizeof(dm_dx11_texture));
     *handle = dx11_renderer->texture_count++;
@@ -544,49 +549,192 @@ void dm_renderer_backend_destroy_texture(dm_render_handle handle, dm_renderer* r
     DM_DX11_RELEASE(dx11_renderer->textures[handle].staging);
 }
 
-/****************
-DIRECTX11_SHADER
-******************/
-bool dm_dx11_create_input_element(dm_vertex_attrib_desc attrib_desc, D3D11_INPUT_ELEMENT_DESC* element_desc)
+/******************
+DIRECTX11_PIPELINE
+********************/
+bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer)
 {
-	DXGI_FORMAT format = dm_vertex_t_to_dx11_format(attrib_desc);
-	if (format == DXGI_FORMAT_UNKNOWN) return false;
-	D3D11_INPUT_CLASSIFICATION input_class = dm_vertex_class_to_dx11_class(attrib_desc.attrib_class);
-	if (input_class == DM_VERTEX_ATTRIB_CLASS_UNKNOWN) return false;
-    
-	element_desc->SemanticName = attrib_desc.name;
-    element_desc->SemanticIndex = attrib_desc.index;
-	element_desc->Format = format;
-	element_desc->AlignedByteOffset = attrib_desc.offset;
-	element_desc->InputSlotClass = input_class;
-	if (input_class == D3D11_INPUT_PER_INSTANCE_DATA)
-	{
-		element_desc->InstanceDataStepRate = 1;
-		element_desc->InputSlot = 1;
-	}
-    
-	return true;
-}
-
-bool dm_renderer_backend_create_shader(const char* vertex_src, const char* pixel_src, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_renderer* renderer)
-{
-	DM_DX11_GET_RENDERER;
+    DM_DX11_GET_RENDERER;
     
     HRESULT hr;
     
 	ID3D11Device* device = dx11_renderer->device;
 	ID3D11DeviceContext* context = dx11_renderer->context;
+	
+    dm_dx11_pipeline internal_pipeline = { 0 };
+    
+	// blending 
+	if (desc.blend)
+	{
+        internal_pipeline.blend = true;
+        
+        D3D11_BLEND_DESC blend_desc = { 0 };
+        blend_desc.RenderTarget[0].BlendEnable = true;
+        blend_desc.RenderTarget[0].SrcBlend = dm_blend_func_to_dx11_func(desc.blend_src_f);
+        blend_desc.RenderTarget[0].DestBlend = dm_blend_func_to_dx11_func(desc.blend_dest_f);
+        blend_desc.RenderTarget[0].BlendOp = dm_blend_eq_to_dx11_op(desc.blend_eq);
+        blend_desc.RenderTarget[0].SrcBlendAlpha = dm_blend_func_to_dx11_func(desc.blend_src_f);
+        blend_desc.RenderTarget[0].DestBlendAlpha = dm_blend_func_to_dx11_func(desc.blend_dest_f);
+        blend_desc.RenderTarget[0].BlendOpAlpha = dm_blend_eq_to_dx11_op(desc.blend_eq);
+        blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+        
+        hr = device->lpVtbl->CreateBlendState(device, &blend_desc, &internal_pipeline.blend_state);
+        if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateBlendState failed!"); return false; }
+	}
+	
+    D3D11_DEPTH_STENCIL_DESC depth_stencil_desc = { 0 };
+    
+    // depth testing
+    if (desc.depth)
+	{
+        internal_pipeline.depth = true;
+        
+        depth_stencil_desc.DepthEnable = desc.depth;
+        depth_stencil_desc.StencilEnable = desc.stencil;
+        
+        depth_stencil_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		depth_stencil_desc.DepthFunc = D3D11_COMPARISON_LESS;
+	}
+    
+    // stencil testing
+    if(desc.stencil)
+    {
+        internal_pipeline.stencil = true;
+    }
+    
+	if(desc.depth || desc.stencil) 
+    {
+        hr = device->lpVtbl->CreateDepthStencilState(device, &depth_stencil_desc, &internal_pipeline.depth_stencil_state);
+        if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateDepthStencilState failed!"); return false; }
+    }
+    
+    // rasterizer
+    D3D11_RASTERIZER_DESC rd = { 0 };
+    D3D11_RASTERIZER_DESC wireframe_rd = { 0 };
+    
+    rd.FillMode = D3D11_FILL_SOLID;
+    wireframe_rd.FillMode = D3D11_FILL_WIREFRAME;
+    
+    // culling
+    rd.CullMode = dm_cull_to_dx11_cull(desc.cull_mode);
+    wireframe_rd.CullMode = dm_cull_to_dx11_cull(desc.cull_mode);
+    
+    rd.DepthClipEnable = true;
+    wireframe_rd.DepthClipEnable = true;
+    
+    internal_pipeline.wireframe = desc.wireframe;
+    
+    // winding
+    switch (desc.winding_order)
+    {
+        case DM_WINDING_CLOCK:
+        {
+            rd.FrontCounterClockwise = false;
+            wireframe_rd.FrontCounterClockwise = false;
+        } break;
+        case DM_WINDING_COUNTER_CLOCK:
+        {
+            rd.FrontCounterClockwise = true;
+            wireframe_rd.FrontCounterClockwise = true;
+        } break;
+        default:
+        DM_LOG_FATAL("Unknown winding order!");
+        return false;
+    }
+    
+    hr = device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pipeline.rasterizer_state);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateRasterizerState failed!"); return false; }
+    hr = device->lpVtbl->CreateRasterizerState(device, &wireframe_rd, &internal_pipeline.wireframe_state);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateRasterizerState failed!"); return false; }
+    
+    // topology
+    internal_pipeline.default_topology = dm_toplogy_to_dx11_topology(desc.primitive_topology);
+    
+    // sampler state
+    D3D11_FILTER filter = dm_image_filter_to_dx11_filter(desc.sampler_filter);
+    D3D11_TEXTURE_ADDRESS_MODE u_mode = dm_texture_mode_to_dx11_mode(desc.u_mode);
+    D3D11_TEXTURE_ADDRESS_MODE v_mode = dm_texture_mode_to_dx11_mode(desc.v_mode);
+    D3D11_TEXTURE_ADDRESS_MODE w_mode = dm_texture_mode_to_dx11_mode(desc.w_mode);
+    D3D11_COMPARISON_FUNC comp = dm_comp_to_directx_comp(desc.sampler_comp);
+    
+    D3D11_SAMPLER_DESC sample_desc = { 0 };
+    sample_desc.Filter = filter;
+    sample_desc.AddressU = u_mode;
+    sample_desc.AddressV = v_mode;
+    sample_desc.AddressW = w_mode;
+    sample_desc.MaxAnisotropy = 1;
+    sample_desc.ComparisonFunc = comp;
+    if (filter != D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT) sample_desc.MaxLOD = D3D11_FLOAT32_MAX;
+    
+    hr = device->lpVtbl->CreateSamplerState(device, &sample_desc, &internal_pipeline.sample_state);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateSamplerState failed!"); return false; }
+    
+    dm_memcpy(dx11_renderer->pipelines + dx11_renderer->pipeline_count, &internal_pipeline, sizeof(dm_dx11_pipeline));
+    *handle = dx11_renderer->pipeline_count++;
+    
+    return true;
+}
+
+void dm_renderer_backend_destroy_pipeline(dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    if(handle > dx11_renderer->pipeline_count) { DM_LOG_FATAL("Trying to destroy invalid DirectX11 pipeline"); return; }
+    
+    dm_dx11_pipeline* internal_pipeline = &dx11_renderer->pipelines[handle];
+    
+    if(internal_pipeline->depth || internal_pipeline->stencil) DM_DX11_RELEASE(internal_pipeline->depth_stencil_state);
+    if(internal_pipeline->blend) DM_DX11_RELEASE(internal_pipeline->blend_state);
+    DM_DX11_RELEASE(internal_pipeline->sample_state);
+    DM_DX11_RELEASE(internal_pipeline->rasterizer_state);
+    DM_DX11_RELEASE(internal_pipeline->wireframe_state);
+}
+
+/****************
+DIRECTX11_SHADER
+******************/
+bool dm_dx11_create_input_element(dm_vertex_attrib_desc attrib_desc, D3D11_INPUT_ELEMENT_DESC* element_desc)
+{
+    DXGI_FORMAT format = dm_vertex_t_to_dx11_format(attrib_desc);
+    if (format == DXGI_FORMAT_UNKNOWN) return false;
+    D3D11_INPUT_CLASSIFICATION input_class = dm_vertex_class_to_dx11_class(attrib_desc.attrib_class);
+    if (input_class == DM_VERTEX_ATTRIB_CLASS_UNKNOWN) return false;
+    
+    element_desc->SemanticName = attrib_desc.name;
+    element_desc->SemanticIndex = attrib_desc.index;
+    element_desc->Format = format;
+    element_desc->AlignedByteOffset = attrib_desc.offset;
+    element_desc->InputSlotClass = input_class;
+    if (input_class == D3D11_INPUT_PER_INSTANCE_DATA)
+    {
+        element_desc->InstanceDataStepRate = 1;
+        element_desc->InputSlot = 1;
+    }
+    
+    return true;
+}
+
+bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    HRESULT hr;
+    
+    ID3D11Device* device = dx11_renderer->device;
+    ID3D11DeviceContext* context = dx11_renderer->context;
     
     dm_dx11_shader internal_shader = { 0 };
     
     // vertex shader
     wchar_t ws[100];
-    swprintf(ws, 100, L"%hs", vertex_src);
+    swprintf(ws, 100, L"%hs", shader_desc.vertex);
     
     ID3DBlob* blob;
-    DM_DX11_ERROR_CHECK(D3DReadFileToBlob(ws, &blob), "D3DReadFileToBlob failed!");
+    hr = D3DReadFileToBlob(ws, &blob); 
+    if(hr!=S_OK) { DM_LOG_FATAL("D3DReadFileToBlob failed!"); return false; }
     
-    DM_DX11_ERROR_CHECK(device->lpVtbl->CreateVertexShader(device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &internal_shader.vertex_shader), "ID3D11Device::CreateVertexShader failed!");
+    hr = device->lpVtbl->CreateVertexShader(device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &internal_shader.vertex_shader);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateVertexShader failed!"); return false; }
     
     // input layout
     D3D11_INPUT_ELEMENT_DESC* desc = dm_alloc(num_attribs * 4 * sizeof(D3D11_INPUT_ELEMENT_DESC));
@@ -628,21 +776,26 @@ bool dm_renderer_backend_create_shader(const char* vertex_src, const char* pixel
         }	
     }
     
-    DM_DX11_ERROR_CHECK(device->lpVtbl->CreateInputLayout(device, desc, (UINT)count, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), &internal_shader.input_layout), "ID3D11Device::CreateInputLayout failed!");
+    hr = device->lpVtbl->CreateInputLayout(device, desc, (UINT)count, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), &internal_shader.input_layout);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateInputLayout failed!"); return false; }
     
     dm_free(desc);
     
     // pixel shader
-    swprintf(ws, 100, L"%hs", pixel_src);
+    swprintf(ws, 100, L"%hs", shader_desc.pixel);
     
-    DM_DX11_ERROR_CHECK(D3DReadFileToBlob(ws, &blob), "D3DReadFileToBlob failed!");
+    hr = D3DReadFileToBlob(ws, &blob);
+    if(hr!=S_OK) { DM_LOG_FATAL("D3DReadFileToBlob failed!"); return false; }
     
-    DM_DX11_ERROR_CHECK(device->lpVtbl->CreatePixelShader(device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &internal_shader.pixel_shader), "ID3D11Device::CreatePixelShader failed!");
+    hr = device->lpVtbl->CreatePixelShader(device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &internal_shader.pixel_shader);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreatePixelShader failed!"); return false; }
     
     DM_DX11_RELEASE(blob);
-	
+    
     dm_memcpy(dx11_renderer->shaders + dx11_renderer->shader_count, &internal_shader, sizeof(dm_dx11_shader));
-    *handle = dx11_renderer->shader_count++;
+    *shader_handle = dx11_renderer->shader_count++;
+    
+    if(!dm_renderer_backend_create_pipeline(pipe_desc, pipe_handle, renderer)) return false;
     
     return true;
 }
@@ -653,142 +806,9 @@ void dm_renderer_backend_destroy_shader(dm_render_handle handle, dm_renderer* re
     
     if(handle > dx11_renderer->shader_count) { DM_LOG_FATAL("Trying to destroy invalid DirectX shader"); return; }
     
-	DM_DX11_RELEASE(dx11_renderer->shaders[handle].vertex_shader);
-	DM_DX11_RELEASE(dx11_renderer->shaders[handle].pixel_shader);
-	DM_DX11_RELEASE(dx11_renderer->shaders[handle].input_layout);
-}
-
-/******************
-DIRECTX11_PIPELINE
-********************/
-bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer)
-{
-    DM_DX11_GET_RENDERER;
-    
-    HRESULT hr;
-    
-	ID3D11Device* device = dx11_renderer->device;
-	ID3D11DeviceContext* context = dx11_renderer->context;
-	
-    dm_dx11_pipeline internal_pipeline = { 0 };
-    
-	// blending 
-	if (desc.blend)
-	{
-        internal_pipeline.blend = true;
-        
-        D3D11_BLEND_DESC blend_desc = { 0 };
-        blend_desc.RenderTarget[0].BlendEnable = true;
-        blend_desc.RenderTarget[0].SrcBlend = dm_blend_func_to_dx11_func(desc.blend_src_f);
-        blend_desc.RenderTarget[0].DestBlend = dm_blend_func_to_dx11_func(desc.blend_dest_f);
-        blend_desc.RenderTarget[0].BlendOp = dm_blend_eq_to_dx11_op(desc.blend_eq);
-        blend_desc.RenderTarget[0].SrcBlendAlpha = dm_blend_func_to_dx11_func(desc.blend_src_f);
-        blend_desc.RenderTarget[0].DestBlendAlpha = dm_blend_func_to_dx11_func(desc.blend_dest_f);
-        blend_desc.RenderTarget[0].BlendOpAlpha = dm_blend_eq_to_dx11_op(desc.blend_eq);
-        blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-        
-        DM_DX11_ERROR_CHECK(device->lpVtbl->CreateBlendState(device, &blend_desc, &internal_pipeline.blend_state), "ID3D11Device::CreateBlendState failed!");
-	}
-	
-    D3D11_DEPTH_STENCIL_DESC depth_stencil_desc = { 0 };
-    
-    // depth testing
-    if (desc.depth)
-	{
-        internal_pipeline.depth = true;
-        
-        depth_stencil_desc.DepthEnable = desc.depth;
-        depth_stencil_desc.StencilEnable = desc.stencil;
-        
-        depth_stencil_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-		depth_stencil_desc.DepthFunc = D3D11_COMPARISON_LESS;
-	}
-    
-    // stencil testing
-    if(desc.stencil)
-    {
-        internal_pipeline.stencil = true;
-    }
-    
-	if(desc.depth || desc.stencil) DM_DX11_ERROR_CHECK(device->lpVtbl->CreateDepthStencilState(device, &depth_stencil_desc, &internal_pipeline.depth_stencil_state), "ID3D11Device::CreateDepthStencilState failed!");
-    
-    // rasterizer
-	D3D11_RASTERIZER_DESC rd = { 0 };
-	D3D11_RASTERIZER_DESC wireframe_rd = { 0 };
-    
-    rd.FillMode = D3D11_FILL_SOLID;
-    wireframe_rd.FillMode = D3D11_FILL_WIREFRAME;
-    
-	// culling
-	rd.CullMode = dm_cull_to_dx11_cull(desc.cull_mode);
-    wireframe_rd.CullMode = dm_cull_to_dx11_cull(desc.cull_mode);
-    
-	rd.DepthClipEnable = true;
-    wireframe_rd.DepthClipEnable = true;
-	
-    internal_pipeline.wireframe = desc.wireframe;
-    
-    // winding
-	switch (desc.winding_order)
-	{
-        case DM_WINDING_CLOCK:
-        {
-            rd.FrontCounterClockwise = false;
-            wireframe_rd.FrontCounterClockwise = false;
-        } break;
-        case DM_WINDING_COUNTER_CLOCK:
-        {
-            rd.FrontCounterClockwise = true;
-            wireframe_rd.FrontCounterClockwise = true;
-        } break;
-        default:
-		DM_LOG_FATAL("Unknown winding order!");
-		return false;
-	}
-    
-	DM_DX11_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &rd, &internal_pipeline.rasterizer_state), "ID3D11Device::CreateRasterizerState failed!");
-    DM_DX11_ERROR_CHECK(device->lpVtbl->CreateRasterizerState(device, &wireframe_rd, &internal_pipeline.wireframe_state), "ID3D11Device::CreateRasterizerState failed!");
-    
-	// topology
-	internal_pipeline.default_topology = dm_toplogy_to_dx11_topology(desc.primitive_topology);
-    
-	// sampler state
-	D3D11_FILTER filter = dm_image_filter_to_dx11_filter(desc.sampler_filter);
-	D3D11_TEXTURE_ADDRESS_MODE u_mode = dm_texture_mode_to_dx11_mode(desc.u_mode);
-	D3D11_TEXTURE_ADDRESS_MODE v_mode = dm_texture_mode_to_dx11_mode(desc.v_mode);
-	D3D11_TEXTURE_ADDRESS_MODE w_mode = dm_texture_mode_to_dx11_mode(desc.w_mode);
-	D3D11_COMPARISON_FUNC comp = dm_comp_to_directx_comp(desc.sampler_comp);
-    
-	D3D11_SAMPLER_DESC sample_desc = { 0 };
-	sample_desc.Filter = filter;
-	sample_desc.AddressU = u_mode;
-	sample_desc.AddressV = v_mode;
-	sample_desc.AddressW = w_mode;
-	sample_desc.MaxAnisotropy = 1;
-	sample_desc.ComparisonFunc = comp;
-	if (filter != D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT) sample_desc.MaxLOD = D3D11_FLOAT32_MAX;
-    
-	DM_DX11_ERROR_CHECK(device->lpVtbl->CreateSamplerState(device, &sample_desc, &internal_pipeline.sample_state), "ID3D11Device::CreateSamplerState failed!");
-    
-    dm_memcpy(dx11_renderer->pipelines + dx11_renderer->pipeline_count, &internal_pipeline, sizeof(dm_dx11_pipeline));
-    *handle = dx11_renderer->pipeline_count++;
-    
-    return true;
-}
-
-void dm_renderer_backend_destroy_pipeline(dm_render_handle handle, dm_renderer* renderer)
-{
-    DM_DX11_GET_RENDERER;
-    
-    if(handle > dx11_renderer->pipeline_count) { DM_LOG_FATAL("Trying to destroy invalid DirectX11 pipeline"); return; }
-    
-    dm_dx11_pipeline* internal_pipeline = &dx11_renderer->pipelines[handle];
-    
-    if(internal_pipeline->depth || internal_pipeline->stencil) DM_DX11_RELEASE(internal_pipeline->depth_stencil_state);
-    if(internal_pipeline->blend) DM_DX11_RELEASE(internal_pipeline->blend_state);
-	DM_DX11_RELEASE(internal_pipeline->sample_state);
-	DM_DX11_RELEASE(internal_pipeline->rasterizer_state);
-    DM_DX11_RELEASE(internal_pipeline->wireframe_state);
+    DM_DX11_RELEASE(dx11_renderer->shaders[handle].vertex_shader);
+    DM_DX11_RELEASE(dx11_renderer->shaders[handle].pixel_shader);
+    DM_DX11_RELEASE(dx11_renderer->shaders[handle].input_layout);
 }
 
 /******
@@ -797,60 +817,55 @@ DEVICE
 #if DM_DEBUG
 void dm_dx11_device_report_live_objects(dm_dx11_renderer* dx11_renderer)
 {
-	HRESULT hr;
-	ID3D11Debug* debugger = dx11_renderer->debugger;
+    HRESULT hr;
+    ID3D11Debug* debugger = dx11_renderer->debugger;
     
-	hr = debugger->lpVtbl->ReportLiveDeviceObjects(debugger, D3D11_RLDO_DETAIL);
-	if (hr != S_OK) DM_LOG_ERROR("ID3D11Debug::ReportLiveDeviceObjects failed!");
+    hr = debugger->lpVtbl->ReportLiveDeviceObjects(debugger, D3D11_RLDO_DETAIL);
+    if (hr != S_OK) DM_LOG_ERROR("ID3D11Debug::ReportLiveDeviceObjects failed!");
 }
 #endif
 
 bool dm_dx11_create_device(dm_dx11_renderer* dx11_renderer)
 {
-	UINT flags = 0;
+    UINT flags = 0;
 #if DM_DEBUG
-	flags |= D3D11_CREATE_DEVICE_DEBUG;
+    flags |= D3D11_CREATE_DEVICE_DEBUG;
 #endif
-	D3D_FEATURE_LEVEL feature_level;
+    D3D_FEATURE_LEVEL feature_level;
     
-	HRESULT hr;
+    HRESULT hr;
     
-	// create the device and immediate context
-	DM_DX11_ERROR_CHECK(D3D11CreateDevice(NULL,
-                                          D3D_DRIVER_TYPE_HARDWARE,
-                                          NULL, 
-                                          flags,
-                                          NULL, 0,
-                                          D3D11_SDK_VERSION,
-                                          &dx11_renderer->device,
-                                          &feature_level,
-                                          &dx11_renderer->context),
-                        "D3D11CreateDevice failed!");
-	if(feature_level != D3D_FEATURE_LEVEL_11_0) { DM_LOG_FATAL("Direct3D Feature Level 11 unsupported!"); return false; }
+    // create the device and immediate context
+    hr = D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, flags, NULL, 0, D3D11_SDK_VERSION,
+                           &dx11_renderer->device, &feature_level, &dx11_renderer->context);
+    if(hr!=S_OK) { DM_LOG_FATAL("D3D11CreateDevice failed!"); return false; }
+    if(feature_level != D3D_FEATURE_LEVEL_11_0) { DM_LOG_FATAL("Direct3D Feature Level 11 unsupported!"); return false; }
     
-	UINT msaa_quality;
-	DM_DX11_ERROR_CHECK(dx11_renderer->device->lpVtbl->CheckMultisampleQualityLevels(dx11_renderer->device, DXGI_FORMAT_R8G8B8A8_UNORM, 4, &msaa_quality), "D3D11Device::CheckMultisampleQualityLevels failed!");
+    UINT msaa_quality;
+    hr = dx11_renderer->device->lpVtbl->CheckMultisampleQualityLevels(dx11_renderer->device, DXGI_FORMAT_R8G8B8A8_UNORM, 4, &msaa_quality);
+    if(hr!=S_OK) { DM_LOG_FATAL("D3D11Device::CheckMultisampleQualityLevels failed!"); return false; }
     
-	// if in debug, create the debugger to query live objects
+    // if in debug, create the debugger to query live objects
 #if DM_DEBUG
-	DM_DX11_ERROR_CHECK(dx11_renderer->device->lpVtbl->QueryInterface(dx11_renderer->device, &IID_ID3D11Debug, (void**)&(dx11_renderer->debugger)), "D3D11Device::QueryInterface failed!");
+    hr = dx11_renderer->device->lpVtbl->QueryInterface(dx11_renderer->device, &IID_ID3D11Debug, (void**)&(dx11_renderer->debugger));
+    if(hr!=S_OK) { DM_LOG_FATAL("D3D11Device::QueryInterface failed!"); return false; }
 #endif
     
-	return true;
+    return true;
 }
 
 void dm_dx11_destroy_device(dm_dx11_renderer* dx11_renderer)
 {
-	ID3D11Device* device = dx11_renderer->device;
-	ID3D11DeviceContext* context = dx11_renderer->context;
+    ID3D11Device* device = dx11_renderer->device;
+    ID3D11DeviceContext* context = dx11_renderer->context;
     
-	DM_DX11_RELEASE(context);
+    DM_DX11_RELEASE(context);
 #if DM_DEBUG
-	dm_dx11_device_report_live_objects(dx11_renderer);
-	DM_DX11_RELEASE(dx11_renderer->debugger);
+    dm_dx11_device_report_live_objects(dx11_renderer);
+    DM_DX11_RELEASE(dx11_renderer->debugger);
 #endif
     
-	DM_DX11_RELEASE(device);
+    DM_DX11_RELEASE(device);
 }
 
 /*********
@@ -858,52 +873,56 @@ SWAPCHAIN
 ***********/
 bool dm_dx11_create_swapchain(dm_dx11_renderer* dx11_renderer)
 {
-	// set up the swap chain pointer to be created in this function
-	IDXGISwapChain* swap_chain = NULL;
+    // set up the swap chain pointer to be created in this function
+    IDXGISwapChain* swap_chain = NULL;
     
-	// make sure the device has been created and then grab it
+    // make sure the device has been created and then grab it
     if(!dx11_renderer->device) { DM_LOG_FATAL("DirectX device is NULL!"); return false; }
-	ID3D11Device* device = dx11_renderer->device;
+    ID3D11Device* device = dx11_renderer->device;
     
-	HRESULT hr;
-	RECT client_rect;
-	GetClientRect(dx11_renderer->hwnd, &client_rect);
+    HRESULT hr;
+    RECT client_rect;
+    GetClientRect(dx11_renderer->hwnd, &client_rect);
     
-	struct DXGI_SWAP_CHAIN_DESC desc = { 0 };
-	desc.BufferDesc.Width = client_rect.right;
-	desc.BufferDesc.Height = client_rect.bottom;
-	desc.BufferDesc.RefreshRate.Numerator = 60;
-	desc.BufferDesc.RefreshRate.Denominator = 1;
-	desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	desc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
-	desc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
-	desc.SampleDesc.Count = 1;
-	desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	desc.BufferCount = 1;
-	desc.OutputWindow = dx11_renderer->hwnd;
-	desc.Windowed = TRUE;
-	desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
-	//desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    struct DXGI_SWAP_CHAIN_DESC desc = { 0 };
+    desc.BufferDesc.Width = client_rect.right;
+    desc.BufferDesc.Height = client_rect.bottom;
+    desc.BufferDesc.RefreshRate.Numerator = 60;
+    desc.BufferDesc.RefreshRate.Denominator = 1;
+    desc.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.BufferDesc.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_UNSPECIFIED;
+    desc.BufferDesc.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;
+    desc.SampleDesc.Count = 1;
+    desc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+    desc.BufferCount = 1;
+    desc.OutputWindow = dx11_renderer->hwnd;
+    desc.Windowed = TRUE;
+    desc.SwapEffect = DXGI_SWAP_EFFECT_DISCARD;
+    //desc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
     
-	// obtain factory
-	IDXGIDevice* dxgi_device = NULL;
-	DM_DX11_ERROR_CHECK(device->lpVtbl->QueryInterface(device, &IID_IDXGIDevice, &dxgi_device), "D3D11Device::QueryInterface failed!");
+    // obtain factory
+    IDXGIDevice* dxgi_device = NULL;
+    hr = device->lpVtbl->QueryInterface(device, &IID_IDXGIDevice, &dxgi_device);
+    if(hr!=S_OK) { DM_LOG_FATAL("D3D11Device::QueryInterface failed!"); return false; }
     
-	IDXGIAdapter* dxgi_adapter = NULL;
-	DM_DX11_ERROR_CHECK(dxgi_device->lpVtbl->GetParent(dxgi_device, &IID_IDXGIAdapter, (void**)&dxgi_adapter), "IDXGIDevice::GetParent failed!");
+    IDXGIAdapter* dxgi_adapter = NULL;
+    hr = dxgi_device->lpVtbl->GetParent(dxgi_device, &IID_IDXGIAdapter, (void**)&dxgi_adapter);
+    if(hr!=S_OK) { DM_LOG_FATAL("IDXGIDevice::GetParent failed!"); return false; }
     
-	IDXGIFactory* dxgi_factory = NULL;
-	DM_DX11_ERROR_CHECK(dxgi_adapter->lpVtbl->GetParent(dxgi_adapter, &IID_IDXGIFactory, (void**)&dxgi_factory), "IDXGIAdapter::GetParent failed!");
+    IDXGIFactory* dxgi_factory = NULL;
+    hr = dxgi_adapter->lpVtbl->GetParent(dxgi_adapter, &IID_IDXGIFactory, (void**)&dxgi_factory);
+    if(hr!=S_OK) { DM_LOG_FATAL("IDXGIAdapter::GetParent failed!"); return false; }
     
-	// create the swap chain
-	DM_DX11_ERROR_CHECK(dxgi_factory->lpVtbl->CreateSwapChain(dxgi_factory, (IUnknown*)device, &desc, &dx11_renderer->swap_chain), "IDXGIFactory::CreateSwapChain failed!");
+    // create the swap chain
+    hr = dxgi_factory->lpVtbl->CreateSwapChain(dxgi_factory, (IUnknown*)device, &desc, &dx11_renderer->swap_chain);
+    if(hr!=S_OK) { DM_LOG_FATAL("IDXGIFactory::CreateSwapChain failed!"); return false; }
     
-	// release pack animal directx objects
-	DM_DX11_RELEASE(dxgi_device);
-	DM_DX11_RELEASE(dxgi_factory);
-	DM_DX11_RELEASE(dxgi_adapter);
+    // release pack animal directx objects
+    DM_DX11_RELEASE(dxgi_device);
+    DM_DX11_RELEASE(dxgi_factory);
+    DM_DX11_RELEASE(dxgi_adapter);
     
-	return true;
+    return true;
 }
 
 /************
@@ -911,28 +930,30 @@ DEPTHSTENCIL
 **************/
 bool dm_dx11_create_depth_stencil(dm_dx11_renderer* dx11_renderer)
 {
-	if(!dx11_renderer->device) { DM_LOG_FATAL("DirectX device is NULL!"); return false; }
+    if(!dx11_renderer->device) { DM_LOG_FATAL("DirectX device is NULL!"); return false; }
     
-	HRESULT hr;
-	RECT client_rect;
-	GetClientRect(dx11_renderer->hwnd, &client_rect);
-	
-	ID3D11Device* device = dx11_renderer->device;
+    HRESULT hr;
+    RECT client_rect;
+    GetClientRect(dx11_renderer->hwnd, &client_rect);
     
-	D3D11_TEXTURE2D_DESC desc = { 0 };
-	desc.Width = client_rect.right;
-	desc.Height = client_rect.bottom;
-	desc.MipLevels = 1;
-	desc.ArraySize = 1;
-	desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	desc.SampleDesc.Count = 1;
-	desc.Usage = D3D11_USAGE_DEFAULT;
-	desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
-	
-	DM_DX11_ERROR_CHECK(device->lpVtbl->CreateTexture2D(device, &desc, NULL, &dx11_renderer->depth_stencil_back_buffer), "ID3D11Device::CreateTexture2D failed!");
-	DM_DX11_ERROR_CHECK(device->lpVtbl->CreateDepthStencilView(device, (ID3D11Resource*)dx11_renderer->depth_stencil_back_buffer, 0, &dx11_renderer->depth_stencil_view), "ID3D11Device::CreateDepthStencilView failed!");
+    ID3D11Device* device = dx11_renderer->device;
     
-	return true;
+    D3D11_TEXTURE2D_DESC desc = { 0 };
+    desc.Width = client_rect.right;
+    desc.Height = client_rect.bottom;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
+    
+    hr = device->lpVtbl->CreateTexture2D(device, &desc, NULL, &dx11_renderer->depth_stencil_back_buffer);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateTexture2D failed!"); return false; }
+    hr = device->lpVtbl->CreateDepthStencilView(device, (ID3D11Resource*)dx11_renderer->depth_stencil_back_buffer, 0, &dx11_renderer->depth_stencil_view);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateDepthStencilView failed!"); return false; }
+    
+    return true;
 }
 
 /**********************
@@ -940,16 +961,17 @@ DIRECTX11 RENDERTARGET
 ************************/
 bool dm_dx11_create_rendertarget(dm_dx11_renderer* dx11_renderer)
 {
-	if(!dx11_renderer->device)     { DM_LOG_FATAL("DirectX11 device is NULL!"); return false; }
-	if(!dx11_renderer->swap_chain) { DM_LOG_FATAL("DirectX11 swap chain is NULL!"); return false; }
+    if(!dx11_renderer->device)     { DM_LOG_FATAL("DirectX11 device is NULL!"); return false; }
+    if(!dx11_renderer->swap_chain) { DM_LOG_FATAL("DirectX11 swap chain is NULL!"); return false; }
     
-	HRESULT hr;
-	ID3D11Device* device = dx11_renderer->device;
-	IDXGISwapChain* swap_chain = dx11_renderer->swap_chain;
-	
-	DM_DX11_ERROR_CHECK(swap_chain->lpVtbl->GetBuffer(swap_chain, 0, &IID_ID3D11Texture2D, (void**)&(ID3D11Resource*)dx11_renderer->render_back_buffer), "IDXGISwapChain::GetBuffer failed!");
-	device->lpVtbl->CreateRenderTargetView(device, (ID3D11Resource*)dx11_renderer->render_back_buffer, NULL, &dx11_renderer->render_view);
-	return true;
+    HRESULT hr;
+    ID3D11Device* device = dx11_renderer->device;
+    IDXGISwapChain* swap_chain = dx11_renderer->swap_chain;
+    
+    hr = swap_chain->lpVtbl->GetBuffer(swap_chain, 0, &IID_ID3D11Texture2D, (void**)&(ID3D11Resource*)dx11_renderer->render_back_buffer);
+    if(hr!=S_OK) { DM_LOG_FATAL("IDXGISwapChain::GetBuffer failed!"); return false; }
+    device->lpVtbl->CreateRenderTargetView(device, (ID3D11Resource*)dx11_renderer->render_back_buffer, NULL, &dx11_renderer->render_view);
+    return true;
 }
 
 /*************************
@@ -960,11 +982,13 @@ bool dm_dx11_update_resource(void* resource, void* data, size_t data_size, dm_dx
     HRESULT hr;
     
     D3D11_MAPPED_SUBRESOURCE msr;
-	ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
+    ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
     
-    DM_DX11_ERROR_CHECK(dx11_renderer->context->lpVtbl->Map(dx11_renderer->context, (ID3D11Resource*)resource, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr), "ID3D11DeviceContext::Map failed!");
-	dm_memcpy(msr.pData, data, data_size);
-	dx11_renderer->context->lpVtbl->Unmap(dx11_renderer->context, (ID3D11Resource*)resource, 0);
+    hr = dx11_renderer->context->lpVtbl->Map(dx11_renderer->context, (ID3D11Resource*)resource, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11DeviceContext::Map failed!"); return false; }
+    
+    dm_memcpy(msr.pData, data, data_size);
+    dx11_renderer->context->lpVtbl->Unmap(dx11_renderer->context, (ID3D11Resource*)resource, 0);
     
     return true;
 }
@@ -979,16 +1003,16 @@ bool dm_renderer_backend_init(dm_context* context)
     context->renderer.internal_renderer = dm_alloc(sizeof(dm_dx11_renderer));
     dm_dx11_renderer* dx11_renderer = context->renderer.internal_renderer;
     
-    dm_internal_windows_data* windows_data = context->platform_data.internal_data;
+    dm_internal_w32_data* w32_data = context->platform_data.internal_data;
     
-    dx11_renderer->hwnd = windows_data->hwnd;
-    dx11_renderer->h_instance = windows_data->h_instance;
+    dx11_renderer->hwnd = w32_data->hwnd;
+    dx11_renderer->h_instance = w32_data->h_instance;
     
     if (!dm_dx11_create_device(dx11_renderer)) return false;
-	if (!dm_dx11_create_swapchain(dx11_renderer)) return false;
-	
-	if (!dm_dx11_create_rendertarget(dx11_renderer)) return false;
-	if (!dm_dx11_create_depth_stencil(dx11_renderer)) return false;
+    if (!dm_dx11_create_swapchain(dx11_renderer)) return false;
+    
+    if (!dm_dx11_create_rendertarget(dx11_renderer)) return false;
+    if (!dm_dx11_create_depth_stencil(dx11_renderer)) return false;
     
     dx11_renderer->active_pipeline = DM_DX11_INVALID_RESOURCE;
     dx11_renderer->active_shader   = DM_DX11_INVALID_RESOURCE;
@@ -1055,9 +1079,9 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     ID3D11RenderTargetView* render_target = dx11_renderer->render_view;
     ID3D11DepthStencilView* depth_stencil = dx11_renderer->depth_stencil_view;
     
-	// render target
+    // render target
     context->lpVtbl->OMSetRenderTargets(context, 1u, &render_target, depth_stencil);
-	
+    
     return true;
 }
 
@@ -1067,21 +1091,21 @@ bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
     
     HRESULT hr;
     
-	IDXGISwapChain* swap_chain = dx11_renderer->swap_chain;
+    IDXGISwapChain* swap_chain = dx11_renderer->swap_chain;
     
     uint32_t v = vsync ? 1 : 0;
-	if (FAILED(hr = swap_chain->lpVtbl->Present(swap_chain, v, 0)))
-	{
-		if (hr == DXGI_ERROR_DEVICE_REMOVED) DM_LOG_FATAL("DirectX Device removed! Exiting...");
-		else DM_LOG_ERROR("Something bad happened when presenting buffers. Exiting...");
-		return false;
-	}
+    if (FAILED(hr = swap_chain->lpVtbl->Present(swap_chain, v, 0)))
+    {
+        if (hr == DXGI_ERROR_DEVICE_REMOVED) DM_LOG_FATAL("DirectX Device removed! Exiting...");
+        else DM_LOG_ERROR("Something bad happened when presenting buffers. Exiting...");
+        return false;
+    }
     
     dx11_renderer->active_pipeline = DM_DX11_INVALID_RESOURCE;
     dx11_renderer->active_shader   = DM_DX11_INVALID_RESOURCE;
     
 #ifdef DM_DEBUG
-	dm_dx11_print_errors(dx11_renderer);
+    dm_dx11_print_errors(dx11_renderer);
 #endif
     
     return true;
@@ -1096,12 +1120,12 @@ void dm_render_command_backend_clear(float r, float g, float b, float a, dm_rend
     
     float c[] = { r,g,b,a };
     ID3D11DeviceContext* context = dx11_renderer->context;
-	ID3D11RenderTargetView* render_target = dx11_renderer->render_view;
-	ID3D11DepthStencilView* depth_stencil = dx11_renderer->depth_stencil_view;
-	
-	// clear framebuffer
-	context->lpVtbl->ClearRenderTargetView(context, render_target, c);
-	context->lpVtbl->ClearDepthStencilView(context, depth_stencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+    ID3D11RenderTargetView* render_target = dx11_renderer->render_view;
+    ID3D11DepthStencilView* depth_stencil = dx11_renderer->depth_stencil_view;
+    
+    // clear framebuffer
+    context->lpVtbl->ClearRenderTargetView(context, render_target, c);
+    context->lpVtbl->ClearDepthStencilView(context, depth_stencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 }
 
 void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer)
@@ -1110,12 +1134,12 @@ void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_
     
     ID3D11DeviceContext* context = dx11_renderer->context;
     
-	D3D11_VIEWPORT new_viewport = { 0 };
-	new_viewport.Width = (FLOAT)width;
-	new_viewport.Height = (FLOAT)height;
-	new_viewport.MaxDepth = 1.0f;
-	
-	context->lpVtbl->RSSetViewports(context, 1, &new_viewport);
+    D3D11_VIEWPORT new_viewport = { 0 };
+    new_viewport.Width = (FLOAT)width;
+    new_viewport.Height = (FLOAT)height;
+    new_viewport.MaxDepth = 1.0f;
+    
+    context->lpVtbl->RSSetViewports(context, 1, &new_viewport);
 }
 
 bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_renderer* renderer)
@@ -1126,15 +1150,15 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
     
     dm_dx11_pipeline internal_pipeline = dx11_renderer->pipelines[handle];
     
-	ID3D11DeviceContext* context = dx11_renderer->context;
-	
-    // raster state
-	if(!internal_pipeline.wireframe) context->lpVtbl->RSSetState(context, internal_pipeline.rasterizer_state);
-    else context->lpVtbl->RSSetState(context, internal_pipeline.wireframe_state);
-	context->lpVtbl->IASetPrimitiveTopology(context, internal_pipeline.default_topology);
+    ID3D11DeviceContext* context = dx11_renderer->context;
     
-	// sampler
-	context->lpVtbl->PSSetSamplers(context, 0, 1, &internal_pipeline.sample_state);
+    // raster state
+    if(!internal_pipeline.wireframe) context->lpVtbl->RSSetState(context, internal_pipeline.rasterizer_state);
+    else context->lpVtbl->RSSetState(context, internal_pipeline.wireframe_state);
+    context->lpVtbl->IASetPrimitiveTopology(context, internal_pipeline.default_topology);
+    
+    // sampler
+    context->lpVtbl->PSSetSamplers(context, 0, 1, &internal_pipeline.sample_state);
     
     // blend state
     if(internal_pipeline.blend)
@@ -1143,15 +1167,15 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
         context->lpVtbl->OMSetBlendState(context, internal_pipeline.blend_state, blends, 0xffffffff);
     }
     
-	// depth stencil state
-	if(internal_pipeline.depth || internal_pipeline.stencil) 
+    // depth stencil state
+    if(internal_pipeline.depth || internal_pipeline.stencil) 
     {
         context->lpVtbl->OMSetDepthStencilState(context, internal_pipeline.depth_stencil_state, 1);
     }
     
     dx11_renderer->active_pipeline = handle;
     
-	return true;
+    return true;
 }
 
 bool dm_render_command_backend_set_primitive_topology(dm_primitive_topology topology, dm_renderer* renderer)
@@ -1178,8 +1202,8 @@ bool dm_render_command_backend_bind_shader(dm_render_handle handle, dm_renderer*
     ID3D11DeviceContext* context = dx11_renderer->context;
     
     context->lpVtbl->VSSetShader(context, internal_shader.vertex_shader, NULL, 0);
-	context->lpVtbl->PSSetShader(context, internal_shader.pixel_shader, NULL, 0);
-	context->lpVtbl->IASetInputLayout(context, internal_shader.input_layout);
+    context->lpVtbl->PSSetShader(context, internal_shader.pixel_shader, NULL, 0);
+    context->lpVtbl->IASetInputLayout(context, internal_shader.input_layout);
     
     return true;
 }
@@ -1194,7 +1218,7 @@ bool dm_render_command_backend_bind_buffer(dm_render_handle handle, uint32_t slo
     
     dm_dx11_buffer internal_buffer = dx11_renderer->buffers[handle];
     
-	UINT offset = 0;
+    UINT offset = 0;
     uint32_t new_stride = (uint32_t)internal_buffer.stride;
     
     switch(internal_buffer.type)
@@ -1221,7 +1245,7 @@ bool dm_render_command_backend_update_buffer(dm_render_handle handle, void* data
     
     if(handle > dx11_renderer->buffer_count) { DM_LOG_FATAL("Trying to update invalid Directx11 buffer"); return false; }
     
-	return dm_dx11_update_resource(dx11_renderer->buffers[handle].buffer, data, data_size, dx11_renderer);
+    return dm_dx11_update_resource(dx11_renderer->buffers[handle].buffer, data, data_size, dx11_renderer);
 }
 
 bool dm_render_command_backend_bind_uniform(dm_render_handle handle, dm_uniform_stage stage, uint32_t slot, uint32_t offset, dm_renderer* renderer)
@@ -1269,11 +1293,11 @@ bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t 
     HRESULT hr;
     
     D3D11_MAPPED_SUBRESOURCE msr;
-	ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
+    ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
     
     DX11_ERROR_CHECK(dx11_renderer.context->lpVtbl->Map(dx11_renderer.context, (ID3D11Resource*)internal_texture->staging, 0, D3D11_MAP_WRITE, 0, &msr), "ID3D11DeviceContext::Map failed!");
-	dm_memcpy(msr.pData, data, data_size);
-	dx11_renderer.context->lpVtbl->Unmap(dx11_renderer.context, (ID3D11Resource*)internal_texture->staging, 0);
+    dm_memcpy(msr.pData, data, data_size);
+    dx11_renderer.context->lpVtbl->Unmap(dx11_renderer.context, (ID3D11Resource*)internal_texture->staging, 0);
     
     dx11_renderer.context->lpVtbl->CopyResource(dx11_renderer.context, (ID3D11Resource*)internal_texture->texture, (ID3D11Resource*)internal_texture->staging);
     */
@@ -1286,8 +1310,8 @@ bool dm_render_command_backend_bind_default_framebuffer(dm_renderer* renderer)
     DM_DX11_GET_RENDERER;
     
     ID3D11DeviceContext* context = dx11_renderer->context;
-	ID3D11RenderTargetView* render_target = dx11_renderer->render_view;
-	ID3D11DepthStencilView* depth_stencil = dx11_renderer->depth_stencil_view;
+    ID3D11RenderTargetView* render_target = dx11_renderer->render_view;
+    ID3D11DepthStencilView* depth_stencil = dx11_renderer->depth_stencil_view;
     
     if(!context) { DM_LOG_FATAL("DX11 context is NULL"); return false; }
     if(!render_target) { DM_LOG_FATAL("Default render target is NULL"); return false; }
@@ -1377,28 +1401,28 @@ DIRECTX DEBUGGING
 #ifdef DM_DEBUG
 bool dm_dx11_print_errors(dm_dx11_renderer* dx11_renderer)
 {
-	HRESULT hr;
+    HRESULT hr;
     
-	ID3D11InfoQueue* info_queue;
-	hr = dx11_renderer->device->lpVtbl->QueryInterface(dx11_renderer->device, &IID_ID3D11InfoQueue, (void**)&info_queue);
-	if (hr != S_OK) { DM_LOG_ERROR("ID3D11Device::QueryInterface failed!"); return false; }
+    ID3D11InfoQueue* info_queue;
+    hr = dx11_renderer->device->lpVtbl->QueryInterface(dx11_renderer->device, &IID_ID3D11InfoQueue, (void**)&info_queue);
+    if (hr != S_OK) { DM_LOG_ERROR("ID3D11Device::QueryInterface failed!"); return false; }
     
-	UINT64 message_count = info_queue->lpVtbl->GetNumStoredMessages(info_queue);
+    UINT64 message_count = info_queue->lpVtbl->GetNumStoredMessages(info_queue);
     
-	for (UINT64 i = 0; i < message_count; i++)
-	{
-		SIZE_T message_size = 0;
-		info_queue->lpVtbl->GetMessage(info_queue, i, NULL, &message_size);
+    for (UINT64 i = 0; i < message_count; i++)
+    {
+        SIZE_T message_size = 0;
+        info_queue->lpVtbl->GetMessage(info_queue, i, NULL, &message_size);
         
-		D3D11_MESSAGE* message = dm_alloc(message_size);
-		info_queue->lpVtbl->GetMessage(info_queue, i, message, &message_size);
+        D3D11_MESSAGE* message = dm_alloc(message_size);
+        info_queue->lpVtbl->GetMessage(info_queue, i, message, &message_size);
         
-		const char* category = dm_dx11_decode_category(message->Category);
-		const char* severity = dm_dx11_decode_severity(message->Severity);
-		D3D11_MESSAGE_ID id = message->ID;
+        const char* category = dm_dx11_decode_category(message->Category);
+        const char* severity = dm_dx11_decode_severity(message->Severity);
+        D3D11_MESSAGE_ID id = message->ID;
         
-		switch (message->Severity)
-		{
+        switch (message->Severity)
+        {
             case D3D11_MESSAGE_SEVERITY_CORRUPTION:
             {
                 DM_LOG_FATAL("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); 
@@ -1424,20 +1448,20 @@ bool dm_dx11_print_errors(dm_dx11_renderer* dx11_renderer)
                 DM_LOG_TRACE("\n    [DirectX11 %s]: (%d) %s", severity, id, message->pDescription); 
                 return false;
             } break;
-		}
+        }
         
-		dm_free(message);
-	}
+        dm_free(message);
+    }
     
-	DM_DX11_RELEASE(info_queue);
+    DM_DX11_RELEASE(info_queue);
     
     return true;
 }
 
 const char* dm_dx11_decode_category(D3D11_MESSAGE_CATEGORY category)
 {
-	switch (category)
-	{
+    switch (category)
+    {
         case D3D11_MESSAGE_CATEGORY_APPLICATION_DEFINED: return "APPLICATION_DEFINED";
         case D3D11_MESSAGE_CATEGORY_MISCELLANEOUS: return "MISCELLANEOUS";
         case D3D11_MESSAGE_CATEGORY_INITIALIZATION: return "INITIALIZATION";
@@ -1450,24 +1474,24 @@ const char* dm_dx11_decode_category(D3D11_MESSAGE_CATEGORY category)
         case D3D11_MESSAGE_CATEGORY_EXECUTION: return "EXECUTION";
         case D3D11_MESSAGE_CATEGORY_SHADER: return "SHADER";
         default:
-		DM_LOG_FATAL("Unknown D3D11_MESSAGE_CATEGORY! Shouldn't be here...");
-		return "Unknown category";
-	}
+        DM_LOG_FATAL("Unknown D3D11_MESSAGE_CATEGORY! Shouldn't be here...");
+        return "Unknown category";
+    }
 }
 
 const char* dm_dx11_decode_severity(D3D11_MESSAGE_SEVERITY severity)
 {
-	switch (severity)
-	{
-		case D3D11_MESSAGE_SEVERITY_CORRUPTION: return "CORRUPTION";
-		case D3D11_MESSAGE_SEVERITY_ERROR: return "ERROR";
-		case D3D11_MESSAGE_SEVERITY_WARNING: return "WARNING";
-		case D3D11_MESSAGE_SEVERITY_INFO: return "INFO";
-		case D3D11_MESSAGE_SEVERITY_MESSAGE: return "MESSAGE";
-		default:
+    switch (severity)
+    {
+        case D3D11_MESSAGE_SEVERITY_CORRUPTION: return "CORRUPTION";
+        case D3D11_MESSAGE_SEVERITY_ERROR: return "ERROR";
+        case D3D11_MESSAGE_SEVERITY_WARNING: return "WARNING";
+        case D3D11_MESSAGE_SEVERITY_INFO: return "INFO";
+        case D3D11_MESSAGE_SEVERITY_MESSAGE: return "MESSAGE";
+        default:
         DM_LOG_FATAL("Unknwon D3D11_MESSAGE_SEVERITY! Shouldn't be here...");
         return "Unknown severity";
-	}
+    }
 }
 #endif
 

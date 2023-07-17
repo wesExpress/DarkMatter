@@ -13,7 +13,7 @@ bool dm_win32_load_opengl_functions(WNDCLASSEX window_class, dm_platform_data* p
 typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int* attribList);
 #endif
 
-typedef struct dm_internal_windows_data_t
+typedef struct dm_internal_w32_data_t
 {
 	HINSTANCE h_instance;
 	HWND      hwnd;
@@ -26,7 +26,9 @@ typedef struct dm_internal_windows_data_t
     HGLRC fake_rc;
     HWND  fake_wnd;
 #endif
-} dm_internal_windows_data;
+} dm_internal_w32_data;
+
+#define DM_WIN32_GET_DATA dm_internal_w32_data* w32_data = platform_data->internal_data
 
 LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam)
 {
@@ -171,16 +173,12 @@ LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
-bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title, dm_platform_data* platform_data)
+bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_platform_data* platform_data)
 {
-    platform_data->window_data.width = window_w;
-    platform_data->window_data.height = window_h;
-    strcpy(platform_data->window_data.title, window_title);
+    platform_data->internal_data = dm_alloc(sizeof(dm_internal_w32_data));
+    dm_internal_w32_data* w32_data = platform_data->internal_data;
     
-    platform_data->internal_data = dm_alloc(sizeof(dm_internal_windows_data));
-    dm_internal_windows_data* windows_data = platform_data->internal_data;
-    
-	windows_data->h_instance = GetModuleHandleA(0);
+	w32_data->h_instance = GetModuleHandleA(0);
     
 	const char* window_class_name = "dm_window_class";
     
@@ -189,8 +187,8 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t win
 	wcex.cbSize = sizeof(wcex);
 	wcex.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
 	wcex.lpfnWndProc = window_callback;
-	wcex.hInstance = windows_data->h_instance;
-	wcex.hIcon = LoadIcon(windows_data->h_instance, IDI_APPLICATION);
+	wcex.hInstance = w32_data->h_instance;
+	wcex.hIcon = LoadIcon(w32_data->h_instance, IDI_APPLICATION);
 	wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
 	wcex.lpszClassName = window_class_name;
@@ -201,11 +199,11 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t win
         return false;
     }
 #else
-	HICON icon = LoadIcon(windows_data->h_instance, IDI_APPLICATION);
+	HICON icon = LoadIcon(w32_data->h_instance, IDI_APPLICATION);
 	WNDCLASSA wc = { 0 };
 	wc.style = CS_DBLCLKS | CS_HREDRAW | CS_OWNDC | CS_VREDRAW;
 	wc.lpfnWndProc = window_callback;
-	wc.hInstance = windows_data->h_instance;
+	wc.hInstance = w32_data->h_instance;
 	wc.hIcon = icon;
 	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
 	wc.hbrBackground = NULL;
@@ -223,8 +221,8 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t win
 	// Adjust client window to be appropriate
 	uint32_t client_x = window_x_pos;
 	uint32_t client_y = window_y_pos;
-	uint32_t client_width = window_w;
-	uint32_t client_height = window_h;
+	uint32_t client_width = platform_data->window_data.width;
+	uint32_t client_height = platform_data->window_data.height;
     
 	uint32_t window_x = client_x;
 	uint32_t window_y = client_y;
@@ -243,16 +241,16 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t win
 	window_height += (border_rect.bottom - border_rect.top);
     
 	// create the window
-	windows_data->hwnd = CreateWindowExA(window_ex_style, 
-                                         window_class_name, window_title,
-                                         window_style,
-                                         window_x, window_y, 
-                                         window_width, window_height,
-                                         NULL, NULL, 
-                                         windows_data->h_instance, 
-                                         NULL);
+	w32_data->hwnd = CreateWindowExA(window_ex_style, 
+                                     window_class_name, platform_data->window_data.title,
+                                     window_style,
+                                     window_x, window_y, 
+                                     window_width, window_height,
+                                     NULL, NULL, 
+                                     w32_data->h_instance, 
+                                     NULL);
     
-	if (!windows_data->hwnd) 
+	if (!w32_data->hwnd) 
     {
         //DM_LOG_FATAL("Window creation failed");
         printf("Window creation failed");
@@ -260,10 +258,10 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t win
     }
     
     // attach platform data to hwnd
-    if(!SetPropA(windows_data->hwnd, "platform_data", platform_data)) return false;
+    if(!SetPropA(w32_data->hwnd, "platform_data", platform_data)) return false;
     
 #ifndef DM_OPENGL
-	ShowWindow(windows_data->hwnd, SW_SHOW);
+	ShowWindow(w32_data->hwnd, SW_SHOW);
 #endif
     
     //ShowCursor(FALSE);
@@ -271,19 +269,19 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t win
 	// clock
 	LARGE_INTEGER frequency;
 	QueryPerformanceFrequency(&frequency);
-	windows_data->clock_freq = 1.0f / frequency.QuadPart;
+	w32_data->clock_freq = 1.0f / frequency.QuadPart;
     
 	return true;
 }
 
 double dm_platform_get_time(dm_platform_data* platform_data)
 {
-    dm_internal_windows_data* windows_data = platform_data->internal_data;
+    DM_WIN32_GET_DATA;
     
 	LARGE_INTEGER time;
 	QueryPerformanceCounter(&time);
     
-	return time.QuadPart * windows_data->clock_freq;
+	return time.QuadPart * w32_data->clock_freq;
 }
 
 void dm_platform_sleep(uint64_t t)
@@ -293,11 +291,12 @@ void dm_platform_sleep(uint64_t t)
 
 void dm_platform_shutdown(dm_platform_data* platform_data)
 {
-    dm_internal_windows_data* windows_data = platform_data->internal_data;
-	if (windows_data->hwnd)
+	DM_WIN32_GET_DATA;
+    
+    if (w32_data->hwnd)
 	{
-		DestroyWindow(windows_data->hwnd);
-		windows_data->hwnd = 0;
+		DestroyWindow(w32_data->hwnd);
+		w32_data->hwnd = 0;
 	}
     
     dm_free(platform_data->internal_data);
@@ -305,10 +304,10 @@ void dm_platform_shutdown(dm_platform_data* platform_data)
 
 bool dm_platform_pump_events(dm_platform_data* platform_data)
 {
-    dm_internal_windows_data* windows_data = platform_data->internal_data;
+    DM_WIN32_GET_DATA;
     
     MSG message;
-    while (PeekMessageA(&message, windows_data->hwnd, 0, 0, PM_REMOVE))
+    while (PeekMessageA(&message, w32_data->hwnd, 0, 0, PM_REMOVE))
     {
         TranslateMessage(&message);
         DispatchMessageA(&message);
@@ -354,21 +353,21 @@ const char* dm_get_win32_last_error()
 #ifdef DM_OPENGL
 bool dm_win32_load_opengl_functions(WNDCLASSEX window_class, dm_platform_data* platform_data)
 {
-    dm_internal_windows_data* windows_data = platform_data->internal_data;
+    DM_WIN32_GET_DATA;
     
 	// fake window
 	if (!RegisterClassEx(&window_class)) return false;
     
-	windows_data->fake_wnd = CreateWindow("dm_window_class",
-                                          "Fake Window",
-                                          WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
-                                          0, 0,
-                                          1, 1,
-                                          NULL, NULL,
-                                          windows_data->h_instance, NULL);
+	w32_data->fake_wnd = CreateWindow("dm_window_class",
+                                      "Fake Window",
+                                      WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
+                                      0, 0,
+                                      1, 1,
+                                      NULL, NULL,
+                                      w32_data->h_instance, NULL);
     
 	// rendering context
-	windows_data->fake_dc = GetDC(windows_data->fake_wnd);
+	w32_data->fake_dc = GetDC(w32_data->fake_wnd);
     
 	PIXELFORMATDESCRIPTOR fake_pfd = { 0 };
 	fake_pfd.nSize = sizeof(fake_pfd);
@@ -379,24 +378,24 @@ bool dm_win32_load_opengl_functions(WNDCLASSEX window_class, dm_platform_data* p
 	fake_pfd.cDepthBits = 24;
 	fake_pfd.cAlphaBits = 8;
     
-	int format = ChoosePixelFormat(windows_data->fake_dc, &fake_pfd);
+	int format = ChoosePixelFormat(w32_data->fake_dc, &fake_pfd);
 	if (format == 0) return false;
-    if (!SetPixelFormat(windows_data->fake_dc, format, &fake_pfd)) 
+    if (!SetPixelFormat(w32_data->fake_dc, format, &fake_pfd)) 
     {
         DM_LOG_FATAL("SetPixelFormat failed");
         return false;
     }
     
-	windows_data->fake_rc = wglCreateContext(windows_data->fake_dc);
-	if (!windows_data->fake_rc) return false;
-	if (!wglMakeCurrent(windows_data->fake_dc, windows_data->fake_rc)) 
+	w32_data->fake_rc = wglCreateContext(w32_data->fake_dc);
+	if (!w32_data->fake_rc) return false;
+	if (!wglMakeCurrent(w32_data->fake_dc, w32_data->fake_rc)) 
     {
         DM_LOG_FATAL("wglMakeCurrent failed");
         return false;
     }
     
 	// load opengl functions with glad
-	if (!gladLoadWGL(windows_data->fake_dc)) 
+	if (!gladLoadWGL(w32_data->fake_dc)) 
     {
         DM_LOG_FATAL("gladLoadWGL failed");
         return false;
@@ -407,9 +406,9 @@ bool dm_win32_load_opengl_functions(WNDCLASSEX window_class, dm_platform_data* p
 
 bool dm_platform_init_opengl(dm_platform_data* platform_data)
 {
-    dm_internal_windows_data* windows_data = platform_data->internal_data;
+    DM_WIN32_GET_DATA;
     
-	windows_data->hdc = GetDC(windows_data->hwnd);
+	w32_data->hdc = GetDC(w32_data->hwnd);
     
 	const int pixel_attribs[] = {
 		WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
@@ -428,12 +427,12 @@ bool dm_platform_init_opengl(dm_platform_data* platform_data)
 	int pixel_format_id;
 	uint32_t num_formats;
     
-	bool status = wglChoosePixelFormatARB(windows_data->hdc, pixel_attribs, NULL, 1, &pixel_format_id, &num_formats);
+	bool status = wglChoosePixelFormatARB(w32_data->hdc, pixel_attribs, NULL, 1, &pixel_format_id, &num_formats);
 	if (!status || (num_formats == 0)) return false;
     
 	PIXELFORMATDESCRIPTOR PFD;
-	DescribePixelFormat(windows_data->hdc, pixel_format_id, sizeof(PFD), &PFD);
-	SetPixelFormat(windows_data->hdc, pixel_format_id, &PFD);
+	DescribePixelFormat(w32_data->hdc, pixel_format_id, sizeof(PFD), &PFD);
+	SetPixelFormat(w32_data->hdc, pixel_format_id, &PFD);
     
 	// opengl context
 	const int context_attribs[] = {
@@ -444,15 +443,15 @@ bool dm_platform_init_opengl(dm_platform_data* platform_data)
 		WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0,
 	};
     
-	windows_data->hrc = wglCreateContextAttribsARB(windows_data->hdc, 0, context_attribs);
-	if (!windows_data->hrc) return false;
+	w32_data->hrc = wglCreateContextAttribsARB(w32_data->hdc, 0, context_attribs);
+	if (!w32_data->hrc) return false;
     
 	wglMakeCurrent(NULL, NULL);
-	wglDeleteContext(windows_data->fake_rc);
-	ReleaseDC(windows_data->fake_wnd, windows_data->fake_dc);
-	DestroyWindow(windows_data->fake_wnd);
+	wglDeleteContext(w32_data->fake_rc);
+	ReleaseDC(w32_data->fake_wnd, w32_data->fake_dc);
+	DestroyWindow(w32_data->fake_wnd);
     
-	if (!wglMakeCurrent(windows_data->hdc, windows_data->hrc)) return false;
+	if (!wglMakeCurrent(w32_data->hdc, w32_data->hrc)) return false;
     
 	// load opengl functions with glad
 	if (!gladLoadGL()) 
@@ -461,26 +460,26 @@ bool dm_platform_init_opengl(dm_platform_data* platform_data)
         return false;
     }
     
-	ShowWindow(windows_data->hwnd, SW_SHOW);
+	ShowWindow(w32_data->hwnd, SW_SHOW);
     
 	return true;
 }
 
 void dm_platform_shutdown_opengl(dm_platform_data* platform_data)
 {
-    dm_internal_windows_data* windows_data = platform_data->internal_data;
+    DM_WIN32_GET_DATA;
     
 	wglMakeCurrent(NULL, NULL);
-	wglDeleteContext(windows_data->hrc);
+	wglDeleteContext(w32_data->hrc);
 }
 
 void dm_platform_swap_buffers(bool vsync, dm_platform_data* platform_data)
 {
-    dm_internal_windows_data* windows_data = platform_data->internal_data;
+    DM_WIN32_GET_DATA;
     
     uint32_t v = vsync ? 1 : 0;
     wglSwapIntervalEXT(v);
-	SwapBuffers(windows_data->hdc);
+	SwapBuffers(w32_data->hdc);
 }
 #endif
 

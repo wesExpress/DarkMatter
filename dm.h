@@ -441,6 +441,7 @@ typedef struct dm_platform_data_t
 {
     dm_window_data window_data;
     dm_event_list  event_list;
+    char           asset_path[512];
     void*          internal_data;
 } dm_platform_data;
 
@@ -665,6 +666,16 @@ typedef struct dm_pipeline_desc_t
     float                 min_lod, max_lod;
 } dm_pipeline_desc;
 
+typedef struct dm_shader_desc_t
+{
+    char vertex[512];
+    char pixel[512];
+    char master[512];
+    
+    dm_render_handle vb[2];
+    uint32_t         vb_count;
+} dm_shader_desc;
+
 typedef struct dm_mesh_t
 {
     uint32_t         vertex_count, index_count;
@@ -744,16 +755,326 @@ typedef struct dm_renderer_t
     void* internal_renderer;
 } dm_renderer;
 
+/***
+ECS
+*****/
+#define DM_ECS_COMPONENT_BLOCK_SIZE 512
+
+#ifdef DM_ECS_MORE_COMPONENTS
+typedef uint64_t dm_ecs_id;
+#define DM_ECS_MAX 64
+#define DM_ECS_INVALID_ID ULONG_MAX
+#else
+typedef uint32_t dm_ecs_id;
+#define DM_ECS_MAX 32
+#define DM_ECS_INVALID_ID UINT_MAX
+#endif
+
+#ifdef DM_ECS_MORE_COMPONENT_MEMBERS
+#define DM_ECS_MAX_COMPONENT_MEMBER_NUM 64
+#else
+#define DM_ECS_MAX_COMPONENT_MEMBER_NUM 32
+#endif
+
+#ifdef DM_ECS_MORE_ENTITIES
+typedef uint64_t dm_entity
+#define DM_ECS_INVALID_ENTITY ULONG_MAX
+#else
+typedef uint32_t dm_entity;
+#define DM_ECS_INVALID_ENTITY UINT_MAX
+#endif
+
+typedef struct dm_entity_ids_t
+{
+    uint32_t block_index[DM_ECS_MAX];
+    uint32_t index[DM_ECS_MAX];
+} dm_entity_ids;
+
+typedef struct dm_component_block_t
+{
+    uint32_t entity_count;
+    void*    block;
+} dm_component_block;
+
+typedef struct dm_component_block_manager_t
+{
+    size_t              block_size;
+    uint32_t            block_count;
+    dm_component_block* blocks;
+} dm_component_block_manager;
+
+typedef struct dm_ecs_default_components_t
+{
+    dm_ecs_id transform, physics, collision;
+} dm_ecs_default_components;
+
+typedef struct dm_ecs_manager_t
+{
+    uint32_t num_registered_components;
+    uint32_t entity_count, entity_capacity;
+    
+    dm_ecs_default_components default_components;
+    
+    dm_component_block_manager component_blocks[DM_ECS_MAX];
+    dm_entity_ids*             entity_ids; 
+} dm_ecs_manager;
+
+// components
+typedef struct dm_component_transform_block_t
+{
+    float pos_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float pos_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float pos_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float scale_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float scale_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float scale_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float rot_i[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float rot_j[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float rot_k[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float rot_r[DM_ECS_COMPONENT_BLOCK_SIZE];
+} dm_component_transform_block;
+
+typedef struct dm_component_transform_t
+{
+    float pos[3];
+    float scale[3];
+    float rot[4];
+} dm_component_transform;
+
+/*******
+PHYSICS
+*********/
+#define DM_PHYSICS_EPA_TOLERANCE     0.00001f
+#define DM_PHYSICS_MAX_CONTACTS      8
+#define DM_PHYSICS_DIVISION_EPSILON  1e-8f
+#define DM_PHYSICS_TEST_EPSILON      1e-4f
+#define DM_PHYSICS_CLIP_MAX_PTS      15
+#define DM_PHYSICS_CONSTRAINT_ITER   10
+#define DM_PHYSICS_PERSISTENT_THRESH 0.001f
+#define DM_PHYSICS_W_LIM             50.0f
+
+typedef struct dm_simplex
+{
+    float    points[4][3];
+    uint32_t size;
+} dm_simplex;
+
+typedef struct dm_contact_constraint
+{
+    float  jacobian[4][3];
+    float  delta_v[4][3];
+    float  b;
+    double lambda, warm_lambda, impulse_sum, impulse_min, impulse_max;
+} dm_contact_constraint;
+
+typedef struct dm_contact_point
+{
+    dm_contact_constraint normal;
+    dm_contact_constraint friction_a, friction_b;
+    
+    float global_pos[2][3];
+    float local_pos[2][3];
+    float penetration;
+} dm_contact_point;
+
+typedef struct dm_contact_manifold
+{
+    dm_entity entities[2];
+    float     normal[3];
+    float     tangent_a[3]; 
+    float     tangent_b[3];
+    float     orientation_a[4];
+    float     orientation_b[4];
+    
+    dm_contact_point points[DM_PHYSICS_CLIP_MAX_PTS];
+    uint32_t         point_count;
+} dm_contact_manifold;
+
+typedef struct dm_collision_pair_t
+{
+    dm_entity entity_a, entity_b;
+} dm_collision_pair;
+
+typedef enum dm_physics_flag_t
+{
+    DM_PHYSICS_FLAG_PAUSED,
+    DM_PHYSICS_FLAG_UNKNOWN
+} dm_physics_flag;
+
+typedef struct dm_physics_manager_t
+{
+    double          accum_time, simulation_time;
+    dm_physics_flag flag;
+    
+    uint32_t num_possible_collisions, collision_capacity;
+    uint32_t num_manifolds, manifold_capacity;
+    
+    dm_collision_pair*   possible_collisions;
+    dm_contact_manifold* manifolds;
+} dm_physics_manager;
+
+// physics component
+typedef enum dm_physics_body_type_t
+{
+    DM_PHYSICS_BODY_TYPE_RIGID,
+    DM_PHYSICS_BODY_TYPE_UNKNOWN
+} dm_physics_body_type;
+
+typedef enum dm_physics_movement_type_t
+{
+    DM_PHYSICS_MOVEMENT_KINEMATIC,
+    DM_PHYSICS_MOVEMENT_STATIC,
+    DM_PHYSICS_MOVEMENT_UNKNOWN
+} dm_physics_movement_type;
+
+typedef struct dm_component_physics_block_t
+{
+    float vel_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float vel_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float vel_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float w_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float w_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float w_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float l_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float l_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float l_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float force_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float force_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float force_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float torque_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float torque_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float torque_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float mass[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float inv_mass[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    // moment of inertia at rest are diagonals
+    // but global inertia is a full 3x3 matrix
+    float i_body[3][DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_inv[3][DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_0[3][DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_1[3][DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_2[3][DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    // damping coefs
+    float damping[2][DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    // enums
+    dm_physics_body_type     body_type[DM_ECS_COMPONENT_BLOCK_SIZE];
+    dm_physics_movement_type movement_type[DM_ECS_COMPONENT_BLOCK_SIZE];
+} dm_component_physics_block;
+
+typedef struct dm_component_physics_t
+{
+    float vel[3];
+    float w[3];
+    float l[3];
+    float force[3];
+    float torque[3];
+    float mass, inv_mass;
+    
+    // moment of inertia at rest are diagonals
+    // but global inertia is a full 3x3 matrix
+    float i_body[3];
+    float i_body_inv[3];
+    float i_inv_0[3];
+    float i_inv_1[3];
+    float i_inv_2[3];
+    
+    // damping coefs
+    float damping[2];
+    
+    // enums
+    dm_physics_body_type     body_type;
+    dm_physics_movement_type movement_type;
+} dm_component_physics;
+
+// collision component
+typedef enum dm_collision_shape_t
+{
+    DM_COLLISION_2D_CIRCLE,
+    DM_COLLISION_2D_BOX,
+    DM_COLLISION_SHAPE_SPHERE,
+    DM_COLLISION_SHAPE_BOX,
+    DM_COLLISION_SHAPE_UNKNOWN
+} dm_collision_shape;
+
+typedef enum dm_collision_flag_t
+{
+    DM_COLLISION_FLAG_NO,
+    DM_COLLISION_FLAG_YES,
+    DM_COLLISION_FLAG_POSSIBLE,
+    DM_COLLISION_FLAG_UNKNOWN
+} dm_collision_flag;
+
+typedef struct dm_aabb_t
+{
+    float min[3];
+    float max[3];
+} dm_aabb;
+
+typedef struct dm_component_collision_block_t
+{
+    float aabb_local_min_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float aabb_local_min_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float aabb_local_min_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float aabb_local_max_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float aabb_local_max_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float aabb_local_max_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float aabb_global_min_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float aabb_global_min_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float aabb_global_min_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float aabb_global_max_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float aabb_global_max_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float aabb_global_max_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float center_x[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float center_y[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float center_z[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float internal[6][DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    dm_collision_shape shape[DM_ECS_COMPONENT_BLOCK_SIZE];
+    dm_collision_flag  flag[DM_ECS_COMPONENT_BLOCK_SIZE];
+} dm_component_collision_block;
+
+typedef struct dm_component_collision_t
+{
+    float aabb_local_min[3];
+    float aabb_local_max[3];
+    float aabb_global_min[3];
+    float aabb_global_max[3];
+    
+    float center[3];
+    
+    float internal[6];
+    
+    dm_collision_shape shape;
+    dm_collision_flag  flag;
+} dm_component_collision;
+
 /******************
 DARKMATTER CONTEXT
 ********************/
 typedef struct dm_context_t
 {
-    dm_platform_data platform_data;
-    dm_input_state   input_states[2];
-    dm_renderer      renderer;
-    bool             is_running;
-    double           start, end, delta;
+    dm_platform_data   platform_data;
+    dm_input_state     input_states[2];
+    dm_renderer        renderer;
+    dm_ecs_manager     ecs_manager;
+    dm_physics_manager physics_manager;
+    double             start, end, delta;
+    uint32_t           flags;
+    void*              app_data;
 } dm_context;
 
 /*********
@@ -767,6 +1088,16 @@ typedef struct dm_timer_t
 /*****************
 FUNC DECLARATIONS
 *******************/
+// memory
+void* dm_alloc(size_t size);
+void* dm_calloc(size_t count, size_t size);
+void* dm_realloc(void* block, size_t size);
+void  dm_free(void* block);
+void* dm_memset(void* dest, int value, size_t size);
+void* dm_memzero(void* block, size_t size);
+void* dm_memcpy(void* dest, const void* src, size_t size);
+void  dm_memmove(void* dest, const void* src, size_t size);
+
 // math
 int   dm_abs(int x);
 float dm_fabs(float x);
@@ -792,7 +1123,11 @@ float dm_logf(float x);
 float dm_log2f(float x);
 bool  dm_isnan(float x);
 
+#if 0
 #include "dm_math.h"
+#else
+#include "dm_new_math.h"
+#endif
 
 // SIMD
 // TODO: no apple support yet
@@ -833,16 +1168,6 @@ dm_mm_int   dm_mm_hadd_i(dm_mm_int left, dm_mm_int right);
 dm_mm_int   dm_mm_shiftl_1(dm_mm_int mm);
 dm_mm_int   dm_mm_shiftr_1(dm_mm_int mm);
 #endif
-
-// memory
-void* dm_alloc(size_t size);
-void* dm_calloc(size_t count, size_t size);
-void* dm_realloc(void* block, size_t size);
-void  dm_free(void* block);
-void* dm_memset(void* dest, int value, size_t size);
-void* dm_memzero(void* block, size_t size);
-void* dm_memcpy(void* dest, const void* src, size_t size);
-void  dm_memmove(void* dest, const void* src, size_t size);
 
 // general input
 bool dm_input_is_key_pressed(dm_key_code key, dm_context* context);
@@ -890,19 +1215,8 @@ bool dm_renderer_create_static_vertex_buffer(void* data, size_t data_size, size_
 bool dm_renderer_create_dynamic_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, dm_render_handle* handle, dm_context* context);
-#ifdef DM_OPENGL
-bool dm_renderer_create_shader(const char* vertex_src, const char* pixel_src, dm_render_handle* vb_indices, uint32_t num_vb, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context);
-#elif defined(DM_DIRECTX)
-bool dm_renderer_create_shader(const char* vertex_src, const char* pixel_src, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context);
-#elif defined(DM_METAL)
-bool dm_renderer_create_shader(const char* shader_file, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context);
-#endif
+bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context);
 bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context);
-#ifdef DM_METAL
-bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_handle, dm_render_handle* handle, dm_context* context);
-#else
-bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
-#endif
 bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, void* data, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context);
@@ -915,6 +1229,8 @@ void dm_renderer_destroy_texture(dm_render_handle handle, dm_context* context);
 void dm_renderer_destroy_font(dm_render_handle handle, dm_context* context);
 
 #define DM_MAKE_VERTEX_ATTRIB(NAME, STRUCT, MEMBER, CLASS, DATA_T, COUNT, INDEX, NORMALIZED) { .name=NAME, .data_t=DATA_T, .attrib_class=CLASS, .stride=sizeof(STRUCT), .offset=offsetof(STRUCT, MEMBER), .count=COUNT, .index=INDEX, .normalized=NORMALIZED}
+
+dm_pipeline_desc dm_renderer_default_pipeline();
 
 // render commands
 void dm_render_command_clear(float r, float g, float b, float a, dm_context* context);
@@ -936,6 +1252,7 @@ void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset,
 void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_context* context);
 void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 
+#if 0
 // structures
 dm_slot_array* __dm_slot_array_create(size_t elem_size, size_t capacity);
 void           dm_slot_array_destroy(dm_slot_array* slot_array);
@@ -968,14 +1285,37 @@ bool  dm_map_has_key(dm_map* map, void* key);
 
 void* dm_map_get_keys(dm_map* map, uint32_t* num_keys);
 void* dm_map_get_values(dm_map* map, uint32_t* num_values);
+#endif
+
+// ecs
+bool dm_ecs_init(dm_context* context);
+void dm_ecs_shutdown(dm_context* context);
+
+dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
+dm_ecs_id dm_ecs_register_system(dm_context* context);
+dm_entity dm_ecs_create_entity(dm_context* context);
+dm_entity dm_ecs_entity_get_component_entity(dm_entity entity, dm_ecs_id component_id, dm_context* context);
+
+void* dm_ecs_get_component_block(dm_entity entity, dm_ecs_id component_id, dm_context* context);
+
+const dm_component_transform dm_ecs_entity_get_transform(dm_entity entity, dm_context* context);
+const dm_component_physics   dm_ecs_entity_get_physics(dm_entity entity, dm_context* context);
+const dm_component_collision dm_ecs_entity_get_collision(dm_entity entity, dm_context* context);
+
+void dm_ecs_entity_add_transform(dm_entity, dm_component_transform t, dm_context* context);
+void dm_ecs_entity_add_physics(dm_entity entity, dm_component_physics physics, dm_context* context);
+void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision c, dm_context* context);
+void dm_ecs_entity_add_box_collider(dm_entity entity, float center[3], float dim[3], dm_context* context);
+void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center[3], float radius, dm_context* context);
 
 // framework funcs
-dm_context* dm_init(uint32_t window_x_pos, uint32_t windos_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title);
+dm_context* dm_init(uint32_t window_x_pos, uint32_t windos_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title, const char* asset_path);
 void        dm_shutdown(dm_context* context);
 bool        dm_update_begin(dm_context* context);
 bool        dm_update_end(dm_context* context);
 bool        dm_renderer_begin_frame(dm_context* context);
 bool        dm_renderer_end_frame(bool vsync, dm_context* context);
+bool        dm_context_is_running(dm_context* context);
 
 void* dm_read_bytes(const char* path, const char* mode, size_t* size);
 

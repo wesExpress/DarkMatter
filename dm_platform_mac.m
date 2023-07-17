@@ -162,10 +162,6 @@ extern void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 
 bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title, dm_platform_data* platform_data)
 {
-	platform_data->window_data.width = window_w;
-	platform_data->window_data.height = window_h;
-	strcpy(platform_data->window_data.title, window_title);
-
 	platform_data->internal_data = dm_alloc(sizeof(dm_internal_apple_data));
 	dm_internal_apple_data* apple_data = platform_data->internal_data;
 

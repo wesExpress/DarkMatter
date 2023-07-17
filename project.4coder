@@ -1,9 +1,10 @@
 version(1);
 
-project_name = "AstronomySim";
+project_name = "testing";
 
 patterns = {
 "*.c",
+"*.cpp",
 "*.h",
 "*.m",
 "*.hlsl",
@@ -18,6 +19,7 @@ patterns = {
 
 blacklist_patterns = {
 ".*",
+"build/*",
 };
 
 load_paths_custom = {

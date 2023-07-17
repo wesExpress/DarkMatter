@@ -393,7 +393,7 @@ dm_vec3 dm_vec3_rotate(dm_vec3 v, dm_quat q)
     
     return dm_vec3_add_vec3(v,a);
 }
-
+f
 DM_INLINE
 void dm_vec3_rotate_inpl(dm_quat q, dm_vec3* out)
 {

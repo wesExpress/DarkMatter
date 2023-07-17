@@ -405,6 +405,62 @@ void dm_renderer_backend_destroy_texture(dm_render_handle handle, dm_renderer* r
     }
 }
 
+/***************
+OPENGL_PIPELINE
+*****************/
+bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_OPENGL_GET_RENDERER;
+    
+    dm_opengl_pipeline internal_pipeline = { 0 };
+    
+    internal_pipeline.cull = dm_cull_to_opengl_cull(desc.cull_mode);
+    internal_pipeline.winding = dm_wind_top_opengl_wind(desc.winding_order);
+    internal_pipeline.primitive = dm_topology_to_opengl_primitive(desc.primitive_topology);
+    
+    // blending
+    if(desc.blend)
+    {
+        internal_pipeline.blend = true;
+        internal_pipeline.blend_func = dm_blend_eq_to_opengl_func(desc.blend_eq);
+        internal_pipeline.blend_src = dm_blend_func_to_opengl_func(desc.blend_src_f);
+        internal_pipeline.blend_dest = dm_blend_func_to_opengl_func(desc.blend_dest_f);
+    }
+    
+    // depth testing
+    if(desc.depth)
+    {
+        internal_pipeline.depth = true;
+        internal_pipeline.depth_func = dm_comp_to_opengl_comp(desc.depth_comp);
+    }
+    
+    // stencil testing
+    if(desc.stencil)
+    {
+        internal_pipeline.stencil = true;
+        internal_pipeline.stencil_func = dm_comp_to_opengl_comp(desc.stencil_comp);
+    }
+    
+    // sampler
+    internal_pipeline.min_filter = dm_filter_to_opengl_filter(desc.sampler_filter);
+    internal_pipeline.mag_filter = dm_filter_to_opengl_filter(desc.sampler_filter);
+    internal_pipeline.s_wrap = dm_texture_mode_to_opengl_mode(desc.u_mode);
+    internal_pipeline.t_wrap = dm_texture_mode_to_opengl_mode(desc.v_mode);
+    
+    // misc
+    internal_pipeline.wireframe = desc.wireframe;
+    
+    dm_memcpy(opengl_renderer->pipelines + opengl_renderer->pipeline_count, &internal_pipeline, sizeof(dm_opengl_pipeline));
+    *handle = opengl_renderer->pipeline_count++;
+    
+    return true;
+}
+
+void dm_renderer_backend_destroy_pipeline(dm_render_handle handle, dm_renderer* renderer)
+{
+    return;
+}
+
 /*************
 OPENGL_SHADER
 ***************/
@@ -550,16 +606,20 @@ bool dm_opengl_create_shader(const char* vertex_src, const char* pixel_src, GLui
     return true;
 }
 
-bool dm_renderer_backend_create_shader(const char* vertex_src, const char* pixel_src, dm_render_handle* vb_indices, uint32_t num_vb, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_renderer* renderer)
+bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer)
 {
-    if(num_vb >2) { DM_LOG_FATAL("OpenGL shader only supports up to 2 buffers, vertex and instance"); return false; }
+    if(shader_desc.vb_count >2) 
+    { 
+        DM_LOG_FATAL("OpenGL shader only supports up to 2 buffers: vertex and instance"); 
+        return false; 
+    }
     
     DM_OPENGL_GET_RENDERER;
     
     dm_opengl_buffer vb_buffers[2];
     
-    vb_buffers[0] = opengl_renderer->buffers[vb_indices[0]];
-    if(num_vb > 1) vb_buffers[1] = opengl_renderer->buffers[vb_indices[1]];
+    vb_buffers[0] = opengl_renderer->buffers[shader_desc.vb[0]];
+    if(shader_desc.vb_count > 1) vb_buffers[1] = opengl_renderer->buffers[shader_desc.vb[1]];
     
     dm_opengl_shader internal_shader = { 0 };
     
@@ -567,7 +627,7 @@ bool dm_renderer_backend_create_shader(const char* vertex_src, const char* pixel
     glGenVertexArrays(1, &internal_shader.vao);
     glCheckErrorReturn();
     
-    if(!dm_opengl_create_shader(vertex_src, pixel_src, &internal_shader.shader)) return false;
+    if(!dm_opengl_create_shader(shader_desc.vertex, shader_desc.pixel, &internal_shader.shader)) return false;
     
     // attribs
     uint32_t attrib_count = 0;
@@ -639,7 +699,9 @@ bool dm_renderer_backend_create_shader(const char* vertex_src, const char* pixel
     }
     
     dm_memcpy(opengl_renderer->shaders + opengl_renderer->shader_count, &internal_shader, sizeof(dm_opengl_shader));
-    *handle = opengl_renderer->shader_count++;
+    *shader_handle = opengl_renderer->shader_count++;
+    
+    if(!dm_renderer_backend_create_pipeline(pipe_desc, pipe_handle, renderer)) return false;
     
     //glDeleteVertexArrays(1, &internal_pass.vao);
     //dm_opengl_destroy_shader(internal_pass.shader);
@@ -755,62 +817,6 @@ void dm_renderer_backend_destroy_framebuffer(dm_render_handle handle, dm_rendere
     if(opengl_renderer->framebuffers[handle].d_flag) glDeleteTextures(1, &opengl_renderer->framebuffers[handle].depth);
     if(opengl_renderer->framebuffers[handle].s_flag) glDeleteTextures(1, &opengl_renderer->framebuffers[handle].stencil);
     
-    return;
-}
-
-/***************
-OPENGL_PIPELINE
-*****************/
-bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer)
-{
-    DM_OPENGL_GET_RENDERER;
-    
-    dm_opengl_pipeline internal_pipeline = { 0 };
-    
-    internal_pipeline.cull = dm_cull_to_opengl_cull(desc.cull_mode);
-    internal_pipeline.winding = dm_wind_top_opengl_wind(desc.winding_order);
-    internal_pipeline.primitive = dm_topology_to_opengl_primitive(desc.primitive_topology);
-    
-    // blending
-    if(desc.blend)
-    {
-        internal_pipeline.blend = true;
-        internal_pipeline.blend_func = dm_blend_eq_to_opengl_func(desc.blend_eq);
-        internal_pipeline.blend_src = dm_blend_func_to_opengl_func(desc.blend_src_f);
-        internal_pipeline.blend_dest = dm_blend_func_to_opengl_func(desc.blend_dest_f);
-    }
-    
-    // depth testing
-    if(desc.depth)
-    {
-        internal_pipeline.depth = true;
-        internal_pipeline.depth_func = dm_comp_to_opengl_comp(desc.depth_comp);
-    }
-    
-    // stencil testing
-    if(desc.stencil)
-    {
-        internal_pipeline.stencil = true;
-        internal_pipeline.stencil_func = dm_comp_to_opengl_comp(desc.stencil_comp);
-    }
-    
-    // sampler
-    internal_pipeline.min_filter = dm_filter_to_opengl_filter(desc.sampler_filter);
-    internal_pipeline.mag_filter = dm_filter_to_opengl_filter(desc.sampler_filter);
-    internal_pipeline.s_wrap = dm_texture_mode_to_opengl_mode(desc.u_mode);
-    internal_pipeline.t_wrap = dm_texture_mode_to_opengl_mode(desc.v_mode);
-    
-    // misc
-    internal_pipeline.wireframe = desc.wireframe;
-    
-    dm_memcpy(opengl_renderer->pipelines + opengl_renderer->pipeline_count, &internal_pipeline, sizeof(dm_opengl_pipeline));
-    *handle = opengl_renderer->pipeline_count++;
-    
-    return true;
-}
-
-void dm_renderer_backend_destroy_pipeline(dm_render_handle handle, dm_renderer* renderer)
-{
     return;
 }
 

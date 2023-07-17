@@ -628,24 +628,12 @@ void dm_renderer_destroy_buffer(dm_render_handle handle, dm_context* context)
     dm_renderer_backend_destroy_buffer(handle, &context->renderer);
 }
 
-#ifdef DM_OPENGL
-bool dm_renderer_create_shader(const char* vertex_src, const char* pixel_src, dm_render_handle* vb_indices, uint32_t num_vb, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context)
-#elif defined(DM_DIRECTX)
-bool dm_renderer_create_shader(const char* vertex_src, const char* pixel_src, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context)
-#elif defined(DM_METAL)
-bool dm_renderer_create_shader(const char* shader_file, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* handle, dm_context* context)
-#endif
+bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context)
 {
-#ifdef DM_OPENGL
-    if(dm_renderer_backend_create_shader(vertex_src, pixel_src, vb_indices, num_vb, attrib_descs, num_attribs, handle, &context->renderer)) return true;
-#elif defined(DM_DIRECTX)
-    if(dm_renderer_backend_create_shader(vertex_src, pixel_src, attrib_descs, num_attribs, handle, &context->renderer)) return true;
-#elif defined(DM_METAL)
-    if(dm_renderer_backend_create_shader(shader_file, attrib_descs, num_attribs, handle, &context->renderer)) return true;
-#endif
+    if(dm_renderer_backend_create_shader_and_pipeline(shader_desc, pipe_desc, attrib_descs, attrib_count, shader_handle, pipe_handle, &context->renderer)) return true;
     
-    DM_LOG_FATAL("Creating shader failed"); 
-    return false; 
+    DM_LOG_FATAL("Creating shader and pipeline failed");
+    return false;
 }
 
 void dm_renderer_destroy_shader(dm_render_handle handle, dm_context* context)
@@ -664,22 +652,6 @@ bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_h
 void dm_renderer_destroy_uniform(dm_render_handle handle, dm_context* context)
 {
     dm_renderer_backend_destroy_uniform(handle, &context->renderer);
-}
-
-#ifdef DM_METAL
-bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_handle, dm_render_handle* handle, dm_context* context)
-#else
-bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context)
-#endif
-{
-#ifdef DM_METAL
-    if(dm_renderer_backend_create_pipeline(desc, shader_handle, handle, &context->renderer)) return true;
-#else
-    if(dm_renderer_backend_create_pipeline(desc, handle, &context->renderer)) return true;
-#endif
-    
-    DM_LOG_FATAL("Creating pipeline failed");
-    return false;
 }
 
 void dm_renderer_destroy_pipeline(dm_render_handle handle, dm_context* context)
@@ -1276,14 +1248,459 @@ bool dm_renderer_submit_commands(dm_context* context)
     return true;
 }
 
+dm_pipeline_desc dm_renderer_default_pipeline()
+{
+    dm_pipeline_desc pipeline_desc = { 0 };
+    pipeline_desc.cull_mode = DM_CULL_BACK;
+    pipeline_desc.winding_order = DM_WINDING_COUNTER_CLOCK;
+    pipeline_desc.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
+    
+    pipeline_desc.depth = true;
+    pipeline_desc.depth_comp = DM_COMPARISON_LESS;
+    
+    pipeline_desc.blend = true;
+    pipeline_desc.blend_eq = DM_BLEND_EQUATION_ADD;
+    pipeline_desc.blend_src_f = DM_BLEND_FUNC_SRC_ALPHA;
+    pipeline_desc.blend_dest_f = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
+    
+    return pipeline_desc;
+}
+
+/*******
+PHYSICS
+*********/
+#include "dm_physics.h"
+
+/***
+ECS
+*****/
+#define DM_ECS_MANAGER_ENTITY_CAPACITY DM_ECS_COMPONENT_BLOCK_SIZE
+#define DM_ECS_MANAGER_RESIZE_FACTOR   2
+#define DM_ECS_MANAGER_LOAD_FACTOR     0.75f
+
+bool dm_ecs_init(dm_context* context)
+{
+    size_t block_size = sizeof(dm_entity_ids) * DM_ECS_MANAGER_ENTITY_CAPACITY;
+    
+    context->ecs_manager.entity_ids = dm_alloc(block_size);
+    context->ecs_manager.entity_capacity = DM_ECS_MANAGER_ENTITY_CAPACITY;
+    dm_memset(context->ecs_manager.entity_ids, DM_ECS_INVALID_ID, block_size);
+    
+    // transform component
+    context->ecs_manager.default_components.transform = dm_ecs_register_component(sizeof(dm_component_transform_block), context);
+    if(context->ecs_manager.default_components.transform!=DM_ECS_INVALID_ID) return true;
+    
+    DM_LOG_FATAL("Could not register transform component"); 
+    return false;
+}
+
+void dm_ecs_shutdown(dm_context* context)
+{
+    for(uint32_t i=0; i<context->ecs_manager.num_registered_components; i++)
+    {
+        dm_component_block_manager* block_manager = &context->ecs_manager.component_blocks[i];
+        
+        for(uint32_t j=0; j<block_manager->block_count; j++)
+        {
+            dm_free(block_manager->blocks[j].block);
+        }
+    }
+    
+    dm_free(context->ecs_manager.entity_ids);
+}
+
+dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context)
+{
+    if(context->ecs_manager.num_registered_components >= DM_ECS_MAX) return DM_ECS_INVALID_ID;
+    
+    dm_ecs_id id = context->ecs_manager.num_registered_components++;
+    
+    context->ecs_manager.component_blocks[id].block_size = component_block_size;
+    context->ecs_manager.component_blocks[id].block_count = 1;
+    
+    context->ecs_manager.component_blocks[id].blocks = dm_alloc(sizeof(dm_component_block));
+    context->ecs_manager.component_blocks[id].blocks[0].block = dm_alloc(component_block_size);
+    
+    return id;
+}
+
+void dm_ecs_component_block_insert(dm_entity entity, dm_ecs_id id, dm_context* context)
+{
+    dm_component_block_manager* block_manager = &context->ecs_manager.component_blocks[id];
+    block_manager->blocks[block_manager->block_count].entity_count++;
+    
+    if(block_manager->blocks[block_manager->block_count].entity_count<DM_ECS_COMPONENT_BLOCK_SIZE) return;
+    block_manager->block_count++;
+    block_manager->blocks = dm_realloc(block_manager->blocks, sizeof(dm_component_block) * block_manager->block_count);
+    block_manager->blocks[block_manager->block_count].block = dm_alloc(block_manager->block_size);
+}
+
+dm_ecs_id dm_ecs_register_system(dm_context* context)
+{
+    return DM_ECS_INVALID_ID;
+}
+
+dm_entity dm_ecs_create_entity(dm_context* context)
+{
+    dm_entity entity = context->ecs_manager.entity_count++;
+    
+    if((float)entity / (float)context->ecs_manager.entity_capacity >= DM_ECS_MANAGER_LOAD_FACTOR)
+    {
+        context->ecs_manager.entity_capacity *= DM_ECS_MANAGER_RESIZE_FACTOR;
+        context->ecs_manager.entity_ids = dm_realloc(context->ecs_manager.entity_ids, sizeof(dm_entity_ids) * context->ecs_manager.entity_capacity);
+    }
+    
+    return entity;
+}
+
+void dm_ecs_entity_get_component_indices(dm_entity entity, dm_ecs_id component_id, uint32_t* block_index, uint32_t* index, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Invalid entity"); return; }
+    if(component_id==DM_ECS_INVALID_ID) { DM_LOG_ERROR("Invalid component"); return; }
+    
+    *block_index = context->ecs_manager.entity_ids[entity].block_index[component_id];
+    *index       = context->ecs_manager.entity_ids[entity].index[component_id];
+}
+
+void* dm_ecs_get_component_block(dm_entity entity, dm_ecs_id component_id, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to retrieve component block with invalid entity"); return NULL; }
+    if(component_id==DM_ECS_INVALID_ID) { DM_LOG_ERROR("Trying to retrieve component block with invalid component"); return NULL; }
+    
+    uint32_t block_index, index;
+    dm_ecs_entity_get_component_indices(entity, component_id, &block_index, &index, context);
+    
+    return context->ecs_manager.component_blocks[component_id].blocks[block_index].block;
+}
+
+void* dm_ecs_get_current_component_block(dm_ecs_id component_id, uint32_t* block_count, uint32_t* entity_count, dm_context* context)
+{
+    dm_component_block_manager* manager = &context->ecs_manager.component_blocks[component_id];
+    dm_component_block*         block   = &manager->blocks[manager->block_count-1];
+    
+    *block_count = manager->block_count;
+    *entity_count = block->entity_count;
+    
+    return block->block;
+}
+
+void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm_context* context)
+{
+    dm_component_block_manager* manager = &context->ecs_manager.component_blocks[component_id];
+    
+    context->ecs_manager.entity_ids[entity].block_index[component_id] = manager->block_count - 1;
+    context->ecs_manager.entity_ids[entity].index[component_id] = manager->blocks[manager->block_count-1].entity_count;
+    
+    manager->blocks[manager->block_count-1].entity_count++;
+    if(manager->blocks[manager->block_count-1].entity_count != DM_ECS_COMPONENT_BLOCK_SIZE) return;
+    
+    manager->blocks = dm_realloc(manager->blocks, sizeof(dm_component_block) * manager->block_count);
+    manager->blocks[manager->block_count].block = dm_alloc(manager->block_size);
+    manager->blocks[manager->block_count].entity_count = 0;
+    manager->block_count++;
+}
+
+void dm_ecs_entity_add_transform(dm_entity entity, dm_component_transform transform, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add transform to invalid entity"); return; }
+    
+    uint32_t entity_count, block_count;
+    dm_ecs_id transform_id = context->ecs_manager.default_components.transform;
+    dm_component_transform_block* transform_block = dm_ecs_get_current_component_block(transform_id, &block_count, &entity_count, context);
+    
+    transform_block->pos_x[entity_count] = transform.pos[0];
+    transform_block->pos_y[entity_count] = transform.pos[1];
+    transform_block->pos_z[entity_count] = transform.pos[2];
+    
+    transform_block->scale_x[entity_count] = transform.scale[0];
+    transform_block->scale_y[entity_count] = transform.scale[1];
+    transform_block->scale_z[entity_count] = transform.scale[2];
+    
+    transform_block->rot_i[entity_count] = transform.rot[0];
+    transform_block->rot_j[entity_count] = transform.rot[1];
+    transform_block->rot_k[entity_count] = transform.rot[2];
+    transform_block->rot_r[entity_count] = transform.rot[3];
+    
+    dm_ecs_iterate_component_block(entity, transform_id, context);
+}
+
+void dm_ecs_entity_add_physics(dm_entity entity, dm_component_physics physics, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
+    
+    uint32_t entity_count, block_count;
+    dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
+    dm_component_physics_block* physics_block = dm_ecs_get_current_component_block(physics_id, &block_count, &entity_count, context);
+    
+    physics_block->vel_x[entity_count] = physics.vel[0];
+    physics_block->vel_y[entity_count] = physics.vel[1];
+    physics_block->vel_z[entity_count] = physics.vel[2];
+    
+    physics_block->w_x[entity_count] = physics.w[0];
+    physics_block->w_y[entity_count] = physics.w[1];
+    physics_block->w_z[entity_count] = physics.w[2];
+    
+    physics_block->l_x[entity_count] = physics.l[0];
+    physics_block->l_y[entity_count] = physics.l[1];
+    physics_block->l_z[entity_count] = physics.l[2];
+    
+    physics_block->force_x[entity_count] = physics.force[0];
+    physics_block->force_y[entity_count] = physics.force[1];
+    physics_block->force_z[entity_count] = physics.force[2];
+    
+    physics_block->torque_x[entity_count] = physics.torque[0];
+    physics_block->torque_y[entity_count] = physics.torque[1];
+    physics_block->torque_z[entity_count] = physics.torque[2];
+    
+    physics_block->mass[entity_count]     = physics.mass;
+    physics_block->inv_mass[entity_count] = physics.inv_mass;
+    
+    physics_block->i_body[0][entity_count] = physics.i_body[0];
+    physics_block->i_body[1][entity_count] = physics.i_body[1];
+    physics_block->i_body[2][entity_count] = physics.i_body[2];
+    
+    physics_block->i_body_inv[0][entity_count] = physics.i_body_inv[0];
+    physics_block->i_body_inv[1][entity_count] = physics.i_body_inv[1];
+    physics_block->i_body_inv[2][entity_count] = physics.i_body_inv[2];
+    
+    physics_block->i_inv_0[0][entity_count] = physics.i_inv_0[0];
+    physics_block->i_inv_0[1][entity_count] = physics.i_inv_0[1];
+    physics_block->i_inv_0[2][entity_count] = physics.i_inv_0[2];
+    
+    physics_block->i_inv_1[0][entity_count] = physics.i_inv_1[0];
+    physics_block->i_inv_1[1][entity_count] = physics.i_inv_1[1];
+    physics_block->i_inv_1[2][entity_count] = physics.i_inv_1[2];
+    
+    physics_block->i_inv_2[0][entity_count] = physics.i_inv_2[0];
+    physics_block->i_inv_2[1][entity_count] = physics.i_inv_2[1];
+    physics_block->i_inv_2[2][entity_count] = physics.i_inv_2[2];
+    
+    physics_block->damping[0][entity_count] = physics.damping[0];
+    physics_block->damping[1][entity_count] = physics.damping[1];
+    
+    physics_block->body_type[entity_count]     = physics.body_type;
+    physics_block->movement_type[entity_count] = physics.movement_type;
+    
+    dm_ecs_iterate_component_block(entity, physics_id, context);
+}
+
+void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision collision, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add collision to invalid entity"); return; }
+    
+    uint32_t entity_count, block_count;
+    dm_ecs_id collision_id = context->ecs_manager.default_components.collision;
+    dm_component_collision_block* collision_block = dm_ecs_get_current_component_block(collision_id, &block_count, &entity_count, context);
+    
+    collision_block->aabb_local_min_x[entity_count] = collision.aabb_local_min[0];
+    collision_block->aabb_local_min_y[entity_count] = collision.aabb_local_min[1];
+    collision_block->aabb_local_min_z[entity_count] = collision.aabb_local_min[2];
+    
+    collision_block->aabb_local_max_x[entity_count] = collision.aabb_local_max[0];
+    collision_block->aabb_local_max_y[entity_count] = collision.aabb_local_max[1];
+    collision_block->aabb_local_max_z[entity_count] = collision.aabb_local_max[2];
+    
+    collision_block->aabb_global_min_x[entity_count] = collision.aabb_global_min[0];
+    collision_block->aabb_global_min_y[entity_count] = collision.aabb_global_min[1];
+    collision_block->aabb_global_min_z[entity_count] = collision.aabb_global_min[2];
+    
+    collision_block->aabb_global_max_x[entity_count] = collision.aabb_global_max[0];
+    collision_block->aabb_global_max_y[entity_count] = collision.aabb_global_max[1];
+    collision_block->aabb_global_max_z[entity_count] = collision.aabb_global_max[2];
+    
+    collision_block->center_x[entity_count] = collision.center[0];
+    collision_block->center_y[entity_count] = collision.center[1];
+    collision_block->center_z[entity_count] = collision.center[2];
+    
+    collision_block->internal[0][entity_count] = collision.internal[0];
+    collision_block->internal[1][entity_count] = collision.internal[1];
+    collision_block->internal[2][entity_count] = collision.internal[2];
+    collision_block->internal[3][entity_count] = collision.internal[3];
+    collision_block->internal[4][entity_count] = collision.internal[4];
+    collision_block->internal[5][entity_count] = collision.internal[5];
+    
+    collision_block->shape[entity_count] = collision.shape;
+    collision_block->flag[entity_count]  = collision.flag;
+    
+    dm_ecs_iterate_component_block(entity, collision_id, context);
+}
+
+void dm_ecs_entity_add_box_collider(dm_entity entity, float center[3], float dim[3], dm_context* context)
+{
+    dm_component_collision c = {
+        .center={ center[0],center[1],center[2] },
+        .internal={ center[0]-dim[0], center[1]-dim[1], center[2]-dim[2], center[0]+dim[0], center[1]+dim[1], center[2]+dim[2] }, .shape=DM_COLLISION_SHAPE_BOX,
+    };
+    
+    dm_vec3_sub_vec3(center, dim, c.aabb_local_min);
+    dm_vec3_add_vec3(center, dim, c.aabb_local_max);
+    
+    dm_ecs_entity_add_collision(entity, c, context);
+}
+
+void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center[3], float radius, dm_context* context)
+{
+    dm_component_collision c = {
+        .center={ center[0],center[1],center[2] },
+        .internal={ radius }, .shape=DM_COLLISION_SHAPE_SPHERE,
+    };
+    
+    dm_vec3_sub_scalar(center, radius, c.aabb_local_min);
+    dm_vec3_add_scalar(center, radius, c.aabb_local_max);
+    
+    dm_ecs_entity_add_collision(entity, c, context);
+}
+
+const dm_component_transform dm_ecs_entity_get_transform(dm_entity entity, dm_context* context)
+{
+    dm_ecs_id transform_index = context->ecs_manager.default_components.transform;
+    uint32_t block_index = context->ecs_manager.entity_ids[entity].block_index[transform_index];
+    uint32_t index       = context->ecs_manager.entity_ids[entity].index[transform_index];
+    
+    dm_component_transform_block* transform_block = context->ecs_manager.component_blocks[transform_index].blocks[block_index].block;
+    
+    dm_component_transform transform = { 0 };
+    
+    transform.pos[0] = transform_block->pos_x[index];
+    transform.pos[1] = transform_block->pos_y[index];
+    transform.pos[2] = transform_block->pos_z[index];
+    
+    transform.scale[0] = transform_block->scale_x[index];
+    transform.scale[1] = transform_block->scale_y[index];
+    transform.scale[2] = transform_block->scale_z[index];
+    
+    transform.rot[0] = transform_block->rot_i[index];
+    transform.rot[1] = transform_block->rot_j[index];
+    transform.rot[2] = transform_block->rot_k[index];
+    transform.rot[3] = transform_block->rot_r[index];
+    
+    return transform;
+}
+
+const dm_component_collision dm_ecs_entity_get_collision(dm_entity entity, dm_context* context)
+{
+    dm_ecs_id collision_index = context->ecs_manager.default_components.collision;
+    uint32_t block_index = context->ecs_manager.entity_ids[entity].block_index[collision_index];
+    uint32_t index       = context->ecs_manager.entity_ids[entity].index[collision_index];
+    
+    dm_component_collision_block* collision_block = context->ecs_manager.component_blocks[collision_index].blocks[block_index].block;
+    
+    dm_component_collision collision = { 0 };
+    
+    collision.aabb_local_min[0] = collision_block->aabb_local_min_x[index];
+    collision.aabb_local_min[1] = collision_block->aabb_local_min_y[index];
+    collision.aabb_local_min[2] = collision_block->aabb_local_min_z[index];
+    
+    collision.aabb_local_max[0] = collision_block->aabb_local_max_x[index];
+    collision.aabb_local_max[1] = collision_block->aabb_local_max_y[index];
+    collision.aabb_local_max[2] = collision_block->aabb_local_max_z[index];
+    
+    collision.aabb_global_min[0] = collision_block->aabb_local_min_x[index];
+    collision.aabb_global_min[1] = collision_block->aabb_local_min_y[index];
+    collision.aabb_global_min[2] = collision_block->aabb_local_min_z[index];
+    
+    collision.aabb_global_max[0] = collision_block->aabb_global_max_x[index];
+    collision.aabb_global_max[1] = collision_block->aabb_global_max_y[index];
+    collision.aabb_global_max[2] = collision_block->aabb_global_max_z[index];
+    
+    collision.center[0] = collision_block->center_x[index];
+    collision.center[1] = collision_block->center_y[index];
+    collision.center[2] = collision_block->center_z[index];
+    
+    collision.internal[0] = collision_block->internal[0][index];
+    collision.internal[1] = collision_block->internal[1][index];
+    collision.internal[2] = collision_block->internal[2][index];
+    collision.internal[3] = collision_block->internal[3][index];
+    collision.internal[4] = collision_block->internal[4][index];
+    collision.internal[5] = collision_block->internal[5][index];
+    
+    collision.shape = collision_block->shape[index];
+    collision.flag = collision_block->flag[index];
+    
+    return collision;
+}
+
+const dm_component_physics dm_ecs_entity_get_physics(dm_entity entity, dm_context* context)
+{
+    dm_ecs_id physics_index = context->ecs_manager.default_components.physics;
+    uint32_t block_index = context->ecs_manager.entity_ids[entity].block_index[physics_index];
+    uint32_t index       = context->ecs_manager.entity_ids[entity].index[physics_index];
+    
+    dm_component_physics_block* physics_block = context->ecs_manager.component_blocks[physics_index].blocks[block_index].block;
+    
+    dm_component_physics physics = { 0 };
+    
+    physics.vel[0] = physics_block->vel_x[index];
+    physics.vel[1] = physics_block->vel_y[index];
+    physics.vel[2] = physics_block->vel_z[index];
+    
+    physics.w[0] = physics_block->w_x[index];
+    physics.w[1] = physics_block->w_y[index];
+    physics.w[2] = physics_block->w_z[index];
+    
+    physics.l[0] = physics_block->l_x[index];
+    physics.l[1] = physics_block->l_y[index];
+    physics.l[2] = physics_block->l_z[index];
+    
+    physics.force[0] = physics_block->force_x[index];
+    physics.force[1] = physics_block->force_y[index];
+    physics.force[2] = physics_block->force_z[index];
+    
+    physics.torque[0] = physics_block->torque_x[index];
+    physics.torque[1] = physics_block->torque_y[index];
+    physics.torque[2] = physics_block->torque_z[index];
+    
+    physics.mass = physics_block->mass[index];
+    physics.inv_mass = physics_block->inv_mass[index];
+    
+    physics.i_body[0] = physics_block->i_body[0][index];
+    physics.i_body[1] = physics_block->i_body[1][index];
+    physics.i_body[2] = physics_block->i_body[2][index];
+    
+    physics.i_body_inv[0] = physics_block->i_body_inv[0][index];
+    physics.i_body_inv[1] = physics_block->i_body_inv[1][index];
+    physics.i_body_inv[2] = physics_block->i_body_inv[2][index];
+    
+    physics.i_inv_0[0] = physics_block->i_inv_0[0][index];
+    physics.i_inv_0[1] = physics_block->i_inv_0[1][index];
+    physics.i_inv_0[2] = physics_block->i_inv_0[2][index];
+    
+    physics.i_inv_1[0] = physics_block->i_inv_1[0][index];
+    physics.i_inv_1[1] = physics_block->i_inv_1[1][index];
+    physics.i_inv_1[2] = physics_block->i_inv_1[2][index];
+    
+    physics.i_inv_2[0] = physics_block->i_inv_2[0][index];
+    physics.i_inv_2[1] = physics_block->i_inv_2[1][index];
+    physics.i_inv_2[2] = physics_block->i_inv_2[2][index];
+    
+    physics.damping[0] = physics_block->damping[0][index];
+    physics.damping[1] = physics_block->damping[2][index];
+    
+    physics.body_type     = physics_block->body_type[index];
+    physics.movement_type = physics_block->movement_type[index];
+    
+    return physics;
+}
+
 /*********
 FRAMEWORK
 ***********/
-dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title)
+typedef enum dm_context_flags_t
+{
+    DM_CONTEXT_FLAG_IS_RUNNING,
+    DM_CONTEXT_FLAG_UNKNOWN
+} dm_context_flags;
+
+dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title, const char* asset_path)
 {
     dm_context* context = dm_alloc(sizeof(dm_context));
     
-    if(!dm_platform_init(window_x_pos, window_y_pos, window_w, window_h, window_title, &context->platform_data))
+    context->platform_data.window_data.width = window_w;
+    context->platform_data.window_data.height = window_h;
+    strcpy(context->platform_data.window_data.title, window_title);
+    strcpy(context->platform_data.asset_path, asset_path);
+    
+    if(!dm_platform_init(window_x_pos, window_y_pos, &context->platform_data))
     {
         dm_free(context);
         return NULL;
@@ -1291,12 +1708,24 @@ dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t windo
     
     if(!dm_renderer_init(context))
     {
+        dm_platform_shutdown(&context->platform_data);
+        dm_free(context);
+        return NULL;
+    }
+    
+    dm_ecs_init(context);
+    
+    if(!dm_physics_init(&context->ecs_manager.default_components.physics, &context->ecs_manager.default_components.collision, context))
+    {
+        dm_renderer_shutdown(context);
+        dm_platform_shutdown(&context->platform_data);
+        dm_ecs_shutdown(context);
         dm_free(context);
         return NULL;
     }
     
     context->delta = 1.0f / DM_DEFAULT_MAX_FPS;
-    context->is_running = true;
+    context->flags |= DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
     
     return context;
 }
@@ -1310,6 +1739,7 @@ void dm_shutdown(dm_context* context)
     
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
+    dm_ecs_shutdown(context);
     
     dm_free(context);
 }
@@ -1323,7 +1753,7 @@ void dm_poll_events(dm_context* context)
         {
             case DM_EVENT_WINDOW_CLOSE:
             {
-                context->is_running = false;
+                context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
                 DM_LOG_WARN("Window close event received");
                 return;
             } break;
@@ -1382,7 +1812,7 @@ bool dm_update_begin(dm_context* context)
     
     if(!dm_platform_pump_events(&context->platform_data)) 
     {
-        context->is_running = false;
+        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
         return false;
     }
     
@@ -1419,7 +1849,7 @@ bool dm_renderer_end_frame(bool vsync, dm_context* context)
 {
     if(!dm_renderer_submit_commands(context)) 
     { 
-        context->is_running = false;
+        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
         DM_LOG_FATAL("Submiting render commands failed"); 
         return false; 
     }
@@ -1428,7 +1858,7 @@ bool dm_renderer_end_frame(bool vsync, dm_context* context)
     
     if(!dm_renderer_backend_end_frame(vsync, context)) 
     {
-        context->is_running = false;
+        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
         DM_LOG_FATAL("End frame failed"); 
         return false; 
     }
@@ -1452,6 +1882,11 @@ void* dm_read_bytes(const char* path, const char* mode, size_t* size)
         fclose(fp);
     }
     return buffer;
+}
+
+bool dm_context_is_running(dm_context* context)
+{
+    return context->flags & DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
 }
 
 /*****

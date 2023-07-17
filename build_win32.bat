@@ -3,7 +3,7 @@ SetLocal EnableDelayedExpansion
 
 SET SRC_DIR=%cd%
 
-SET /A opengl=1
+SET /A opengl=0
 SET /A debug=1
 SET /A simd_256=1
 SET /A phys_simd=1
@@ -17,7 +17,7 @@ FOR /R %%f IN (*.c) do (
 
 SET linker_flags=/link user32.lib gdi32.lib
 SET include_flags=/I%SRC_DIR%\lib
-SET compiler_flags=/arch:AVX2 /Wall /WL /TC
+SET compiler_flags=/arch:AVX2 /Wall /WL /TC /std:c99
 
 IF /I "%simd_256%" EQU "1" (
 	SET defines="/DDM_SIMD_256"
