@@ -9,7 +9,7 @@ typedef struct vertex_t
 typedef struct inst_vertex_t
 {
     float model[M4];
-    float color[4];
+    float color[N4];
 } inst_vertex;
 
 typedef struct uniform_t
@@ -57,7 +57,7 @@ bool render_pass_init(dm_context* context)
         dm_pipeline_desc pipeline_desc = dm_renderer_default_pipeline();
         
         // resources
-        if(!dm_renderer_create_static_vertex_buffer(vertices, sizeof(vertices), sizeof(vertex), &pass_data->vb, context)) return false;
+        if(!dm_renderer_create_static_vertex_buffer(indices, sizeof(indices), sizeof(vertex), &pass_data->vb, context)) return false;
         if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(inst_vertex) * MAX_ENTITIES_PER_FRAME, sizeof(inst_vertex), &pass_data->instb, context)) return false;
         if(!dm_renderer_create_static_index_buffer(indices, sizeof(indices), &pass_data->ib, context)) return false;
         if(!dm_renderer_create_uniform(sizeof(uniform), DM_UNIFORM_STAGE_VERTEX, &pass_data->uni, context)) return false;

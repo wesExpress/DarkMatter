@@ -14,9 +14,9 @@ mkdir -p build
 cd build
 
 c_files="$SRC_DIR/main.c $SRC_DIR/app.c $SRC_DIR/render_pass.c"
-external_files="$external_files $SRC_DIR/lib/glad/src/glad.c"
+external_files="$SRC_DIR/lib/glad/src/glad.c"
 
-compiler_flags="-g -fPIC -MD -std=gnu99 -fdiagnostics-absolute-paths -fPIC -Wall -Wno-missing-braces"
+compiler_flags="-g -MD -std=gnu99 -fPIC -Wall -Wuninitialized -Wno-missing-braces"
 defines="-DDM_OPENGL"
 
 if ((simd_256)); then
@@ -43,7 +43,7 @@ fi
 
 include_flags="-I$SRC_DIR/ -I$SRC_DIR/lib -I$SRC_DIR/lib/glad/include"
 
-linker_flags="-g -lX11 -lX11-xcb -lxcb -lxkbcommon -lGL -L/usr/X11R6/lib -lm -ldl -pthread"
+linker_flags="-g -lX11 -lX11-xcb -lxcb -lxkbcommon -lGL -L/usr/X11R6/lib -lm -ldl"
 
 echo "Building $output..."
 clang $c_files $compiler_flags $external_files -o $output $defines $include_flags $linker_flags

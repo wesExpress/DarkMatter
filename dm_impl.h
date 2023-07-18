@@ -1466,10 +1466,10 @@ void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm
     manager->blocks[manager->block_count-1].entity_count++;
     if(manager->blocks[manager->block_count-1].entity_count != DM_ECS_COMPONENT_BLOCK_SIZE) return;
     
+    manager->block_count++;
     manager->blocks = dm_realloc(manager->blocks, sizeof(dm_component_block) * manager->block_count);
     manager->blocks[manager->block_count].block = dm_alloc(manager->block_size);
     manager->blocks[manager->block_count].entity_count = 0;
-    manager->block_count++;
 }
 
 void dm_ecs_entity_add_transform(dm_entity entity, dm_component_transform transform, dm_context* context)

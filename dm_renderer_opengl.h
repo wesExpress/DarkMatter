@@ -8,10 +8,8 @@
 #if DM_DEBUG
 GLenum  glCheckError_(const char* file, int line);
 #define glCheckError() glCheckError_(__FILE__, __LINE__) 
-#define glCheckErrorReturn() if(glCheckError()) return false 
 #else
-#define glCheckError()
-#define glCheckErrorReturn()
+#define glCheckError() 0
 #endif
 
 /************
@@ -273,17 +271,17 @@ bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_rende
     if (internal_buffer.usage == DM_BUFFER_USAGE_UNKNOWN) return false;
     
     glGenBuffers(1, &internal_buffer.id);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     glBindBuffer(internal_buffer.type, internal_buffer.id);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     glBufferData(internal_buffer.type, desc.buffer_size, data, internal_buffer.usage);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     dm_memcpy(opengl_renderer->buffers + opengl_renderer->buffer_count, &internal_buffer, sizeof(dm_opengl_buffer));
     *handle = opengl_renderer->buffer_count++;
-    //glDeleteBuffers(1, &internal_buffer.id);
+    
     return true;
 }
 
@@ -313,12 +311,12 @@ bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_
     
     glGenBuffers(1, &internal_uniform.id);
     glBindBuffer(GL_UNIFORM_BUFFER, internal_uniform.id);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glBufferData(GL_UNIFORM_BUFFER, size, NULL, GL_STATIC_DRAW);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
     glBindBufferRange(GL_UNIFORM_BUFFER, renderer->uniform_bindings, internal_uniform.id, 0, size);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     dm_memcpy(opengl_renderer->buffers + opengl_renderer->buffer_count, &internal_uniform, sizeof(dm_opengl_buffer));
     *handle = opengl_renderer->buffer_count++;
@@ -357,16 +355,16 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
     }
     
     glGenTextures(1, &internal_texture.id);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     glBindTexture(GL_TEXTURE_2D, internal_texture.id);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     // load data
     glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glGenerateMipmap(GL_TEXTURE_2D);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     strcpy(internal_texture.name, name);
     
@@ -374,11 +372,11 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
     for(uint32_t i=0; i<2; i++)
     {
         glGenBuffers(1, &internal_texture.pbos[i]);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glBindBuffer(GL_PIXEL_UNPACK_BUFFER, internal_texture.pbos[i]);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * sizeof(uint32_t), 0, GL_STATIC_DRAW);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
     }
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
     
@@ -472,19 +470,19 @@ bool dm_opengl_validate_shader(GLuint shader)
     int length = -1;
     
     glGetShaderiv(shader, GL_COMPILE_STATUS, &result);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     if (result != GL_TRUE)
     {
         GLchar message[512];
         glGetShaderiv(shader, GL_INFO_LOG_LENGTH, &length);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glGetShaderInfoLog(shader, sizeof(message), &length, message);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         DM_LOG_FATAL("%s", message);
         
         glDeleteShader(shader);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         
         return false;
     }
@@ -498,20 +496,20 @@ bool dm_opengl_validate_program(GLuint program)
     int length = -1;
     
     glGetProgramiv(program, GL_LINK_STATUS, &result);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     if (result == GL_FALSE)
     {
         DM_LOG_ERROR("OpenGL Error: %d", glGetError());
         char message[512];
         glGetProgramiv(program, GL_INFO_LOG_LENGTH, &length);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glGetProgramInfoLog(program, length, NULL, message);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         DM_LOG_FATAL("%s", message);
         
         glDeleteProgram(program);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         
         return false;
     }
@@ -581,11 +579,11 @@ bool dm_opengl_create_shader(const char* vertex_src, const char* pixel_src, GLui
     DM_LOG_DEBUG("Linking shader...");
     GLuint internal_shader = glCreateProgram();
     glAttachShader(internal_shader, vertex_shader);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glAttachShader(internal_shader, frag_shader);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glLinkProgram(internal_shader);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     if (!dm_opengl_validate_program(internal_shader))
     {
@@ -594,14 +592,14 @@ bool dm_opengl_create_shader(const char* vertex_src, const char* pixel_src, GLui
     }
     
     glDetachShader(internal_shader, vertex_shader);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glDetachShader(internal_shader, frag_shader);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     glDeleteShader(vertex_shader);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glDeleteShader(frag_shader);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     *shader = internal_shader;
     
@@ -627,14 +625,14 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
     
     // vao creation
     glGenVertexArrays(1, &internal_shader.vao);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     if(!dm_opengl_create_shader(shader_desc.vertex, shader_desc.pixel, &internal_shader.shader)) return false;
     
     // attribs
     uint32_t attrib_count = 0;
     glBindVertexArray(internal_shader.vao);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     for(uint32_t i=0; i<num_attribs; i++)
     {
@@ -644,11 +642,11 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
         {
             case DM_VERTEX_ATTRIB_CLASS_VERTEX:
             glBindBuffer(vb_buffers[0].type, vb_buffers[0].id);
-            glCheckErrorReturn();
+            if(glCheckError()) return false;
             break;
             case DM_VERTEX_ATTRIB_CLASS_INSTANCE:
             glBindBuffer(vb_buffers[1].type, vb_buffers[1].id);
-            glCheckErrorReturn();
+            if(glCheckError()) return false;
             break;
             
             default:
@@ -671,13 +669,13 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
                 new_offset = j * type_size * desc.count + desc.offset;
                 
                 glVertexAttribPointer(attrib_count, desc.count, data_t, desc.normalized, desc.stride, (void*)(uintptr_t)new_offset);
-                glCheckErrorReturn();
+                if(glCheckError()) return false;
                 glEnableVertexAttribArray(attrib_count);
-                glCheckErrorReturn();
+                if(glCheckError()) return false;
                 if(desc.attrib_class == DM_VERTEX_ATTRIB_CLASS_INSTANCE) 
                 {
                     glVertexAttribDivisor(attrib_count, 1);
-                    glCheckErrorReturn();
+                    if(glCheckError()) return false;
                 }
                 attrib_count++;
             }
@@ -688,13 +686,13 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
             if(data_t==DM_GLUINT_FAIL) return false;
             
             glVertexAttribPointer(attrib_count, desc.count, data_t, desc.normalized, desc.stride, (void*)(uintptr_t)desc.offset);
-            glCheckErrorReturn();
+            if(glCheckError()) return false;
             glEnableVertexAttribArray(attrib_count);
-            glCheckErrorReturn();
+            if(glCheckError()) return false;
             if (desc.attrib_class == DM_VERTEX_ATTRIB_CLASS_INSTANCE)
             {
                 glVertexAttribDivisor(attrib_count, 1);
-                glCheckErrorReturn();
+                if(glCheckError()) return false;
             }
             attrib_count++;
         }
@@ -705,8 +703,6 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
     
     if(!dm_renderer_backend_create_pipeline(pipe_desc, pipe_handle, renderer)) return false;
     
-    //glDeleteVertexArrays(1, &internal_pass.vao);
-    //dm_opengl_destroy_shader(internal_pass.shader);
     return true;
 }
 
@@ -729,25 +725,25 @@ bool dm_renderer_backend_create_framebuffer(bool color, bool depth, bool stencil
     
     dm_opengl_framebuffer fbo;
     glGenFramebuffers(1, &fbo.fbo);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glBindFramebuffer(GL_FRAMEBUFFER, fbo.fbo);
     
     if(color)
     {
         glGenTextures(1, &fbo.color);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glBindTexture(GL_TEXTURE_2D, fbo.color);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width,height, 0, GL_RGBA, GL_UNSIGNED_BYTE, NULL);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);  
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, fbo.color, 0);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         
         fbo.c_flag = true;
     }
@@ -755,19 +751,19 @@ bool dm_renderer_backend_create_framebuffer(bool color, bool depth, bool stencil
     if(depth)
     {
         glGenTextures(1, &fbo.depth);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glBindTexture(GL_TEXTURE_2D, fbo.depth);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         
         glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, width,height, 0, GL_DEPTH_COMPONENT, GL_UNSIGNED_BYTE, NULL);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);  
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, fbo.depth, 0);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         
         fbo.d_flag = true;
     }
@@ -775,19 +771,19 @@ bool dm_renderer_backend_create_framebuffer(bool color, bool depth, bool stencil
     if(stencil)
     {
         glGenTextures(1, &fbo.stencil);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glBindTexture(GL_TEXTURE_2D, fbo.stencil);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         
         glTexImage2D(GL_TEXTURE_2D, 0, GL_STENCIL_INDEX, width,height, 0, GL_STENCIL_INDEX, GL_UNSIGNED_BYTE, NULL);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);  
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         
         glFramebufferTexture2D(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_TEXTURE_2D, fbo.stencil, 0);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         
         fbo.s_flag = true;
     }
@@ -836,6 +832,8 @@ bool dm_renderer_backend_init(dm_context* context)
     context->renderer.internal_renderer = dm_alloc(sizeof(dm_opengl_renderer));
     
     DM_LOG_DEBUG("Initializing OpenGL render backend...");
+    
+    
     
     DM_LOG_INFO("OpenGL Info:");
     DM_LOG_INFO("       Vendor  : %s", glGetString(GL_VENDOR));
@@ -945,9 +943,9 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
     {
         glEnable(GL_BLEND);
         glBlendEquation(internal_pipe.blend_func);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
         glBlendFunc(internal_pipe.blend_src, internal_pipe.blend_dest);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
     }
     else glDisable(GL_BLEND);
     
@@ -956,7 +954,7 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
     {
         glEnable(GL_DEPTH_TEST);
         glDepthFunc(internal_pipe.depth_func);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
     }
     else glDisable(GL_DEPTH_TEST);
     
@@ -965,7 +963,7 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
     {
         glEnable(GL_STENCIL_TEST);
         glDepthFunc(internal_pipe.stencil_func);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
     }
     else glDisable(GL_STENCIL_TEST);
     
@@ -978,19 +976,19 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
     {
         glEnable(GL_CULL_FACE);
         glCullFace(internal_pipe.cull);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
     }
     else glDisable(GL_CULL_FACE);
     
     // SAMPLER
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, internal_pipe.s_wrap);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, internal_pipe.t_wrap);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, internal_pipe.min_filter);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, internal_pipe.mag_filter);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     opengl_renderer->active_primitive = internal_pipe.primitive;
     
@@ -1017,9 +1015,9 @@ bool dm_render_command_backend_bind_shader(dm_render_handle handle, dm_renderer*
     if(handle > opengl_renderer->shader_count) { DM_LOG_FATAL("Trying to bind invalid OpenGL shader"); return false; }
     
     glBindVertexArray(opengl_renderer->shaders[handle].vao);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glUseProgram(opengl_renderer->shaders[handle].shader);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     opengl_renderer->active_shader = handle;
     
@@ -1029,7 +1027,7 @@ bool dm_render_command_backend_bind_shader(dm_render_handle handle, dm_renderer*
 bool dm_opengl_bind_buffer(GLenum type, GLuint id)
 {
     glBindBuffer(type, id);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     return true;
 }
@@ -1059,9 +1057,9 @@ bool dm_render_command_backend_update_buffer(dm_render_handle handle, void* data
     if(handle > opengl_renderer->buffer_count) { DM_LOG_FATAL("Trying to update invalid OpenGL buffer"); return false; }
     
     glBindBuffer(opengl_renderer->buffers[handle].type, opengl_renderer->buffers[handle].id);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glBufferSubData(opengl_renderer->buffers[handle].type, offset, data_size, data);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     return true;
 }
@@ -1073,11 +1071,11 @@ bool dm_render_command_backend_update_uniform(dm_render_handle handle, void* dat
     if(handle > opengl_renderer->buffer_count) { DM_LOG_FATAL("Trying to update invalid OpenGL uniform"); return false; }
     
     glBindBuffer(GL_UNIFORM_BUFFER, opengl_renderer->buffers[handle].id);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glBufferSubData(GL_UNIFORM_BUFFER, 0, data_size, data);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glBindBuffer(GL_UNIFORM_BUFFER, 0);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     return true;
 }
@@ -1089,9 +1087,9 @@ bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t sl
     if(handle > opengl_renderer->texture_count) { DM_LOG_FATAL("Trying to update invalid OpenGL texture"); return false; }
     
     glActiveTexture(GL_TEXTURE0 + slot);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glBindTexture(GL_TEXTURE_2D, opengl_renderer->textures[handle].id);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     /*
     GLint location = -1;
@@ -1122,27 +1120,27 @@ bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t 
     internal_texture.pbo_n_index = (internal_texture.pbo_n_index + 1) % 2;
     
     glBindTexture(GL_TEXTURE_2D, internal_texture.id);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, internal_texture.pbos[internal_texture.pbo_index]);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, internal_texture.pbos[internal_texture.pbo_n_index]);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     glBufferData(GL_PIXEL_UNPACK_BUFFER, data_size, 0, GL_STREAM_DRAW);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     void* ptr = glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
     if(ptr)
     {
         dm_memcpy(ptr, data, data_size);
         glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-        glCheckErrorReturn();
+        if(glCheckError()) return false;
     }
     
     glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     return true;
 }
@@ -1166,8 +1164,8 @@ bool dm_render_command_backend_bind_framebuffer(dm_render_handle handle, dm_rend
     
     glBindFramebuffer(GL_FRAMEBUFFER, fbo.fbo);
     
-    if(fbo.color) glClear(GL_COLOR_BUFFER_BIT);
-    if(fbo.depth) glClear(GL_DEPTH_BUFFER_BIT);
+    if(fbo.color)   glClear(GL_COLOR_BUFFER_BIT);
+    if(fbo.depth)   glClear(GL_DEPTH_BUFFER_BIT);
     if(fbo.stencil) glClear(GL_STENCIL_BUFFER_BIT);
     
     return true;
@@ -1180,7 +1178,7 @@ bool dm_render_command_backend_bind_framebuffer_texture(dm_render_handle handle,
     if(handle > opengl_renderer->framebuffer_count) { DM_LOG_FATAL("Trying to bind invalid OpenGL framebuffer texture"); return false; }
     
     glBindTexture(GL_TEXTURE_2D, opengl_renderer->framebuffers[handle].color);
-    glCheckErrorReturn();
+    if(glCheckError()) return false;
     
     return true;
 }
