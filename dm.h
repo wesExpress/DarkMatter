@@ -1056,14 +1056,14 @@ typedef struct dm_component_collision_block_t
 
 typedef struct dm_component_collision_t
 {
-    float aabb_local_min_x, aabb_local_min_y, aabb_local_min_z;
-    float aabb_local_max_x, aabb_local_max_y, aabb_local_max_z;
-    float aabb_global_min_x, aabb_global_min_y, aabb_global_min_z;
-    float aabb_global_max_x, aabb_global_max_y, aabb_global_max_z;
+    float aabb_local_min[3];
+    float aabb_local_max[3];
+    float aabb_global_min[3];
+    float aabb_global_max[3];
     
-    float center_x, center_y, center_z;
+    float center[3];
     
-    float internal_0, internal_1, internal_2, internal_3, internal_4, internal_5;
+    float internal[6];
     
     dm_collision_shape shape;
     dm_collision_flag  flag;
@@ -1080,7 +1080,11 @@ typedef struct dm_context_t
     dm_ecs_manager     ecs_manager;
     dm_physics_manager physics_manager;
     double             start, end, delta;
+    mt19937            random;
+    mt19937_64         random_64;
     uint32_t           flags;
+    
+    
     void*              app_data;
 } dm_context;
 
@@ -1216,6 +1220,18 @@ void __dm_log_output(log_level level, const char* message, ...);
 #define DM_LOG_WARN(message, ...)  __dm_log_output(DM_LOG_LEVEL_WARN,  message, ##__VA_ARGS__)
 #define DM_LOG_ERROR(message, ...) __dm_log_output(DM_LOG_LEVEL_ERROR, message, ##__VA_ARGS__)
 #define DM_LOG_FATAL(message, ...) __dm_log_output(DM_LOG_LEVEL_FATAL, message, ##__VA_ARGS__)
+
+// random
+int dm_random_int(dm_context* context);
+int dm_random_int_range(int start, int end, dm_context* context);
+uint32_t dm_random_uint32(dm_context* context);
+uint32_t dm_random_uint32_range(uint32_t start, uint32_t end, dm_context* context);
+uint64_t dm_random_uint64(dm_context* context);
+uint64_t dm_random_uint64_range(uint64_t start, uint64_t end, dm_context* context);
+float dm_random_float(dm_context* context);
+float dm_random_float_range(float start, float end,dm_context* context);
+double dm_random_double(dm_context* context);
+double dm_random_double_range(double start, double end, dm_context* context);
 
 // rendering
 bool dm_renderer_create_static_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context);

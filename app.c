@@ -1,33 +1,42 @@
 #include "app.h"
 #include "render_pass.h"
 
+#define CAMERA_SIZE 100
+
+dm_entity create_entity(dm_context* context)
+{
+    dm_entity entity = dm_ecs_create_entity(context);
+    
+    dm_component_transform t = { 0 };
+    
+    t.pos[0] = dm_random_float(context) * CAMERA_SIZE * 2 - CAMERA_SIZE;
+    t.pos[1] = dm_random_float(context) * CAMERA_SIZE * 2 - CAMERA_SIZE;
+    //t.pos[2] = dm_random_float(context) * 20 - 10;
+    
+    t.scale[0] = dm_random_float_range(0.5,3,context);
+    t.scale[1] = dm_random_float_range(0.5,3,context);
+    t.scale[2] = dm_random_float_range(0.5,3,context);
+    
+    t.rot[0] = 0;
+    t.rot[1] = 0;
+    t.rot[2] = 0;
+    t.rot[3] = 1;
+    
+    dm_ecs_entity_add_transform(entity, t, context);
+    dm_ecs_entity_add_box_collider(entity, (float[]){0,0,0}, t.scale, context);
+    
+    return entity;
+}
+
 bool app_init(dm_context* context)
 {
     context->app_data = dm_alloc(sizeof(application_data));
     application_data* app_data = context->app_data;
     
     // entities
+    for(uint32_t i=0; i<MAX_ENTITIES; i++)
     {
-        app_data->entities[0] = dm_ecs_create_entity(context);
-        app_data->entities[1] = dm_ecs_create_entity(context);
-        
-        dm_component_transform box_transform = {
-            { 0,5,0 },
-            { 1,1,1 },
-            { 0,0,0,1 }
-        };
-        
-        dm_component_transform box2_transform = {
-            { 2,-5,0 },
-            { 2,2,2 },
-            { 0,0,0,1 }
-        };
-        
-        dm_ecs_entity_add_transform(app_data->entities[0], box_transform, context);
-        dm_ecs_entity_add_transform(app_data->entities[1], box2_transform, context);
-        
-        dm_ecs_entity_add_box_collider(app_data->entities[0], (float[]){0,0,0}, (float[]){1,1,1}, context);
-        dm_ecs_entity_add_box_collider(app_data->entities[1], (float[]){0,0,0}, (float[]){2,2,2}, context);
+        app_data->entities[i] = create_entity(context);
     }
     
     // camera
@@ -35,7 +44,7 @@ bool app_init(dm_context* context)
         app_data->camera.pos[0] = 0; 
         app_data->camera.pos[1] = 0; 
         app_data->camera.pos[2] = 0;
-        dm_mat_ortho(-10,10,-10,10, -1,1, app_data->camera.proj);
+        dm_mat_ortho(-CAMERA_SIZE,CAMERA_SIZE,-CAMERA_SIZE,CAMERA_SIZE, -1,1, app_data->camera.proj);
     }
     
     if(!render_pass_init(context)) return false;
@@ -69,10 +78,9 @@ bool app_update(dm_context* context)
         dm_vec3_add_vec3(app_data->camera.pos, move, app_data->camera.pos);
     }
     
-    // submit entities
+    for(uint32_t i=0; i<MAX_ENTITIES; i++)
     {
-        render_pass_submit_entity(app_data->entities[0], context);
-        render_pass_submit_entity(app_data->entities[1], context);
+        render_pass_submit_entity(app_data->entities[i], context);
     }
     
     return true;

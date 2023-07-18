@@ -17,7 +17,7 @@ typedef struct uniform_t
     float view_proj[M4];
 } uniform;
 
-#define MAX_ENTITIES_PER_FRAME 100
+#define MAX_ENTITIES_PER_FRAME MAX_ENTITIES
 typedef struct render_pass_data_t
 {
     dm_render_handle vb, instb, ib, shader, pipe, uni;
@@ -106,11 +106,13 @@ bool render_pass_render(dm_context* context)
     
     float obj_rm[M4];
     dm_component_transform transform = { 0 };
+    inst_vertex* inst = NULL;
+    
     for(uint32_t i=0; i<pass_data->entity_count; i++)
     {
         transform = dm_ecs_entity_get_transform(pass_data->entities[i], context);
+        inst = &pass_data->insts[i];
         
-        inst_vertex* inst = &pass_data->insts[pass_data->instance_count];
         dm_mat4_rotate_from_quat(transform.rot, obj_rm);
         
         dm_mat_scale_make(transform.scale, inst->model);
@@ -151,7 +153,7 @@ bool render_pass_render(dm_context* context)
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
     
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
-    dm_render_command_draw_instanced(6,2,0,0,0, context);
+    dm_render_command_draw_instanced(6,pass_data->instance_count,0,0,0, context);
     
     // reset counts back to 0
     pass_data->entity_count = 0;

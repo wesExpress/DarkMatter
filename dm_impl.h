@@ -224,6 +224,72 @@ void dm_memmove(void* dest, const void* src, size_t size)
     memmove(dest, src, size);
 }
 
+/***********
+RANDOM IMPL
+*************/
+int dm_random_int(dm_context* context)
+{
+    return dm_random_uint32(context) - INT_MAX;
+}
+
+int dm_random_int_range(int start, int end, dm_context* context)
+{
+    int old_range = UINT_MAX;
+    int new_range = end - start;
+    
+    return ((dm_random_int(context) + INT_MAX) * new_range) / old_range + start;
+}
+
+uint32_t dm_random_uint32(dm_context* context)
+{
+    return genrand_int32(&context->random);
+}
+
+uint32_t dm_random_uint32_range(uint32_t start, uint32_t end, dm_context* context)
+{
+    uint32_t old_range = UINT_MAX;
+    uint32_t new_range = end - start;
+    
+    return (dm_random_uint32(context) * new_range) / old_range + start;
+}
+
+uint64_t dm_random_uint64(dm_context* context)
+{
+    return genrand64_uint64(&context->random_64);
+}
+
+uint64_t dm_random_uint64_range(uint64_t start, uint64_t end, dm_context* context)
+{
+    uint64_t old_range = ULLONG_MAX;
+    uint64_t new_range = end - start;
+    
+    return (dm_random_uint64(context) - new_range) / old_range + start;
+}
+
+float dm_random_float(dm_context* context)
+{
+    return genrand_float32_full(&context->random);
+}
+
+float dm_random_float_range(float start, float end, dm_context* context)
+{
+    float range = end - start;
+    
+    return dm_random_float(context) * range + start;
+}
+
+double dm_random_double(dm_context* context)
+{
+    return genrand64_real1(&context->random_64);
+}
+
+double dm_random_double_range(double start, double end, dm_context* context)
+{
+    double range = end - start;
+    
+    return dm_random_double(context) * range + start;
+}
+
 /*****
 INPUT
 *******/
@@ -1309,7 +1375,7 @@ void dm_ecs_shutdown(dm_ecs_manager* ecs_manager)
         {
             dm_free(block_manager->blocks[j].block);
         }
-        dm_free(block_manager->blocks);
+        //dm_free(block_manager->blocks);
     }
     
     dm_free(ecs_manager->entity_ids);
@@ -1499,32 +1565,32 @@ void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision collis
     dm_ecs_id collision_id = context->ecs_manager.default_components.collision;
     dm_component_collision_block* collision_block = dm_ecs_get_current_component_block(collision_id, &block_count, &entity_count, context);
     
-    collision_block->aabb_local_min_x[entity_count] = collision.aabb_local_min_x;
-    collision_block->aabb_local_min_y[entity_count] = collision.aabb_local_min_y;
-    collision_block->aabb_local_min_z[entity_count] = collision.aabb_local_min_z;
+    collision_block->aabb_local_min_x[entity_count] = collision.aabb_local_min[0];
+    collision_block->aabb_local_min_y[entity_count] = collision.aabb_local_min[1];
+    collision_block->aabb_local_min_z[entity_count] = collision.aabb_local_min[2];
     
-    collision_block->aabb_local_max_x[entity_count] = collision.aabb_local_max_x;
-    collision_block->aabb_local_max_y[entity_count] = collision.aabb_local_max_y;
-    collision_block->aabb_local_max_z[entity_count] = collision.aabb_local_max_z;
+    collision_block->aabb_local_max_x[entity_count] = collision.aabb_local_max[0];
+    collision_block->aabb_local_max_y[entity_count] = collision.aabb_local_max[1];
+    collision_block->aabb_local_max_z[entity_count] = collision.aabb_local_max[2];
     
-    collision_block->aabb_global_min_x[entity_count] = collision.aabb_global_min_x;
-    collision_block->aabb_global_min_y[entity_count] = collision.aabb_global_min_y;
-    collision_block->aabb_global_min_z[entity_count] = collision.aabb_global_min_z;
+    collision_block->aabb_global_min_x[entity_count] = collision.aabb_global_min[0];
+    collision_block->aabb_global_min_y[entity_count] = collision.aabb_global_min[1];
+    collision_block->aabb_global_min_z[entity_count] = collision.aabb_global_min[2];
     
-    collision_block->aabb_global_max_x[entity_count] = collision.aabb_global_max_x;
-    collision_block->aabb_global_max_y[entity_count] = collision.aabb_global_max_z;
-    collision_block->aabb_global_max_z[entity_count] = collision.aabb_global_max_x;
+    collision_block->aabb_global_max_x[entity_count] = collision.aabb_global_max[0];
+    collision_block->aabb_global_max_y[entity_count] = collision.aabb_global_max[1];
+    collision_block->aabb_global_max_z[entity_count] = collision.aabb_global_max[2];
     
-    collision_block->center_x[entity_count] = collision.center_x;
-    collision_block->center_y[entity_count] = collision.center_y;
-    collision_block->center_z[entity_count] = collision.center_z;
+    collision_block->center_x[entity_count] = collision.center[0];
+    collision_block->center_y[entity_count] = collision.center[1];
+    collision_block->center_z[entity_count] = collision.center[2];
     
-    collision_block->internal_0[entity_count] = collision.internal_0;
-    collision_block->internal_1[entity_count] = collision.internal_1;
-    collision_block->internal_2[entity_count] = collision.internal_2;
-    collision_block->internal_3[entity_count] = collision.internal_3;
-    collision_block->internal_4[entity_count] = collision.internal_4;
-    collision_block->internal_5[entity_count] = collision.internal_5;
+    collision_block->internal_0[entity_count] = collision.internal[0];
+    collision_block->internal_1[entity_count] = collision.internal[1];
+    collision_block->internal_2[entity_count] = collision.internal[2];
+    collision_block->internal_3[entity_count] = collision.internal[3];
+    collision_block->internal_4[entity_count] = collision.internal[4];
+    collision_block->internal_5[entity_count] = collision.internal[5];
     
     collision_block->shape[entity_count] = collision.shape;
     collision_block->flag[entity_count]  = collision.flag;
@@ -1541,11 +1607,11 @@ void dm_ecs_entity_add_box_collider(dm_entity entity, float center[3], float dim
     dm_vec3_add_vec3(center, dim, max);
     
     dm_component_collision c = {
-        .aabb_local_min_x=min[0], .aabb_local_min_y=min[1], .aabb_local_min_z=min[2],
-        .aabb_global_min_x=max[0], .aabb_global_min_y=max[1], .aabb_global_min_z=max[2],
-        .center_x=center[0], .center_y=center[1], .center_z=center[2],
-        .internal_0=min[0], .internal_1=min[1], .internal_2=min[2], 
-        .internal_3=max[0], .internal_4=max[1], .internal_5=max[2], 
+        .aabb_local_min[0]=min[0], .aabb_local_min[1]=min[1], .aabb_local_min[2]=min[2],
+        .aabb_global_min[0]=max[0], .aabb_global_min[1]=max[1], .aabb_global_min[2]=max[2],
+        .center[0]=center[0], .center[1]=center[1], .center[2]=center[2],
+        .internal[0]=min[0], .internal[1]=min[1], .internal[2]=min[2], 
+        .internal[3]=max[0], .internal[4]=max[1], .internal[5]=max[2], 
         .shape=DM_COLLISION_SHAPE_BOX,
     };
     
@@ -1561,10 +1627,10 @@ void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center[3], float 
     dm_vec3_add_scalar(center, radius, max);
     
     dm_component_collision c = {
-        .aabb_local_min_x=min[0], .aabb_local_min_y=min[1], .aabb_local_min_z=min[2],
-        .aabb_global_min_x=max[0], .aabb_global_min_y=max[1], .aabb_global_min_z=max[2],
-        .center_x=center[0], .center_y=center[1], .center_z=center[2],
-        .internal_0=radius, .shape=DM_COLLISION_SHAPE_SPHERE,
+        .aabb_local_min[0]=min[0], .aabb_local_min[1]=min[1], .aabb_local_min[2]=min[2],
+        .aabb_global_min[0]=max[0], .aabb_global_min[1]=max[1], .aabb_global_min[2]=max[2],
+        .center[0]=center[0], .center[1]=center[1], .center[2]=center[2],
+        .internal[0]=radius, .shape=DM_COLLISION_SHAPE_SPHERE,
     };
     
     dm_ecs_entity_add_collision(entity, c, context);
@@ -1606,32 +1672,32 @@ const dm_component_collision dm_ecs_entity_get_collision(dm_entity entity, dm_co
     
     dm_component_collision collision = { 0 };
     
-    collision.aabb_local_min_x = collision_block->aabb_local_min_x[index];
-    collision.aabb_local_min_y = collision_block->aabb_local_min_y[index];
-    collision.aabb_local_min_z = collision_block->aabb_local_min_z[index];
+    collision.aabb_local_min[0] = collision_block->aabb_local_min_x[index];
+    collision.aabb_local_min[1] = collision_block->aabb_local_min_y[index];
+    collision.aabb_local_min[2] = collision_block->aabb_local_min_z[index];
     
-    collision.aabb_local_max_x = collision_block->aabb_local_max_x[index];
-    collision.aabb_local_max_y = collision_block->aabb_local_max_y[index];
-    collision.aabb_local_max_z = collision_block->aabb_local_max_z[index];
+    collision.aabb_local_max[0] = collision_block->aabb_local_max_x[index];
+    collision.aabb_local_max[1] = collision_block->aabb_local_max_y[index];
+    collision.aabb_local_max[2] = collision_block->aabb_local_max_z[index];
     
-    collision.aabb_global_min_x = collision_block->aabb_local_min_x[index];
-    collision.aabb_global_min_y = collision_block->aabb_local_min_y[index];
-    collision.aabb_global_min_z = collision_block->aabb_local_min_z[index];
+    collision.aabb_global_min[0] = collision_block->aabb_local_min_x[index];
+    collision.aabb_global_min[1] = collision_block->aabb_local_min_y[index];
+    collision.aabb_global_min[2] = collision_block->aabb_local_min_z[index];
     
-    collision.aabb_global_max_x = collision_block->aabb_global_max_x[index];
-    collision.aabb_global_max_y = collision_block->aabb_global_max_y[index];
-    collision.aabb_global_max_z = collision_block->aabb_global_max_z[index];
+    collision.aabb_global_max[0] = collision_block->aabb_global_max_x[index];
+    collision.aabb_global_max[1] = collision_block->aabb_global_max_y[index];
+    collision.aabb_global_max[2] = collision_block->aabb_global_max_z[index];
     
-    collision.center_x = collision_block->center_x[index];
-    collision.center_y = collision_block->center_y[index];
-    collision.center_z = collision_block->center_z[index];
+    collision.center[0] = collision_block->center_x[index];
+    collision.center[1] = collision_block->center_y[index];
+    collision.center[2] = collision_block->center_z[index];
     
-    collision.internal_0 = collision_block->internal_0[index];
-    collision.internal_1 = collision_block->internal_1[index];
-    collision.internal_2 = collision_block->internal_2[index];
-    collision.internal_3 = collision_block->internal_3[index];
-    collision.internal_4 = collision_block->internal_4[index];
-    collision.internal_5 = collision_block->internal_5[index];
+    collision.internal[0] = collision_block->internal_0[index];
+    collision.internal[1] = collision_block->internal_1[index];
+    collision.internal[2] = collision_block->internal_2[index];
+    collision.internal[3] = collision_block->internal_3[index];
+    collision.internal[4] = collision_block->internal_4[index];
+    collision.internal[5] = collision_block->internal_5[index];
     
     collision.shape = collision_block->shape[index];
     collision.flag = collision_block->flag[index];
@@ -1742,6 +1808,10 @@ dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t windo
         dm_free(context);
         return NULL;
     }
+    
+    // random init
+    init_genrand(&context->random, (uint32_t)dm_platform_get_time(&context->platform_data));
+    init_genrand64(&context->random_64, (uint64_t)dm_platform_get_time(&context->platform_data));
     
     context->delta = 1.0f / DM_DEFAULT_MAX_FPS;
     context->flags |= DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);

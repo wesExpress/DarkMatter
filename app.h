@@ -9,11 +9,12 @@ typedef struct basic_camera_t
     float pos[3];
 } basic_camera;
 
+#define MAX_ENTITIES 512
 typedef struct application_data_t
 {
-    dm_entity   entities[2];
+    dm_entity    entities[MAX_ENTITIES];
     basic_camera camera;
-    void*       render_pass_data;
+    void*        render_pass_data;
 } application_data;
 
 bool app_init(dm_context* context);
