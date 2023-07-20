@@ -22,7 +22,7 @@ depreciated
 
 #elif defined(__WIN32__) || defined(_WIN32) || defined(WIN32)
 #define DM_PLATFORM_WIN32
-#ifndef DM_OPENGL
+#if !defined(DM_OPENGL) && !defined(DM_VULKAN)
 #define DM_DIRECTX
 #endif
 #define DM_INLINE __forceinline
@@ -92,6 +92,8 @@ MATH
 #define DM_MATH_INV_SQRT3           0.57735026918962f
 #define DM_MATH_DEG_TO_RAD          0.0174533f
 #define DM_MATH_RAD_TO_DEG          57.2958f
+
+#define DM_MATH_1024_INV            0.0009765625f
 
 // math macros
 #define DM_MAX(X, Y) (X > Y ? X : Y)

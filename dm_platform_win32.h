@@ -13,6 +13,11 @@ bool dm_win32_load_opengl_functions(WNDCLASSEX window_class, dm_platform_data* p
 typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int* attribList);
 #endif
 
+#ifdef DM_VULKAN
+#include <vulkan/vulkan.h>
+#include <vulkan/vulkan_win32.h>
+#endif
+
 typedef struct dm_internal_w32_data_t
 {
 	HINSTANCE h_instance;
@@ -483,6 +488,24 @@ void dm_platform_swap_buffers(bool vsync, dm_platform_data* platform_data)
     uint32_t v = vsync ? 1 : 0;
     wglSwapIntervalEXT(v);
 	SwapBuffers(w32_data->hdc);
+}
+#endif
+
+#ifdef DM_VULKAN
+bool dm_platform_create_vulkan_surface(dm_platform_data* platform_data, VkInstance* instance, VkSurfaceKHR* surface)
+{
+    DM_WIN32_GET_DATA;
+    
+    VkWin32SurfaceCreateInfoKHR create_info = { 0 };
+    create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    create_info.hinstance = w32_data->h_instance;
+    create_info.hwnd = w32_data->hwnd;
+    
+    VkResult result = vkCreateWin32SurfaceKHR(*instance, &create_info, NULL, surface);
+    if(result==VK_SUCCESS) return true;
+    
+    DM_LOG_FATAL("Could not create Win32 Vulkan surface");
+    return false;
 }
 #endif
 

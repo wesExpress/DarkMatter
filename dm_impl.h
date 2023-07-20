@@ -578,6 +578,8 @@ RENDERING
 ***********/
 #ifdef DM_DIRECTX
 #include "dm_renderer_dx11.h"
+#elif defined(DM_VULKAN)
+#include "dm_renderer_vulkan.h"
 #elif defined(DM_OPENGL)
 #include "dm_renderer_opengl.h"
 #elif defined(DM_METAL)
