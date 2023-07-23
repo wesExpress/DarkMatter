@@ -215,7 +215,7 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
         case WM_SIZE:
         {
             RECT rect;
-            GetWindowRect(hwnd, &rect);
+            GetClientRect(hwnd, &rect);
             uint32_t width = rect.right - rect.left;
             uint32_t height = rect.bottom - rect.top;
             

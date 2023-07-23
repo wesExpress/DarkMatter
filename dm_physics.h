@@ -18,8 +18,8 @@
 // collision handling
 typedef struct dm_plane
 {
-    dm_vec3 normal;
-    float   distance;
+    float normal[3];
+    float distance;
 } dm_plane;
 
 #define DM_PHYSICS_DEFAULT_COLLISION_CAPACITY 16

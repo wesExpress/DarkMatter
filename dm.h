@@ -102,93 +102,6 @@ MATH
 #define DM_CLAMP(X, MIN, MAX) DM_MIN(DM_MAX(X, MIN), MAX)
 #define DM_BIT_SHIFT(X) (1 << X)
 
-/**********
-MATH TYPES
-************/
-typedef struct dm_vec2_t
-{
-    union
-    {
-        float v[2];
-        struct
-        {
-            float x, y;
-        };
-    };
-} dm_vec2;
-
-typedef struct dm_vec3_t
-{
-    union
-    {
-        float v[3];
-        float xy[2];
-        struct
-        {
-            float x, y, z;
-        };
-    };
-} dm_vec3;
-
-typedef struct dm_vec4_t
-{
-    union
-    {
-        float v[4];
-        float xyz[3];
-        struct
-        {
-            float x, y, z, w;
-        };
-    };
-} dm_vec4;
-
-typedef struct dm_quat_t
-{
-    union
-    {
-        float v[4];
-        float ijk[3];
-        struct
-        {
-            float i,j,k,r;
-        };
-    };
-} dm_quat;
-
-typedef struct dm_mat2_t
-{
-	union
-	{
-		dm_vec2 rows[2];
-		float m[2 * 2];
-	};
-} dm_mat2;
-
-typedef struct dm_mat3_t
-{
-	union
-	{
-		dm_vec3 rows[3];
-		float m[3 * 3];
-        float mm[3][3];
-	};
-} dm_mat3;
-
-typedef struct dm_mat4_t
-{
-	union
-	{
-		dm_vec4 rows[4];
-		float m[4 * 4];
-        float mm[4][4];
-	};
-} dm_mat4;
-
-static const dm_vec3 dm_vec3_unit_x = { 1,0,0 };
-static const dm_vec3 dm_vec3_unit_y = { 0,1,0 };
-static const dm_vec3 dm_vec3_unit_z = { 0,0,1 };
-
 /****
 SIMD
 ******/
@@ -679,6 +592,46 @@ typedef struct dm_shader_desc_t
     dm_render_handle vb[2];
     uint32_t         vb_count;
 } dm_shader_desc;
+
+typedef enum dm_load_operation_t
+{
+    DM_LOAD_OPERATION_LOAD,
+    DM_LOAD_OPERATION_CLEAR,
+    DM_LOAD_OPERATION_DONT_CARE,
+    DM_LOAD_OPERATION_UNKNOWN
+} dm_load_operation;
+
+typedef enum dm_store_operation_t
+{
+    DM_STORE_OPERATION_STORE,
+    DM_STORE_OPERATION_DONT_CARE,
+    DM_STORE_OPERATION_UNKNOWN
+} dm_store_operation;
+
+typedef enum dm_renderpass_flag_t
+{
+    DM_RENDERPASS_FLAG_COLOR   = 1 << 0,
+    DM_RENDERPASS_FLAG_DEPTH   = 1 << 1,
+    DM_RENDERPASS_FLAG_STENCIL = 1 << 2,
+    DM_RENDERPASS_FLAG_UNKNOWN = 1 << 3
+} dm_renderpass_flag;
+
+typedef struct dm_renderpass_desc_t
+{
+    dm_load_operation  color_load_op;
+    dm_store_operation color_store_op;
+    
+    dm_load_operation  color_stencil_load_op;
+    dm_store_operation color_stencil_store_op;
+    
+    dm_load_operation  depth_load_op;
+    dm_store_operation depth_store_op;
+    
+    dm_load_operation  depth_stencil_load_op;
+    dm_store_operation depth_stencil_store_op;
+    
+    dm_renderpass_flag flags;
+} dm_renderpass_desc;
 
 typedef struct dm_mesh_t
 {
@@ -1246,13 +1199,6 @@ bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels,
 bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, void* data, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context);
 
-void dm_renderer_destroy_buffer(dm_render_handle handle, dm_context* context);
-void dm_renderer_destroy_shader(dm_render_handle handle, dm_context* context);
-void dm_renderer_destroy_uniform(dm_render_handle handle, dm_context* context);
-void dm_renderer_destroy_pipeline(dm_render_handle handle, dm_context* context);
-void dm_renderer_destroy_texture(dm_render_handle handle, dm_context* context);
-void dm_renderer_destroy_font(dm_render_handle handle, dm_context* context);
-
 #define DM_MAKE_VERTEX_ATTRIB(NAME, STRUCT, MEMBER, CLASS, DATA_T, COUNT, INDEX, NORMALIZED) { .name=NAME, .data_t=DATA_T, .attrib_class=CLASS, .stride=sizeof(STRUCT), .offset=offsetof(STRUCT, MEMBER), .count=COUNT, .index=INDEX, .normalized=NORMALIZED}
 
 dm_pipeline_desc dm_renderer_default_pipeline();
@@ -1337,7 +1283,7 @@ void        dm_shutdown(dm_context* context);
 bool        dm_update_begin(dm_context* context);
 bool        dm_update_end(dm_context* context);
 bool        dm_renderer_begin_frame(dm_context* context);
-bool        dm_renderer_end_frame(bool vsync, dm_context* context);
+bool        dm_renderer_end_frame(bool vsync, bool begin_frame, dm_context* context);
 bool        dm_context_is_running(dm_context* context);
 
 void* dm_read_bytes(const char* path, const char* mode, size_t* size);

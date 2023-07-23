@@ -3,7 +3,6 @@ SetLocal EnableDelayedExpansion
 
 SET SRC_DIR=%cd%
 
-SET /A opengl=0
 set /A vulkan=1
 SET /A debug=1
 SET /A simd_256=1
@@ -35,12 +34,7 @@ IF /I "%debug%" EQU "1" (
 	SET compiler_flags=/Zi /O2 /Ob2 /DEBUG
 )
 
-IF /I "%opengl%" EQU "1" (
-	SET c_filesnames=%c_filenames% %SRC_DIR%\lib\glad\src\glad.c %SRC_DIR%\lib\glad\src\glad_wgl.c
-	SET include_flags=%include_flags% /I%SRC_DIR%\lib\glad\include
-	SET linker_flags=%linker_flags% Opengl32.lib
-	SET defines=%defines% /DDM_OPENGL
-) ELSE IF /I "%vulkan%" EQU "1" (
+IF /I "%vulkan%" EQU "1" (
 	SET include_flags=%include_flags% /I%VULKAN_SDK%\Include
 	SET linker_flags=%linker_flags% /LIBPATH:%VULKAN_SDK%\Lib vulkan-1.lib
 	SET defines=%defines% /DDM_VULKAN
@@ -60,11 +54,22 @@ cl %compiler_flags% %defines% /FC %include_flags% %c_filenames% /Fe%assembly% %l
 cd ..
 IF NOT EXIST "build\assets\shaders" mkdir build\assets\shaders
 
-IF /I "%opengl%" EQU "1" GOTO move_shaders
 IF /I "%vulkan%" EQU "1" (
-	:move_shaders
 	FOR /R %%f IN (*.glsl) DO (
-		copy /y "%%f" build\assets\shaders\
+		SET fname=%%f
+		SET root=!fname:~0,-5!
+		SET output=!root!.spv
+		SET shader_type=!root:~-5!
+
+		ECHO Compiling shader: !fname!
+		IF /I "!shader_type!" EQU "pixel" (
+			SET shader_flags=-fshader-stage=frag
+		) ELSE (
+			SET shader_flags=-fshader-stage=vert
+		)
+
+		%VULKAN_SDK%\bin\glslc !shader_flags! !fname! -o !output!
+		MOVE !output! build/assets/shaders
 	)
 ) ELSE (
 	FOR /R %%f IN (*.hlsl) DO (

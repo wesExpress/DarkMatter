@@ -35,6 +35,7 @@ int main(int argc, char** argv)
     }
     
     // run the app
+    bool begin_frame = false;
     while(dm_context_is_running(context))
     {
         // updating
@@ -44,9 +45,9 @@ int main(int argc, char** argv)
         
         
         // rendering
-        if(!dm_renderer_begin_frame(context))     e = ERROR_CODE_RENDER_BEGIN_FAIL;
+        begin_frame = dm_renderer_begin_frame(context);
         if(!app_render(context))                  e = ERROR_CODE_APP_RENDER_FAIL;
-        if(!dm_renderer_end_frame(true, context)) e = ERROR_CODE_RENDER_END_FAIL;
+        if(!dm_renderer_end_frame(true, begin_frame, context)) e = ERROR_CODE_RENDER_END_FAIL;
     }
     
     // cleanup

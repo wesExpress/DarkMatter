@@ -14,8 +14,8 @@ typedef struct dm_dx11_buffer_t
 typedef struct dm_dx11_shader_t
 {
     ID3D11VertexShader* vertex_shader;
-	ID3D11PixelShader* pixel_shader;
-	ID3D11InputLayout* input_layout;
+	ID3D11PixelShader*  pixel_shader;
+	ID3D11InputLayout*  input_layout;
 } dm_dx11_shader;
 
 typedef struct dm_dx11_texture_t
@@ -35,13 +35,22 @@ typedef struct dm_dx11_framebuffer_t
     ID3D11DepthStencilState*  depth_stencil_buffer;
 } dm_dx11_framebuffer;
 
+typedef enum dm_dx11_pipeline_flag_t
+{
+    DM_DX11_PIPELINE_FLAG_WIREFRAME = 1 << 0,
+    DM_DX11_PIPELINE_FLAG_BLEND     = 1 << 1,
+    DM_DX11_PIPELINE_FLAG_DEPTH     = 1 << 2,
+    DM_DX11_PIPELINE_FLAG_STENCIL   = 1 << 3,
+    DM_DX11_PIPELINE_FLAG_UNKNOWN   = 1 << 4
+} dm_dx11_pipeline_flag;
+
 typedef struct dm_dx11_pipeline_t
 {
 	ID3D11DepthStencilState* depth_stencil_state;
-    ID3D11RasterizerState* rasterizer_state;
-    ID3D11RasterizerState* wireframe_state;
-    ID3D11BlendState* blend_state;
-    ID3D11SamplerState* sample_state;
+    ID3D11RasterizerState*   rasterizer_state;
+    ID3D11RasterizerState*   wireframe_state;
+    ID3D11BlendState*        blend_state;
+    ID3D11SamplerState*      sample_state;
     D3D11_PRIMITIVE_TOPOLOGY default_topology;
     bool wireframe, blend, depth, stencil;
 } dm_dx11_pipeline;
@@ -749,12 +758,7 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
             {
                 dm_vertex_attrib_desc sub_desc = attrib_desc;
                 if (attrib_desc.data_t == DM_VERTEX_DATA_T_MATRIX_INT) sub_desc.data_t = DM_VERTEX_DATA_T_INT;
-                else if(attrib_desc.data_t == DM_VERTEX_DATA_T_MATRIX_FLOAT) sub_desc.data_t = DM_VERTEX_DATA_T_FLOAT;
-                else
-                {
-                    DM_LOG_FATAL("Unknwon vertex data type!");
-                    return false;
-                }
+                else sub_desc.data_t = DM_VERTEX_DATA_T_FLOAT;
                 
                 sub_desc.offset = sub_desc.offset + sizeof(float) * j;
                 
