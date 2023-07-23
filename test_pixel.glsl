@@ -1,4 +1,4 @@
-#version 330 core
+#version 460 core
 
 struct ps_input
 {
@@ -6,8 +6,8 @@ struct ps_input
 	vec4 color;
 };
 
-in ps_input vs_output;
-out vec4 frag_color;
+layout(location=0) in ps_input vs_output;
+layout(location=1) out vec4 frag_color;
 
 void main()
 {

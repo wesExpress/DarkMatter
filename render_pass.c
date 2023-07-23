@@ -63,13 +63,9 @@ bool render_pass_init(dm_context* context)
         if(!dm_renderer_create_uniform(sizeof(uniform), DM_UNIFORM_STAGE_VERTEX, &pass_data->uni, context)) return false;
         
         dm_shader_desc shader_desc = { 0 };
-#ifdef DM_OPENGL
-        strcpy(shader_desc.vertex, "assets/shaders/test_vertex.glsl");
-        strcpy(shader_desc.pixel, "assets/shaders/test_pixel.glsl");
-        
-        shader_desc.vb[0]    = pass_data->vb;
-        shader_desc.vb[1]    = pass_data->instb;
-        shader_desc.vb_count = 2;
+#ifdef DM_VULKAN
+        strcpy(shader_desc.vertex, "assets/shaders/test_vertex.spv");
+        strcpy(shader_desc.pixel, "assets/shaders/test_pixel.spv");
 #elif defined(DM_DIRECTX)
         strcpy(shader_desc.vertex, "assets/shaders/test_vertex.fxc");
         strcpy(shader_desc.pixel, "assets/shaders/test_pixel.fxc");
@@ -142,6 +138,7 @@ bool render_pass_render(dm_context* context)
 #endif
     
     // render
+#if 0
     dm_render_command_clear(0.1f,0.3f,0.5f,1,context);
     
     dm_render_command_bind_shader(pass_data->shader, context);
@@ -154,6 +151,7 @@ bool render_pass_render(dm_context* context)
     
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
     dm_render_command_draw_instanced(6,pass_data->instance_count,0,0,0, context);
+#endif
     
     // reset counts back to 0
     pass_data->entity_count = 0;

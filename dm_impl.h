@@ -578,6 +578,8 @@ RENDERING
 ***********/
 #ifdef DM_DIRECTX
 #include "dm_renderer_dx11.h"
+#elif defined(DM_VULKAN)
+#include "dm_renderer_vulkan.h"
 #elif defined(DM_OPENGL)
 #include "dm_renderer_opengl.h"
 #elif defined(DM_METAL)
@@ -587,15 +589,9 @@ extern bool dm_renderer_backend_begin_frame(dm_renderer* renderer);
 extern bool dm_renderer_backend_end_frame(bool vsync, dm_context* context);
 
 extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_renderer* renderer);
-extern void dm_renderer_backend_destroy_buffer(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
-extern void dm_renderer_backend_destroy_uniform(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_shader(const char* shader_file, dm_vertex_attrib_desc* layout, uint32_t num_attribs, dm_render_handle* handle, dm_renderer* renderer);
-extern void dm_renderer_backend_destroy_shader(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
-extern void dm_renderer_backend_destroy_texture(dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_handle, dm_render_handle* handle, dm_renderer* renderer);
-extern void dm_renderer_backend_destroy_pipeline(dm_render_handle handle, dm_renderer* renderer);
 
 extern void dm_render_command_backend_clear(float r, float g, float b, float a, dm_renderer* renderer);
 extern void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer);
@@ -691,11 +687,6 @@ bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, dm_re
     return dm_renderer_create_buffer(desc, data, handle, context);
 }
 
-void dm_renderer_destroy_buffer(dm_render_handle handle, dm_context* context)
-{
-    dm_renderer_backend_destroy_buffer(handle, &context->renderer);
-}
-
 bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context)
 {
     if(dm_renderer_backend_create_shader_and_pipeline(shader_desc, pipe_desc, attrib_descs, attrib_count, shader_handle, pipe_handle, &context->renderer)) return true;
@@ -704,27 +695,12 @@ bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipel
     return false;
 }
 
-void dm_renderer_destroy_shader(dm_render_handle handle, dm_context* context)
-{
-    dm_renderer_backend_destroy_shader(handle, &context->renderer);
-}
-
 bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context)
 {
     if(dm_renderer_backend_create_uniform(size, stage, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Creating uniform failed");
     return false;
-}
-
-void dm_renderer_destroy_uniform(dm_render_handle handle, dm_context* context)
-{
-    dm_renderer_backend_destroy_uniform(handle, &context->renderer);
-}
-
-void dm_renderer_destroy_pipeline(dm_render_handle handle, dm_context* context)
-{
-    dm_renderer_backend_destroy_pipeline(handle, &context->renderer);
 }
 
 bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context)
@@ -769,11 +745,6 @@ bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint3
     }
     
     return true;
-}
-
-void dm_renderer_destroy_texture(dm_render_handle handle, dm_context* context)
-{
-    dm_renderer_backend_destroy_texture(handle, &context->renderer);
 }
 
 bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context)
@@ -1885,7 +1856,7 @@ void dm_poll_events(dm_context* context)
             
             case DM_EVENT_WINDOW_RESIZE:
             {
-                //dm_renderer_resize_window(e.new_rect[0], e.new_rect[1]);
+                dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer);
             } break;
             
             case DM_EVENT_UNKNOWN:
@@ -1929,15 +1900,15 @@ bool dm_renderer_begin_frame(dm_context* context)
         return false;
     }
     
-    dm_render_command_clear(0,0,0,1, context);
-    dm_render_command_set_default_viewport(context);
+    //dm_render_command_clear(0,0,0,1, context);
+    //dm_render_command_set_default_viewport(context);
     
     return true;
 }
 
-bool dm_renderer_end_frame(bool vsync, dm_context* context)
+bool dm_renderer_end_frame(bool vsync, bool begin_frame, dm_context* context)
 {
-    if(!dm_renderer_submit_commands(context)) 
+    if(begin_frame && !dm_renderer_submit_commands(context)) 
     { 
         context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
         DM_LOG_FATAL("Submiting render commands failed"); 
@@ -1946,7 +1917,7 @@ bool dm_renderer_end_frame(bool vsync, dm_context* context)
     
     context->renderer.command_manager.command_count = 0;
     
-    if(!dm_renderer_backend_end_frame(vsync, context)) 
+    if(begin_frame && !dm_renderer_backend_end_frame(vsync, context)) 
     {
         context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
         DM_LOG_FATAL("End frame failed"); 

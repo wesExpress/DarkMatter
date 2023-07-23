@@ -22,7 +22,7 @@ depreciated
 
 #elif defined(__WIN32__) || defined(_WIN32) || defined(WIN32)
 #define DM_PLATFORM_WIN32
-#ifndef DM_OPENGL
+#if !defined(DM_OPENGL) && !defined(DM_VULKAN)
 #define DM_DIRECTX
 #endif
 #define DM_INLINE __forceinline
@@ -92,6 +92,8 @@ MATH
 #define DM_MATH_INV_SQRT3           0.57735026918962f
 #define DM_MATH_DEG_TO_RAD          0.0174533f
 #define DM_MATH_RAD_TO_DEG          57.2958f
+
+#define DM_MATH_1024_INV            0.0009765625f
 
 // math macros
 #define DM_MAX(X, Y) (X > Y ? X : Y)
@@ -590,6 +592,46 @@ typedef struct dm_shader_desc_t
     dm_render_handle vb[2];
     uint32_t         vb_count;
 } dm_shader_desc;
+
+typedef enum dm_load_operation_t
+{
+    DM_LOAD_OPERATION_LOAD,
+    DM_LOAD_OPERATION_CLEAR,
+    DM_LOAD_OPERATION_DONT_CARE,
+    DM_LOAD_OPERATION_UNKNOWN
+} dm_load_operation;
+
+typedef enum dm_store_operation_t
+{
+    DM_STORE_OPERATION_STORE,
+    DM_STORE_OPERATION_DONT_CARE,
+    DM_STORE_OPERATION_UNKNOWN
+} dm_store_operation;
+
+typedef enum dm_renderpass_flag_t
+{
+    DM_RENDERPASS_FLAG_COLOR   = 1 << 0,
+    DM_RENDERPASS_FLAG_DEPTH   = 1 << 1,
+    DM_RENDERPASS_FLAG_STENCIL = 1 << 2,
+    DM_RENDERPASS_FLAG_UNKNOWN = 1 << 3
+} dm_renderpass_flag;
+
+typedef struct dm_renderpass_desc_t
+{
+    dm_load_operation  color_load_op;
+    dm_store_operation color_store_op;
+    
+    dm_load_operation  color_stencil_load_op;
+    dm_store_operation color_stencil_store_op;
+    
+    dm_load_operation  depth_load_op;
+    dm_store_operation depth_store_op;
+    
+    dm_load_operation  depth_stencil_load_op;
+    dm_store_operation depth_stencil_store_op;
+    
+    dm_renderpass_flag flags;
+} dm_renderpass_desc;
 
 typedef struct dm_mesh_t
 {
@@ -1157,13 +1199,6 @@ bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels,
 bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, void* data, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context);
 
-void dm_renderer_destroy_buffer(dm_render_handle handle, dm_context* context);
-void dm_renderer_destroy_shader(dm_render_handle handle, dm_context* context);
-void dm_renderer_destroy_uniform(dm_render_handle handle, dm_context* context);
-void dm_renderer_destroy_pipeline(dm_render_handle handle, dm_context* context);
-void dm_renderer_destroy_texture(dm_render_handle handle, dm_context* context);
-void dm_renderer_destroy_font(dm_render_handle handle, dm_context* context);
-
 #define DM_MAKE_VERTEX_ATTRIB(NAME, STRUCT, MEMBER, CLASS, DATA_T, COUNT, INDEX, NORMALIZED) { .name=NAME, .data_t=DATA_T, .attrib_class=CLASS, .stride=sizeof(STRUCT), .offset=offsetof(STRUCT, MEMBER), .count=COUNT, .index=INDEX, .normalized=NORMALIZED}
 
 dm_pipeline_desc dm_renderer_default_pipeline();
@@ -1248,7 +1283,7 @@ void        dm_shutdown(dm_context* context);
 bool        dm_update_begin(dm_context* context);
 bool        dm_update_end(dm_context* context);
 bool        dm_renderer_begin_frame(dm_context* context);
-bool        dm_renderer_end_frame(bool vsync, dm_context* context);
+bool        dm_renderer_end_frame(bool vsync, bool begin_frame, dm_context* context);
 bool        dm_context_is_running(dm_context* context);
 
 void* dm_read_bytes(const char* path, const char* mode, size_t* size);
