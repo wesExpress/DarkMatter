@@ -10,6 +10,7 @@ SET /A phys_simd=1
 SET /A phys_multi_th=0
 
 SET c_filenames=%SRC_DIR%\main.c %SRC_DIR%\app.c %SRC_DIR%\render_pass.c
+SET dm_filenames=%SRC_DIR%\dm_impl.c %SRC_DIR%\dm_platform_win32.c
 SET linker_flags=/link user32.lib gdi32.lib
 SET include_flags=/I%SRC_DIR%\lib
 SET compiler_flags=/arch:AVX2 /Wall /WL /TC /std:c99 /RTCsu
@@ -35,9 +36,13 @@ IF /I "%debug%" EQU "1" (
 )
 
 IF /I "%vulkan%" EQU "1" (
+	SET dm_filenames=%dm_filenames% %SRC_DIR%\dm_renderer_vulkan.c
 	SET include_flags=%include_flags% /I%VULKAN_SDK%\Include
 	SET linker_flags=%linker_flags% /LIBPATH:%VULKAN_SDK%\Lib vulkan-1.lib
 	SET defines=%defines% /DDM_VULKAN
+) ELSE (
+	SET dm_filenames=%dm_filenames% %SRC_DIR%\dm_renderer_dx11.c
+	SET linker_flags=%linker_flags% d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib
 )
 
 SET assembly=app
@@ -45,7 +50,7 @@ SET assembly=app
 if not exist "build" mkdir build
 cd build
 ECHO Building %assembly%...
-cl %compiler_flags% %defines% /FC %include_flags% %c_filenames% /Fe%assembly% %linker_flags%
+cl %compiler_flags% %defines% /FC %include_flags% %c_filenames% %dm_filenames% /Fe%assembly% %linker_flags%
 
 cd ..
 IF NOT EXIST "build\assets\shaders" mkdir build\assets\shaders

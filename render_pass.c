@@ -141,7 +141,8 @@ bool render_pass_render(dm_context* context)
 #endif
     
     // render
-#if 0
+#if 1
+    dm_render_command_set_default_viewport(context);
     dm_render_command_clear(0.1f,0.3f,0.5f,1,context);
     
     dm_render_command_bind_shader(pass_data->shader, context);

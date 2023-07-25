@@ -1,5 +1,4 @@
-#ifndef DM_RENDERER_DX11_H
-#define DM_RENDERER_DX11_H
+#include "dm_platform_win32.h"
 
 #include <d3d11_1.h>
 #include <dxgi.h>
@@ -1503,5 +1502,3 @@ const char* dm_dx11_decode_severity(D3D11_MESSAGE_SEVERITY severity)
     }
 }
 #endif
-
-#endif //DM_RENDERER_DX11_H
