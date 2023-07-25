@@ -7,6 +7,7 @@ typedef struct basic_camera_t
 {
     float proj[M4];
     float pos[3];
+    float zoom;
 } basic_camera;
 
 #define MAX_ENTITIES 256

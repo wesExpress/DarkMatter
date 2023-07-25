@@ -1,7 +1,14 @@
 #include "app.h"
 #include "render_pass.h"
 
-#define CAMERA_SIZE 100
+static float zoom_levels[] = {
+    0.1f,0.25f,0.5f,0.75f
+};
+static float move_speeds[] = {
+    1,2,4,10
+};
+
+static int zoom_index = 0;
 
 dm_entity create_entity(dm_context* context)
 {
@@ -9,9 +16,11 @@ dm_entity create_entity(dm_context* context)
     
     dm_component_transform t = { 0 };
     
-    t.pos[0] = dm_random_float(context) * CAMERA_SIZE * 2 - CAMERA_SIZE;
-    t.pos[1] = dm_random_float(context) * CAMERA_SIZE * 2 - CAMERA_SIZE;
-    //t.pos[2] = dm_random_float(context) * 20 - 10;
+    float w = (float)DM_SCREEN_WIDTH(context) * 0.5f;
+    float h = (float)DM_SCREEN_HEIGHT(context) * 0.5f;
+    
+    t.pos[0] = dm_random_float(context) * w * 2 - w;
+    t.pos[1] = dm_random_float(context) * h * 2 - h;
     
     t.scale[0] = dm_random_float_range(0.5,3,context);
     t.scale[1] = dm_random_float_range(0.5,3,context);
@@ -44,7 +53,13 @@ bool app_init(dm_context* context)
         app_data->camera.pos[0] = 0; 
         app_data->camera.pos[1] = 0; 
         app_data->camera.pos[2] = 0;
-        dm_mat_ortho(-CAMERA_SIZE,CAMERA_SIZE,-CAMERA_SIZE,CAMERA_SIZE, -1,1, app_data->camera.proj);
+        
+        float w = DM_SCREEN_WIDTH(context)  * 0.5f * app_data->camera.zoom;
+        float h = DM_SCREEN_HEIGHT(context) * 0.5f * app_data->camera.zoom;
+        
+        dm_mat_ortho(-w,w,-h,h, -1,1, app_data->camera.proj);
+        
+        app_data->camera.zoom = zoom_levels[zoom_index];
     }
     
     if(!render_pass_init(context)) return false;
@@ -62,8 +77,20 @@ bool app_update(dm_context* context)
 {
     application_data* app_data = context->app_data;
     
+    // scroll
     {
-        static float move_speed = 0.5f;
+        if(dm_input_mouse_has_scrolled(context)) 
+        { 
+            zoom_index += dm_input_get_mouse_scroll(context);
+            zoom_index = DM_CLAMP(zoom_index, 0, DM_ARRAY_LEN(zoom_levels)-1);
+            DM_LOG_TRACE("Scroll: %d", dm_input_get_mouse_scroll(context));
+            DM_LOG_TRACE("Zoom index: %d", zoom_index);
+            app_data->camera.zoom = zoom_levels[zoom_index];
+        }
+    }
+    
+    // move
+    {
         float move[3] = { 0 };
         
         if(dm_input_is_key_pressed(DM_KEY_A, context))      move[0] = 1;
@@ -73,11 +100,18 @@ bool app_update(dm_context* context)
         else if(dm_input_is_key_pressed(DM_KEY_S, context)) move[1] = 1;
         
         dm_vec3_norm(move, move);
-        dm_vec3_scale(move, move_speed, move);
+        dm_vec3_scale(move, move_speeds[zoom_index], move);
         
         dm_vec3_add_vec3(app_data->camera.pos, move, app_data->camera.pos);
     }
     
+    // camera ortho
+    float w = DM_SCREEN_WIDTH(context)  * 0.5f * app_data->camera.zoom;
+    float h = DM_SCREEN_HEIGHT(context) * 0.5f * app_data->camera.zoom;
+    
+    dm_mat_ortho(-w,w,-h,h, -1,1, app_data->camera.proj);
+    
+    // submit entities
     for(uint32_t i=0; i<MAX_ENTITIES; i++)
     {
         render_pass_submit_entity(app_data->entities[i], context);

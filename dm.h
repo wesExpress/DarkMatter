@@ -740,24 +740,19 @@ typedef uint32_t dm_entity;
 #define DM_ECS_INVALID_ENTITY UINT_MAX
 #endif
 
-typedef struct dm_entity_ids_t
+typedef struct dm_ecs_entity_ids_t
 {
     uint32_t block_index[DM_ECS_MAX];
     uint32_t index[DM_ECS_MAX];
-} dm_entity_ids;
+} dm_ecs_entity_ids;
 
-typedef struct dm_component_block_t
+typedef struct dm_ecs_component_manager_t
 {
-    uint32_t entity_count;
-    void*    block;
-} dm_component_block;
-
-typedef struct dm_component_block_manager_t
-{
-    size_t              block_size;
-    uint32_t            block_count;
-    dm_component_block* blocks;
-} dm_component_block_manager;
+    size_t    block_size;
+    uint32_t  block_count;
+    uint32_t* entity_count;
+    void*     data;
+} dm_ecs_component_manager;
 
 typedef struct dm_ecs_default_components_t
 {
@@ -771,8 +766,8 @@ typedef struct dm_ecs_manager_t
     
     dm_ecs_default_components default_components;
     
-    dm_component_block_manager component_blocks[DM_ECS_MAX];
-    dm_entity_ids*             entity_ids; 
+    dm_ecs_component_manager component_blocks[DM_ECS_MAX];
+    dm_ecs_entity_ids*       entity_ids; 
 } dm_ecs_manager;
 
 // components
@@ -1155,7 +1150,7 @@ int      dm_input_get_mouse_scroll(dm_context* context);
 int      dm_input_get_prev_mouse_x(dm_context* context);
 int      dm_input_get_prev_mouse_y(dm_context* context);
 void     dm_input_get_prev_mouse_pos(uint32_t* x, uint32_t* y, dm_context* context);
-int      dm_input_get_mouse_scroll(dm_context* context);
+int      dm_input_get_prev_mouse_scroll(dm_context* context);
 
 // clear/resetting functions
 void dm_input_reset_mouse_x(dm_context* context);
@@ -1261,6 +1256,12 @@ bool        dm_renderer_end_frame(bool vsync, bool begin_frame, dm_context* cont
 bool        dm_context_is_running(dm_context* context);
 
 void* dm_read_bytes(const char* path, const char* mode, size_t* size);
+
+uint32_t __dm_get_screen_width(dm_context* context);
+uint32_t __dm_get_screen_height(dm_context* context);
+
+#define DM_SCREEN_WIDTH(CONTEXT)  __dm_get_screen_width(context)
+#define DM_SCREEN_HEIGHT(CONTEXT) __dm_get_screen_height(context)
 
 #define DM_ARRAY_LEN(ARRAY) sizeof(ARRAY) / sizeof(ARRAY[0])
 
