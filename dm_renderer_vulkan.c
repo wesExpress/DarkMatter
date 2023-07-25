@@ -462,7 +462,7 @@ VkFormat dm_vertex_data_t_to_vulkan_format(dm_vertex_attrib_desc desc)
         DM_LOG_ERROR("Unknown vertex data t, shouldn't be here...");
         return VK_FORMAT_UNDEFINED;
     }
-
+    
     return VK_FORMAT_UNDEFINED;
 }
 
@@ -474,7 +474,7 @@ bool dm_vulkan_command_buffer_allocate(VkCommandPool pool, dm_vulkan_command_buf
 #ifdef DM_DEBUG
     VkResult result;
 #endif
-
+    
     VkCommandBufferAllocateInfo allocate_info = { 0 };
     allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocate_info.commandPool  = pool;
@@ -501,13 +501,14 @@ bool dm_vulkan_command_buffer_begin(bool single_use, bool renderpass_continue, b
 #ifdef DM_DEBUG
     VkResult result;
 #endif
-
+    
     VkCommandBufferBeginInfo begin_info = { 0 };
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     if(single_use)          begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
     if(renderpass_continue) begin_info.flags |= VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
     if(simultaneous_use)    begin_info.flags |= VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
     
+    DM_LOG_TRACE("BEGIN_COMMAND_BUFFER");
     DM_VULKAN_FUNC_CHECK(vkBeginCommandBuffer(buffer->buffer, &begin_info));
     if(DM_VULKAN_FUNC_SUCCESS()) 
     {
@@ -524,7 +525,8 @@ bool dm_vulkan_command_buffer_end(dm_vulkan_command_buffer* buffer)
 #ifdef DM_DEBUG
     VkResult result;
 #endif
-
+    
+    DM_LOG_TRACE("END_COMMAND_BUFFER");
     DM_VULKAN_FUNC_CHECK(vkEndCommandBuffer(buffer->buffer));
     if(DM_VULKAN_FUNC_SUCCESS())
     {
@@ -694,7 +696,7 @@ bool dm_vulkan_create_framebuffer(dm_vulkan_framebuffer_desc desc, VkImageView* 
     
     DM_VULKAN_FUNC_CHECK(vkCreateFramebuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &framebuffer->framebuffer));
     if(DM_VULKAN_FUNC_SUCCESS()) return true;
-
+    
     DM_LOG_FATAL("Could not create Vulkan framebuffer");
     return false;
 }
@@ -947,7 +949,7 @@ bool dm_vulkan_create_renderpass(dm_renderpass_desc desc, dm_vulkan_renderpass_d
     
     subpass.colorAttachmentCount = 1;
     subpass.pColorAttachments = &color_attachment_reference;
-
+    
     VkAttachmentDescription depth_attachment = { 0 };
     depth_attachment.format         = vulkan_renderer->device.depth_format;
     depth_attachment.samples        = VK_SAMPLE_COUNT_1_BIT;
@@ -1015,12 +1017,14 @@ void dm_vulkan_begin_renderpass(dm_vulkan_renderpass* renderpass, VkFramebuffer 
     begin_info.clearValueCount = 2;
     begin_info.pClearValues = clear_values;
     
+    DM_LOG_TRACE("BEGIN_RENDERPASS");
     vkCmdBeginRenderPass(command_buffer->buffer, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
     command_buffer->state = DM_VULKAN_COMMAND_BUFFER_STATE_IN_RENDERPASS;
 }
 
 void dm_vulkan_end_renderpass(dm_vulkan_renderpass* renderpass, dm_vulkan_command_buffer* command_buffer, dm_vulkan_renderer* vulkan_renderer)
 {
+    DM_LOG_TRACE("END_RENDERPASS");
     vkCmdEndRenderPass(command_buffer->buffer);
     command_buffer->state = DM_VULKAN_COMMAND_BUFFER_STATE_RECORDING;
 }
@@ -1287,7 +1291,7 @@ void dm_vulkan_destroy_swapchain(dm_vulkan_swapchain* swapchain, dm_vulkan_rende
     
     if(swapchain->images) dm_free(swapchain->images);
     if(swapchain->views)  dm_free(swapchain->views);
-
+    
     swapchain->images = NULL;
     swapchain->views = NULL;
 }
@@ -2017,6 +2021,9 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     DM_VULKAN_GET_RENDERER;
     DM_VULKAN_GET_COMMAND_BUFFER;
     
+    DM_LOG_TRACE("CURRENT_FRAME: %u", vulkan_renderer->current_frame);
+    DM_LOG_TRACE("IMAGE_INDEX:   %u", vulkan_renderer->image_index);
+    
     // quick boot out
     if(vulkan_renderer->flags & DM_VULKAN_RENDERER_FLAG_RECREATING_SWAPCHAIN) return false;
     
@@ -2228,6 +2235,21 @@ VULKAN DEBUG
 #ifdef DM_DEBUG
 VKAPI_ATTR VkBool32 VKAPI_CALL dm_vulkan_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT types, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data)
 {
+    switch(types)
+    {
+        case VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT:
+        DM_LOG_WARN("Validation message");
+        break;
+        
+        case VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT:
+        DM_LOG_WARN("General message");
+        break;
+        
+        case VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT:
+        DM_LOG_WARN("Performance message:");
+        break;
+    }
+    
     switch(severity)
     {
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
@@ -2245,7 +2267,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL dm_vulkan_debug_callback(VkDebugUtilsMessageSever
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
         DM_LOG_TRACE(callback_data->pMessage);
         break;
-
+        
         default:
         DM_LOG_ERROR("Shouldn't be here");
         break;

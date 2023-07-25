@@ -1450,13 +1450,13 @@ void dm_ecs_entity_add_transform(dm_entity entity, dm_component_transform transf
     transform_block->rot_j[entity_count] = transform.rot[1];
     transform_block->rot_k[entity_count] = transform.rot[2];
     transform_block->rot_r[entity_count] = transform.rot[3];
-
+    
     dm_component_block_manager* transform_manager = &context->ecs_manager.component_blocks[transform_id];
     
     context->ecs_manager.entity_ids[entity].block_index[transform_id] = transform_manager->block_count - 1;
     context->ecs_manager.entity_ids[entity].index[transform_id] = transform_manager->blocks[transform_manager->block_count-1].entity_count++;
     if(transform_manager->blocks[transform_manager->block_count-1].entity_count != DM_ECS_COMPONENT_BLOCK_SIZE) return;
-
+    
     transform_manager->block_count++;
     transform_manager->blocks = dm_realloc(transform_manager->blocks, sizeof(dm_component_block) * transform_manager->block_count);
     transform_manager->blocks[transform_manager->block_count].block = dm_alloc(transform_manager->block_size);
@@ -1525,7 +1525,7 @@ void dm_ecs_entity_add_physics(dm_entity entity, dm_component_physics physics, d
     context->ecs_manager.entity_ids[entity].block_index[physics_id] = physics_manager->block_count - 1;
     context->ecs_manager.entity_ids[entity].index[physics_id] = physics_manager->blocks[physics_manager->block_count-1].entity_count++;
     if(physics_manager->blocks[physics_manager->block_count-1].entity_count != DM_ECS_COMPONENT_BLOCK_SIZE) return;
-
+    
     physics_manager->block_count++;
     physics_manager->blocks = dm_realloc(physics_manager->blocks, sizeof(dm_component_block) * physics_manager->block_count);
     physics_manager->blocks[physics_manager->block_count].block = dm_alloc(physics_manager->block_size);
@@ -1576,7 +1576,7 @@ void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision collis
     context->ecs_manager.entity_ids[entity].block_index[collision_id] = collision_manager->block_count - 1;
     context->ecs_manager.entity_ids[entity].index[collision_id] = collision_manager->blocks[collision_manager->block_count-1].entity_count++;
     if(collision_manager->blocks[collision_manager->block_count-1].entity_count != DM_ECS_COMPONENT_BLOCK_SIZE) return;
-
+    
     collision_manager->block_count++;
     collision_manager->blocks = dm_realloc(collision_manager->blocks, sizeof(dm_component_block) * collision_manager->block_count);
     collision_manager->blocks[collision_manager->block_count].block = dm_alloc(collision_manager->block_size);
@@ -1870,6 +1870,8 @@ void dm_poll_events(dm_context* context)
             
             case DM_EVENT_WINDOW_RESIZE:
             {
+                context->platform_data.window_data.width  = e.new_rect[0];
+                context->platform_data.window_data.height = e.new_rect[1];
                 dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer);
             } break;
             
@@ -1959,7 +1961,7 @@ void* dm_read_bytes(const char* path, const char* mode, size_t* size)
             DM_LOG_ERROR("Something bad happened with fread");
             return NULL;
         }
-
+        
         fclose(fp);
     }
     return buffer;

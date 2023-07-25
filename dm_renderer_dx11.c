@@ -1114,9 +1114,35 @@ bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
     return true;
 }
 
-void dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
+bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
 {
     DM_DX11_GET_RENDERER;
+    HRESULT hr;
+    
+    ID3D11Device* device = dx11_renderer->device;
+    ID3D11DeviceContext* context = dx11_renderer->context;
+    IDXGISwapChain* swap_chain   = dx11_renderer->swap_chain;
+    context->lpVtbl->OMSetRenderTargets(context, 0,0,0);
+    
+    DM_DX11_RELEASE(dx11_renderer->render_view);
+    DM_DX11_RELEASE(dx11_renderer->render_back_buffer);
+    DM_DX11_RELEASE(dx11_renderer->depth_stencil_view);
+    DM_DX11_RELEASE(dx11_renderer->depth_stencil_back_buffer);
+    
+    hr = swap_chain->lpVtbl->ResizeBuffers(swap_chain, 0,width,height,DXGI_FORMAT_UNKNOWN,0);
+    if(hr!=S_OK) { DM_LOG_FATAL("IDXGISwapChain::ResizeBuffers failed"); return false; }
+    
+    hr = swap_chain->lpVtbl->GetBuffer(swap_chain, 0, &IID_ID3D11Texture2D, &dx11_renderer->render_back_buffer);
+    if(hr!=S_OK) { DM_LOG_FATAL("IDXGISwapChain::GetBuffer failed"); return false; }
+    
+    hr = device->lpVtbl->CreateRenderTargetView(device, (ID3D11Resource*)dx11_renderer->render_back_buffer, NULL, &dx11_renderer->render_view);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateRenderTargetView failed"); return false; }
+    
+    if(!dm_dx11_create_depth_stencil(dx11_renderer)) return false;
+    
+    context->lpVtbl->OMSetRenderTargets(context, 1u, &dx11_renderer->render_view, NULL);
+    
+    return true;
 }
 
 /********
