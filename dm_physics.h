@@ -107,22 +107,24 @@ void dm_physics_gjk_support(float pos[3], float rot[4], float cen[3], void* data
 
 void dm_support(dm_entity entity_a, dm_entity entity_b, float direction[3], float out[3], dm_context* context)
 {
+#if 0 
     float dir_neg[3];
     float support_a[3];
     float support_b[3];
     
     dm_vec3_negate(direction, dir_neg);
     
-    //dm_component_transform transform_a = dm_ecs_entity_get_transform(entity_a, context);
-    //dm_component_transform transform_b = dm_ecs_entity_get_transform(entity_b, context);
+    dm_component_transform transform_a = dm_ecs_entity_get_transform(entity_a, context);
+    dm_component_transform transform_b = dm_ecs_entity_get_transform(entity_b, context);
     
-    //dm_component_collision collision_a = dm_ecs_entity_get_collision(entity_a, context);
-    //dm_component_collision collision_b = dm_ecs_entity_get_collision(entity_b, context);
+    dm_component_collision collision_a = dm_ecs_entity_get_collision(entity_a, context);
+    dm_component_collision collision_b = dm_ecs_entity_get_collision(entity_b, context);
     
-    //dm_physics_gjk_support(transform_a.pos, transform_a.rot, collision_a.center, collision_a.internal, collision_a.shape, direction, support_a);
-    //dm_physics_gjk_support(transform_b.pos, transform_b.rot, collision_b.center, collision_b.internal, collision_b.shape, direction, support_b);
+    dm_physics_gjk_support(transform_a.pos, transform_a.rot, collision_a.center, collision_a.internal, collision_a.shape, direction, support_a);
+    dm_physics_gjk_support(transform_b.pos, transform_b.rot, collision_b.center, collision_b.internal, collision_b.shape, direction, support_b);
     
     dm_vec3_sub_vec3(support_a, support_b, out);
+#endif
 }
 
 void dm_simplex_push_front(float point[3], dm_simplex* simplex)

@@ -57,7 +57,7 @@ bool render_pass_init(dm_context* context)
         dm_pipeline_desc pipeline_desc = dm_renderer_default_pipeline();
         
         // resources
-        if(!dm_renderer_create_static_vertex_buffer(indices, sizeof(indices), sizeof(vertex), &pass_data->vb, context)) return false;
+        if(!dm_renderer_create_static_vertex_buffer(vertices, sizeof(vertices), sizeof(vertex), &pass_data->vb, context)) return false;
         if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(inst_vertex) * MAX_ENTITIES_PER_FRAME, sizeof(inst_vertex), &pass_data->instb, context)) return false;
         if(!dm_renderer_create_static_index_buffer(indices, sizeof(indices), &pass_data->ib, context)) return false;
         if(!dm_renderer_create_uniform(sizeof(uniform), DM_UNIFORM_STAGE_VERTEX, &pass_data->uni, context)) return false;
@@ -66,6 +66,9 @@ bool render_pass_init(dm_context* context)
 #ifdef DM_VULKAN
         strcpy(shader_desc.vertex, "assets/shaders/test_vertex.spv");
         strcpy(shader_desc.pixel, "assets/shaders/test_pixel.spv");
+#elif defined(DM_OPENGL)
+        strcpy(shader_desc.vertex, "assets/shaders/test_vertex.glsl");
+        strcpy(shader_desc.pixel, "assets/shaders/test_pixel.glsl");
 #elif defined(DM_DIRECTX)
         strcpy(shader_desc.vertex, "assets/shaders/test_vertex.fxc");
         strcpy(shader_desc.pixel, "assets/shaders/test_pixel.fxc");

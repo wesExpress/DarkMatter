@@ -30,7 +30,6 @@ depreciated
 #elif __linux__ || __gnu_linux__
 #define DM_PLATFORM_LINUX
 #define DM_INLINE __always_inline
-
 #else
 #define DM_PLATFORM_GLFW
 #define DM_INLINE
@@ -1176,6 +1175,16 @@ void __dm_log_output(log_level level, const char* message, ...);
 #define DM_LOG_ERROR(message, ...) __dm_log_output(DM_LOG_LEVEL_ERROR, message, ##__VA_ARGS__)
 #define DM_LOG_FATAL(message, ...) __dm_log_output(DM_LOG_LEVEL_FATAL, message, ##__VA_ARGS__)
 
+// events for platform
+void dm_add_window_close_event(dm_event_list* event_list);
+void dm_add_window_resize_event(uint32_t new_width, uint32_t new_height, dm_event_list* event_list);
+void dm_add_mousebutton_down_event(dm_mousebutton_code button, dm_event_list* event_list);
+void dm_add_mousebutton_up_event(dm_mousebutton_code button, dm_event_list* event_list);
+void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* event_list);
+void dm_add_mouse_scroll_event(uint32_t delta, dm_event_list* event_list);
+void dm_add_key_down_event(dm_key_code key, dm_event_list* event_list);
+void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
+
 // random
 int dm_random_int(dm_context* context);
 int dm_random_int_range(int start, int end, dm_context* context);
@@ -1224,41 +1233,6 @@ void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset,
 void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_context* context);
 void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 
-#if 0
-// structures
-dm_slot_array* __dm_slot_array_create(size_t elem_size, size_t capacity);
-void           dm_slot_array_destroy(dm_slot_array* slot_array);
-void           dm_slot_array_insert(dm_slot_array* slot_array, void* data, dm_slot_index* index);
-void           dm_slot_array_overwrite(dm_slot_array* slot_array, void* data, dm_slot_index index);
-void           dm_slot_array_delete(dm_slot_array* slot_array, dm_slot_index index);
-void*          dm_slot_array_get(dm_slot_array* slot_array, dm_slot_index index);
-
-#define DM_SLOT_ARRAY_CREATE(T) __dm_slot_array_create(sizeof(T), DM_SLOT_ARRAY_DEFAULT_CAPACITY)
-
-dm_map* __dm_map_create_key_str(size_t value_size);
-dm_map* __dm_map_create_key_uint32(size_t value_size);
-dm_map* __dm_map_create_key_uint64(size_t value_size);
-dm_map* __dm_map_create_key_int_pair(size_t value_size);
-dm_map* __dm_map_create_key_uint_pair(size_t value_size);
-
-#define DM_MAP_CREATE_KEY_STR(VALUE_TYPE)       __dm_map_create_key_str(sizeof(VALUE_TYPE))
-#define DM_MAP_CREATE_KEY_UINT32(VALUE_TYPE)    __dm_map_create_key_uint32(sizeof(VALUE_TYPE))
-#define DM_MAP_CREATE_KEY_UINT64(VALUE_TYPE)    __dm_map_create_key_uint64(sizeof(VALUE_TYPE))
-#define DM_MAP_CREATE_KEY_INT_PAIR(VALUE_TYPE)  __dm_map_create_key_int_pair(sizeof(VALUE_TYPE))
-#define DM_MAP_CREATE_KEY_UINT_PAIR(VALUE_TYPE) __dm_map_create_key_uint_pair(sizeof(VALUE_TYPE))
-
-void  dm_map_destroy(dm_map* map);
-
-void  dm_map_insert(dm_map* map, void* key, void* value);
-void* dm_map_get(dm_map* map, void* key);
-void  dm_map_delete(dm_map* map, void* key);
-
-bool  dm_map_has_key(dm_map* map, void* key);
-
-void* dm_map_get_keys(dm_map* map, uint32_t* num_keys);
-void* dm_map_get_values(dm_map* map, uint32_t* num_values);
-#endif
-
 // ecs
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
 dm_ecs_id dm_ecs_register_system(dm_context* context);
@@ -1295,12 +1269,5 @@ void   dm_timer_start(dm_timer* timer, dm_context* context);
 void   dm_timer_restart(dm_timer* timer, dm_context* context);
 double dm_timer_elapsed(dm_timer* timer, dm_context* context);
 double dm_timer_elapsed_ms(dm_timer* timer, dm_context* context);
-
-/****
-IMPL
-******/
-#ifdef DM_IMPL
-#include "dm_impl.h"
-#endif
 
 #endif //DM_H

@@ -1,7 +1,6 @@
-#ifndef DM_RENDERER_OPENGL_H
-#define DM_RENDERER_OPENGL_H
-
+#include "dm.h"
 #include <glad/glad.h>
+#include <limits.h>
 
 #define DM_GLUINT_FAIL UINT_MAX
 
@@ -11,6 +10,10 @@ GLenum  glCheckError_(const char* file, int line);
 #else
 #define glCheckError() 0
 #endif
+
+extern bool dm_platform_init_opengl(dm_platform_data* platform_data);
+extern void dm_platform_shutdown_opengl(dm_platform_data* platform_data);
+extern void dm_platform_swap_buffers(bool vsync, dm_platform_data* platform_data);
 
 /************
 OPENGL_TYPES
@@ -66,6 +69,8 @@ typedef struct dm_opengl_renderer_t
     GLenum   active_primitive;
     uint32_t buffer_count, shader_count, texture_count, framebuffer_count, pipeline_count;
     uint32_t active_pipeline, active_shader;
+
+    uint32_t width, height;
 } dm_opengl_renderer;
 
 #define DM_OPENGL_GET_RENDERER dm_opengl_renderer* opengl_renderer = renderer->internal_renderer
@@ -909,6 +914,14 @@ bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
     return true;
 }
 
+void dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
+{
+    DM_OPENGL_GET_RENDERER;
+
+    opengl_renderer->width = width;
+    opengl_renderer->height = height;
+}
+
 /**********************
 OPENGL RENDER COMMANDS
 ************************/
@@ -1240,5 +1253,3 @@ GLenum glCheckError_(const char *file, int line)
     return errorCode;
 }
 #endif
-
-#endif //DM_RENDERER_OPENGL_H

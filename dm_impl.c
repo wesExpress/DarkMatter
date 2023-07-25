@@ -1,5 +1,4 @@
-#ifndef DM_IMPL_H
-#define DM_IMPL_H
+#include "dm.h"
 
 #include <string.h>
 #include <math.h>
@@ -525,17 +524,11 @@ void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list)
 /********
 PLATFORM
 **********/
-#ifdef DM_PLATFORM_WIN32
-#include "dm_platform_win32.h"
-#elif defined(DM_PLATFORM_LINUX)
-#include "dm_platform_linux.h"
-#elif defined(DM_PLATFORM_APPLE)
-extern bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t window_w, uint32_t window_h, const char* title, dm_platform_data* platform_data);
+extern bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_platform_data* platform_data);
 extern void dm_platform_shutdown(dm_platform_data* platform_data);
 extern double dm_platform_get_time(dm_platform_data* platform_data);
 extern void dm_platform_write(const char* message, uint8_t color);
 extern bool dm_platform_pump_events(dm_platform_data* platform_data);
-#endif
 
 /*******
 LOGGING
@@ -544,7 +537,8 @@ void __dm_log_output(log_level level, const char* message, ...)
 {
 	static const char* log_tag[6] = { "DM_TRCE", "DM_DEBG", "DM_INFO", "DM_WARN", "DM_ERRR", "DM_FATL" };
     
-    char msg_fmt[5000];
+#define DM_MSG_LEN 4980
+    char msg_fmt[DM_MSG_LEN];
 	memset(msg_fmt, 0, sizeof(msg_fmt));
     
 	// ar_ptr lets us move through any variable number of arguments. 
@@ -553,7 +547,7 @@ void __dm_log_output(log_level level, const char* message, ...)
 	// formatted appropriately beforehand
 	va_list ar_ptr;
 	va_start(ar_ptr, message);
-	vsnprintf(msg_fmt, 5000, message, ar_ptr);
+	vsnprintf(msg_fmt, DM_MSG_LEN, message, ar_ptr);
 	va_end(ar_ptr);
     
 	// add log tag and time code of message
@@ -576,21 +570,15 @@ void __dm_log_output(log_level level, const char* message, ...)
 /*********
 RENDERING
 ***********/
-#ifdef DM_DIRECTX
-#include "dm_renderer_dx11.h"
-#elif defined(DM_VULKAN)
-#include "dm_renderer_vulkan.h"
-#elif defined(DM_OPENGL)
-#include "dm_renderer_opengl.h"
-#elif defined(DM_METAL)
 extern bool dm_renderer_backend_init(dm_context* context);
 extern void dm_renderer_backend_shutdown(dm_context* context);
 extern bool dm_renderer_backend_begin_frame(dm_renderer* renderer);
 extern bool dm_renderer_backend_end_frame(bool vsync, dm_context* context);
+extern void dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer);
 
 extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_shader(const char* shader_file, dm_vertex_attrib_desc* layout, uint32_t num_attribs, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
 
 extern void dm_render_command_backend_clear(float r, float g, float b, float a, dm_renderer* renderer);
@@ -611,7 +599,6 @@ extern void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count
 extern void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
 extern void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer);
 extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer);
-#endif
 
 // renderer
 bool dm_renderer_init(dm_context* context)
@@ -1346,7 +1333,7 @@ void dm_ecs_shutdown(dm_ecs_manager* ecs_manager)
         {
             dm_free(block_manager->blocks[j].block);
         }
-        //dm_free(block_manager->blocks);
+        dm_free(block_manager->blocks);
     }
     
     dm_free(ecs_manager->entity_ids);
@@ -1463,8 +1450,17 @@ void dm_ecs_entity_add_transform(dm_entity entity, dm_component_transform transf
     transform_block->rot_j[entity_count] = transform.rot[1];
     transform_block->rot_k[entity_count] = transform.rot[2];
     transform_block->rot_r[entity_count] = transform.rot[3];
+
+    dm_component_block_manager* transform_manager = &context->ecs_manager.component_blocks[transform_id];
     
-    dm_ecs_iterate_component_block(entity, transform_id, context);
+    context->ecs_manager.entity_ids[entity].block_index[transform_id] = transform_manager->block_count - 1;
+    context->ecs_manager.entity_ids[entity].index[transform_id] = transform_manager->blocks[transform_manager->block_count-1].entity_count++;
+    if(transform_manager->blocks[transform_manager->block_count-1].entity_count != DM_ECS_COMPONENT_BLOCK_SIZE) return;
+
+    transform_manager->block_count++;
+    transform_manager->blocks = dm_realloc(transform_manager->blocks, sizeof(dm_component_block) * transform_manager->block_count);
+    transform_manager->blocks[transform_manager->block_count].block = dm_alloc(transform_manager->block_size);
+    transform_manager->blocks[transform_manager->block_count].entity_count = 0;
 }
 
 void dm_ecs_entity_add_physics(dm_entity entity, dm_component_physics physics, dm_context* context)
@@ -1524,7 +1520,16 @@ void dm_ecs_entity_add_physics(dm_entity entity, dm_component_physics physics, d
     physics_block->body_type[entity_count]     = physics.body_type;
     physics_block->movement_type[entity_count] = physics.movement_type;
     
-    dm_ecs_iterate_component_block(entity, physics_id, context);
+    dm_component_block_manager* physics_manager = &context->ecs_manager.component_blocks[physics_id];
+    
+    context->ecs_manager.entity_ids[entity].block_index[physics_id] = physics_manager->block_count - 1;
+    context->ecs_manager.entity_ids[entity].index[physics_id] = physics_manager->blocks[physics_manager->block_count-1].entity_count++;
+    if(physics_manager->blocks[physics_manager->block_count-1].entity_count != DM_ECS_COMPONENT_BLOCK_SIZE) return;
+
+    physics_manager->block_count++;
+    physics_manager->blocks = dm_realloc(physics_manager->blocks, sizeof(dm_component_block) * physics_manager->block_count);
+    physics_manager->blocks[physics_manager->block_count].block = dm_alloc(physics_manager->block_size);
+    physics_manager->blocks[physics_manager->block_count].entity_count = 0;
 }
 
 void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision collision, dm_context* context)
@@ -1566,7 +1571,16 @@ void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision collis
     collision_block->shape[entity_count] = collision.shape;
     collision_block->flag[entity_count]  = collision.flag;
     
-    dm_ecs_iterate_component_block(entity, collision_id, context);
+    dm_component_block_manager* collision_manager = &context->ecs_manager.component_blocks[collision_id];
+    
+    context->ecs_manager.entity_ids[entity].block_index[collision_id] = collision_manager->block_count - 1;
+    context->ecs_manager.entity_ids[entity].index[collision_id] = collision_manager->blocks[collision_manager->block_count-1].entity_count++;
+    if(collision_manager->blocks[collision_manager->block_count-1].entity_count != DM_ECS_COMPONENT_BLOCK_SIZE) return;
+
+    collision_manager->block_count++;
+    collision_manager->blocks = dm_realloc(collision_manager->blocks, sizeof(dm_component_block) * collision_manager->block_count);
+    collision_manager->blocks[collision_manager->block_count].block = dm_alloc(collision_manager->block_size);
+    collision_manager->blocks[collision_manager->block_count].entity_count = 0;
 }
 
 void dm_ecs_entity_add_box_collider(dm_entity entity, float center[3], float dim[3], dm_context* context)
@@ -1730,7 +1744,7 @@ const dm_component_physics dm_ecs_entity_get_physics(dm_entity entity, dm_contex
     physics.i_inv_2[2] = physics_block->i_inv_2[2][index];
     
     physics.damping[0] = physics_block->damping[0][index];
-    physics.damping[1] = physics_block->damping[2][index];
+    physics.damping[1] = physics_block->damping[1][index];
     
     physics.body_type     = physics_block->body_type[index];
     physics.movement_type = physics_block->movement_type[index];
@@ -1939,7 +1953,13 @@ void* dm_read_bytes(const char* path, const char* mode, size_t* size)
         
         buffer = dm_alloc(*size);
         
-        fread(buffer, *size, 1, fp);
+        size_t t = fread(buffer, *size, 1, fp);
+        if(t!=1) 
+        {
+            DM_LOG_ERROR("Something bad happened with fread");
+            return NULL;
+        }
+
         fclose(fp);
     }
     return buffer;
@@ -1972,5 +1992,3 @@ double dm_timer_elapsed_ms(dm_timer* timer, dm_context* context)
 {
     return dm_timer_elapsed(timer, context) * 1000;
 }
-
-#endif //DM_IMPL_H

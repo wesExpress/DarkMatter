@@ -23,7 +23,7 @@ dm_entity create_entity(dm_context* context)
     t.rot[3] = 1;
     
     dm_ecs_entity_add_transform(entity, t, context);
-    dm_ecs_entity_add_box_collider(entity, (float[]){0,0,0}, t.scale, context);
+    //dm_ecs_entity_add_box_collider(entity, (float[]){0,0,0}, t.scale, context);
     
     return entity;
 }
