@@ -1115,6 +1115,11 @@ bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
     return true;
 }
 
+void dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+}
+
 /********
 COMMANDS
 **********/
