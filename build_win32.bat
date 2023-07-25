@@ -38,10 +38,6 @@ IF /I "%vulkan%" EQU "1" (
 	SET include_flags=%include_flags% /I%VULKAN_SDK%\Include
 	SET linker_flags=%linker_flags% /LIBPATH:%VULKAN_SDK%\Lib vulkan-1.lib
 	SET defines=%defines% /DDM_VULKAN
-) ELSE (
-	SET c_filenames=!c_filenames:%cd%\lib\glad\src\glad.c=!
-	SET c_filenames=!c_filenames:%cd%\lib\glad\src\glad_wgl.c=!
-	SET linker_flags=%linker_flags% d3d11.lib dxgi.lib dxguid.lib d3dcompiler.lib
 )
 
 SET assembly=app

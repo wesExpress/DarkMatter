@@ -1,5 +1,4 @@
-#ifndef DM_PLATFORM_LINUX_H
-#define DM_PLATFORM_LINUX_H
+#include "dm.h"
 
 #include <xcb/xcb.h>
 #include <X11/keysym.h>
@@ -28,12 +27,12 @@
 #ifdef DM_OPENGL
 #include <glad/glad.h>
 #include <GL/glx.h>
+
+typedef GLXContext (*glXCreateContextAttribARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
 #else
 #define VK_USE_PLATFORM_XCB_KHR
 #include <vulkan/vulkan.h>
 #endif
-
-typedef GLXContext (*glXCreateContextAttribARBProc)(Display*, GLXFBConfig, GLXContext, Bool, const int*);
 
 typedef struct dm_internal_linux_data_t
 {
@@ -274,6 +273,7 @@ void dm_platform_write(const char* message, uint8_t color)
     printf("%s", out);
 }
 
+#ifdef DM_OPENGL
 bool dm_platform_init_opengl(dm_platform_data* platform_data)
 {
     DM_LINUX_GET_DATA;
@@ -342,6 +342,7 @@ void dm_platform_swap_buffers(bool vsync, dm_platform_data* platform_data)
     
     glXSwapBuffers(linux_data->display, linux_data->window);
 }
+#endif
 
 dm_key_code dm_linux_translate_key_code(uint32_t x_keycode)
 {
@@ -467,17 +468,15 @@ bool dm_platform_create_vulkan_surface(dm_platform_data* platform_data, VkInstan
 {
     DM_LINUX_GET_DATA;
     
-    VkXcbSurfaceCreateInforKHR create_info = { 0 };
+    VkXcbSurfaceCreateInfoKHR create_info = { 0 };
     create_info.sType = VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO_KHR;
     create_info.connection = linux_data->connection;
     create_info.window = linux_data->window;
     
-    VkResult result = vkCreateXCBSurfaceKHR(*instance, &create_info, NULL, surface);
+    VkResult result = vkCreateXcbSurfaceKHR(*instance, &create_info, NULL, surface);
     if(result==VK_SUCCESS) return true;
     
     DM_LOG_FATAL("Could not create Win32 Vulkan surface");
     return false;
 }
 #endif
-
-#endif //DM_PLATFORM_LINUX_H

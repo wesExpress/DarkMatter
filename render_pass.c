@@ -9,7 +9,7 @@ typedef struct vertex_t
 typedef struct inst_vertex_t
 {
     float model[M4];
-    float color[4];
+    float color[N4];
 } inst_vertex;
 
 typedef struct uniform_t
@@ -66,6 +66,9 @@ bool render_pass_init(dm_context* context)
 #ifdef DM_VULKAN
         strcpy(shader_desc.vertex, "assets/shaders/test_vertex.spv");
         strcpy(shader_desc.pixel, "assets/shaders/test_pixel.spv");
+#elif defined(DM_OPENGL)
+        strcpy(shader_desc.vertex, "assets/shaders/test_vertex.glsl");
+        strcpy(shader_desc.pixel, "assets/shaders/test_pixel.glsl");
 #elif defined(DM_DIRECTX)
         strcpy(shader_desc.vertex, "assets/shaders/test_vertex.fxc");
         strcpy(shader_desc.pixel, "assets/shaders/test_pixel.fxc");

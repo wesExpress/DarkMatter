@@ -1,5 +1,4 @@
-#ifndef DM_RENDERER_VULKAN_H
-#define DM_RENDERER_VULKAN_H
+#include "dm.h"
 
 #include <vulkan/vulkan.h>
 
@@ -98,7 +97,7 @@ typedef struct dm_vulkan_physical_device_reqs_t
 {
     dm_vulkan_physical_device_flag flags;
     uint32_t                  extension_count;
-    const char*               device_extension_names[DM_VULKAN_DEVICE_MAX_EXTENSIONS];
+    char*                     device_extension_names[DM_VULKAN_DEVICE_MAX_EXTENSIONS];
 } dm_vulkan_physical_device_reqs;
 
 typedef struct dm_vulkan_physical_device_queue_family_info_t
@@ -226,14 +225,16 @@ typedef struct dm_vulkan_renderer_t
 VKAPI_ATTR VkBool32 VKAPI_CALL dm_vulkan_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT types, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data);
 
 #define DM_VULKAN_FUNC_CHECK(FUNC_CALL) result = FUNC_CALL
-#define DM_VULKAN_FUNC_SUCCESS result==VK_SUCCESS
+#define DM_VULKAN_FUNC_SUCCESS() result==VK_SUCCESS
 #else
 #define DM_VULKAN_FUNC_CHECK(FUNC_CALL) FUNC_CALL
-#define DM_VULKAN_FUNC_SUCCESS 1
+#define DM_VULKAN_FUNC_SUCCESS() 1
 #endif
 
 bool     dm_vulkan_device_detect_depth_buffer_range(dm_vulkan_device* device);
 uint32_t dm_vulkan_device_find_memory_index(uint32_t type_filter, uint32_t property_flags, VkPhysicalDevice device);
+
+extern bool dm_platform_create_vulkan_surface(dm_platform_data* platform_data, VkInstance* instance, VkSurfaceKHR* surface);
 
 /****************
 ENUM CONVERSIONS
@@ -461,6 +462,8 @@ VkFormat dm_vertex_data_t_to_vulkan_format(dm_vertex_attrib_desc desc)
         DM_LOG_ERROR("Unknown vertex data t, shouldn't be here...");
         return VK_FORMAT_UNDEFINED;
     }
+
+    return VK_FORMAT_UNDEFINED;
 }
 
 /*********************
@@ -468,8 +471,10 @@ VULKAN COMMAND BUFFER
 ***********************/
 bool dm_vulkan_command_buffer_allocate(VkCommandPool pool, dm_vulkan_command_buffer* buffer, dm_vulkan_renderer* vulkan_renderer)
 {
+#ifdef DM_DEBUG
     VkResult result;
-    
+#endif
+
     VkCommandBufferAllocateInfo allocate_info = { 0 };
     allocate_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocate_info.commandPool  = pool;
@@ -479,7 +484,7 @@ bool dm_vulkan_command_buffer_allocate(VkCommandPool pool, dm_vulkan_command_buf
     buffer->state = DM_VULKAN_COMMAND_BUFFER_STATE_NOT_ALLOCATED;
     
     DM_VULKAN_FUNC_CHECK(vkAllocateCommandBuffers(vulkan_renderer->device.logical, &allocate_info, &buffer->buffer));
-    if(DM_VULKAN_FUNC_SUCCESS) return true;
+    if(DM_VULKAN_FUNC_SUCCESS()) return true;
     
     DM_LOG_FATAL("Could not allocate Vulkan command buffer");
     return false;
@@ -493,8 +498,10 @@ void dm_vulkan_command_buffer_free(VkCommandPool pool, dm_vulkan_command_buffer*
 
 bool dm_vulkan_command_buffer_begin(bool single_use, bool renderpass_continue, bool simultaneous_use, dm_vulkan_command_buffer* buffer)
 {
+#ifdef DM_DEBUG
     VkResult result;
-    
+#endif
+
     VkCommandBufferBeginInfo begin_info = { 0 };
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
     if(single_use)          begin_info.flags |= VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
@@ -502,7 +509,7 @@ bool dm_vulkan_command_buffer_begin(bool single_use, bool renderpass_continue, b
     if(simultaneous_use)    begin_info.flags |= VK_COMMAND_BUFFER_USAGE_SIMULTANEOUS_USE_BIT;
     
     DM_VULKAN_FUNC_CHECK(vkBeginCommandBuffer(buffer->buffer, &begin_info));
-    if(DM_VULKAN_FUNC_SUCCESS) 
+    if(DM_VULKAN_FUNC_SUCCESS()) 
     {
         buffer->state = DM_VULKAN_COMMAND_BUFFER_STATE_RECORDING;
         return true;
@@ -514,10 +521,12 @@ bool dm_vulkan_command_buffer_begin(bool single_use, bool renderpass_continue, b
 
 bool dm_vulkan_command_buffer_end(dm_vulkan_command_buffer* buffer)
 {
+#ifdef DM_DEBUG
     VkResult result;
-    
+#endif
+
     DM_VULKAN_FUNC_CHECK(vkEndCommandBuffer(buffer->buffer));
-    if(DM_VULKAN_FUNC_SUCCESS)
+    if(DM_VULKAN_FUNC_SUCCESS())
     {
         buffer->state = DM_VULKAN_COMMAND_BUFFER_STATE_RECORDING_ENDED;
         return true;
@@ -563,7 +572,9 @@ VULKAN TEXTURE
 ****************/
 bool dm_vulkan_image_view_create(VkFormat format, dm_vulkan_image* image, VkImageAspectFlags aspect_flags, VkDevice device, VkAllocationCallbacks* allocator)
 {
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     VkImageViewCreateInfo create_info = { 0 };
     create_info.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -575,7 +586,7 @@ bool dm_vulkan_image_view_create(VkFormat format, dm_vulkan_image* image, VkImag
     create_info.subresourceRange.layerCount = 1;
     
     DM_VULKAN_FUNC_CHECK(vkCreateImageView(device, &create_info, allocator, &image->view));
-    if(DM_VULKAN_FUNC_SUCCESS) return true;
+    if(DM_VULKAN_FUNC_SUCCESS()) return true;
     
     DM_LOG_FATAL("Creating Vulkan image view failed");
     return false;
@@ -583,7 +594,9 @@ bool dm_vulkan_image_view_create(VkFormat format, dm_vulkan_image* image, VkImag
 
 bool dm_vulkan_create_image(dm_vulkan_image_desc desc, dm_vulkan_image* image, dm_vulkan_device* device, VkAllocationCallbacks* allocator)
 {
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     image->desc = desc;
     
@@ -603,7 +616,7 @@ bool dm_vulkan_create_image(dm_vulkan_image_desc desc, dm_vulkan_image* image, d
     create_info.sharingMode       = VK_SHARING_MODE_EXCLUSIVE;
     
     DM_VULKAN_FUNC_CHECK(vkCreateImage(device->logical, &create_info, allocator, &image->handle));
-    if(!DM_VULKAN_FUNC_SUCCESS) 
+    if(!DM_VULKAN_FUNC_SUCCESS()) 
     {
         DM_LOG_FATAL("Could not create Vulkan image");
         return false;
@@ -625,14 +638,14 @@ bool dm_vulkan_create_image(dm_vulkan_image_desc desc, dm_vulkan_image* image, d
     mem_info.allocationSize = mem_reqs.size;
     mem_info.memoryTypeIndex = mem_type;
     DM_VULKAN_FUNC_CHECK(vkAllocateMemory(device->logical, &mem_info, allocator, &image->memory));
-    if(!DM_VULKAN_FUNC_SUCCESS) 
+    if(!DM_VULKAN_FUNC_SUCCESS()) 
     {
         DM_LOG_FATAL("vkAllocateMemory failed");
         return false;
     }
     
     DM_VULKAN_FUNC_CHECK(vkBindImageMemory(device->logical, image->handle, image->memory, 0));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     if(!desc.has_view) return true;
     
@@ -661,7 +674,9 @@ VULKAN FRAMEBUFFER
 ********************/
 bool dm_vulkan_create_framebuffer(dm_vulkan_framebuffer_desc desc, VkImageView* attachments, dm_vulkan_framebuffer* framebuffer, dm_vulkan_renderer* vulkan_renderer)
 {
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     framebuffer->attachments = dm_alloc(sizeof(VkImageView) * desc.attachment_count);
     dm_memcpy(framebuffer->attachments, attachments, sizeof(VkImageView) * desc.attachment_count);
@@ -678,13 +693,10 @@ bool dm_vulkan_create_framebuffer(dm_vulkan_framebuffer_desc desc, VkImageView* 
     create_info.layers          = 1;
     
     DM_VULKAN_FUNC_CHECK(vkCreateFramebuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &framebuffer->framebuffer));
-    if(!DM_VULKAN_FUNC_SUCCESS) 
-    {
-        DM_LOG_FATAL("Could not create Vulkan framebuffer");
-        return false;
-    }
-    
-    return true;
+    if(DM_VULKAN_FUNC_SUCCESS()) return true;
+
+    DM_LOG_FATAL("Could not create Vulkan framebuffer");
+    return false;
 }
 
 void dm_vulkan_destroy_framebuffer(dm_vulkan_framebuffer* framebuffer, dm_vulkan_renderer* vulkan_renderer)
@@ -699,7 +711,9 @@ VULKAN PIPELINE
 bool dm_vulkan_create_pipeline(dm_pipeline_desc desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, VkViewport viewport, VkRect2D scissor, dm_vulkan_shader* shader, dm_render_handle* handle, dm_renderer* renderer)
 {
     DM_VULKAN_GET_RENDERER;
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     dm_vulkan_pipeline internal_pipe = { 0 };
     
@@ -851,7 +865,7 @@ bool dm_vulkan_create_pipeline(dm_pipeline_desc desc, dm_vertex_attrib_desc* att
     layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     
     DM_VULKAN_FUNC_CHECK(vkCreatePipelineLayout(vulkan_renderer->device.logical, &layout_info, vulkan_renderer->allocator, &internal_pipe.layout));
-    if(!DM_VULKAN_FUNC_SUCCESS) 
+    if(!DM_VULKAN_FUNC_SUCCESS()) 
     {
         DM_LOG_FATAL("Could not create Vulkan pipeline layout");
         return false;
@@ -879,7 +893,7 @@ bool dm_vulkan_create_pipeline(dm_pipeline_desc desc, dm_vertex_attrib_desc* att
     pipeline_info.basePipelineIndex   = -1;
     
     DM_VULKAN_FUNC_CHECK(vkCreateGraphicsPipelines(vulkan_renderer->device.logical, VK_NULL_HANDLE, 1, &pipeline_info, vulkan_renderer->allocator, &internal_pipe.pipeline));
-    if(DM_VULKAN_FUNC_SUCCESS) 
+    if(DM_VULKAN_FUNC_SUCCESS()) 
     {
         vulkan_renderer->pipelines[vulkan_renderer->pipeline_count] = internal_pipe;
         *handle = vulkan_renderer->pipeline_count++;
@@ -905,7 +919,9 @@ VULKAN RENDERPASS
 *******************/
 bool dm_vulkan_create_renderpass(dm_renderpass_desc desc, dm_vulkan_renderpass_desc vulkan_desc, dm_vulkan_renderer* vulkan_renderer)
 {
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     vulkan_renderer->master_renderpass.desc = vulkan_desc;
     
@@ -929,6 +945,9 @@ bool dm_vulkan_create_renderpass(dm_renderpass_desc desc, dm_vulkan_renderpass_d
     VkAttachmentReference color_attachment_reference = { 0 };
     color_attachment_reference.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     
+    subpass.colorAttachmentCount = 1;
+    subpass.pColorAttachments = &color_attachment_reference;
+
     VkAttachmentDescription depth_attachment = { 0 };
     depth_attachment.format         = vulkan_renderer->device.depth_format;
     depth_attachment.samples        = VK_SAMPLE_COUNT_1_BIT;
@@ -964,7 +983,7 @@ bool dm_vulkan_create_renderpass(dm_renderpass_desc desc, dm_vulkan_renderpass_d
     create_info.pDependencies   = &dependency;
     
     DM_VULKAN_FUNC_CHECK(vkCreateRenderPass(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->master_renderpass.renderpass));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     return true;
 }
@@ -1011,7 +1030,9 @@ VULKAN SHADER
 ***************/
 bool dm_vulkan_create_shader_module(const char* shader_file, VkShaderStageFlagBits shader_stage, uint32_t stage_index, dm_vulkan_shader* shader, dm_vulkan_renderer* vulkan_renderer)
 {
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     shader->module_create_infos[stage_index].sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     
@@ -1025,7 +1046,7 @@ bool dm_vulkan_create_shader_module(const char* shader_file, VkShaderStageFlagBi
     DM_VULKAN_FUNC_CHECK(vkCreateShaderModule(vulkan_renderer->device.logical, &shader->module_create_infos[stage_index], vulkan_renderer->allocator, &shader->modules[stage_index]));
     
     dm_free(file_bytes); 
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     shader->stage_create_infos[stage_index].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     shader->stage_create_infos[stage_index].stage  = shader_stage;
@@ -1086,27 +1107,29 @@ VULKAN SWAPCHAIN
 ******************/
 bool dm_vulkan_query_swapchain_support(VkPhysicalDevice physical_device, VkSurfaceKHR surface, dm_vulkan_swapchain_support_info* support_info)
 {
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     DM_VULKAN_FUNC_CHECK(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physical_device, surface, &support_info->capabilities));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     DM_VULKAN_FUNC_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &support_info->format_count, 0));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     if(support_info->format_count)
     {
         if(!support_info->formats) support_info->formats = dm_alloc(sizeof(VkSurfaceFormatKHR) * support_info->format_count);
         DM_VULKAN_FUNC_CHECK(vkGetPhysicalDeviceSurfaceFormatsKHR(physical_device, surface, &support_info->format_count, support_info->formats));
-        if(!DM_VULKAN_FUNC_SUCCESS) return false;
+        if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     }
     
     DM_VULKAN_FUNC_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &support_info->present_mode_count, 0));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     if(support_info->present_mode_count)
     {
         if(!support_info->present_modes) support_info->present_modes = dm_alloc(sizeof(VkPresentModeKHR) * support_info->present_mode_count);
         DM_VULKAN_FUNC_CHECK(vkGetPhysicalDeviceSurfacePresentModesKHR(physical_device, surface, &support_info->present_mode_count, support_info->present_modes));
-        if(!DM_VULKAN_FUNC_SUCCESS) return false;
+        if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     }
     
     return true;
@@ -1114,7 +1137,9 @@ bool dm_vulkan_query_swapchain_support(VkPhysicalDevice physical_device, VkSurfa
 
 bool dm_vulkan_internal_create_swapchain(uint32_t width, uint32_t height, dm_vulkan_swapchain* swapchain, dm_vulkan_renderer* vulkan_renderer)
 {
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     VkExtent2D swapchain_extent = { width, height };
     
@@ -1197,13 +1222,13 @@ bool dm_vulkan_internal_create_swapchain(uint32_t width, uint32_t height, dm_vul
     vulkan_renderer->current_frame = 0;
     swapchain->image_count = 0;
     DM_VULKAN_FUNC_CHECK(vkGetSwapchainImagesKHR(vulkan_renderer->device.logical, swapchain->handle, &swapchain->image_count, 0));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     if(!swapchain->images) swapchain->images = dm_alloc(sizeof(VkImage) * swapchain->image_count);
     if(!swapchain->views)  swapchain->views  = dm_alloc(sizeof(VkImageView) * swapchain->image_count);
     
     DM_VULKAN_FUNC_CHECK(vkGetSwapchainImagesKHR(vulkan_renderer->device.logical, swapchain->handle, &swapchain->image_count, swapchain->images));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     for(uint32_t i=0; i<swapchain->image_count; i++)
     {
@@ -1217,7 +1242,7 @@ bool dm_vulkan_internal_create_swapchain(uint32_t width, uint32_t height, dm_vul
         view_info.subresourceRange.layerCount = 1;
         
         DM_VULKAN_FUNC_CHECK(vkCreateImageView(vulkan_renderer->device.logical, &view_info, vulkan_renderer->allocator, &swapchain->views[i]));
-        if(!DM_VULKAN_FUNC_SUCCESS) return false;
+        if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     }
     
     // depth buffer
@@ -1262,6 +1287,9 @@ void dm_vulkan_destroy_swapchain(dm_vulkan_swapchain* swapchain, dm_vulkan_rende
     
     if(swapchain->images) dm_free(swapchain->images);
     if(swapchain->views)  dm_free(swapchain->views);
+
+    swapchain->images = NULL;
+    swapchain->views = NULL;
 }
 
 bool dm_vulkan_create_swapchain(dm_vulkan_swapchain* swapchain, dm_vulkan_renderer* vulkan_renderer)
@@ -1300,7 +1328,6 @@ bool dm_vulkan_swapchain_next_image_index(uint32_t timeout_ms, VkSemaphore image
 
 bool dm_vulkan_swapchain_present(VkQueue graphics_queue, VkQueue present_queue, VkSemaphore render_complete_semaphore, uint32_t image_index, dm_vulkan_swapchain* swapchain, dm_vulkan_renderer* vulkan_renderer)
 {
-    
     VkPresentInfoKHR present_info   = { 0 };
     present_info.sType              = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     present_info.waitSemaphoreCount = 1;
@@ -1356,7 +1383,9 @@ VULKAN DEVICE
 ***************/
 bool dm_vulkan_is_device_suitable(VkPhysicalDevice physical_device, VkSurfaceKHR surface, dm_vulkan_device* device, dm_vulkan_physical_device_reqs* reqs, dm_vulkan_physical_device_queue_family_info* queue_info, dm_vulkan_swapchain_support_info* swapchain_support_info)
 {
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     VkPhysicalDeviceProperties props;
     vkGetPhysicalDeviceProperties(physical_device, &props);
@@ -1404,7 +1433,7 @@ bool dm_vulkan_is_device_suitable(VkPhysicalDevice physical_device, VkSurfaceKHR
         
         VkBool32 supports_present = VK_FALSE;
         DM_VULKAN_FUNC_CHECK(vkGetPhysicalDeviceSurfaceSupportKHR(physical_device, i, surface, &supports_present));
-        if(!DM_VULKAN_FUNC_SUCCESS) 
+        if(!DM_VULKAN_FUNC_SUCCESS()) 
         {
             dm_free(queue_families);
             return false;
@@ -1435,12 +1464,12 @@ bool dm_vulkan_is_device_suitable(VkPhysicalDevice physical_device, VkSurfaceKHR
     {
         uint32_t available_count = 0;
         DM_VULKAN_FUNC_CHECK(vkEnumerateDeviceExtensionProperties(physical_device, 0, &available_count, 0));
-        if(!DM_VULKAN_FUNC_SUCCESS) return false;
+        if(!DM_VULKAN_FUNC_SUCCESS()) return false;
         if(!available_count) return false;
         
         VkExtensionProperties* available_extensions = dm_alloc(sizeof(VkExtensionProperties) * available_count);
         DM_VULKAN_FUNC_CHECK(vkEnumerateDeviceExtensionProperties(physical_device, 0, &available_count, available_extensions));
-        if(!DM_VULKAN_FUNC_SUCCESS) return false;
+        if(!DM_VULKAN_FUNC_SUCCESS()) return false;
         
         bool found;
         for(uint32_t i=0; i<reqs->extension_count; i++)
@@ -1499,7 +1528,9 @@ bool dm_vulkan_is_device_suitable(VkPhysicalDevice physical_device, VkSurfaceKHR
 
 bool dm_vulkan_create_device(dm_vulkan_renderer* vulkan_renderer)
 {
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     vulkan_renderer->device.physical = VK_NULL_HANDLE;
     
@@ -1513,7 +1544,7 @@ bool dm_vulkan_create_device(dm_vulkan_renderer* vulkan_renderer)
     dm_vulkan_physical_device_reqs reqs = { 0 };
     reqs.flags = DM_VULKAN_PHYSICAL_DEVICE_FLAG_GRAPHICS | DM_VULKAN_PHYSICAL_DEVICE_FLAG_PRESENT | DM_VULKAN_PHYSICAL_DEVICE_FLAG_COMPUTE  | DM_VULKAN_PHYSICAL_DEVICE_FLAG_TRANSFER | DM_VULKAN_PHYSICAL_DEVICE_FLAG_SAMPLER_ANISOP | DM_VULKAN_PHYSICAL_DEVICE_FLAG_DISCRETE_GPU;
     
-    reqs.device_extension_names[reqs.extension_count] = dm_alloc(strlen(VK_KHR_SWAPCHAIN_EXTENSION_NAME));
+    reqs.device_extension_names[reqs.extension_count] = dm_alloc(strlen(VK_KHR_SWAPCHAIN_EXTENSION_NAME)+1);
     strcpy(reqs.device_extension_names[reqs.extension_count++], VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     
     dm_vulkan_physical_device_queue_family_info queue_info = { 0 };
@@ -1566,7 +1597,7 @@ bool dm_vulkan_create_device(dm_vulkan_renderer* vulkan_renderer)
     DM_VULKAN_FUNC_CHECK(vkCreateDevice(vulkan_renderer->device.physical, &device_create_info, vulkan_renderer->allocator, &vulkan_renderer->device.logical));
     dm_free(indices);
     dm_free(create_info);
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     vkGetDeviceQueue(vulkan_renderer->device.logical, vulkan_renderer->device.graphics_index, 0, &vulkan_renderer->device.graphics_queue); 
     vkGetDeviceQueue(vulkan_renderer->device.logical, vulkan_renderer->device.present_index, 0, &vulkan_renderer->device.present_queue); 
@@ -1579,7 +1610,7 @@ bool dm_vulkan_create_device(dm_vulkan_renderer* vulkan_renderer)
     pool_create_info.flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
     
     DM_VULKAN_FUNC_CHECK(vkCreateCommandPool(vulkan_renderer->device.logical, &pool_create_info, vulkan_renderer->allocator, &vulkan_renderer->device.graphics_command_pool));
-    if(!DM_VULKAN_FUNC_SUCCESS)
+    if(!DM_VULKAN_FUNC_SUCCESS())
     {
         DM_LOG_FATAL("Could not create command pool");
         return false;
@@ -1590,8 +1621,6 @@ bool dm_vulkan_create_device(dm_vulkan_renderer* vulkan_renderer)
 
 bool dm_vulkan_device_detect_depth_buffer_range(dm_vulkan_device* device)
 {
-    VkResult result;
-    
     static const uint32_t candidate_count = 3;
     static VkFormat candidates[3] = {
         VK_FORMAT_D32_SFLOAT,
@@ -1636,18 +1665,20 @@ VULKAN INSTANCE
 bool dm_vulkan_create_instance(dm_platform_data* platform_data, dm_vulkan_renderer* vulkan_renderer)
 {
     vulkan_renderer->allocator = NULL;
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     // extensions
-    uint32_t extension_count;
 #ifdef DM_DEBUG
+    uint32_t extension_count;
     // available
     DM_VULKAN_FUNC_CHECK(vkEnumerateInstanceExtensionProperties(NULL, &extension_count, NULL));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     VkExtensionProperties* available_extensions = dm_alloc(sizeof(VkExtensionProperties) * extension_count);
     DM_VULKAN_FUNC_CHECK(vkEnumerateInstanceExtensionProperties(NULL, &extension_count, available_extensions));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     DM_LOG_INFO("Available Vulkan extensions:");
     for(uint32_t i=0; i<extension_count; i++)
@@ -1659,7 +1690,6 @@ bool dm_vulkan_create_instance(dm_platform_data* platform_data, dm_vulkan_render
 #endif
     
     // required
-    extension_count = 0;
     const char* required_extensions[] = {
         VK_KHR_SURFACE_EXTENSION_NAME,
 #ifdef DM_PLATFORM_WIN32
@@ -1685,11 +1715,11 @@ bool dm_vulkan_create_instance(dm_platform_data* platform_data, dm_vulkan_render
     uint32_t available_count;
     
     DM_VULKAN_FUNC_CHECK(vkEnumerateInstanceLayerProperties(&available_count, NULL));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     VkLayerProperties* available_layers = dm_alloc(sizeof(VkLayerProperties) * available_count);
     DM_VULKAN_FUNC_CHECK(vkEnumerateInstanceLayerProperties(&available_count, available_layers));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     const char* required_layers[] = {
         "VK_LAYER_KHRONOS_validation"
@@ -1739,7 +1769,7 @@ bool dm_vulkan_create_instance(dm_platform_data* platform_data, dm_vulkan_render
 #endif
     
     DM_VULKAN_FUNC_CHECK(vkCreateInstance(&create_info, vulkan_renderer->allocator, &vulkan_renderer->instance));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     // debugger
 #ifdef DM_DEBUG
@@ -1769,7 +1799,9 @@ VULKAN FENCE
 **************/
 bool dm_vulkan_create_fence(bool signaled, dm_vulkan_fence* fence, dm_vulkan_renderer* vulkan_renderer)
 {
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     fence->signaled = signaled;
     
@@ -1778,7 +1810,7 @@ bool dm_vulkan_create_fence(bool signaled, dm_vulkan_fence* fence, dm_vulkan_ren
     if(signaled) create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     
     DM_VULKAN_FUNC_CHECK(vkCreateFence(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &fence->fence));
-    if(DM_VULKAN_FUNC_SUCCESS) return true; 
+    if(DM_VULKAN_FUNC_SUCCESS()) return true; 
     
     DM_LOG_FATAL("Could not create Vulkan fence");
     return false;
@@ -1829,9 +1861,11 @@ bool dm_vulkan_fence_reset(dm_vulkan_fence* fence, dm_vulkan_renderer* vulkan_re
     if(!fence->signaled) return true;
     
     fence->signaled = false;
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     DM_VULKAN_FUNC_CHECK(vkResetFences(vulkan_renderer->device.logical, 1, &fence->fence));
-    if(DM_VULKAN_FUNC_SUCCESS) return true;
+    if(DM_VULKAN_FUNC_SUCCESS()) return true;
     
     DM_LOG_FATAL("vkResetFences failed");
     return false;
@@ -1991,7 +2025,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     {
         vulkan_renderer->flags &= ~DM_VULKAN_RENDERER_FLAG_RESIZED;
         
-        VkResult result = vkDeviceWaitIdle(vulkan_renderer->device.logical);
+        vkDeviceWaitIdle(vulkan_renderer->device.logical);
         
         dm_vulkan_query_swapchain_support(vulkan_renderer->device.physical, vulkan_renderer->surface, &vulkan_renderer->device.swapchain_support_info);
         dm_vulkan_device_detect_depth_buffer_range(&vulkan_renderer->device);
@@ -2021,7 +2055,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     
     if(!dm_vulkan_fence_wait(UINT64_MAX, &vulkan_renderer->in_flight_fences[vulkan_renderer->current_frame], vulkan_renderer)) return false;
     
-    if(!dm_vulkan_swapchain_next_image_index(UINT64_MAX, vulkan_renderer->available_semaphores[vulkan_renderer->current_frame], 0, &vulkan_renderer->image_index, &vulkan_renderer->swapchain, vulkan_renderer)) return false;
+    if(!dm_vulkan_swapchain_next_image_index(UINT32_MAX, vulkan_renderer->available_semaphores[vulkan_renderer->current_frame], 0, &vulkan_renderer->image_index, &vulkan_renderer->swapchain, vulkan_renderer)) return false;
     
     dm_vulkan_command_buffer_reset(buffer);
     dm_vulkan_command_buffer_begin(false, false, false, buffer);
@@ -2034,7 +2068,9 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 
 bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
 {
+#ifdef DM_DEBUG
     VkResult result;
+#endif
     
     dm_vulkan_renderer* vulkan_renderer = context->renderer.internal_renderer;
     DM_VULKAN_GET_COMMAND_BUFFER;
@@ -2063,7 +2099,7 @@ bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
     submit_info.pWaitDstStageMask = flags;
     
     DM_VULKAN_FUNC_CHECK(vkQueueSubmit(vulkan_renderer->device.graphics_queue, 1, &submit_info, vulkan_renderer->in_flight_fences[vulkan_renderer->current_frame].fence));
-    if(!DM_VULKAN_FUNC_SUCCESS) return false;
+    if(!DM_VULKAN_FUNC_SUCCESS()) return false;
     
     dm_vulkan_command_buffer_update_submitted(buffer);
     
@@ -2209,10 +2245,12 @@ VKAPI_ATTR VkBool32 VKAPI_CALL dm_vulkan_debug_callback(VkDebugUtilsMessageSever
         case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
         DM_LOG_TRACE(callback_data->pMessage);
         break;
+
+        default:
+        DM_LOG_ERROR("Shouldn't be here");
+        break;
     }
     
     return VK_FALSE;
 }
 #endif
-
-#endif //DM_RENDERER_VULKAN_H
