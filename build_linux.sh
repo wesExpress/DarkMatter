@@ -3,7 +3,7 @@
 set echo on
 output="app"
 
-vulkan=1
+vulkan=0
 debug=1
 simd_256=1
 phys_simd=1
@@ -44,13 +44,15 @@ fi
 
 if ((debug)); then
 	defines="$defines -DDM_DEBUG"
-	compiler_flags="$compiler_flags -O0 -fsanitize=address -fno-omit-frame-pointer"
+	#compiler_flags="$compiler_flags -O0 -fsanitize=address -fno-omit-frame-pointer"
 else
 	compiler_flags="$compiler_flags -O2"
 fi
 
 include_flags="-I$SRC_DIR/ -I$SRC_DIR/lib"
-if ((!vulkan)); then
+if ((vulkan)); then
+	include_flags="$include_flags -I$VULKAN_SDK/Include"
+else
 	include_flags="$include_flags -I$SRC_DIR/lib/glad/include"
 fi
 
