@@ -135,13 +135,11 @@ bool render_pass_render(dm_context* context)
     dm_mat4_identity(uni.view_proj);
     dm_mat_translate(uni.view_proj, app_data->camera.pos,  uni.view_proj);
     dm_mat4_mul_mat4(uni.view_proj, app_data->camera.proj, uni.view_proj);
-    
 #ifdef DM_DIRECTX
     dm_mat4_transpose(uni.view_proj, uni.view_proj);
 #endif
     
     // render
-#if 1
     dm_render_command_set_default_viewport(context);
     dm_render_command_clear(0.1f,0.3f,0.5f,1,context);
     
@@ -155,7 +153,6 @@ bool render_pass_render(dm_context* context)
     
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
     dm_render_command_draw_instanced(6,pass_data->instance_count,0,0,0, context);
-#endif
     
     // reset counts back to 0
     pass_data->entity_count = 0;

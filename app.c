@@ -83,8 +83,6 @@ bool app_update(dm_context* context)
         { 
             zoom_index += dm_input_get_mouse_scroll(context);
             zoom_index = DM_CLAMP(zoom_index, 0, DM_ARRAY_LEN(zoom_levels)-1);
-            DM_LOG_TRACE("Scroll: %d", dm_input_get_mouse_scroll(context));
-            DM_LOG_TRACE("Zoom index: %d", zoom_index);
             app_data->camera.zoom = zoom_levels[zoom_index];
         }
     }

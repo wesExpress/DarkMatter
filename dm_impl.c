@@ -1326,6 +1326,10 @@ void dm_ecs_shutdown(dm_ecs_manager* ecs_manager)
 {
     for(uint32_t i=0; i<ecs_manager->num_registered_components; i++)
     {
+        //for(uint32_t j=0; j<ecs_manager->component_blocks[i].block_count; j++)
+        //{
+        //dm_free(ecs_manager->component_blocks[i].data[j]);
+        //}
         dm_free(ecs_manager->component_blocks[i].data);
         dm_free(ecs_manager->component_blocks[i].entity_count);
     }
@@ -1342,7 +1346,7 @@ dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* con
     context->ecs_manager.component_blocks[id].block_size = component_block_size;
     context->ecs_manager.component_blocks[id].block_count = 1;
     
-    context->ecs_manager.component_blocks[id].data = dm_alloc(component_block_size * context->ecs_manager.component_blocks[id].block_count);
+    context->ecs_manager.component_blocks[id].data = dm_alloc(component_block_size);
     context->ecs_manager.component_blocks[id].entity_count = dm_alloc(sizeof(uint32_t) * context->ecs_manager.component_blocks[id].block_count);
     
     return id;
@@ -1382,7 +1386,7 @@ void* dm_ecs_get_current_component_block(dm_ecs_id component_id, uint32_t* block
     *block_count  = manager->block_count;
     *entity_count = manager->entity_count[*block_count-1];
     
-    return (char*)manager->data + manager->block_size * (manager->block_count-1);
+    return (char*)manager->data + manager->block_size * *block_count;
 }
 
 void* dm_ecs_entity_get_component_block(dm_entity entity, dm_ecs_id component_id, uint32_t* index, dm_context* context)
@@ -1404,10 +1408,10 @@ void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm
     context->ecs_manager.entity_ids[entity].index[component_id] = manager->entity_count[block_index]++;
     if(manager->entity_count[block_index] <= DM_ECS_COMPONENT_BLOCK_SIZE) return;
     
-    manager->block_count++;
-    manager->data = dm_realloc(manager->data, manager->block_size * manager->block_count);
+    manager->data = dm_realloc(manager->data, (manager->block_count++) * manager->block_size);
     manager->entity_count = dm_realloc(manager->entity_count, sizeof(uint32_t) * manager->block_count);
-    manager->entity_count[block_index+1] = 0;
+    manager->entity_count[manager->block_count-1] = 0;
+    manager->block_count++;
 }
 
 void dm_ecs_entity_add_transform(dm_entity entity, dm_component_transform transform, dm_context* context)
