@@ -1386,7 +1386,7 @@ void* dm_ecs_get_current_component_block(dm_ecs_id component_id, uint32_t* block
     *block_count  = manager->block_count;
     *entity_count = manager->entity_count[*block_count-1];
     
-    return (char*)manager->data + manager->block_size * *block_count;
+    return (char*)manager->data + manager->block_size * (manager->block_count-1);
 }
 
 void* dm_ecs_entity_get_component_block(dm_entity entity, dm_ecs_id component_id, uint32_t* index, dm_context* context)

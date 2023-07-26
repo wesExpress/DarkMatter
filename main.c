@@ -20,7 +20,7 @@ typedef enum error_code_t
 int main(int argc, char** argv)
 {
     error_code e = ERROR_CODE_SUCCESS;
-    
+   
     dm_context* context = dm_init(100,100,800,800,"test","assets");
     
     if(!context) return ERROR_CODE_INIT_FAIL;

@@ -740,12 +740,6 @@ typedef uint32_t dm_entity;
 #define DM_ECS_INVALID_ENTITY UINT_MAX
 #endif
 
-typedef struct dm_ecs_entity_ids_t
-{
-    uint32_t block_index[DM_ECS_MAX];
-    uint32_t index[DM_ECS_MAX];
-} dm_ecs_entity_ids;
-
 typedef struct dm_ecs_component_manager_t
 {
     size_t    block_size;
@@ -767,7 +761,7 @@ typedef struct dm_ecs_manager_t
     dm_ecs_default_components default_components;
     
     dm_ecs_component_manager component_blocks[DM_ECS_MAX];
-    dm_ecs_entity_ids*       entity_ids; 
+    uint32_t*                entity_indices[DM_ECS_MAX];
 } dm_ecs_manager;
 
 // components
