@@ -1384,8 +1384,9 @@ void* dm_ecs_get_current_component_block(dm_ecs_id component_id, dm_context* con
 
 void* dm_ecs_entity_get_component_block(dm_entity entity, dm_ecs_id component_id, uint32_t* index, dm_context* context)
 {
-    uint32_t block_index = context->ecs_manager.entity_indices[entity * DM_ECS_MAX + component_id];
-    
+    uint32_t block_index = context->ecs_manager.entity_indices[entity * DM_ECS_MAX + component_id] / DM_ECS_COMPONENT_BLOCK_SIZE;
+    *index = context->ecs_manager.entity_indices[entity * DM_ECS_MAX + component_id] % DM_ECS_COMPONENT_BLOCK_SIZE;
+
     dm_ecs_component_manager* manager = &context->ecs_manager.component_blocks[component_id];
     
     return (char*)manager->data + manager->block_size * block_index;
@@ -1396,12 +1397,13 @@ void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm
     dm_ecs_component_manager* manager = &context->ecs_manager.component_blocks[component_id];
     
     context->ecs_manager.entity_indices[entity * DM_ECS_MAX + component_id] = context->ecs_manager.component_blocks[component_id].entity_count++;
-    uint32_t t[DM_ECS_MAX];
-    dm_memcpy(t, context->ecs_manager.entity_indices + entity * DM_ECS_MAX, sizeof(uint32_t) * DM_ECS_MAX);
     
-    if(manager->entity_count <= DM_ECS_COMPONENT_BLOCK_SIZE) return;
+    if(entity==0) return;
+    bool resize = manager->entity_count % DM_ECS_COMPONENT_BLOCK_SIZE == 0;
+    if(!resize) return;
     
-    manager->data = dm_realloc(manager->data, (manager->block_count++) * manager->block_size);
+    manager->block_count++;
+    manager->data = dm_realloc(manager->data, manager->block_count * manager->block_size);
     dm_memzero((char*)manager->data + (manager->block_count-1) * manager->block_size, manager->block_size);
 }
 
@@ -1409,10 +1411,10 @@ void dm_ecs_entity_add_transform(dm_entity entity, dm_component_transform transf
 {
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add transform to invalid entity"); return; }
     
-    dm_ecs_id transform_id = context->ecs_manager.default_components.transform;
-    uint32_t index = context->ecs_manager.component_blocks[transform_id].entity_count;
+    const dm_ecs_id transform_id = context->ecs_manager.default_components.transform;
+    const uint32_t index = context->ecs_manager.component_blocks[transform_id].entity_count % DM_ECS_COMPONENT_BLOCK_SIZE;
     dm_component_transform_block* transform_block = dm_ecs_get_current_component_block(transform_id, context);
-    
+
     transform_block->pos_x[index] = transform.pos[0];
     transform_block->pos_y[index] = transform.pos[1];
     transform_block->pos_z[index] = transform.pos[2];
@@ -1425,7 +1427,7 @@ void dm_ecs_entity_add_transform(dm_entity entity, dm_component_transform transf
     transform_block->rot_j[index] = transform.rot[1];
     transform_block->rot_k[index] = transform.rot[2];
     transform_block->rot_r[index] = transform.rot[3];
-    
+
     dm_ecs_iterate_component_block(entity, transform_id, context);
 }
 
@@ -1434,7 +1436,7 @@ void dm_ecs_entity_add_physics(dm_entity entity, dm_component_physics physics, d
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
     
     dm_ecs_id physics_id = context->ecs_manager.default_components.transform;
-    uint32_t index = context->ecs_manager.component_blocks[physics_id].entity_count;
+    uint32_t index = context->ecs_manager.component_blocks[physics_id].entity_count % DM_ECS_COMPONENT_BLOCK_SIZE;
     dm_component_physics_block* physics_block = dm_ecs_get_current_component_block(physics_id, context);
     
     physics_block->vel_x[index] = physics.vel[0];
@@ -1494,7 +1496,7 @@ void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision collis
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add collision to invalid entity"); return; }
     
     dm_ecs_id collision_id = context->ecs_manager.default_components.collision;
-    uint32_t index = context->ecs_manager.component_blocks[collision_id].entity_count;
+    uint32_t index = context->ecs_manager.component_blocks[collision_id].entity_count % DM_ECS_COMPONENT_BLOCK_SIZE;
     dm_component_collision_block* collision_block = dm_ecs_get_current_component_block(collision_id, context);
     
     collision_block->aabb_local_min_x[index] = collision.aabb_local_min[0];

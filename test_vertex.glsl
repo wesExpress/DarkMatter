@@ -12,17 +12,15 @@ struct ps_input
 
 layout(location=0) out ps_input vs_output;
 
-#if 0
 layout (std140, binding=0) uniform uni
 {
 	mat4  view_proj;
 };
-#endif
 
 void main()
 {
-	//vs_output.position = view_proj * model * vec4(position, 1);
-	vs_output.position = vec4(position, 1);
+	vs_output.position = view_proj * model * vec4(position, 1);
+	//vs_output.position = vec4(position, 1);
 	vs_output.color = color;
 
 	gl_Position = vs_output.position;
