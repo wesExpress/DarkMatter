@@ -742,10 +742,10 @@ typedef uint32_t dm_entity;
 
 typedef struct dm_ecs_component_manager_t
 {
-    size_t    block_size;
-    uint32_t  block_count;
-    uint32_t* entity_count;
-    void*     data;
+    size_t   block_size;
+    uint32_t block_count;
+    uint32_t entity_count;
+    void*    data;
 } dm_ecs_component_manager;
 
 typedef struct dm_ecs_default_components_t
@@ -760,8 +760,8 @@ typedef struct dm_ecs_manager_t
     
     dm_ecs_default_components default_components;
     
+    uint32_t*                entity_indices;
     dm_ecs_component_manager component_blocks[DM_ECS_MAX];
-    uint32_t*                entity_indices[DM_ECS_MAX];
 } dm_ecs_manager;
 
 // components
@@ -901,14 +901,29 @@ typedef struct dm_component_physics_block_t
     
     // moment of inertia at rest are diagonals
     // but global inertia is a full 3x3 matrix
-    float i_body[3][DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_body_inv[3][DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_inv_0[3][DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_inv_1[3][DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_inv_2[3][DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_0[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_1[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_2[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float i_body_inv_0[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_inv_1[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_inv_2[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float i_inv_0_0[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_0_1[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_0_2[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float i_inv_1_0[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_1_1[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_1_2[DM_ECS_COMPONENT_BLOCK_SIZE];
+    
+    float i_inv_2_0[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_2_1[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_2_2[DM_ECS_COMPONENT_BLOCK_SIZE];
     
     // damping coefs
-    float damping[2][DM_ECS_COMPONENT_BLOCK_SIZE];
+    float damping_v[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float damping_w[DM_ECS_COMPONENT_BLOCK_SIZE];
     
     // enums
     dm_physics_body_type     body_type[DM_ECS_COMPONENT_BLOCK_SIZE];
