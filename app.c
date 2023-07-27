@@ -36,7 +36,7 @@ dm_entity create_entity(dm_context* context)
     
     dm_component_physics p = { 0 };
     dm_ecs_entity_add_physics(entity, p, context);
-
+    
     return entity;
 }
 
@@ -84,7 +84,7 @@ bool app_update(dm_context* context)
     {
         if(dm_input_mouse_has_scrolled(context)) 
         { 
-            zoom_index += dm_input_get_mouse_scroll(context);
+            zoom_index -= dm_input_get_mouse_scroll(context);
             zoom_index = DM_CLAMP(zoom_index, 0, DM_ARRAY_LEN(zoom_levels)-1);
             app_data->camera.zoom = zoom_levels[zoom_index];
         }

@@ -27,6 +27,132 @@ typedef struct dm_plane
 #define DM_PHYSICS_LOAD_FACTOR                0.75f
 #define DM_PHYSICS_RESIZE_FACTOR              1.5f
 
+// system funcs
+bool dm_physics_system_insert_entity(dm_entity entity, dm_ecs_system_timing timing, dm_ecs_id id, dm_context* context)
+{
+    dm_ecs_system_manager* manager = &context->ecs_manager.systems[timing][id];
+    
+    uint32_t sys_index = manager->entity_count;
+    
+    if(entity>=DM_ECS_COMPONENT_BLOCK_SIZE) return true;
+    
+    // transform
+    uint32_t index;
+    dm_component_transform_block* t_block = dm_ecs_entity_get_component_block(entity, context->ecs_manager.default_components.transform, &index, context);
+    dm_system_component_transform_block* sys_t_block = (void*)((char*)manager->data + manager->block_size * (manager->block_count-1));
+    
+    sys_t_block->pos_x[sys_index] = &t_block->pos_x[index];
+    sys_t_block->pos_y[sys_index] = &t_block->pos_y[index];
+    sys_t_block->pos_z[sys_index] = &t_block->pos_z[index];
+    
+    sys_t_block->scale_x[sys_index] = &t_block->scale_x[index];
+    sys_t_block->scale_y[sys_index] = &t_block->scale_y[index];
+    sys_t_block->scale_z[sys_index] = &t_block->scale_z[index];
+    
+    sys_t_block->rot_i[sys_index] = &t_block->rot_i[index];
+    sys_t_block->rot_j[sys_index] = &t_block->rot_j[index];
+    sys_t_block->rot_k[sys_index] = &t_block->rot_k[index];
+    sys_t_block->rot_r[sys_index] = &t_block->rot_r[index];
+    
+    // physics
+    dm_component_physics_block* p_block = dm_ecs_entity_get_component_block(entity, context->ecs_manager.default_components.physics, &index, context);
+    
+    dm_system_component_physics_block* sys_p_block = (void*)((char*)manager->data + manager->block_size * (manager->block_count-1) + sizeof(dm_system_component_transform_block));
+    
+    sys_p_block->vel_x[sys_index] = &p_block->vel_x[index];
+    sys_p_block->vel_y[sys_index] = &p_block->vel_y[index];
+    sys_p_block->vel_z[sys_index] = &p_block->vel_z[index];
+    
+    sys_p_block->w_x[sys_index] = &p_block->w_x[index];
+    sys_p_block->w_y[sys_index] = &p_block->w_y[index];
+    sys_p_block->w_z[sys_index] = &p_block->w_z[index];
+    
+    sys_p_block->l_x[sys_index] = &p_block->l_x[index];
+    sys_p_block->l_y[sys_index] = &p_block->l_y[index];
+    sys_p_block->l_z[sys_index] = &p_block->l_z[index];
+    
+    sys_p_block->force_x[sys_index] = &p_block->force_x[index];
+    sys_p_block->force_y[sys_index] = &p_block->force_y[index];
+    sys_p_block->force_z[sys_index] = &p_block->force_z[index];
+    
+    sys_p_block->torque_x[sys_index] = &p_block->torque_x[index];
+    sys_p_block->torque_y[sys_index] = &p_block->torque_y[index];
+    sys_p_block->torque_z[sys_index] = &p_block->torque_z[index];
+    
+    sys_p_block->mass[sys_index] = &p_block->mass[index];
+    sys_p_block->inv_mass[sys_index] = &p_block->inv_mass[index];
+    
+    sys_p_block->i_body_0[sys_index] = &p_block->i_body_0[index];
+    sys_p_block->i_body_1[sys_index] = &p_block->i_body_1[index];
+    sys_p_block->i_body_2[sys_index] = &p_block->i_body_2[index];
+    
+    sys_p_block->i_body_inv_0[sys_index] = &p_block->i_body_inv_0[index];
+    sys_p_block->i_body_inv_1[sys_index] = &p_block->i_body_inv_1[index];
+    sys_p_block->i_body_inv_2[sys_index] = &p_block->i_body_inv_2[index];
+    
+    sys_p_block->i_inv_0_0[sys_index] = &p_block->i_inv_0_0[index];
+    sys_p_block->i_inv_0_1[sys_index] = &p_block->i_inv_0_1[index];
+    sys_p_block->i_inv_0_2[sys_index] = &p_block->i_inv_0_2[index];
+    
+    sys_p_block->i_inv_1_0[sys_index] = &p_block->i_inv_1_0[index];
+    sys_p_block->i_inv_1_1[sys_index] = &p_block->i_inv_1_1[index];
+    sys_p_block->i_inv_1_2[sys_index] = &p_block->i_inv_1_2[index];
+    
+    sys_p_block->i_inv_2_0[sys_index] = &p_block->i_inv_2_0[index];
+    sys_p_block->i_inv_2_1[sys_index] = &p_block->i_inv_2_1[index];
+    sys_p_block->i_inv_2_2[sys_index] = &p_block->i_inv_2_2[index];
+    
+    sys_p_block->damping_v[sys_index] = &p_block->damping_v[index];
+    sys_p_block->damping_w[sys_index] = &p_block->damping_w[index];
+    
+    sys_p_block->body_type[sys_index]     = &p_block->body_type[index];
+    sys_p_block->movement_type[sys_index] = &p_block->movement_type[index];
+    
+    // collision
+    dm_component_collision_block* c_block = dm_ecs_entity_get_component_block(entity, context->ecs_manager.default_components.collision, &index, context);
+    
+    dm_system_component_collision_block* sys_c_block = (void*)((char*)manager->data + manager->block_size * (manager->block_count-1) + sizeof(dm_system_component_transform_block) + sizeof(dm_system_component_physics_block));
+    
+    sys_c_block->aabb_local_min_x[sys_index] = &c_block->aabb_local_min_x[index];
+    sys_c_block->aabb_local_min_y[sys_index] = &c_block->aabb_local_min_y[index];
+    sys_c_block->aabb_local_min_z[sys_index] = &c_block->aabb_local_min_z[index];
+    
+    sys_c_block->aabb_local_max_x[sys_index] = &c_block->aabb_local_max_x[index];
+    sys_c_block->aabb_local_max_y[sys_index] = &c_block->aabb_local_max_y[index];
+    sys_c_block->aabb_local_max_z[sys_index] = &c_block->aabb_local_max_z[index];
+    
+    sys_c_block->aabb_global_min_x[sys_index] = &c_block->aabb_global_min_x[index];
+    sys_c_block->aabb_global_min_y[sys_index] = &c_block->aabb_global_min_y[index];
+    sys_c_block->aabb_global_min_z[sys_index] = &c_block->aabb_global_min_z[index];
+    
+    sys_c_block->aabb_global_max_x[sys_index] = &c_block->aabb_global_max_x[index];
+    sys_c_block->aabb_global_max_y[sys_index] = &c_block->aabb_global_max_y[index];
+    sys_c_block->aabb_global_max_z[sys_index] = &c_block->aabb_global_max_z[index];
+    
+    sys_c_block->center_x[sys_index] = &c_block->center_x[index];
+    sys_c_block->center_y[sys_index] = &c_block->center_y[index];
+    sys_c_block->center_z[sys_index] = &c_block->center_z[index];
+    
+    sys_c_block->internal_0[sys_index] = &c_block->internal_0[index];
+    sys_c_block->internal_1[sys_index] = &c_block->internal_1[index];
+    sys_c_block->internal_2[sys_index] = &c_block->internal_2[index];
+    sys_c_block->internal_3[sys_index] = &c_block->internal_3[index];
+    sys_c_block->internal_4[sys_index] = &c_block->internal_4[index];
+    sys_c_block->internal_5[sys_index] = &c_block->internal_5[index];
+    
+    sys_c_block->shape[sys_index] = &c_block->shape[index];
+    sys_c_block->flag[sys_index] = &c_block->flag[index];
+    
+    manager->entity_count++;
+    
+    return true;
+}
+
+bool dm_physics_system_run(dm_context* context)
+{
+    return true;
+}
+
 // impl
 bool dm_physics_init(dm_ecs_id* physics_id, dm_ecs_id* collision_id, dm_context* context)
 {
@@ -38,6 +164,22 @@ bool dm_physics_init(dm_ecs_id* physics_id, dm_ecs_id* collision_id, dm_context*
     
     context->physics_manager.possible_collisions = dm_alloc(sizeof(dm_collision_pair) * DM_PHYSICS_DEFAULT_COLLISION_CAPACITY);
     context->physics_manager.manifolds = dm_alloc(sizeof(dm_contact_manifold) * DM_PHYSICS_DEFAULT_MANIFOLD_CAPACITY);
+    
+#define DM_PHYSICS_SYS_NUM_COMPS 3
+    
+    size_t block_sizes[DM_PHYSICS_SYS_NUM_COMPS] = {
+        sizeof(dm_system_component_transform_block),
+        sizeof(dm_system_component_physics_block),
+        sizeof(dm_system_component_collision_block)
+    };
+    
+    dm_ecs_id comps[DM_PHYSICS_SYS_NUM_COMPS] = {
+        context->ecs_manager.default_components.transform,
+        context->ecs_manager.default_components.physics,
+        context->ecs_manager.default_components.collision
+    };
+    
+    dm_ecs_id sys_id = dm_ecs_register_system(block_sizes, comps, DM_PHYSICS_SYS_NUM_COMPS, DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN, dm_physics_system_insert_entity, dm_physics_system_run, context);
     
     return true;
 }
