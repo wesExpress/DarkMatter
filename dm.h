@@ -792,10 +792,10 @@ typedef struct dm_ecs_manager_t
     
     // entities; indexed via hashing
     dm_entity* entities;
+    uint32_t  (*entity_component_indices)[DM_ECS_MAX];
+    uint32_t  (*entity_system_indices)[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
     dm_ecs_id* entity_component_masks;
-    uint32_t*  entity_component_indices;
-    uint32_t*  entity_system_indices;
-    
+
     // components and systems
     dm_ecs_component_manager components[DM_ECS_MAX];
     dm_ecs_system_manager    systems[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
@@ -1392,6 +1392,9 @@ void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 // ecs
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
 dm_ecs_id dm_ecs_register_system(size_t* system_block_sizes, dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*insert_func)(dm_entity,dm_ecs_system_timing,dm_ecs_id,void*), bool (*run_func)(void*), dm_context* context);
+
+void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm_context* context);
+void dm_ecs_interate_system_block(dm_entity entity, dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context);
 
 dm_entity dm_ecs_create_entity(dm_context* context);
 dm_entity dm_ecs_entity_get_component_entity(dm_entity entity, dm_ecs_id component_id, dm_context* context);

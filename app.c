@@ -24,11 +24,7 @@ dm_entity create_entity(dm_context* context)
     
     t.scale[0] = dm_random_float_range(0.5,3,context);
     t.scale[1] = dm_random_float_range(0.5,3,context);
-    t.scale[2] = dm_random_float_range(0.5,3,context);
     
-    t.rot[0] = 0;
-    t.rot[1] = 0;
-    t.rot[2] = 0;
     t.rot[3] = 1;
     
     dm_ecs_entity_add_transform(entity, t, context);
