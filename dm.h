@@ -117,6 +117,72 @@ typedef __m128i dm_mm_int;
 #endif
 #endif
 
+/*******
+HASHING
+*********/
+typedef uint32_t dm_hash;
+typedef uint64_t dm_hash64;
+
+DM_INLINE
+dm_hash64 dm_hash_fnv1a(const char* key)
+{
+    dm_hash64 hash = 14695981039346656037UL;
+	for (int i = 0; key[i]; i++)
+	{
+		hash ^= key[i];
+		hash *= 1099511628211;
+	}
+    
+	return hash;
+}
+
+// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+DM_INLINE
+dm_hash dm_hash_32bit(uint32_t key)
+{
+    dm_hash hash = ((key >> 16) ^ key)   * 0x119de1f3;
+    hash         = ((hash >> 16) ^ hash) * 0x119de1f3;
+    hash         = (hash >> 16) ^ hash;
+    
+    return hash;
+}
+
+// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+DM_INLINE
+dm_hash64 dm_hash_64bit(uint64_t key)
+{
+	dm_hash64 hash = (key ^ (key >> 30))   * UINT64_C(0xbf58476d1ce4e5b9);
+	hash           = (hash ^ (hash >> 27)) * UINT64_C(0x94d049bb133111eb);
+	hash           = hash ^ (hash >> 31);
+    
+	return hash;
+}
+
+// http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
+DM_INLINE
+dm_hash dm_hash_int_pair(int x, int y)
+{
+    if(y < x) return ( y << 16 ) + x;
+    
+    return (x << 16) + y;
+}
+
+// https://stackoverflow.com/questions/682438/hash-function-providing-unique-uint-from-an-integer-coordinate-pair
+DM_INLINE
+dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y)
+{
+    if(y < x) return ( (uint64_t)y << 32 ) ^ x;
+    
+    return ((uint64_t)x << 32) ^ y;
+}
+
+// alternative to modulo: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+DM_INLINE
+uint32_t dm_hash_reduce(uint32_t x, uint32_t n)
+{
+    return ((uint64_t)x * (uint64_t)n) >> 32;
+}
+
 /******
 RANDOM
 ********/
@@ -714,7 +780,8 @@ typedef struct dm_renderer_t
 /***
 ECS
 *****/
-#define DM_ECS_COMPONENT_BLOCK_SIZE 512
+#define DM_ECS_COMPONENT_BLOCK_SIZE     512
+#define DM_ECS_INV_COMPONENT_BLOCK_SIZE 0.001953125f   // TODO: this is inverse 512, so if above changes, this should too
 
 #ifdef DM_ECS_MORE_COMPONENTS
 typedef uint64_t dm_ecs_id;
@@ -749,18 +816,28 @@ typedef enum dm_ecs_system_timing_t
     DM_ECS_SYSTEM_TIMING_UNKNOWN
 } dm_ecs_system_timing;
 
-struct dm_context;
+typedef struct dm_ecs_system_entity_container_t
+{
+    dm_entity entity;
+    uint32_t  entity_index;
+    
+    uint32_t component_indices[DM_ECS_MAX];
+    uint32_t block_indices[DM_ECS_MAX];
+} dm_ecs_system_entity_container;
+
 typedef struct dm_ecs_system_manager_t
 {
-    size_t    block_size;
-    uint32_t  block_count;
-    uint32_t  entity_count;
+    uint32_t  entity_count, entity_capacity, component_count;
+    
     dm_ecs_id component_mask;
+    dm_ecs_id component_ids[DM_ECS_MAX];
     
-    bool (*run_func)(void*);
-    bool (*insert_func)(dm_entity,dm_ecs_system_timing,dm_ecs_id,void*);
+    bool (*run_func)(dm_ecs_system_timing,dm_ecs_id,void*);
+    void (*shutdown_func)(dm_ecs_system_timing,dm_ecs_id,void*);
     
-    void*    data;
+    void* system_data;
+    
+    dm_ecs_system_entity_container* entity_containers;
 } dm_ecs_system_manager;
 
 typedef struct dm_ecs_component_manager_t
@@ -793,9 +870,9 @@ typedef struct dm_ecs_manager_t
     // entities; indexed via hashing
     dm_entity* entities;
     uint32_t  (*entity_component_indices)[DM_ECS_MAX];
-    uint32_t  (*entity_system_indices)[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
+    uint32_t  (*entity_block_indices)[DM_ECS_MAX];
     dm_ecs_id* entity_component_masks;
-
+    
     // components and systems
     dm_ecs_component_manager components[DM_ECS_MAX];
     dm_ecs_system_manager    systems[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
@@ -818,22 +895,6 @@ typedef struct dm_component_transform_block_t
     float rot_r[DM_ECS_COMPONENT_BLOCK_SIZE];
 } dm_component_transform_block;
 
-typedef struct dm_system_component_transform_block_t
-{
-    float* pos_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* pos_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* pos_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* scale_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* scale_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* scale_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* rot_i[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* rot_j[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* rot_k[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* rot_r[DM_ECS_COMPONENT_BLOCK_SIZE];
-} dm_system_component_transform_block;
-
 typedef struct dm_component_transform_t
 {
     float pos[3];
@@ -844,75 +905,6 @@ typedef struct dm_component_transform_t
 /*******
 PHYSICS
 *********/
-#define DM_PHYSICS_EPA_TOLERANCE     0.00001f
-#define DM_PHYSICS_MAX_CONTACTS      8
-#define DM_PHYSICS_DIVISION_EPSILON  1e-8f
-#define DM_PHYSICS_TEST_EPSILON      1e-4f
-#define DM_PHYSICS_CLIP_MAX_PTS      15
-#define DM_PHYSICS_CONSTRAINT_ITER   10
-#define DM_PHYSICS_PERSISTENT_THRESH 0.001f
-#define DM_PHYSICS_W_LIM             50.0f
-
-typedef struct dm_simplex
-{
-    float    points[4][3];
-    uint32_t size;
-} dm_simplex;
-
-typedef struct dm_contact_constraint
-{
-    float  jacobian[4][3];
-    float  delta_v[4][3];
-    float  b;
-    double lambda, warm_lambda, impulse_sum, impulse_min, impulse_max;
-} dm_contact_constraint;
-
-typedef struct dm_contact_point
-{
-    dm_contact_constraint normal;
-    dm_contact_constraint friction_a, friction_b;
-    
-    float global_pos[2][3];
-    float local_pos[2][3];
-    float penetration;
-} dm_contact_point;
-
-typedef struct dm_contact_manifold
-{
-    dm_entity entities[2];
-    float     normal[3];
-    float     tangent_a[3]; 
-    float     tangent_b[3];
-    float     orientation_a[4];
-    float     orientation_b[4];
-    
-    dm_contact_point points[DM_PHYSICS_CLIP_MAX_PTS];
-    uint32_t         point_count;
-} dm_contact_manifold;
-
-typedef struct dm_collision_pair_t
-{
-    dm_entity entity_a, entity_b;
-} dm_collision_pair;
-
-typedef enum dm_physics_flag_t
-{
-    DM_PHYSICS_FLAG_PAUSED,
-    DM_PHYSICS_FLAG_UNKNOWN
-} dm_physics_flag;
-
-typedef struct dm_physics_manager_t
-{
-    double          accum_time, simulation_time;
-    dm_physics_flag flag;
-    
-    uint32_t num_possible_collisions, collision_capacity;
-    uint32_t num_manifolds, manifold_capacity;
-    
-    dm_collision_pair*   possible_collisions;
-    dm_contact_manifold* manifolds;
-} dm_physics_manager;
-
 // physics component
 typedef enum dm_physics_body_type_t
 {
@@ -982,62 +974,6 @@ typedef struct dm_component_physics_block_t
     dm_physics_body_type     body_type[DM_ECS_COMPONENT_BLOCK_SIZE];
     dm_physics_movement_type movement_type[DM_ECS_COMPONENT_BLOCK_SIZE];
 } dm_component_physics_block;
-
-typedef struct dm_system_component_physics_block_t
-{
-    float* vel_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* vel_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* vel_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* w_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* w_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* w_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* l_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* l_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* l_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* force_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* force_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* force_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* torque_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* torque_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* torque_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* mass[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* inv_mass[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    // moment of inertia at rest are diagonals
-    // but global inertia is a full 3x3 matrix
-    float* i_body_0[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* i_body_1[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* i_body_2[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* i_body_inv_0[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* i_body_inv_1[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* i_body_inv_2[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* i_inv_0_0[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* i_inv_0_1[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* i_inv_0_2[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* i_inv_1_0[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* i_inv_1_1[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* i_inv_1_2[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* i_inv_2_0[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* i_inv_2_1[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* i_inv_2_2[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    // damping coefs
-    float* damping_v[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* damping_w[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    // enums
-    dm_physics_body_type*     body_type[DM_ECS_COMPONENT_BLOCK_SIZE];
-    dm_physics_movement_type* movement_type[DM_ECS_COMPONENT_BLOCK_SIZE];
-} dm_system_component_physics_block;
 
 typedef struct dm_component_physics_t
 {
@@ -1121,39 +1057,6 @@ typedef struct dm_component_collision_block_t
     dm_collision_flag  flag[DM_ECS_COMPONENT_BLOCK_SIZE];
 } dm_component_collision_block;
 
-typedef struct dm_system_component_collision_block_t
-{
-    float* aabb_local_min_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* aabb_local_min_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* aabb_local_min_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* aabb_local_max_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* aabb_local_max_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* aabb_local_max_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* aabb_global_min_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* aabb_global_min_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* aabb_global_min_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* aabb_global_max_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* aabb_global_max_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* aabb_global_max_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* center_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* center_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* center_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float* internal_0[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* internal_1[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* internal_2[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* internal_3[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* internal_4[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float* internal_5[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    dm_collision_shape* shape[DM_ECS_COMPONENT_BLOCK_SIZE];
-    dm_collision_flag*  flag[DM_ECS_COMPONENT_BLOCK_SIZE];
-} dm_system_component_collision_block;
-
 typedef struct dm_component_collision_t
 {
     float aabb_local_min[3];
@@ -1178,7 +1081,7 @@ typedef struct dm_context_t
     dm_input_state     input_states[2];
     dm_renderer        renderer;
     dm_ecs_manager     ecs_manager;
-    dm_physics_manager physics_manager;
+    
     double             start, end, delta;
     mt19937            random;
     mt19937_64         random_64;
@@ -1279,16 +1182,6 @@ dm_mm_int   dm_mm_hadd_i(dm_mm_int left, dm_mm_int right);
 dm_mm_int   dm_mm_shiftl_1(dm_mm_int mm);
 dm_mm_int   dm_mm_shiftr_1(dm_mm_int mm);
 #endif
-
-// hashing
-typedef uint32_t dm_hash;
-typedef uint64_t dm_hash64;
-
-dm_hash   dm_hash_32bit(uint32_t key);
-dm_hash   dm_hash_int_pair(int x, int y);
-dm_hash64 dm_hash_fnv1a(const char* key);
-dm_hash64 dm_hash_64bit(uint64_t key);
-dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y);
 
 // general input
 bool dm_input_is_key_pressed(dm_key_code key, dm_context* context);
@@ -1391,15 +1284,12 @@ void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 
 // ecs
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
-dm_ecs_id dm_ecs_register_system(size_t* system_block_sizes, dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*insert_func)(dm_entity,dm_ecs_system_timing,dm_ecs_id,void*), bool (*run_func)(void*), dm_context* context);
+dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*run_func)(dm_ecs_system_timing,dm_ecs_id,void*), void (*shutdown_func)(dm_ecs_system_timing,dm_ecs_id,void*), dm_context* context);
 
 void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm_context* context);
-void dm_ecs_interate_system_block(dm_entity entity, dm_ecs_system_timing timing, dm_ecs_id sys_id, dm_context* context);
 
 dm_entity dm_ecs_create_entity(dm_context* context);
 dm_entity dm_ecs_entity_get_component_entity(dm_entity entity, dm_ecs_id component_id, dm_context* context);
-bool dm_ecs_entity_has_component(dm_entity entity, dm_ecs_id component_id, dm_context* context);
-bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_mask, dm_context* context);
 
 void* dm_ecs_entity_get_component_block(dm_entity entity, dm_ecs_id component_id, uint32_t* index, dm_context* context);
 
@@ -1412,6 +1302,55 @@ void dm_ecs_entity_add_physics(dm_entity entity, dm_component_physics physics, d
 void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision c, dm_context* context);
 void dm_ecs_entity_add_box_collider(dm_entity entity, float center[3], float dim[3], dm_context* context);
 void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center[3], float radius, dm_context* context);
+
+// inline ecs
+DM_INLINE
+uint32_t dm_ecs_entity_get_index(dm_entity entity, dm_context* context)
+{
+    const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
+    dm_entity* entities = context->ecs_manager.entities;
+    
+    if(entities[index]==entity) return index;
+    
+    uint32_t runner = index + 1;
+    if(runner >= context->ecs_manager.entity_capacity) runner = 0;
+    
+    while(runner != index)
+    {
+        if(entities[runner]==entity) return runner;
+        
+        runner++;
+        if(runner >= context->ecs_manager.entity_capacity) runner = 0;
+    }
+    
+    DM_LOG_FATAL("Could not find entity index, should not be here...");
+    return UINT_MAX;
+}
+
+DM_INLINE
+bool dm_ecs_entity_has_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
+{
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    if(entity_index==UINT_MAX) return false;
+    
+    return context->ecs_manager.entity_component_masks[entity_index] & component_id;
+}
+
+DM_INLINE
+bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_mask, dm_context* context)
+{
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    if(entity_index==UINT_MAX) return false;
+    
+    dm_ecs_id entity_mask = context->ecs_manager.entity_component_masks[entity_index];
+    
+    // NAND entity mask with opposite of component mask
+    dm_ecs_id result = ~(entity_mask & ~component_mask);
+    // XOR with opposite of entity mask
+    result ^= ~entity_mask;
+    // success only if this equals the component mask
+    return (result == component_mask);
+}
 
 // framework funcs
 dm_context* dm_init(uint32_t window_x_pos, uint32_t windos_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title, const char* asset_path);

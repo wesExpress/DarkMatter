@@ -4,13 +4,13 @@ SetLocal EnableDelayedExpansion
 SET SRC_DIR=%cd%
 
 SET /A vulkan=0
-SET /A debug=1
+SET /A debug=0
 SET /A simd_256=1
 SET /A phys_simd=1
 SET /A phys_multi_th=0
 
 SET c_filenames=%SRC_DIR%\main.c %SRC_DIR%\app.c %SRC_DIR%\render_pass.c
-SET dm_filenames=%SRC_DIR%\dm_impl.c %SRC_DIR%\dm_platform_win32.c
+SET dm_filenames=%SRC_DIR%\dm_impl.c %SRC_DIR%\dm_platform_win32.c %SRC_DIR%\dm_physics.c
 SET linker_flags=/link user32.lib gdi32.lib
 SET include_flags=/I%SRC_DIR%\lib
 SET compiler_flags=/arch:AVX2 /Wall /WL /TC /std:c99 /RTCsu
@@ -32,7 +32,7 @@ IF /I "%debug%" EQU "1" (
 	SET compiler_flags=/W2 /Z7 /Od /Ob0
 ) ELSE (
 	SET defines=%defines% /DDM_RELEASE
-	SET compiler_flags=/Zi /O2 /Ob2 /DEBUG
+	SET compiler_flags=/Zi /O2 /Ob3 /DEBUG
 )
 
 IF /I "%vulkan%" EQU "1" (

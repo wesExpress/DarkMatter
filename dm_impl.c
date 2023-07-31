@@ -3,6 +3,7 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
+#include <float.h>
 
 #include "mt19937/mt19937.h"
 #include "mt19937/mt19937_64.h"
@@ -170,56 +171,6 @@ float dm_log2f(float x)
 bool dm_isnan(float x)
 {
     return isnan(x);
-}
-
-/*******
-HASHING
-*********/
-dm_hash64 dm_hash_fnv1a(const char* key)
-{
-    dm_hash64 hash = 14695981039346656037UL;
-	for (int i = 0; key[i]; i++)
-	{
-		hash ^= key[i];
-		hash *= 1099511628211;
-	}
-    
-	return hash;
-}
-
-dm_hash dm_hash_32bit(uint32_t key)
-{
-    dm_hash hash = ((key >> 16) ^ key) * 0x119de1f3;
-    hash= ((hash >> 16) ^ hash) * 0x119de1f3;
-    hash= (hash >> 16) ^ hash;
-    
-    return hash;
-}
-
-// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
-dm_hash64 dm_hash_64bit(uint64_t key)
-{
-	dm_hash64 hash = (key ^ (key >> 30)) * UINT64_C(0xbf58476d1ce4e5b9);
-	hash = (hash ^ (hash >> 27)) * UINT64_C(0x94d049bb133111eb);
-	hash = hash ^ (hash >> 31);
-    
-	return hash;
-}
-
-// http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
-dm_hash dm_hash_int_pair(int x, int y)
-{
-    if(y < x) return ( y << 16 ) + x;
-    
-    return (x << 16) + y;
-}
-
-// https://stackoverflow.com/questions/682438/hash-function-providing-unique-uint-from-an-integer-coordinate-pair
-dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y)
-{
-    if(y < x) return ( (uint64_t)y << 32 ) ^ x;
-    
-    return ((uint64_t)x << 32) ^ y;
 }
 
 /******
@@ -1342,11 +1293,6 @@ dm_pipeline_desc dm_renderer_default_pipeline()
     return pipeline_desc;
 }
 
-/*******
-PHYSICS
-*********/
-#include "dm_physics.h"
-
 /***
 ECS
 *****/
@@ -1369,9 +1315,8 @@ bool dm_ecs_init(dm_context* context)
     ecs_manager->entity_component_indices = dm_alloc(block_size);
     dm_memset(ecs_manager->entity_component_indices, DM_ECS_INVALID_ID, block_size);
     
-    block_size                           *= DM_ECS_SYSTEM_TIMING_UNKNOWN;
-    ecs_manager->entity_system_indices    = dm_alloc(block_size);
-    dm_memset(ecs_manager->entity_system_indices, DM_ECS_INVALID_ID, block_size);
+    ecs_manager->entity_block_indices    = dm_alloc(block_size);
+    dm_memset(ecs_manager->entity_block_indices, DM_ECS_INVALID_ID, block_size);
     
     block_size                            = sizeof(dm_ecs_id) * ecs_manager->entity_capacity;
     ecs_manager->entity_component_masks   = dm_alloc(block_size);
@@ -1385,9 +1330,11 @@ bool dm_ecs_init(dm_context* context)
     return false;
 }
 
-void dm_ecs_shutdown(dm_ecs_manager* ecs_manager)
+void dm_ecs_shutdown(dm_context* context)
 {
     uint32_t i;
+    
+    dm_ecs_manager* ecs_manager = &context->ecs_manager;
     
     for(i=0; i<ecs_manager->num_registered_components; i++)
     {
@@ -1398,13 +1345,14 @@ void dm_ecs_shutdown(dm_ecs_manager* ecs_manager)
     {
         for(uint32_t j=0; j<ecs_manager->num_registered_systems[i]; j++)
         {
-            dm_free(ecs_manager->systems[i][j].data);
+            ecs_manager->systems[i][j].shutdown_func(i,j,(void*)context);
+            dm_free(ecs_manager->systems[i][j].entity_containers);
         }
     }
     
     dm_free(ecs_manager->entity_component_masks);
     dm_free(ecs_manager->entity_component_indices);
-    dm_free(ecs_manager->entity_system_indices);
+    dm_free(ecs_manager->entity_block_indices);
     dm_free(ecs_manager->entities);
 }
 
@@ -1423,76 +1371,51 @@ dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* con
     return id;
 }
 
-dm_ecs_id dm_ecs_register_system(size_t* system_block_sizes, dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*insert_func)(dm_entity,dm_ecs_system_timing,dm_ecs_id,void*), bool (*run_func)(void*), dm_context* context)
+dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing,  bool (*run_func)(dm_ecs_system_timing,dm_ecs_id,void*), void (*shutdown_func)(dm_ecs_system_timing,dm_ecs_id,void*), dm_context* context)
 {
     if(context->ecs_manager.num_registered_systems[timing] >= DM_ECS_MAX) return DM_ECS_INVALID_ID;
     
+    
     dm_ecs_id id = context->ecs_manager.num_registered_systems[timing]++;
+    dm_ecs_system_manager* manager = &context->ecs_manager.systems[timing][id];
     
     for(uint32_t i=0; i<component_count; i++)
     {
-        if(i>0 && component_ids[i] < component_ids[i-1]) 
-        { 
-            DM_LOG_ERROR("Re-run with component ids in increasing order"); 
-            return DM_ECS_INVALID_ID; 
-        }
-        
-        context->ecs_manager.systems[timing][id].block_size     += system_block_sizes[i];
-        context->ecs_manager.systems[timing][id].component_mask |= DM_BIT_SHIFT(component_ids[i]);
+        manager->component_mask |= DM_BIT_SHIFT(component_ids[i]);
+        manager->component_ids[i] = component_ids[i];
     }
     
-    context->ecs_manager.systems[timing][id].block_count = 1;
-    context->ecs_manager.systems[timing][id].run_func    = run_func;
-    context->ecs_manager.systems[timing][id].insert_func = insert_func;
-    context->ecs_manager.systems[timing][id].data        = dm_alloc(context->ecs_manager.systems[timing][id].block_size);
+    manager->component_count = component_count;
+    
+    manager->run_func      = run_func;
+    manager->shutdown_func = shutdown_func;
+    
+    manager->entity_capacity   = DM_ECS_COMPONENT_BLOCK_SIZE;
+    manager->entity_containers = dm_alloc(sizeof(dm_ecs_system_entity_container) * manager->entity_capacity);
+    manager->entity_count      = 0;
     
     return id;
-}
-
-uint32_t dm_ecs_entity_get_index(dm_entity entity, dm_context* context)
-{
-    const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
-    
-    if(context->ecs_manager.entities[index]==entity) return index;
-    
-    uint32_t runner = index + 1;
-    if(runner >= context->ecs_manager.entity_capacity) runner = 0;
-    
-    while(runner != index)
-    {
-        if(context->ecs_manager.entities[runner]==entity) return runner;
-        
-        runner++;
-        if(runner >= context->ecs_manager.entity_capacity) runner = 0;
-    }
-    
-    DM_LOG_FATAL("Could not find entity index, should not be here...");
-    for(uint32_t i=0; i<context->ecs_manager.entity_capacity; i++)
-    {
-        if(context->ecs_manager.entities[i]!=entity) continue;
-        DM_LOG_WARN("Entity found");
-    }
-    return UINT_MAX;
 }
 
 void dm_ecs_entity_insert(dm_entity entity, dm_context* context)
 {
     const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
+    dm_entity* entities = context->ecs_manager.entities;
     
-    if(context->ecs_manager.entities[index]==DM_ECS_INVALID_ENTITY) 
+    if(entities[index]==DM_ECS_INVALID_ENTITY) 
     {
-        context->ecs_manager.entities[index] = entity;
+        entities[index] = entity;
         return;
     }
     
     uint32_t runner = index + 1;
     if(runner >= context->ecs_manager.entity_capacity) runner = 0;
-
+    
     while(runner != index)
     {
-        if(context->ecs_manager.entities[runner]==DM_ECS_INVALID_ENTITY) 
+        if(entities[runner]==DM_ECS_INVALID_ENTITY) 
         {
-            context->ecs_manager.entities[runner] = entity;
+            entities[runner] = entity;
             return;
         }
         
@@ -1506,41 +1429,41 @@ void dm_ecs_entity_insert(dm_entity entity, dm_context* context)
 void dm_ecs_reinsert_entities(uint32_t old_capacity, dm_context* context)
 {
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
-
+    
     uint32_t cap = ecs_manager->entity_capacity;
     
     size_t e_size = sizeof(dm_entity) * cap;
     size_t c_size = sizeof(uint32_t) * DM_ECS_MAX * cap;
-    size_t s_size = sizeof(uint32_t) * DM_ECS_MAX * DM_ECS_SYSTEM_TIMING_UNKNOWN * cap;
+    size_t s_size = sizeof(uint32_t) * DM_ECS_MAX * cap;
     size_t m_size = sizeof(dm_ecs_id) * cap;
-
+    
     dm_entity* new_entities;
     uint32_t (*new_comp_inds)[DM_ECS_MAX];
-    uint32_t (*new_sys_inds)[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
+    uint32_t (*new_blk_inds)[DM_ECS_MAX];
     dm_ecs_id* new_masks;
-
+    
     new_entities  = dm_alloc(e_size);
     new_comp_inds = dm_alloc(c_size);
-    new_sys_inds  = dm_alloc(s_size);
+    new_blk_inds  = dm_alloc(s_size);
     new_masks     = dm_alloc(m_size);
-
+    
     dm_memset(new_entities, DM_ECS_INVALID_ENTITY, e_size);
     dm_memset(new_comp_inds, DM_ECS_INVALID_ID, c_size);
-    dm_memset(new_sys_inds, DM_ECS_INVALID_ID, s_size);
-    dm_memset(new_masks, DM_ECS_INVALID_ID, m_size);
-
+    dm_memset(new_blk_inds, DM_ECS_INVALID_ID, s_size);
+    dm_memzero(new_masks, m_size);
+    
     for(uint32_t i=0; i<old_capacity; i++)
     {
         dm_entity entity = ecs_manager->entities[i];
         if(entity==DM_ECS_INVALID_ENTITY) continue;
-
+        
         uint32_t index = dm_hash_32bit(entity) % ecs_manager->entity_capacity;
-
+        
         if(new_entities[index]==DM_ECS_INVALID_ENTITY)
         {
             new_entities[index] = entity;
             dm_memcpy(new_comp_inds[index], ecs_manager->entity_component_indices[i], sizeof(uint32_t) * DM_ECS_MAX);
-            dm_memcpy(new_sys_inds[index], ecs_manager->entity_system_indices[i], sizeof(uint32_t) * DM_ECS_SYSTEM_TIMING_UNKNOWN * DM_ECS_MAX);
+            dm_memcpy(new_blk_inds[index], ecs_manager->entity_block_indices[i], sizeof(uint32_t) * DM_ECS_MAX);
             new_masks[index] = ecs_manager->entity_component_masks[i];
         }
         // hash conflict, so iterate
@@ -1548,14 +1471,14 @@ void dm_ecs_reinsert_entities(uint32_t old_capacity, dm_context* context)
         {
             uint32_t runner = index + 1;
             if(runner >= ecs_manager->entity_capacity) runner = 0;
-
+            
             while(runner != index)
             {
                 if(new_entities[runner]==DM_ECS_INVALID_ENTITY)
                 {
                     new_entities[runner] = entity;
                     dm_memcpy(new_comp_inds[runner], ecs_manager->entity_component_indices[i], sizeof(uint32_t) * DM_ECS_MAX);
-                    dm_memcpy(new_sys_inds[runner], ecs_manager->entity_system_indices[i], sizeof(uint32_t) * DM_ECS_SYSTEM_TIMING_UNKNOWN * DM_ECS_MAX);
+                    dm_memcpy(new_blk_inds[runner], ecs_manager->entity_block_indices[i], sizeof(uint32_t) * DM_ECS_MAX);
                     new_masks[runner] = ecs_manager->entity_component_masks[i];
                     
                     break;
@@ -1568,30 +1491,65 @@ void dm_ecs_reinsert_entities(uint32_t old_capacity, dm_context* context)
             }
         }
     }
-
+    
     dm_memcpy(ecs_manager->entities, new_entities, e_size);
     dm_memcpy(ecs_manager->entity_component_indices, new_comp_inds, c_size);
-    dm_memcpy(ecs_manager->entity_system_indices, new_sys_inds, s_size);
+    dm_memcpy(ecs_manager->entity_block_indices, new_blk_inds, s_size);
     dm_memcpy(ecs_manager->entity_component_masks, new_masks, m_size);
-
+    
     dm_free(new_entities);
     dm_free(new_comp_inds);
-    dm_free(new_sys_inds);
+    dm_free(new_blk_inds);
     dm_free(new_masks);
 }
 
 bool dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
 {
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    uint32_t component_count, component_index, index, block_index, old_capacity, entity_count;
+    uint32_t c_i, b_i, i;
+    size_t   block_size, cap_dif;
+    
+    dm_ecs_manager* ecs_manager = &context->ecs_manager;
+    
     // for all system timings
     for(uint32_t t=0; t<DM_ECS_SYSTEM_TIMING_UNKNOWN; t++)
     {
         // for all systems in timing
-        for(uint32_t s=0; s<context->ecs_manager.num_registered_systems[t]; s++)
+        for(uint32_t s=0; s<ecs_manager->num_registered_systems[t]; s++)
         {
-            // early out if we don't have what this system needs
-            if(!dm_ecs_entity_has_component_multiple(entity, context->ecs_manager.systems[t][s].component_mask, context)) continue;
+            dm_ecs_system_manager* manager = &ecs_manager->systems[t][s];
             
-            if(!context->ecs_manager.systems[t][s].insert_func(entity,t,s,context)) return false;
+            // early out if we don't have what this system needs
+            if(!dm_ecs_entity_has_component_multiple(entity, manager->component_mask, context)) continue;
+            
+            entity_count    = manager->entity_count;
+            component_count = manager->component_count;
+            
+            dm_ecs_system_entity_container* entity_container = &manager->entity_containers[entity_count];
+            
+            entity_container->entity       = entity;
+            entity_container->entity_index = entity_index;
+            
+            for(uint32_t c=0; c<manager->component_count; c++)
+            {
+                uint32_t c_id = manager->component_ids[c];
+                
+                component_index = ecs_manager->entity_component_indices[entity_index][c_id];
+                block_index     = ecs_manager->entity_block_indices[entity_index][c_id];
+                
+                entity_container->component_indices[c_id] = component_index;
+                entity_container->block_indices[c_id]     = block_index;
+            }
+            
+            manager->entity_count++;
+            if((float)manager->entity_count / (float)manager->entity_capacity < 0.75f) continue;
+            
+            old_capacity = manager->entity_capacity;
+            manager->entity_capacity *= 2;
+            
+            block_size = sizeof(uint32_t) * component_count * manager->entity_capacity;
+            manager->entity_containers = dm_realloc(manager->entity_containers, sizeof(dm_ecs_system_entity_container) * manager->entity_capacity);
         }
     }
     
@@ -1602,7 +1560,7 @@ bool dm_ecs_run_systems(dm_ecs_system_timing timing, dm_context* context)
 {
     for(uint32_t i=0; i<context->ecs_manager.num_registered_systems[timing]; i++)
     {
-        if(!context->ecs_manager.systems[timing][i].run_func(context)) return false;
+        if(!context->ecs_manager.systems[timing][i].run_func(timing,i,context)) return false;
     }
     
     return true;
@@ -1639,10 +1597,8 @@ dm_entity dm_ecs_create_entity(dm_context* context)
     block                                 = ecs_manager->entity_component_indices + offset;
     dm_memset(block, DM_ECS_INVALID_ID, index_size * cap_dif);
     
-    index_size                        *= DM_ECS_SYSTEM_TIMING_UNKNOWN;
-    new_size                           = index_size * ecs_manager->entity_capacity;
-    ecs_manager->entity_system_indices = dm_realloc(ecs_manager->entity_system_indices, new_size);
-    block                              = ecs_manager->entity_system_indices + offset;
+    ecs_manager->entity_block_indices = dm_realloc(ecs_manager->entity_block_indices, new_size);
+    block                             = ecs_manager->entity_block_indices + offset;
     dm_memset(block, DM_ECS_INVALID_ID, index_size * cap_dif);
     
     // resize component masks
@@ -1654,31 +1610,8 @@ dm_entity dm_ecs_create_entity(dm_context* context)
     
     // reinsertion
     dm_ecs_reinsert_entities(old_capacity, context);
-
+    
     return entity;
-}
-
-bool dm_ecs_entity_has_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
-{
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==UINT_MAX) return false;
-    
-    return context->ecs_manager.entity_component_masks[entity_index] & component_id;
-}
-
-bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_mask, dm_context* context)
-{
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==UINT_MAX) return false;
-    
-    dm_ecs_id entity_mask = context->ecs_manager.entity_component_masks[entity_index];
-    
-    // NAND entity mask with opposite of component mask
-    dm_ecs_id result = ~(entity_mask & ~component_mask);
-    // XOR with opposite of entity mask
-    result ^= ~entity_mask;
-    // success only if this equals the component mask
-    return (result == component_mask);
 }
 
 void* dm_ecs_get_current_component_block(dm_ecs_id component_id, uint32_t* insert_index, dm_context* context)
@@ -1694,10 +1627,8 @@ void* dm_ecs_entity_get_component_block(dm_entity entity, dm_ecs_id component_id
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     if(entity_index==UINT_MAX) return NULL;
     
-    uint32_t component_index = context->ecs_manager.entity_component_indices[entity_index][component_id];
-
-    uint32_t block_index = component_index / DM_ECS_COMPONENT_BLOCK_SIZE;
-    *index = component_index % DM_ECS_COMPONENT_BLOCK_SIZE;
+    *index               = context->ecs_manager.entity_component_indices[entity_index][component_id];
+    uint32_t block_index = context->ecs_manager.entity_block_indices[entity_index][component_id];
     
     dm_ecs_component_manager* manager = &context->ecs_manager.components[component_id];
     
@@ -1710,35 +1641,20 @@ void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm
     
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     if(entity_index==UINT_MAX) return;
-
-    context->ecs_manager.entity_component_indices[entity_index][component_id] = manager->entity_count++;
+    
+    context->ecs_manager.entity_block_indices[entity_index][component_id] = (uint32_t)(manager->entity_count * DM_ECS_INV_COMPONENT_BLOCK_SIZE);
+    context->ecs_manager.entity_component_indices[entity_index][component_id] = manager->entity_count % DM_ECS_COMPONENT_BLOCK_SIZE;
+    
     context->ecs_manager.entity_component_masks[entity_index] |= DM_BIT_SHIFT(component_id);
     
     if(!dm_ecs_entity_insert_into_systems(entity, context)) { DM_LOG_ERROR("Inserting entity failed"); return; }
     
+    manager->entity_count++;
+    
     if(manager->entity_count==0) return;
     bool resize = manager->entity_count % DM_ECS_COMPONENT_BLOCK_SIZE == 0;
     if(!resize) return;
     
-    manager->block_count++;
-    manager->data = dm_realloc(manager->data, manager->block_count * manager->block_size);
-    void* data = (char*)manager->data + (manager->block_count-1) * manager->block_size;
-    dm_memzero(data, manager->block_size);
-}
-
-void dm_ecs_interate_system_block(dm_entity entity, dm_ecs_system_timing timing, dm_ecs_id system_id, dm_context* context)
-{
-    dm_ecs_system_manager* manager = &context->ecs_manager.systems[timing][system_id];
-    
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==UINT_MAX) return;
-
-    context->ecs_manager.entity_system_indices[entity_index][timing][system_id] = manager->entity_count++;
-
-    if(manager->entity_count==0) return;
-    bool resize = manager->entity_count % DM_ECS_COMPONENT_BLOCK_SIZE == 0;
-    if(!resize) return;
-
     manager->block_count++;
     manager->data = dm_realloc(manager->data, manager->block_count * manager->block_size);
     void* data = (char*)manager->data + (manager->block_count-1) * manager->block_size;
@@ -1880,7 +1796,7 @@ void dm_ecs_entity_add_box_collider(dm_entity entity, float center[3], float dim
     
     dm_component_collision c = {
         .aabb_local_min[0]=min[0], .aabb_local_min[1]=min[1], .aabb_local_min[2]=min[2],
-        .aabb_global_min[0]=max[0], .aabb_global_min[1]=max[1], .aabb_global_min[2]=max[2],
+        .aabb_local_max[0]=max[0], .aabb_local_max[1]=max[1], .aabb_local_max[2]=max[2],
         .center[0]=center[0], .center[1]=center[1], .center[2]=center[2],
         .internal[0]=min[0], .internal[1]=min[1], .internal[2]=min[2], 
         .internal[3]=max[0], .internal[4]=max[1], .internal[5]=max[2], 
@@ -1900,7 +1816,7 @@ void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center[3], float 
     
     dm_component_collision c = {
         .aabb_local_min[0]=min[0], .aabb_local_min[1]=min[1], .aabb_local_min[2]=min[2],
-        .aabb_global_min[0]=max[0], .aabb_global_min[1]=max[1], .aabb_global_min[2]=max[2],
+        .aabb_local_max[0]=max[0], .aabb_local_max[1]=max[1], .aabb_local_min[2]=max[2],
         .center[0]=center[0], .center[1]=center[1], .center[2]=center[2],
         .internal[0]=radius, .shape=DM_COLLISION_SHAPE_SPHERE,
     };
@@ -1913,7 +1829,7 @@ const dm_component_transform dm_ecs_entity_get_transform(dm_entity entity, dm_co
     uint32_t index;
     dm_component_transform_block* transform_block = dm_ecs_entity_get_component_block(entity, context->ecs_manager.default_components.transform, &index, context);
     if(!transform_block) return (dm_component_transform){ 0 };
-
+    
     dm_component_transform transform = { 0 };
     
     transform.pos[0] = transform_block->pos_x[index];
@@ -2064,11 +1980,11 @@ dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t windo
     
     dm_ecs_init(context);
     
-    if(!dm_physics_init(&context->ecs_manager.default_components.physics, &context->ecs_manager.default_components.collision, context))
+    if(!dm_physics_system_init(&context->ecs_manager.default_components.physics, &context->ecs_manager.default_components.collision, context))
     {
         dm_renderer_shutdown(context);
         dm_platform_shutdown(&context->platform_data);
-        dm_ecs_shutdown(&context->ecs_manager);
+        dm_ecs_shutdown(context);
         dm_free(context);
         return NULL;
     }
@@ -2092,8 +2008,7 @@ void dm_shutdown(dm_context* context)
     
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
-    dm_physics_shutdown(context);
-    dm_ecs_shutdown(&context->ecs_manager);
+    dm_ecs_shutdown(context);
     
     dm_free(context);
 }

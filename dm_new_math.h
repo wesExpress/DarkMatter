@@ -106,6 +106,14 @@ void dm_vec3_sub_vec3(float left[N3], float right[N3], float out[N3])
 }
 
 DM_INLINE
+void dm_vec3_mul_vec3(float left[N3], float right[N3], float out[N3])
+{
+    out[0] = left[0] * right[0];
+    out[1] = left[1] * right[1];
+    out[2] = left[2] * right[2];
+}
+
+DM_INLINE
 float dm_vec3_dot(float left[N3], float right[N3])
 {
     return ((left[0] * right[0]) + (left[1] * right[1]) + (left[2] * right[2]));
