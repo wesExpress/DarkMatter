@@ -48,11 +48,15 @@ depreciated
 /********
 INCLUDES
 **********/
+#ifdef DM_PLATFORM_LINUX
+#define _GNU_SOURCE
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <stddef.h>
 #include <string.h>
+#include <limits.h>
 
 #ifndef  DM_PLATFORM_APPLE
 #include <immintrin.h>
@@ -1324,14 +1328,14 @@ uint32_t dm_ecs_entity_get_index(dm_entity entity, dm_context* context)
     }
     
     DM_LOG_FATAL("Could not find entity index, should not be here...");
-    return UINT_MAX;
+    return DM_ECS_INVALID_ID;
 }
 
 DM_INLINE
 bool dm_ecs_entity_has_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
 {
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==UINT_MAX) return false;
+    if(entity_index==DM_ECS_INVALID_ENTITY) return false;
     
     return context->ecs_manager.entity_component_masks[entity_index] & component_id;
 }
@@ -1340,7 +1344,7 @@ DM_INLINE
 bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_mask, dm_context* context)
 {
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==UINT_MAX) return false;
+    if(entity_index==DM_ECS_INVALID_ENTITY) return false;
     
     dm_ecs_id entity_mask = context->ecs_manager.entity_component_masks[entity_index];
     

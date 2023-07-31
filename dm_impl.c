@@ -1506,9 +1506,8 @@ void dm_ecs_reinsert_entities(uint32_t old_capacity, dm_context* context)
 bool dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
 {
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    uint32_t component_count, component_index, index, block_index, old_capacity, entity_count;
-    uint32_t c_i, b_i, i;
-    size_t   block_size, cap_dif;
+    uint32_t component_count, component_index, block_index, old_capacity, entity_count;
+    size_t   block_size;
     
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
     
@@ -1950,6 +1949,8 @@ const dm_component_physics dm_ecs_entity_get_physics(dm_entity entity, dm_contex
 /*********
 FRAMEWORK
 ***********/
+extern bool dm_physics_system_init(dm_ecs_id* physics_id, dm_ecs_id* collision_id, dm_context* context);
+
 typedef enum dm_context_flags_t
 {
     DM_CONTEXT_FLAG_IS_RUNNING,

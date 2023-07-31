@@ -4,7 +4,7 @@ set echo on
 output="app"
 
 vulkan=0
-debug=1
+debug=0
 simd_256=1
 phys_simd=1
 phys_multi_th=0
@@ -15,7 +15,7 @@ mkdir -p build
 cd build
 
 c_files="$SRC_DIR/main.c $SRC_DIR/app.c $SRC_DIR/render_pass.c"
-dm_files="$SRC_DIR/dm_impl.c $SRC_DIR/dm_platform_linux.c"
+dm_files="$SRC_DIR/dm_impl.c $SRC_DIR/dm_platform_linux.c ${SRC_DIR}/dm_physics.c"
 
 if ((vulkan)); then
 	dm_files="$dm_files $SRC_DIR/dm_renderer_vulkan.c"

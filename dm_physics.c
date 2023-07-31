@@ -1,5 +1,6 @@
 #include "dm.h"
 
+#include <limits.h>
 #include <float.h>
 
 #ifdef DM_PHYSICS_SMALLER_DT
@@ -107,7 +108,11 @@ typedef struct dm_physics_broadphase_sort_data_t
 /**********
 BROADPHASE
 ************/
+#ifdef DM_PLATFORM_WIN32
 int dm_physics_broadphase_sort(void* c, const void* a, const void* b)
+#else
+int dm_physics_broadphase_sort(const void* a, const void* b, void* c)
+#endif
 {
     dm_physics_broadphase_sort_data* sort_data = c;
     dm_ecs_system_entity_container container_a = *(dm_ecs_system_entity_container*)a;
@@ -132,22 +137,18 @@ int dm_physics_broadphase_sort(void* c, const void* a, const void* b)
 
 int dm_physics_broadphase_get_variance_axis(dm_ecs_system_manager* system, dm_context* context)
 {
-    float center_sum[3];
-    float center_sq_sum[3];
+    float center_sum[3] = { 0 };
+    float center_sq_sum[3] = { 0 };
     int axis = 0;
-    
-    uint32_t component_count = system->component_count;
     
     dm_component_collision_block* c_block;
     dm_component_transform_block* t_block;
     
-    uint32_t (*entity_component_indices)[DM_ECS_MAX] = context->ecs_manager.entity_component_indices;
     uint32_t  t_id = context->ecs_manager.default_components.transform;
     uint32_t  c_id = context->ecs_manager.default_components.collision;
     
-    uint32_t  t_comp_index, t_block_index, t_index, t_i;
-    uint32_t  c_comp_index, c_block_index, c_index, c_i;
-    dm_entity entity;
+    uint32_t  t_block_index, t_index;
+    uint32_t  c_block_index, c_index;
     
     float a,b = 0.0f;
     float quat[N4];
@@ -156,9 +157,6 @@ int dm_physics_broadphase_get_variance_axis(dm_ecs_system_manager* system, dm_co
     
     for(uint32_t i=0; i<system->entity_count; i++)
     {
-        t_i = i * component_count;
-        c_i = i * component_count + 2;
-        
         t_index       = system->entity_containers[i].component_indices[t_id];
         t_block_index = system->entity_containers[i].block_indices[t_id];
         
@@ -298,54 +296,32 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
     
     dm_component_collision_block* block = context->ecs_manager.components[data.index].data;
     
-    dm_ecs_system_entity_container* test = &system->entity_containers[100];
-    
     // sort
     switch(axis)
     {
         case 0:
-        {
-            data.min = block->aabb_global_min_x;
-            qsort_s(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), dm_physics_broadphase_sort, &data);
-        } break;
+        data.min = block->aabb_global_min_x;
+        break;
         
         case 1:
-        {
-            data.min = block->aabb_global_min_y;
-            qsort_s(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), dm_physics_broadphase_sort, &data);
-        } break;
+        data.min = block->aabb_global_min_y;
+         break;
         
         case 2:
-        {
-            data.min = block->aabb_global_min_z;
-            qsort_s(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), dm_physics_broadphase_sort, &data);
-        } break;
+        data.min = block->aabb_global_min_z;
+        break;
     }
     
+#ifdef DM_PLATFORM_WIN32
+    qsort_s(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), dm_physics_broadphase_sort, &data);
+#else
+    qsort_r(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), dm_physics_broadphase_sort, &data);
+#endif
+
     // sweep
     float max_i, min_j;
     dm_ecs_system_entity_container entity_a, entity_b;
-    const size_t size = sizeof(dm_component_collision_block);
     uint32_t a_c_index, a_b_index, b_c_index, b_b_index;
-    
-    float* maxes, *mins;
-    switch(axis)
-    {
-        case 0:
-        mins  = block->aabb_global_min_x;
-        maxes = block->aabb_global_max_x;
-        break;
-        
-        case 1:
-        mins  = block->aabb_global_min_y;
-        maxes = block->aabb_global_max_y;
-        break;
-        
-        case 2:
-        mins  = block->aabb_global_min_z;
-        maxes = block->aabb_global_max_z;
-        break;
-    }
     
     for(uint32_t i=0; i<system->entity_count; i++)
     {
@@ -364,6 +340,10 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
             
             case 2: max_i = (block + a_b_index)->aabb_global_max_z[a_c_index];
             break;
+
+            default:
+            DM_LOG_FATAL("Shouldn't be here in broadphase");
+            return false;
         }
         
         for(uint32_t j=i+1; j<system->entity_count; j++)
@@ -383,6 +363,10 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
                 
                 case 2: min_j = (block + b_b_index)->aabb_global_min_z[b_c_index];
                 break;
+                
+                default:
+                DM_LOG_FATAL("Shouldn't be here in broadphase");
+                return false;
             }
             
             if(min_j > max_i) break;
@@ -797,7 +781,7 @@ bool dm_physics_epa(dm_ecs_system_entity_container entity_a, dm_ecs_system_entit
     dm_memcpy(faces[3][2], c, sizeof(c));
     dm_vec3_sub_vec3(d, b, dum1);
     dm_vec3_sub_vec3(c, b, dum2);
-    dm_vec3_cross(dum1, dum2, normals[0]);
+    dm_vec3_cross(dum1, dum2, normals[3]);
     dm_vec3_norm(normals[3], normals[3]);
     
     uint32_t num_faces = 4;
@@ -894,7 +878,7 @@ bool dm_physics_epa(dm_ecs_system_entity_container entity_a, dm_ecs_system_entit
             dm_vec3_norm(normals[num_faces], normals[num_faces]);
             
             static const float bias = 0.000001f;
-            if(dm_vec3_dot(faces[num_faces][0], normals[num_faces]) < 0)
+            if(dm_vec3_dot(faces[num_faces][0], normals[num_faces]) + bias < 0)
             {
                 float temp[3];
                 dm_memcpy(temp, faces[num_faces][0], sizeof(temp));
@@ -1065,7 +1049,7 @@ void dm_support_face_box(dm_ecs_system_entity_container entity, dm_ecs_id t_id, 
     dm_vec3_rotate(normal, rot, normal);
     dm_vec3_norm(normal, normal);
     
-    dm_memcpy(planes[0].normal, normal, sizeof(normal));
+    dm_memcpy(planes[0].normal, normal, sizeof(planes[0].normal));
     planes[0].distance = -dm_vec3_dot(planes[0].normal, points[0]);
     
     dm_support_face_box_planes(planes, points, normal);
@@ -1207,8 +1191,6 @@ bool dm_physics_narrowphase(dm_ecs_system_manager* system, dm_physics_manager* m
     dm_component_transform_block* t_block = context->ecs_manager.components[t_id].data;
     dm_component_collision_block* c_block = context->ecs_manager.components[c_id].data;
     
-    dm_collision_flag* flags = c_block->flag;
-    
     for(uint32_t i=0; i<manager->num_possible_collisions; i++)
     {
         dm_collision_pair collision_pair = manager->possible_collisions[i];
@@ -1251,11 +1233,14 @@ bool dm_physics_system_run(dm_ecs_system_timing timing, dm_ecs_id system_id, voi
     
     // update
     
+    manager->num_manifolds = 0;
+
     return true;
 }
 
-void dm_physics_system_shutdown(dm_ecs_system_timing timing, dm_ecs_id system_id, dm_context* context)
+void dm_physics_system_shutdown(dm_ecs_system_timing timing, dm_ecs_id system_id, void* c)
 {
+    dm_context* context = c;
     dm_ecs_system_manager* physics_system = &context->ecs_manager.systems[timing][system_id];
     dm_physics_manager* manager = physics_system->system_data;
     

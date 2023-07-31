@@ -297,7 +297,7 @@ void dm_renderer_backend_destroy_buffer(dm_render_handle handle, dm_renderer* re
     if(handle > opengl_renderer->buffer_count) { DM_LOG_ERROR("Trying to delete invalid OpenGL buffer"); return; }
     
     glDeleteBuffers(1, &opengl_renderer->buffers[handle].id);
-    glCheckError();
+    if(glCheckError()) return;
 }
 
 bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer)
@@ -401,12 +401,12 @@ void dm_renderer_backend_destroy_texture(dm_render_handle handle, dm_renderer* r
     if(handle > opengl_renderer->texture_count) { DM_LOG_ERROR("Trying to destroy invalid OpenGL texture"); return; }
     
     glDeleteTextures(1, &opengl_renderer->textures[handle].id);
-    glCheckError();
+    if(glCheckError()) return;
     
     for(uint32_t i=0; i<2; i++)
     {
         glDeleteBuffers(1, &opengl_renderer->textures[handle].pbos[i]);
-        glCheckError();
+        if(glCheckError()) return;
     }
 }
 
@@ -526,7 +526,7 @@ GLuint dm_opengl_compile_shader(const char* path, dm_shader_type type)
 {
     GLenum shader_type = dm_shader_to_opengl_shader(type);
     GLuint shader = glCreateShader(shader_type);
-    glCheckError();
+    if(glCheckError()) return DM_GLUINT_FAIL;
     
     DM_LOG_DEBUG("Compiling shader: %s", path);
     
@@ -555,9 +555,9 @@ GLuint dm_opengl_compile_shader(const char* path, dm_shader_type type)
     const char* source = string;
     GLint l = (GLint)length;
     glShaderSource(shader, 1, &source, &l);
-    glCheckError();
+    if(glCheckError()) return DM_GLUINT_FAIL;
     glCompileShader(shader);
-    glCheckError();
+    if(glCheckError()) return DM_GLUINT_FAIL;
     
     if(!dm_opengl_validate_shader(shader))
     {
@@ -718,7 +718,7 @@ void dm_renderer_backend_destroy_shader(dm_render_handle handle, dm_renderer* re
     if(handle > opengl_renderer->shader_count) { DM_LOG_ERROR("Trying to destroy invalid OpenGL shader"); return; }
     
     glDeleteProgram(opengl_renderer->shaders[handle].shader);
-    glCheckError();
+    if(glCheckError()) return;
 }
 
 /******************
@@ -814,7 +814,7 @@ void dm_renderer_backend_destroy_framebuffer(dm_render_handle handle, dm_rendere
     if(handle > opengl_renderer->framebuffer_count) { DM_LOG_ERROR("Trying to destroy invalid OpenGL framebuffer"); return; }
     
     glDeleteFramebuffers(1, &opengl_renderer->framebuffers[handle].fbo);
-    glCheckError();
+    if(glCheckError()) return;
     
     if(opengl_renderer->framebuffers[handle].c_flag) glDeleteTextures(1, &opengl_renderer->framebuffers[handle].color);
     if(opengl_renderer->framebuffers[handle].d_flag) glDeleteTextures(1, &opengl_renderer->framebuffers[handle].depth);
@@ -928,20 +928,20 @@ OPENGL RENDER COMMANDS
 void dm_render_command_backend_clear(float r, float g, float b, float a, dm_renderer* renderer)
 {
     glClearColor(r, g, b, a);
-    glCheckError();
+    if(glCheckError()) return;
     
     GLuint clear_bit = GL_COLOR_BUFFER_BIT;
     
     clear_bit |= GL_DEPTH_BUFFER_BIT;
     
     glClear(clear_bit);
-    glCheckError();
+    if(glCheckError()) return;
 }
 
 void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer)
 {
     glViewport(0, 0, width, height);
-    glCheckError();
+    if(glCheckError()) return;
 }
 
 bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_renderer* renderer)
@@ -1201,7 +1201,7 @@ void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count, dm_re
     DM_OPENGL_GET_RENDERER;
     
     glDrawArrays(opengl_renderer->active_primitive, start, count);
-    glCheckError();
+    if(glCheckError()) return;
 }
 
 void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer)
@@ -1209,7 +1209,7 @@ void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index
     DM_OPENGL_GET_RENDERER;
     
     glDrawElements(opengl_renderer->active_primitive, num_indices, GL_UNSIGNED_INT, (void*)(index_offset * sizeof(GLuint)));
-    glCheckError();
+    if(glCheckError()) return;
 }
 
 void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer)
@@ -1217,7 +1217,7 @@ void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num
     DM_OPENGL_GET_RENDERER;
     
     glDrawElementsInstanced(opengl_renderer->active_primitive, num_indices, GL_UNSIGNED_INT, (void*)(index_offset * sizeof(GLuint)), num_insts);
-    glCheckError();
+    if(glCheckError()) return;
 }
 
 void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer)
