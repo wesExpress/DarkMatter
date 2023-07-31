@@ -1003,8 +1003,8 @@ typedef struct dm_component_physics_t
 // collision component
 typedef enum dm_collision_shape_t
 {
-    DM_COLLISION_2D_CIRCLE,
-    DM_COLLISION_2D_BOX,
+    DM_COLLISION_SHAPE_2D_CIRCLE,
+    DM_COLLISION_SHAPE_2D_BOX,
     DM_COLLISION_SHAPE_SPHERE,
     DM_COLLISION_SHAPE_BOX,
     DM_COLLISION_SHAPE_UNKNOWN

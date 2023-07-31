@@ -10,7 +10,7 @@ typedef struct basic_camera_t
     float zoom;
 } basic_camera;
 
-#define MAX_ENTITIES 2048
+#define MAX_ENTITIES 512
 typedef struct application_data_t
 {
     dm_entity    entities[MAX_ENTITIES];

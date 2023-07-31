@@ -181,6 +181,12 @@ bool dm_vec3_same_direction(float left[N3], float right[N3])
     return dm_vec3_dot(left,right) > 0;
 }
 
+DM_INLINE
+bool dm_vec3_equals_vec3(float left[N3], float right[N3])
+{
+    return ((left[0]==right[0]) && (left[1]==right[1]) && (left[2]==right[2]));
+}
+
 /****
 VEC4
 ******/

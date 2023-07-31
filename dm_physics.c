@@ -132,9 +132,6 @@ int dm_physics_broadphase_sort(void* c, const void* a, const void* b)
 
 int dm_physics_broadphase_get_variance_axis(dm_ecs_system_manager* system, dm_context* context)
 {
-    dm_timer t = { 0 };
-    dm_timer_start(&t, context);
-    
     float center_sum[3];
     float center_sq_sum[3];
     int axis = 0;
@@ -175,6 +172,9 @@ int dm_physics_broadphase_get_variance_axis(dm_ecs_system_manager* system, dm_co
         quat[1] = t_block->rot_j[t_index];
         quat[2] = t_block->rot_k[t_index];
         quat[3] = t_block->rot_r[t_index];
+        
+        // reset collision flags
+        c_block->flag[c_index] = DM_COLLISION_FLAG_NO;
         
         // update global aabb
         switch(c_block->shape[c_index])
@@ -281,8 +281,6 @@ int dm_physics_broadphase_get_variance_axis(dm_ecs_system_manager* system, dm_co
         axis = i;
     }
     
-    DM_LOG_DEBUG("Get axis took: %lf ms", dm_timer_elapsed_ms(&t, context));
-    
     return axis;
 }
 
@@ -299,9 +297,6 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
     data.block_size = sizeof(dm_component_collision_block);
     
     dm_component_collision_block* block = context->ecs_manager.components[data.index].data;
-    
-    dm_timer t = { 0 };
-    dm_timer_start(&t, context);
     
     dm_ecs_system_entity_container* test = &system->entity_containers[100];
     
@@ -326,7 +321,6 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
             qsort_s(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), dm_physics_broadphase_sort, &data);
         } break;
     }
-    DM_LOG_DEBUG("Sorting took: %lf ms", dm_timer_elapsed_ms(&t, context));
     
     // sweep
     float max_i, min_j;
@@ -353,9 +347,6 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
         break;
     }
     
-    dm_collision_flag* flags = block->flag;
-    
-    dm_timer_start(&t, context);
     for(uint32_t i=0; i<system->entity_count; i++)
     {
         entity_a = system->entity_containers[i];
@@ -363,7 +354,17 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
         a_c_index = entity_a.component_indices[data.index];
         a_b_index = entity_a.block_indices[data.index];
         
-        max_i = ((float*)((char*)maxes + a_b_index * size))[a_c_index];
+        switch(axis)
+        {
+            case 0: max_i = (block + a_b_index)->aabb_global_max_x[a_c_index];
+            break;
+            
+            case 1: max_i = (block + a_b_index)->aabb_global_max_y[a_c_index];
+            break;
+            
+            case 2: max_i = (block + a_b_index)->aabb_global_max_z[a_c_index];
+            break;
+        }
         
         for(uint32_t j=i+1; j<system->entity_count; j++)
         {
@@ -372,15 +373,26 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
             b_c_index = entity_b.component_indices[data.index];
             b_b_index = entity_b.block_indices[data.index];
             
-            min_j = ((float*)((char*)mins + b_b_index * size))[b_c_index];
+            switch(axis)
+            {
+                case 0: min_j = (block + b_b_index)->aabb_global_min_x[b_c_index];
+                break;
+                
+                case 1: min_j = (block + b_b_index)->aabb_global_min_y[b_c_index];
+                break;
+                
+                case 2: min_j = (block + b_b_index)->aabb_global_min_z[b_c_index];
+                break;
+            }
+            
             if(min_j > max_i) break;
             
             manager->possible_collisions[manager->num_possible_collisions].entity_a = entity_a;
             manager->possible_collisions[manager->num_possible_collisions].entity_b = entity_b;
             manager->num_possible_collisions++;
             
-            ((dm_collision_flag*)((char*)flags + a_b_index * size))[a_c_index] = DM_COLLISION_FLAG_POSSIBLE;
-            ((dm_collision_flag*)((char*)flags + b_b_index * size))[b_c_index] = DM_COLLISION_FLAG_POSSIBLE;
+            (block + a_b_index)->flag[a_c_index] = DM_COLLISION_FLAG_POSSIBLE;
+            (block + b_b_index)->flag[b_c_index] = DM_COLLISION_FLAG_POSSIBLE;
             
             float load = (float)manager->num_possible_collisions / (float)manager->collision_capacity;
             if(load < DM_PHYSICS_LOAD_FACTOR) continue;
@@ -389,7 +401,6 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
             manager->possible_collisions = dm_realloc(manager->possible_collisions, sizeof(dm_collision_pair) * manager->collision_capacity);
         }
     }
-    DM_LOG_DEBUG("Sweeping took: %lf ms", dm_timer_elapsed_ms(&t, context));
     
     return true;
 }
@@ -398,28 +409,26 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
 NARROWPHASE
 *************/
 // 3d support funcs
-void dm_support_func_sphere(float pos[3], float cen[3], void* data, float d[3], float support[3])
+void dm_support_func_sphere(float pos[3], float cen[3], float internals[6], float d[3], float support[3])
 {
-    float radius = *(float*)data;
+    float radius = internals[0];
     
     support[0] = (d[0] * radius) + (pos[0] + cen[0]); 
     support[1] = (d[1] * radius) + (pos[1] + cen[1]); 
     support[2] = (d[2] * radius) + (pos[2] + cen[2]);
 }
 
-void dm_support_func_box(float pos[3], float rot[4], float cen[3], void* data, float d[3], float support[3])
+void dm_support_func_box(float pos[3], float rot[4], float cen[3], float internals[6], float d[3], float support[3])
 {
     float inv_rot[4];
     float p[3];
-    float box[6];
-    dm_memcpy(box, data, sizeof(box));
     
     dm_quat_inverse(rot, inv_rot);
     dm_vec3_rotate(d, inv_rot, d);
     
-    support[0] = (d[0] > 0) ? box[3] : box[0];
-    support[1] = (d[1] > 0) ? box[4] : box[1];
-    support[2] = (d[2] > 0) ? box[5] : box[2];
+    support[0] = (d[0] > 0) ? internals[3] : internals[0];
+    support[1] = (d[1] > 0) ? internals[4] : internals[1];
+    support[2] = (d[2] > 0) ? internals[5] : internals[2];
     
     dm_vec3_rotate(support, rot, support);
     dm_vec3_add_vec3(pos, cen, p);
@@ -430,16 +439,49 @@ void dm_support_func_box(float pos[3], float rot[4], float cen[3], void* data, f
 // 2d support funcs
 
 // gjk
-void dm_physics_gjk_support(float pos[3], float rot[4], float cen[3], void* data, dm_collision_shape shape, float direction[3], float support[3])
+void dm_physics_gjk_support(dm_ecs_system_entity_container entity, float direction[3], float support[3], dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block)
 {
+    dm_component_transform_block* e_t_block = t_block + entity.block_indices[t_id];
+    dm_component_collision_block* e_c_block = c_block + entity.block_indices[c_id];
+    
+    float pos[] = {
+        e_t_block->pos_x[entity.component_indices[t_id]],
+        e_t_block->pos_y[entity.component_indices[t_id]],
+        e_t_block->pos_z[entity.component_indices[t_id]],
+    };
+    
+    float rot[] = {
+        e_t_block->rot_i[entity.component_indices[t_id]],
+        e_t_block->rot_j[entity.component_indices[t_id]],
+        e_t_block->rot_k[entity.component_indices[t_id]],
+        e_t_block->rot_r[entity.component_indices[t_id]],
+    };
+    
+    float cen[] = {
+        e_c_block->center_x[entity.component_indices[c_id]],
+        e_c_block->center_y[entity.component_indices[c_id]],
+        e_c_block->center_z[entity.component_indices[c_id]],
+    };
+    
+    float internals[] = {
+        e_c_block->internal_0[entity.component_indices[c_id]],
+        e_c_block->internal_1[entity.component_indices[c_id]],
+        e_c_block->internal_2[entity.component_indices[c_id]],
+        e_c_block->internal_3[entity.component_indices[c_id]],
+        e_c_block->internal_4[entity.component_indices[c_id]],
+        e_c_block->internal_5[entity.component_indices[c_id]],
+    };
+    
+    dm_collision_shape shape = e_c_block->shape[entity.component_indices[c_id]];
+    
     switch(shape)
     {
         case DM_COLLISION_SHAPE_SPHERE: 
-        dm_support_func_sphere(pos, cen, data, direction, support);
+        dm_support_func_sphere(pos, cen, internals, direction, support);
         break;
         
         case DM_COLLISION_SHAPE_BOX: 
-        dm_support_func_box(pos, rot, cen, data, direction, support);
+        dm_support_func_box(pos, rot, cen, internals, direction, support);
         break;
         
         default:
@@ -448,26 +490,18 @@ void dm_physics_gjk_support(float pos[3], float rot[4], float cen[3], void* data
     }
 }
 
-void dm_support(dm_entity entity_a, dm_entity entity_b, float direction[3], float out[3], dm_context* context)
+void dm_support(dm_ecs_system_entity_container entity_a, dm_ecs_system_entity_container entity_b, float direction[3], float out[3], dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block)
 {
-#if 0 
     float dir_neg[3];
     float support_a[3];
     float support_b[3];
     
     dm_vec3_negate(direction, dir_neg);
     
-    dm_component_transform transform_a = dm_ecs_entity_get_transform(entity_a, context);
-    dm_component_transform transform_b = dm_ecs_entity_get_transform(entity_b, context);
-    
-    dm_component_collision collision_a = dm_ecs_entity_get_collision(entity_a, context);
-    dm_component_collision collision_b = dm_ecs_entity_get_collision(entity_b, context);
-    
-    dm_physics_gjk_support(transform_a.pos, transform_a.rot, collision_a.center, collision_a.internal, collision_a.shape, direction, support_a);
-    dm_physics_gjk_support(transform_b.pos, transform_b.rot, collision_b.center, collision_b.internal, collision_b.shape, direction, support_b);
+    dm_physics_gjk_support(entity_a, direction, support_a, t_id, c_id, t_block, c_block);
+    dm_physics_gjk_support(entity_b, dir_neg, support_b, t_id, c_id, t_block, c_block);
     
     dm_vec3_sub_vec3(support_a, support_b, out);
-#endif
 }
 
 void dm_simplex_push_front(float point[3], dm_simplex* simplex)
@@ -683,7 +717,7 @@ bool dm_next_simplex(float direction[3], dm_simplex* simplex)
     }
 }
 
-bool dm_physics_gjk(dm_entity entity_a, dm_entity entity_b, dm_simplex* simplex, dm_context* context)
+bool dm_physics_gjk(dm_ecs_system_entity_container entity_a, dm_ecs_system_entity_container entity_b, dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block, dm_simplex* simplex)
 {
     // initial guess should not matter, but algorithm WILL FAIL if initial guess is
     // perfectly aligned with global unit axes
@@ -693,15 +727,15 @@ bool dm_physics_gjk(dm_entity entity_a, dm_entity entity_b, dm_simplex* simplex,
     // start simplex
     float support[3];
     
-    dm_support(entity_a, entity_b, direction, support, context);
+    dm_support(entity_a, entity_b, direction, support, t_id, c_id, t_block, c_block);
     dm_vec3_negate(support, direction);
     dm_simplex_push_front(support, simplex);
     
     for(uint32_t iter=0; iter<DM_PHYSICS_MAX_GJK_ITER; iter++)
     {
-        if(simplex->size > 4) DM_LOG_ERROR("GJK simplex greater than 4...?");
+        if(simplex->size > 4) DM_LOG_ERROR("GJK simplex size greater than 4...?");
         
-        dm_support(entity_a, entity_b, direction, support, context);
+        dm_support(entity_a, entity_b, direction, support, t_id, c_id, t_block, c_block);
         if(dm_vec3_dot(support, direction) < 0 ) return false;
         
         dm_simplex_push_front(support, simplex);
@@ -714,8 +748,484 @@ bool dm_physics_gjk(dm_entity entity_a, dm_entity entity_b, dm_simplex* simplex,
     return false;
 }
 
+// EPA
+//https://github.com/kevinmoran/GJK/blob/master/GJK.h
+//https://www.youtube.com/watch?v=0XQ2FSz3EK8&ab_channel=Winterdev
+bool dm_physics_epa(dm_ecs_system_entity_container entity_a, dm_ecs_system_entity_container entity_b, dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block, float penetration[3], dm_simplex* simplex)
+{
+    float faces[DM_PHYSICS_EPA_MAX_FACES][3][3];
+    float normals[DM_PHYSICS_EPA_MAX_FACES][3];
+    
+    float a[3], b[3], c[3], d[3];
+    float dum1[3], dum2[3];
+    
+    dm_memcpy(a, simplex->points[0], sizeof(a));
+    dm_memcpy(b, simplex->points[1], sizeof(a));
+    dm_memcpy(c, simplex->points[2], sizeof(a));
+    dm_memcpy(d, simplex->points[3], sizeof(a));
+    
+    // face a,b,c
+    dm_memcpy(faces[0][0], a, sizeof(a));
+    dm_memcpy(faces[0][1], b, sizeof(b));
+    dm_memcpy(faces[0][2], c, sizeof(c));
+    dm_vec3_sub_vec3(b, a, dum1);
+    dm_vec3_sub_vec3(c, a, dum2);
+    dm_vec3_cross(dum1, dum2, normals[0]);
+    dm_vec3_norm(normals[0], normals[0]);
+    
+    // face a,c,d
+    dm_memcpy(faces[1][0], a, sizeof(a));
+    dm_memcpy(faces[1][1], c, sizeof(c));
+    dm_memcpy(faces[1][2], d, sizeof(d));
+    dm_vec3_sub_vec3(c, a, dum1);
+    dm_vec3_sub_vec3(d, a, dum2);
+    dm_vec3_cross(dum1, dum2, normals[1]);
+    dm_vec3_norm(normals[1], normals[1]);
+    
+    // face a,d,b
+    dm_memcpy(faces[2][0], a, sizeof(a));
+    dm_memcpy(faces[2][1], d, sizeof(d));
+    dm_memcpy(faces[2][2], b, sizeof(b));
+    dm_vec3_sub_vec3(d, a, dum1);
+    dm_vec3_sub_vec3(b, a, dum2);
+    dm_vec3_cross(dum1, dum2, normals[2]);
+    dm_vec3_norm(normals[2], normals[2]);
+    
+    // face b,d,c
+    dm_memcpy(faces[3][0], b, sizeof(b));
+    dm_memcpy(faces[3][1], d, sizeof(b));
+    dm_memcpy(faces[3][2], c, sizeof(c));
+    dm_vec3_sub_vec3(d, b, dum1);
+    dm_vec3_sub_vec3(c, b, dum2);
+    dm_vec3_cross(dum1, dum2, normals[0]);
+    dm_vec3_norm(normals[3], normals[3]);
+    
+    uint32_t num_faces = 4;
+    uint32_t closest_face;
+    float    min_distance;
+    float    support[3];
+    float    direction[3];
+    float    loose_edges[DM_PHYSICS_EPA_MAX_FACES][2][3];
+    uint32_t num_loose = 0;
+    float    current_edge[2][3];
+    bool     found;
+    
+    for(uint32_t iter=0; iter<DM_PHYSICS_EPA_MAX_FACES; iter++)
+    {
+        min_distance = dm_vec3_dot(faces[0][0], normals[0]);
+        closest_face = 0;
+        for(uint32_t i=1; i<num_faces; i++)
+        {
+            float distance = dm_vec3_dot(faces[i][0], normals[i]);
+            if(distance >= min_distance) continue;
+            
+            min_distance = distance;
+            closest_face = i;
+        }
+        
+        dm_memcpy(direction, normals[closest_face], sizeof(direction));
+        
+        dm_support(entity_a, entity_b, direction, support, t_id, c_id, t_block, c_block);
+        
+        // have we converged
+        if(dm_vec3_dot(support, direction) < DM_PHYSICS_EPA_TOLERANCE)
+        {
+            float depth = dm_vec3_dot(support, direction);
+            if(!depth) return false;
+            
+            dm_vec3_scale(direction, depth, penetration);
+            return true;
+        }
+        
+        // revamp polytope
+        for(uint32_t i=0; i<num_faces; i++)
+        {
+            dm_vec3_sub_vec3(support, faces[i][0], dum1);
+            if(dm_vec3_dot(normals[i], dum1) <= 0) continue;
+            
+            for(uint32_t j=0; j<3; j++)
+            {
+                dm_memcpy(current_edge[0], faces[i][j],       sizeof(current_edge[0]));
+                dm_memcpy(current_edge[1], faces[i][(j+1)%3], sizeof(current_edge[1]));
+                found = false;
+                
+                for(uint32_t k=0; k<num_loose; k++)
+                {
+                    bool cond1 = dm_vec3_equals_vec3(loose_edges[k][1], current_edge[0]);
+                    bool cond2 = dm_vec3_equals_vec3(loose_edges[k][0], current_edge[1]);
+                    
+                    if(!cond1 || !cond2) continue;
+                    
+                    dm_memcpy(loose_edges[k][0], loose_edges[num_loose-1][0], sizeof(loose_edges[k][0]));
+                    dm_memcpy(loose_edges[k][1], loose_edges[num_loose-1][1], sizeof(loose_edges[k][0]));;
+                    
+                    num_loose--;
+                    found = true;
+                    k = num_loose;
+                }
+                
+                if(found) continue;
+                if(num_loose>=DM_PHYSICS_EPA_MAX_FACES) break;
+                
+                dm_memcpy(loose_edges[num_loose][0], current_edge[0], sizeof(loose_edges[num_loose][0]));
+                dm_memcpy(loose_edges[num_loose][1], current_edge[1], sizeof(loose_edges[num_loose][1]));
+                num_loose++;
+            }
+            
+            dm_memcpy(faces[i][0], faces[num_faces-1][0], sizeof(faces[i][0]));
+            dm_memcpy(faces[i][1], faces[num_faces-1][1], sizeof(faces[i][1]));
+            dm_memcpy(faces[i][2], faces[num_faces-1][2], sizeof(faces[i][2]));
+            dm_memcpy(normals[i], normals[num_faces-1], sizeof(normals[i]));
+            num_faces--;
+            i--;
+        }
+        
+        // reconstruct polytope
+        for(uint32_t i=0; i<num_loose; i++)
+        {
+            if(num_faces >= DM_PHYSICS_EPA_MAX_FACES) break;
+            
+            dm_memcpy(faces[num_faces][0], loose_edges[i][0], sizeof(faces[num_faces][0]));
+            dm_memcpy(faces[num_faces][1], loose_edges[i][1], sizeof(faces[num_faces][1]));
+            dm_memcpy(faces[num_faces][2], support, sizeof(faces[num_faces][2]));
+            dm_vec3_sub_vec3(loose_edges[i][0], loose_edges[i][1], dum1);
+            dm_vec3_sub_vec3(loose_edges[i][0], support, dum2);
+            dm_vec3_cross(dum1, dum2, normals[num_faces]);
+            dm_vec3_norm(normals[num_faces], normals[num_faces]);
+            
+            static const float bias = 0.000001f;
+            if(dm_vec3_dot(faces[num_faces][0], normals[num_faces]) < 0)
+            {
+                float temp[3];
+                dm_memcpy(temp, faces[num_faces][0], sizeof(temp));
+                dm_memcpy(faces[num_faces][0], faces[num_faces][1], sizeof(temp));
+                dm_memcpy(faces[num_faces][1], temp, sizeof(temp));
+                dm_vec3_scale(normals[num_faces], -1, normals[num_faces]);
+            }
+            
+            num_faces++;
+        }
+    }
+    
+    DM_LOG_ERROR("EPA failed to converge after %u iterations", DM_PHYSICS_EPA_MAX_FACES);
+    return false;
+}
+
+/*
+Collision resolution
+*/
+void dm_support_face_box_planes(dm_plane planes[5], float points[10][3], float face_normal[3])
+{
+    uint32_t ids[] = { 1,2,3,0 };
+    float neg_normal[3];
+    dm_vec3_negate(face_normal, neg_normal);
+    
+    float ref_pt[3], normal[3];
+    float dum1[3], dum2[3];
+    float distance;
+    
+    for(uint32_t i=0; i<4; i++)
+    {
+        dm_memcpy(ref_pt, points[i], sizeof(ref_pt));
+        
+        dm_vec3_sub_vec3(points[ids[i]], ref_pt, dum1);
+        dm_vec3_cross(dum1, neg_normal, dum2);
+        dm_vec3_norm(dum2, normal);
+        distance = -dm_vec3_dot(normal, ref_pt);
+        
+        dm_memcpy(planes[i+1].normal, normal, sizeof(normal));
+        planes[i+1].distance=distance;
+    }
+}
+
+void dm_support_face_box(dm_ecs_system_entity_container entity, dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block, float direction[3], float points[10][3], uint32_t* num_pts, dm_plane planes[5], uint32_t* num_planes, float normal[3])
+{
+    float pos[] = {
+        (t_block + entity.block_indices[t_id])->pos_x[entity.component_indices[c_id]],
+        (t_block + entity.block_indices[t_id])->pos_y[entity.component_indices[c_id]],
+        (t_block + entity.block_indices[t_id])->pos_z[entity.component_indices[c_id]],
+    };
+    
+    float rot[] = { 
+        (t_block + entity.block_indices[t_id])->rot_i[entity.component_indices[c_id]],
+        (t_block + entity.block_indices[t_id])->rot_j[entity.component_indices[c_id]],
+        (t_block + entity.block_indices[t_id])->rot_k[entity.component_indices[c_id]],
+        (t_block + entity.block_indices[t_id])->rot_r[entity.component_indices[c_id]],
+    };
+    
+    float box_min[] = {
+        (c_block + entity.block_indices[t_id])->internal_0[entity.component_indices[c_id]],
+        (c_block + entity.block_indices[t_id])->internal_1[entity.component_indices[c_id]],
+        (c_block + entity.block_indices[t_id])->internal_2[entity.component_indices[c_id]],
+    };
+    
+    float box_max[] = {
+        (c_block + entity.block_indices[t_id])->internal_3[entity.component_indices[c_id]],
+        (c_block + entity.block_indices[t_id])->internal_4[entity.component_indices[c_id]],
+        (c_block + entity.block_indices[t_id])->internal_5[entity.component_indices[c_id]],
+    };
+    
+    float inv_rot[3];
+    dm_quat_inverse(rot, inv_rot);
+    dm_vec3_rotate(direction, inv_rot, direction);
+    
+    float axes[][3] = {
+        {1,0,0},
+        {0,1,0},
+        {0,0,1}
+    };
+    
+    float best_proximity = -FLT_MAX;
+    float best_sgn = 0.0f;
+    int   best_axis = -1;
+    
+    for(uint32_t i=0; i<3; i++)
+    {
+        float proximity = dm_vec3_dot(direction, axes[i]);
+        float s = DM_SIGN(proximity);
+        proximity *= s;
+        if(proximity <= best_proximity) continue;
+        
+        best_proximity = proximity;
+        best_sgn = s;
+        best_axis = i;
+    }
+    
+    float max_t[3];
+    float min_t[3];
+    
+    dm_memcpy(max_t, box_max, sizeof(box_max));
+    dm_memcpy(min_t, box_min, sizeof(box_min));
+    
+    switch(best_axis)
+    {
+        case 0:
+        {
+            if(best_sgn > 0)
+            {
+                points[0][0] = max_t[0]; points[0][1] = min_t[1]; points[0][2] = min_t[2];
+                points[1][0] = max_t[0]; points[1][1] = min_t[1]; points[1][2] = max_t[2];
+                points[2][0] = max_t[0]; points[2][1] = max_t[1]; points[2][2] = max_t[2];
+                points[3][0] = max_t[0]; points[3][1] = max_t[1]; points[3][2] = min_t[2];
+            }
+            else
+            {
+                points[0][0] = min_t[0]; points[0][1] = min_t[1]; points[0][2] = max_t[2];
+                points[1][0] = min_t[0]; points[1][1] = min_t[1]; points[1][2] = min_t[2];
+                points[2][0] = min_t[0]; points[2][1] = max_t[1]; points[2][2] = min_t[2];
+                points[3][0] = min_t[0]; points[3][1] = max_t[1]; points[3][2] = max_t[2];
+            }
+        } break;
+        
+        case 1:
+        {
+            if(best_sgn > 0)
+            {
+                points[0][0] = min_t[0]; points[0][1] = max_t[1]; points[0][2] = min_t[2];
+                points[1][0] = max_t[0]; points[1][1] = max_t[1]; points[1][2] = min_t[2];
+                points[2][0] = max_t[0]; points[2][1] = max_t[1]; points[2][2] = max_t[2];
+                points[3][0] = min_t[0]; points[3][1] = max_t[1]; points[3][2] = max_t[2];
+            }
+            else
+            {
+                points[0][0] = max_t[0]; points[0][1] = min_t[1]; points[0][2] = min_t[2];
+                points[1][0] = min_t[0]; points[1][1] = min_t[1]; points[1][2] = min_t[2];
+                points[2][0] = min_t[0]; points[2][1] = min_t[1]; points[2][2] = max_t[2];
+                points[3][0] = max_t[0]; points[3][1] = min_t[1]; points[3][2] = max_t[2];
+            }
+        } break;
+        
+        case 2:
+        {
+            if(best_sgn > 0)
+            {
+                points[0][0] = max_t[0]; points[0][1] = min_t[1]; points[0][2] = max_t[2];
+                points[1][0] = min_t[0]; points[1][1] = min_t[1]; points[1][2] = max_t[2];
+                points[2][0] = min_t[0]; points[2][1] = max_t[1]; points[2][2] = max_t[2];
+                points[3][0] = max_t[0]; points[3][1] = max_t[1]; points[3][2] = max_t[2];
+            }
+            else
+            {
+                points[0][0] = min_t[0]; points[0][1] = min_t[1]; points[0][2] = min_t[2];
+                points[1][0] = max_t[0]; points[1][1] = min_t[1]; points[1][2] = min_t[2];
+                points[2][0] = max_t[0]; points[2][1] = max_t[1]; points[2][2] = min_t[2];
+                points[3][0] = min_t[0]; points[3][1] = max_t[1]; points[3][2] = min_t[2];
+            }
+        } break;
+    }
+    
+    // get points into world frame
+    for(uint32_t i=0; i<4; i++)
+    {
+        dm_vec3_rotate(points[i], rot, points[i]);
+        dm_vec3_add_vec3(points[i], pos, points[i]);
+    }
+    
+    dm_vec3_scale(axes[best_axis], best_sgn, normal);
+    dm_vec3_rotate(normal, rot, normal);
+    dm_vec3_norm(normal, normal);
+    
+    dm_memcpy(planes[0].normal, normal, sizeof(normal));
+    planes[0].distance = -dm_vec3_dot(planes[0].normal, points[0]);
+    
+    dm_support_face_box_planes(planes, points, normal);
+    
+    *num_pts    = 4;
+    *num_planes = 5;
+}
+
+void dm_support_face_entity(dm_ecs_system_entity_container entity, dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block, float direction[3], float points[10][3], uint32_t* num_pts, dm_plane planes[5], uint32_t* num_planes, float normal[3])
+{
+    dm_collision_shape shape = (c_block + entity.block_indices[c_id])->shape[entity.component_indices[c_id]];
+    
+    switch(shape)
+    {
+        case DM_COLLISION_SHAPE_SPHERE:
+        break;
+        
+        case DM_COLLISION_SHAPE_BOX:
+        dm_support_face_box(entity, t_id, c_id, t_block, c_block, direction, points, num_pts, planes, num_planes, normal);
+        break;
+        
+        default:
+        DM_LOG_ERROR("Unknown or unsupported collider type");
+        return;
+    }
+}
+
+bool dm_physics_collide_sphere_other(dm_ecs_system_entity_container entity_a, dm_ecs_system_entity_container entity_b, dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block, dm_simplex* simplex)
+{
+    dm_collision_shape shape = (c_block + entity_b.block_indices[c_id])->shape[entity_b.component_indices[c_id]];
+    
+    switch(shape)
+    {
+        case DM_COLLISION_SHAPE_SPHERE:
+        break;
+        
+        case DM_COLLISION_SHAPE_BOX:
+        break;
+        
+        default:
+        DM_LOG_FATAL("Unknown collider type! Shouldn't be here so we are crashing");
+        return false;
+    }
+    
+    return true;
+}
+
+void dm_physics_collide_poly_sphere(dm_ecs_system_entity_container box, dm_ecs_system_entity_container sphere, dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block, dm_simplex* simplex)
+{
+    float penetration[3];
+    if(!dm_physics_epa(box, sphere, t_id, c_id, t_block, c_block, penetration, simplex)) return;
+    
+    float    points_box[10][3];
+    uint32_t num_pts;
+    float    normal_box[3];
+    dm_plane planes[5];
+    uint32_t num_planes;
+}
+
+void dm_physics_collide_poly_poly(dm_ecs_system_entity_container poly_a, dm_ecs_system_entity_container poly_b, dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block, dm_simplex* simplex)
+{
+    float penetration[3];
+    if(!dm_physics_epa(poly_a, poly_b, t_id, c_id, t_block, c_block, penetration, simplex)) return;
+    
+    float    points_a[10][3];
+    uint32_t num_pts_a;
+    float    normal_a[3];
+    dm_plane planes_a[5];
+    uint32_t num_planes_a;
+    
+    float    points_b[10][3];
+    uint32_t num_pts_b;
+    float    normal_b[3];
+    dm_plane planes_b[5];
+    uint32_t num_planes_b;
+    
+    float norm_pen[3];
+    float neg_pen[3];
+    
+    dm_vec3_norm(penetration, norm_pen);
+    dm_vec3_negate(norm_pen, neg_pen);
+    float pen_depth = dm_vec3_mag(penetration);
+    
+    dm_support_face_entity(poly_a, t_id, c_id, t_block, c_block, norm_pen, points_a, &num_pts_a, planes_a, &num_planes_a, normal_a);
+    dm_support_face_entity(poly_b, t_id, c_id, t_block, c_block, neg_pen, points_b, &num_pts_b, planes_b, &num_planes_b, normal_b);
+}
+
+bool dm_physics_collide_poly_other(dm_ecs_system_entity_container entity_a, dm_ecs_system_entity_container entity_b, dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block, dm_simplex* simplex)
+{
+    dm_collision_shape shape = (c_block + entity_b.block_indices[c_id])->shape[entity_b.component_indices[c_id]];
+    
+    switch(shape)
+    {
+        case DM_COLLISION_SHAPE_SPHERE:
+        dm_physics_collide_poly_sphere(entity_a, entity_b, t_id, c_id, t_block, c_block, simplex);
+        break;
+        
+        case DM_COLLISION_SHAPE_BOX:
+        dm_physics_collide_poly_poly(entity_a, entity_b, t_id, c_id, t_block, c_block, simplex);
+        break;
+        
+        default:
+        DM_LOG_FATAL("Unknown collider type! Shouldn't be here so we are crashing");
+        return false;
+    }
+    
+    return true;
+}
+
+bool dm_physics_collide_entities(dm_ecs_system_entity_container entity_a, dm_ecs_system_entity_container entity_b, dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block, dm_simplex* simplex, dm_physics_manager* manager)
+{
+    dm_contact_manifold* manifold = &manager->manifolds[manager->num_manifolds++];
+    *manifold = (dm_contact_manifold){ 0 };
+    
+    dm_collision_shape shape = (c_block + entity_a.block_indices[c_id])->shape[entity_a.component_indices[c_id]];
+    
+    switch(shape)
+    {
+        case DM_COLLISION_SHAPE_SPHERE:
+        return dm_physics_collide_sphere_other(entity_a, entity_b, t_id, c_id, t_block, c_block, simplex);
+        break;
+        
+        case DM_COLLISION_SHAPE_BOX:
+        return dm_physics_collide_poly_other(entity_a, entity_b, t_id, c_id, t_block, c_block, simplex);
+        break;
+        
+        default:
+        DM_LOG_FATAL("Unknown collider type! Shouldn't be here so we are crashing");
+        return false;
+    }
+}
+
+// narrowphase
 bool dm_physics_narrowphase(dm_ecs_system_manager* system, dm_physics_manager* manager, dm_context* context)
 {
+    dm_ecs_id t_id = context->ecs_manager.default_components.transform;
+    dm_ecs_id c_id = context->ecs_manager.default_components.collision;
+    
+    dm_component_transform_block* t_block = context->ecs_manager.components[t_id].data;
+    dm_component_collision_block* c_block = context->ecs_manager.components[c_id].data;
+    
+    dm_collision_flag* flags = c_block->flag;
+    
+    for(uint32_t i=0; i<manager->num_possible_collisions; i++)
+    {
+        dm_collision_pair collision_pair = manager->possible_collisions[i];
+        
+        dm_ecs_system_entity_container entity_a = collision_pair.entity_a;
+        dm_ecs_system_entity_container entity_b = collision_pair.entity_b;
+        
+        dm_simplex simplex = { 0 };
+        
+        if(!dm_physics_gjk(entity_a, entity_b, t_id, c_id, t_block, c_block, &simplex)) continue;
+        
+        (c_block + entity_a.block_indices[c_id])->flag[entity_a.component_indices[c_id]] = DM_COLLISION_FLAG_YES;
+        (c_block + entity_b.block_indices[c_id])->flag[entity_b.component_indices[c_id]] = DM_COLLISION_FLAG_YES;
+        
+        if(!dm_physics_collide_entities(entity_a, entity_b, t_id, c_id, t_block, c_block, &simplex, manager)) return false;
+    }
+    
     return true;
 }
 
@@ -728,11 +1238,16 @@ bool dm_physics_system_run(dm_ecs_system_timing timing, dm_ecs_id system_id, voi
     dm_ecs_system_manager* system = &context->ecs_manager.systems[timing][system_id];
     dm_physics_manager* manager = system->system_data;
     
+    dm_timer t = { 0 };
     // broadphase
+    dm_timer_start(&t, context);
     if(!dm_physics_broadphase(system, manager, context)) return false;
+    DM_LOG_WARN("Physics broadphase took: %lf ms", dm_timer_elapsed_ms(&t, context));
     
     // narrowphase
+    dm_timer_start(&t, context);
     if(!dm_physics_narrowphase(system, manager, context)) return false;
+    DM_LOG_WARN("Physics narrowphase took: %lf ms", dm_timer_elapsed_ms(&t, context));
     
     // update
     

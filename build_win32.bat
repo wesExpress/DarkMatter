@@ -4,7 +4,7 @@ SetLocal EnableDelayedExpansion
 SET SRC_DIR=%cd%
 
 SET /A vulkan=0
-SET /A debug=0
+SET /A debug=1
 SET /A simd_256=1
 SET /A phys_simd=1
 SET /A phys_multi_th=0
