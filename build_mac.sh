@@ -9,8 +9,9 @@ SRC_DIR=$PWD
 mkdir -p build
 cd build
 
-c_files="$SRC_DIR/main.c"
+c_files="$SRC_DIR/main.c $SRC_DIR/app.c $SRC_DIR/render_pass.c"
 
+dm_files="$SRC_DIR/dm_impl.c $SRC_DIR/dm_physics.c"
 objc_files="$SRC_DIR/dm_platform_mac.m $SRC_DIR/dm_renderer_metal.m"
 
 compiler_flags="-g -fPIC -MD -std=gnu99 -fdiagnostics-absolute-paths -fPIC -Wall -Wno-missing-braces"
@@ -34,7 +35,7 @@ include_flags="-I$SRC_DIR -I$SRC_DIR/lib/"
 linker_flags="-g -framework Cocoa -lobjc -framework QuartzCore -framework CoreFoundation -framework Metal"
 
 echo "Building $output..."
-clang $c_files $external_files $objc_files $compiler_flags -o $output $defines $include_flags $linker_flags
+gcc $c_files $dm_files $objc_files $compiler_flags -o $output $defines $include_flags $linker_flags
 
 cd ..
 # shaders

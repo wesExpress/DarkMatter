@@ -1815,7 +1815,7 @@ void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center[3], float 
     
     dm_component_collision c = {
         .aabb_local_min[0]=min[0], .aabb_local_min[1]=min[1], .aabb_local_min[2]=min[2],
-        .aabb_local_max[0]=max[0], .aabb_local_max[1]=max[1], .aabb_local_min[2]=max[2],
+        .aabb_local_max[0]=max[0], .aabb_local_max[1]=max[1], .aabb_local_max[2]=max[2],
         .center[0]=center[0], .center[1]=center[1], .center[2]=center[2],
         .internal[0]=radius, .shape=DM_COLLISION_SHAPE_SPHERE,
     };

@@ -376,6 +376,11 @@ void dm_renderer_backend_destroy_uniform(dm_render_handle handle, dm_renderer* r
 /************
 METAL SHADER
 **************/
+bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer)
+{
+	return true;
+}
+
 bool dm_renderer_backend_create_shader(const char* shader_src, dm_vertex_attrib_desc* layout, uint32_t num_attribs, dm_render_handle* handle, dm_renderer* renderer)
 {
 	DM_METAL_GET_RENDERER;
@@ -732,6 +737,11 @@ bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
 	metal_renderer->active_shader = DM_METAL_INVALID_RESOURCE;
 	metal_renderer->active_pipeline = DM_METAL_INVALID_RESOURCE;
 
+	return true;
+}
+
+bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
+{
 	return true;
 }
 

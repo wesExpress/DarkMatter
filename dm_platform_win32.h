@@ -2,6 +2,9 @@
 #define DM_PLATFORM_WIN32_H
 
 #include "dm.h"
+
+#ifdef DM_PLATFORM_WIN32
+
 #define WIN32_MEAN_AND_LEAN
 #include <windows.h>
 #include <windowsx.h>
@@ -21,5 +24,6 @@ typedef struct dm_internal_w32_data_t
 #endif
 } dm_internal_w32_data;
 
+#endif
 
 #endif //DM_PLATFORM_WIN32_H

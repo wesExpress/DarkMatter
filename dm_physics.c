@@ -108,10 +108,10 @@ typedef struct dm_physics_broadphase_sort_data_t
 /**********
 BROADPHASE
 ************/
-#ifdef DM_PLATFORM_WIN32
-int dm_physics_broadphase_sort(void* c, const void* a, const void* b)
-#else
+#ifdef DM_PLATFORM_LINUX
 int dm_physics_broadphase_sort(const void* a, const void* b, void* c)
+#else
+int dm_physics_broadphase_sort(void* c, const void* a, const void* b)
 #endif
 {
     dm_physics_broadphase_sort_data* sort_data = c;
@@ -314,8 +314,10 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
     
 #ifdef DM_PLATFORM_WIN32
     qsort_s(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), dm_physics_broadphase_sort, &data);
-#else
+#elif defined(DM_PLATFORM_LINUX)
     qsort_r(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), dm_physics_broadphase_sort, &data);
+#elif defined(DM_PLATFORM_APPLE)
+     qsort_r(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), &data, dm_physics_broadphase_sort);
 #endif
 
     // sweep
