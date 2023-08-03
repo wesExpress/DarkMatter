@@ -4,7 +4,7 @@ set echo on
 output="app"
 
 vulkan=0
-debug=0
+debug=1
 simd_256=1
 phys_simd=1
 phys_multi_th=0

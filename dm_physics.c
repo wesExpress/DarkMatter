@@ -814,11 +814,9 @@ bool dm_physics_epa(dm_ecs_system_entity_container entity_a, dm_ecs_system_entit
         dm_support(entity_a, entity_b, direction, support, t_id, c_id, t_block, c_block);
         
         // have we converged
-        if(dm_vec3_dot(support, direction) < DM_PHYSICS_EPA_TOLERANCE)
+        if(dm_vec3_dot(support, direction) - min_distance < DM_PHYSICS_EPA_TOLERANCE)
         {
             float depth = dm_vec3_dot(support, direction);
-            if(!depth) return false;
-            
             dm_vec3_scale(direction, depth, penetration);
             return true;
         }
@@ -1101,7 +1099,7 @@ bool dm_physics_collide_sphere_other(dm_ecs_system_entity_container entity_a, dm
 
 void dm_physics_collide_poly_sphere(dm_ecs_system_entity_container box, dm_ecs_system_entity_container sphere, dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block, dm_simplex* simplex)
 {
-    float penetration[3];
+    float penetration[3] = { 0 };
     if(!dm_physics_epa(box, sphere, t_id, c_id, t_block, c_block, penetration, simplex)) return;
     
     float    points_box[10][3];
@@ -1113,7 +1111,7 @@ void dm_physics_collide_poly_sphere(dm_ecs_system_entity_container box, dm_ecs_s
 
 void dm_physics_collide_poly_poly(dm_ecs_system_entity_container poly_a, dm_ecs_system_entity_container poly_b, dm_ecs_id t_id, dm_ecs_id c_id, dm_component_transform_block* t_block, dm_component_collision_block* c_block, dm_simplex* simplex)
 {
-    float penetration[3];
+    float penetration[3] = { 0 };
     if(!dm_physics_epa(poly_a, poly_b, t_id, c_id, t_block, c_block, penetration, simplex)) return;
     
     float    points_a[10][3];
@@ -1208,6 +1206,13 @@ bool dm_physics_narrowphase(dm_ecs_system_manager* system, dm_physics_manager* m
         (c_block + entity_b.block_indices[c_id])->flag[entity_b.component_indices[c_id]] = DM_COLLISION_FLAG_YES;
         
         if(!dm_physics_collide_entities(entity_a, entity_b, t_id, c_id, t_block, c_block, &simplex, manager)) return false;
+
+        // resize manifolds
+        float load = (float)manager->num_manifolds / (float)manager->manifold_capacity;
+        if(load < DM_PHYSICS_LOAD_FACTOR) continue;
+
+        manager->manifold_capacity *= DM_PHYSICS_RESIZE_FACTOR;
+        manager->manifolds = dm_realloc(manager->manifolds, sizeof(dm_contact_manifold) * manager->manifold_capacity);
     }
     
     return true;
