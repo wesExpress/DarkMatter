@@ -5,17 +5,25 @@
 
 typedef struct basic_camera_t
 {
-    float proj[M4];
-    float pos[3];
-    float zoom;
+    float fov, near_plane, far_plane;
+    float move_speed, look_sens;
+    
+    uint32_t width, height;
+    
+    float pos[N3];
+    float up[N3], forward[N3], right[N3];
+    float proj[M4], view[M4], inv_view[M4], view_proj[M4];
 } basic_camera;
 
-#define MAX_ENTITIES 1024
+#define MAX_ENTITIES 2
 typedef struct application_data_t
 {
+    uint32_t     entity_count;
     dm_entity    entities[MAX_ENTITIES];
     basic_camera camera;
+    
     void*        render_pass_data;
+    void*        debug_render_pass_data;
 } application_data;
 
 bool app_init(dm_context* context);

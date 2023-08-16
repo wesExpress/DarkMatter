@@ -414,6 +414,16 @@ uint32_t dm_input_get_mouse_y(dm_context* context)
 	return context->input_states[0].mouse.y;
 }
 
+int dm_input_get_mouse_delta_x(dm_context* context)
+{
+	return context->input_states[0].mouse.x - context->input_states[1].mouse.x;
+}
+
+int dm_input_get_mouse_delta_y(dm_context* context)
+{
+	return context->input_states[0].mouse.y - context->input_states[1].mouse.y;
+}
+
 void dm_input_get_mouse_pos(uint32_t* x, uint32_t* y, dm_context* context)
 {
 	*x = context->input_states[0].mouse.x;
@@ -424,16 +434,6 @@ void dm_input_get_mouse_delta(int* x, int* y, dm_context* context)
 {
 	*x = dm_input_get_mouse_delta_x(context);
 	*y = dm_input_get_mouse_delta_y(context);
-}
-
-int dm_input_get_mouse_delta_x(dm_context* context)
-{
-	return context->input_states[0].mouse.x - context->input_states[1].mouse.x;
-}
-
-int dm_input_get_mouse_delta_y(dm_context* context)
-{
-	return context->input_states[0].mouse.y - context->input_states[1].mouse.y;
 }
 
 int dm_input_get_prev_mouse_x(dm_context* context)
@@ -1660,7 +1660,7 @@ void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm
     dm_memzero(data, manager->block_size);
 }
 
-void dm_ecs_entity_add_transform(dm_entity entity, dm_component_transform transform, dm_context* context)
+void dm_ecs_entity_add_transform(dm_entity entity, float pos_x,float pos_y,float pos_z, float scale_x,float scale_y,float scale_z, float rot_i,float rot_j,float rot_k,float rot_r, dm_context* context)
 {
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add transform to invalid entity"); return; }
     
@@ -1668,80 +1668,112 @@ void dm_ecs_entity_add_transform(dm_entity entity, dm_component_transform transf
     const dm_ecs_id transform_id = context->ecs_manager.default_components.transform;
     dm_component_transform_block* transform_block = dm_ecs_get_current_component_block(transform_id, &index, context);
     
-    transform_block->pos_x[index] = transform.pos[0];
-    transform_block->pos_y[index] = transform.pos[1];
-    transform_block->pos_z[index] = transform.pos[2];
+    transform_block->pos_x[index] = pos_x;
+    transform_block->pos_y[index] = pos_y;
+    transform_block->pos_z[index] = pos_z;
     
-    transform_block->scale_x[index] = transform.scale[0];
-    transform_block->scale_y[index] = transform.scale[1];
-    transform_block->scale_z[index] = transform.scale[2];
+    transform_block->scale_x[index] = scale_x;
+    transform_block->scale_y[index] = scale_y;
+    transform_block->scale_z[index] = scale_z;
     
-    transform_block->rot_i[index] = transform.rot[0];
-    transform_block->rot_j[index] = transform.rot[1];
-    transform_block->rot_k[index] = transform.rot[2];
-    transform_block->rot_r[index] = transform.rot[3];
+    transform_block->rot_i[index] = rot_i;
+    transform_block->rot_j[index] = rot_j;
+    transform_block->rot_k[index] = rot_k;
+    transform_block->rot_r[index] = rot_r;
     
     dm_ecs_iterate_component_block(entity, transform_id, context);
 }
 
-void dm_ecs_entity_add_physics(dm_entity entity, dm_component_physics physics, dm_context* context)
+void dm_ecs_entity_add_kinematics(dm_entity entity, float mass, float vel_x,float vel_y,float vel_z, float damping_v,float damping_w, float collider_data[6], dm_context* context)
 {
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
-    
     uint32_t index;
     const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
     dm_component_physics_block* physics_block = dm_ecs_get_current_component_block(physics_id, &index, context);
     
-    physics_block->vel_x[index] = physics.vel[0];
-    physics_block->vel_y[index] = physics.vel[1];
-    physics_block->vel_z[index] = physics.vel[2];
+    float dim_x = collider_data[3] - collider_data[0];
+    float dim_y = collider_data[4] - collider_data[1];
+    float dim_z = collider_data[5] - collider_data[2];
     
-    physics_block->w_x[index] = physics.w[0];
-    physics_block->w_y[index] = physics.w[1];
-    physics_block->w_z[index] = physics.w[2];
+    dim_x *= dim_x;
+    dim_y *= dim_y;
+    dim_z *= dim_z;
     
-    physics_block->l_x[index] = physics.l[0];
-    physics_block->l_y[index] = physics.l[1];
-    physics_block->l_z[index] = physics.l[2];
+    physics_block->vel_x[index] = vel_x;
+    physics_block->vel_y[index] = vel_y;
+    physics_block->vel_z[index] = vel_z;
     
-    physics_block->force_x[index] = physics.force[0];
-    physics_block->force_y[index] = physics.force[1];
-    physics_block->force_z[index] = physics.force[2];
+    physics_block->mass[index]     = mass;
+    physics_block->inv_mass[index] = 1.0f / mass;
     
-    physics_block->torque_x[index] = physics.torque[0];
-    physics_block->torque_y[index] = physics.torque[1];
-    physics_block->torque_z[index] = physics.torque[2];
+    physics_block->movement_type[index] = DM_PHYSICS_MOVEMENT_KINEMATIC;
     
-    physics_block->mass[index]     = physics.mass;
-    physics_block->inv_mass[index] = physics.inv_mass;
+    physics_block->i_body_00[index] = (dim_y + dim_z) * mass * DM_MATH_INV_12;
+    physics_block->i_body_11[index] = (dim_x + dim_z) * mass * DM_MATH_INV_12;
+    physics_block->i_body_22[index] = (dim_x + dim_y) * mass * DM_MATH_INV_12;
     
-    physics_block->i_body_0[index] = physics.i_body[0];
-    physics_block->i_body_1[index] = physics.i_body[1];
-    physics_block->i_body_2[index] = physics.i_body[2];
+    physics_block->i_body_inv_00[index] = 1.0f / physics_block->i_body_00[index];
+    physics_block->i_body_inv_11[index] = 1.0f / physics_block->i_body_11[index];
+    physics_block->i_body_inv_22[index] = 1.0f / physics_block->i_body_22[index];
     
-    physics_block->i_body_inv_0[index] = physics.i_body_inv[0];
-    physics_block->i_body_inv_1[index] = physics.i_body_inv[1];
-    physics_block->i_body_inv_2[index] = physics.i_body_inv[2];
+    physics_block->i_inv_00[index] = physics_block->i_body_inv_00[index];
+    physics_block->i_inv_11[index] = physics_block->i_body_inv_11[index];
+    physics_block->i_inv_22[index] = physics_block->i_body_inv_22[index];
     
-    physics_block->i_inv_0_0[index] = physics.i_inv_0[0];
-    physics_block->i_inv_0_1[index] = physics.i_inv_0[1];
-    physics_block->i_inv_0_2[index] = physics.i_inv_0[2];
+    physics_block->damping_v[index] = damping_v;
+    physics_block->damping_w[index] = damping_w;
     
-    physics_block->i_inv_1_0[index] = physics.i_inv_1[0];
-    physics_block->i_inv_1_1[index] = physics.i_inv_1[1];
-    physics_block->i_inv_1_2[index] = physics.i_inv_1[2];
-    
-    physics_block->i_inv_2_0[index] = physics.i_inv_2[0];
-    physics_block->i_inv_2_1[index] = physics.i_inv_2[1];
-    physics_block->i_inv_2_2[index] = physics.i_inv_2[2];
-    
-    physics_block->damping_v[index] = physics.damping[0];
-    physics_block->damping_w[index] = physics.damping[1];
-    
-    physics_block->body_type[index]     = physics.body_type;
-    physics_block->movement_type[index] = physics.movement_type;
+    // default for now
+    physics_block->body_type[index] = DM_PHYSICS_BODY_TYPE_RIGID;
     
     dm_ecs_iterate_component_block(entity, physics_id, context);
+}
+
+void dm_ecs_entity_add_velocity(dm_entity entity, float v_x, float v_y, float v_z, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
+    const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
+    dm_component_physics_block* physics_block = context->ecs_manager.components[physics_id].data;
+    
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    uint32_t block_index  = context->ecs_manager.entity_block_indices[entity_index][physics_id];
+    uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][physics_id];
+    
+    (physics_block + block_index)->vel_x[comp_index] += v_x;
+    (physics_block + block_index)->vel_y[comp_index] += v_y;
+    (physics_block + block_index)->vel_z[comp_index] += v_z;
+}
+
+void dm_ecs_entity_add_angular_velocity(dm_entity entity, float w_x, float w_y, float w_z, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
+    uint32_t index;
+    const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
+    dm_component_physics_block* physics_block = dm_ecs_get_current_component_block(physics_id, &index, context);
+    
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    uint32_t block_index  = context->ecs_manager.entity_block_indices[entity_index][physics_id];
+    uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][physics_id];
+    
+    (physics_block + block_index)->w_x[comp_index] += w_x;
+    (physics_block + block_index)->w_y[comp_index] += w_y;
+    (physics_block + block_index)->w_z[comp_index] += w_z;
+}
+
+void dm_ecs_entity_add_force(dm_entity entity, float f_x, float f_y, float f_z, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
+    uint32_t index;
+    const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
+    dm_component_physics_block* physics_block = dm_ecs_get_current_component_block(physics_id, &index, context);
+    
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    uint32_t block_index  = context->ecs_manager.entity_block_indices[entity_index][physics_id];
+    uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][physics_id];
+    
+    (physics_block + block_index)->force_x[comp_index] += f_x;
+    (physics_block + block_index)->force_y[comp_index] += f_y;
+    (physics_block + block_index)->force_z[comp_index] += f_z;
 }
 
 void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision collision, dm_context* context)
@@ -1785,42 +1817,104 @@ void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision collis
     dm_ecs_iterate_component_block(entity, collision_id, context);
 }
 
-void dm_ecs_entity_add_box_collider(dm_entity entity, float center[3], float dim[3], dm_context* context)
+void dm_ecs_entity_add_box_collider(dm_entity entity, float center_x,float center_y,float center_z, float scale_x,float scale_y,float scale_z, dm_context* context)
 {
-    float min[3];
-    float max[3];
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add collision to invalid entity"); return; }
     
-    dm_vec3_sub_vec3(center, dim, min);
-    dm_vec3_add_vec3(center, dim, max);
+    uint32_t index;
+    const dm_ecs_id collision_id = context->ecs_manager.default_components.collision;
+    dm_component_collision_block* collision_block = dm_ecs_get_current_component_block(collision_id, &index, context);
     
-    dm_component_collision c = {
-        .aabb_local_min[0]=min[0], .aabb_local_min[1]=min[1], .aabb_local_min[2]=min[2],
-        .aabb_local_max[0]=max[0], .aabb_local_max[1]=max[1], .aabb_local_max[2]=max[2],
-        .center[0]=center[0], .center[1]=center[1], .center[2]=center[2],
-        .internal[0]=min[0], .internal[1]=min[1], .internal[2]=min[2], 
-        .internal[3]=max[0], .internal[4]=max[1], .internal[5]=max[2], 
-        .shape=DM_COLLISION_SHAPE_BOX,
-    };
+    scale_x *= 0.5f;
+    scale_y *= 0.5f;
+    scale_z *= 0.5f;
     
-    dm_ecs_entity_add_collision(entity, c, context);
+    float min_x = center_x - scale_x;
+    float min_y = center_y - scale_x;
+    float min_z = center_z - scale_x;
+    
+    float max_x = center_x + scale_x;
+    float max_y = center_y + scale_y;
+    float max_z = center_z + scale_z;
+    
+    collision_block->aabb_local_min_x[index] = min_x;
+    collision_block->aabb_local_min_y[index] = min_y;
+    collision_block->aabb_local_min_z[index] = min_z;
+    
+    collision_block->aabb_local_max_x[index] = max_x;
+    collision_block->aabb_local_max_y[index] = max_y;
+    collision_block->aabb_local_max_z[index] = max_z;
+    
+    collision_block->aabb_global_min_x[index] = min_x;
+    collision_block->aabb_global_min_y[index] = min_y;
+    collision_block->aabb_global_min_z[index] = min_z;
+    
+    collision_block->aabb_global_max_x[index] = max_x;
+    collision_block->aabb_global_max_y[index] = max_y;
+    collision_block->aabb_global_max_z[index] = max_z;
+    
+    collision_block->center_x[index] = center_x;
+    collision_block->center_y[index] = center_y;
+    collision_block->center_z[index] = center_z;
+    
+    collision_block->internal_0[index] = min_x;
+    collision_block->internal_1[index] = min_y;
+    collision_block->internal_2[index] = min_z;
+    collision_block->internal_3[index] = max_x;
+    collision_block->internal_4[index] = max_y;
+    collision_block->internal_5[index] = max_z;
+    
+    collision_block->shape[index] = DM_COLLISION_SHAPE_BOX;
+    collision_block->flag[index]  = DM_COLLISION_FLAG_NO;
+    
+    dm_ecs_iterate_component_block(entity, collision_id, context);
 }
 
-void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center[3], float radius, dm_context* context)
+void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center_x,float center_y,float center_z, float radius, dm_context* context)
 {
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add collision to invalid entity"); return; }
+    
+    uint32_t index;
+    const dm_ecs_id collision_id = context->ecs_manager.default_components.collision;
+    dm_component_collision_block* collision_block = dm_ecs_get_current_component_block(collision_id, &index, context);
+    
     float min[3];
     float max[3];
     
-    dm_vec3_sub_scalar(center, radius, min);
-    dm_vec3_add_scalar(center, radius, max);
+    min[0] = center_x - radius;
+    min[1] = center_y - radius;
+    min[2] = center_z - radius;
     
-    dm_component_collision c = {
-        .aabb_local_min[0]=min[0], .aabb_local_min[1]=min[1], .aabb_local_min[2]=min[2],
-        .aabb_local_max[0]=max[0], .aabb_local_max[1]=max[1], .aabb_local_max[2]=max[2],
-        .center[0]=center[0], .center[1]=center[1], .center[2]=center[2],
-        .internal[0]=radius, .shape=DM_COLLISION_SHAPE_SPHERE,
-    };
+    max[0] = center_x + radius;
+    max[1] = center_y + radius;
+    max[2] = center_z + radius;
     
-    dm_ecs_entity_add_collision(entity, c, context);
+    collision_block->aabb_local_min_x[index] = min[0];
+    collision_block->aabb_local_min_y[index] = min[1];
+    collision_block->aabb_local_min_z[index] = min[2];
+    
+    collision_block->aabb_local_max_x[index] = max[0];
+    collision_block->aabb_local_max_y[index] = max[1];
+    collision_block->aabb_local_max_z[index] = max[2];
+    
+    collision_block->aabb_global_min_x[index] = min[0];
+    collision_block->aabb_global_min_y[index] = min[1];
+    collision_block->aabb_global_min_z[index] = min[2];
+    
+    collision_block->aabb_global_max_x[index] = max[0];
+    collision_block->aabb_global_max_y[index] = max[1];
+    collision_block->aabb_global_max_z[index] = max[2];
+    
+    collision_block->center_x[index] = center_x;
+    collision_block->center_y[index] = center_y;
+    collision_block->center_z[index] = center_z;
+    
+    collision_block->internal_0[index] = radius;
+    
+    collision_block->shape[index] = DM_COLLISION_SHAPE_SPHERE;
+    collision_block->flag[index]  = DM_COLLISION_FLAG_NO;
+    
+    dm_ecs_iterate_component_block(entity, collision_id, context);
 }
 
 const dm_component_transform dm_ecs_entity_get_transform(dm_entity entity, dm_context* context)
@@ -1862,9 +1956,9 @@ const dm_component_collision dm_ecs_entity_get_collision(dm_entity entity, dm_co
     collision.aabb_local_max[1] = collision_block->aabb_local_max_y[index];
     collision.aabb_local_max[2] = collision_block->aabb_local_max_z[index];
     
-    collision.aabb_global_min[0] = collision_block->aabb_local_min_x[index];
-    collision.aabb_global_min[1] = collision_block->aabb_local_min_y[index];
-    collision.aabb_global_min[2] = collision_block->aabb_local_min_z[index];
+    collision.aabb_global_min[0] = collision_block->aabb_global_min_x[index];
+    collision.aabb_global_min[1] = collision_block->aabb_global_min_y[index];
+    collision.aabb_global_min[2] = collision_block->aabb_global_min_z[index];
     
     collision.aabb_global_max[0] = collision_block->aabb_global_max_x[index];
     collision.aabb_global_max[1] = collision_block->aabb_global_max_y[index];
@@ -1917,25 +2011,25 @@ const dm_component_physics dm_ecs_entity_get_physics(dm_entity entity, dm_contex
     physics.mass = physics_block->mass[index];
     physics.inv_mass = physics_block->inv_mass[index];
     
-    physics.i_body[0] = physics_block->i_body_0[index];
-    physics.i_body[1] = physics_block->i_body_1[index];
-    physics.i_body[2] = physics_block->i_body_2[index];
+    physics.i_body[0] = physics_block->i_body_00[index];
+    physics.i_body[1] = physics_block->i_body_11[index];
+    physics.i_body[2] = physics_block->i_body_22[index];
     
-    physics.i_body_inv[0] = physics_block->i_body_inv_0[index];
-    physics.i_body_inv[1] = physics_block->i_body_inv_1[index];
-    physics.i_body_inv[2] = physics_block->i_body_inv_2[index];
+    physics.i_body_inv[0] = physics_block->i_body_inv_00[index];
+    physics.i_body_inv[1] = physics_block->i_body_inv_11[index];
+    physics.i_body_inv[2] = physics_block->i_body_inv_22[index];
     
-    physics.i_inv_0[0] = physics_block->i_inv_0_0[index];
-    physics.i_inv_0[1] = physics_block->i_inv_0_1[index];
-    physics.i_inv_0[2] = physics_block->i_inv_0_2[index];
+    physics.i_inv_0[0] = physics_block->i_inv_00[index];
+    physics.i_inv_0[1] = physics_block->i_inv_01[index];
+    physics.i_inv_0[2] = physics_block->i_inv_02[index];
     
-    physics.i_inv_1[0] = physics_block->i_inv_1_0[index];
-    physics.i_inv_1[1] = physics_block->i_inv_1_1[index];
-    physics.i_inv_1[2] = physics_block->i_inv_1_2[index];
+    physics.i_inv_1[0] = physics_block->i_inv_10[index];
+    physics.i_inv_1[1] = physics_block->i_inv_11[index];
+    physics.i_inv_1[2] = physics_block->i_inv_12[index];
     
-    physics.i_inv_2[0] = physics_block->i_inv_2_0[index];
-    physics.i_inv_2[1] = physics_block->i_inv_2_1[index];
-    physics.i_inv_2[2] = physics_block->i_inv_2_2[index];
+    physics.i_inv_2[0] = physics_block->i_inv_20[index];
+    physics.i_inv_2[1] = physics_block->i_inv_21[index];
+    physics.i_inv_2[2] = physics_block->i_inv_22[index];
     
     physics.damping[0] = physics_block->damping_v[index];
     physics.damping[1] = physics_block->damping_w[index];
@@ -2078,10 +2172,19 @@ void dm_poll_events(dm_context* context)
     }
 }
 
-bool dm_update_begin(dm_context* context)
+void dm_start(dm_context* context)
 {
     context->start = dm_platform_get_time(&context->platform_data);
-    
+}
+
+void dm_end(dm_context* context)
+{
+    context->end = dm_platform_get_time(&context->platform_data);
+    context->delta = context->end - context->start;
+}
+
+bool dm_update_begin(dm_context* context)
+{
     // update input states
     context->input_states[1] = context->input_states[0];
     //dm_memzero(&context->input_states[0], sizeof(context->input_states[0]));
@@ -2108,9 +2211,6 @@ bool dm_update_end(dm_context* context)
     
     // cleaning
     context->platform_data.event_list.num = 0;
-    
-    context->end = dm_platform_get_time(&context->platform_data);
-    context->delta = context->end - context->start;
     
     return true;
 }

@@ -87,6 +87,7 @@ MATH
 #define DM_MATH_INV_2PI             0.159154943091f
 #define DM_MATH_4PI                 12.566370614359173f
 #define DM_MATH_INV_4PI             0.0795774715459f
+#define DM_MATH_INV_12              0.0833333f
 
 #define DM_MATH_ANGLE_RAD_TOLERANCE 0.001f
 #define DM_MATH_SQRT2               1.41421356237309f
@@ -950,25 +951,25 @@ typedef struct dm_component_physics_block_t
     
     // moment of inertia at rest are diagonals
     // but global inertia is a full 3x3 matrix
-    float i_body_0[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_body_1[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_body_2[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_00[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_11[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_22[DM_ECS_COMPONENT_BLOCK_SIZE];
     
-    float i_body_inv_0[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_body_inv_1[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_body_inv_2[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_inv_00[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_inv_11[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_body_inv_22[DM_ECS_COMPONENT_BLOCK_SIZE];
     
-    float i_inv_0_0[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_inv_0_1[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_inv_0_2[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_00[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_01[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_02[DM_ECS_COMPONENT_BLOCK_SIZE];
     
-    float i_inv_1_0[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_inv_1_1[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_inv_1_2[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_10[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_11[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_12[DM_ECS_COMPONENT_BLOCK_SIZE];
     
-    float i_inv_2_0[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_inv_2_1[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float i_inv_2_2[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_20[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_21[DM_ECS_COMPONENT_BLOCK_SIZE];
+    float i_inv_22[DM_ECS_COMPONENT_BLOCK_SIZE];
     
     // damping coefs
     float damping_v[DM_ECS_COMPONENT_BLOCK_SIZE];
@@ -1007,8 +1008,6 @@ typedef struct dm_component_physics_t
 // collision component
 typedef enum dm_collision_shape_t
 {
-    DM_COLLISION_SHAPE_2D_CIRCLE,
-    DM_COLLISION_SHAPE_2D_BOX,
     DM_COLLISION_SHAPE_SPHERE,
     DM_COLLISION_SHAPE_BOX,
     DM_COLLISION_SHAPE_UNKNOWN
@@ -1301,11 +1300,15 @@ const dm_component_transform dm_ecs_entity_get_transform(dm_entity entity, dm_co
 const dm_component_physics   dm_ecs_entity_get_physics(dm_entity entity, dm_context* context);
 const dm_component_collision dm_ecs_entity_get_collision(dm_entity entity, dm_context* context);
 
-void dm_ecs_entity_add_transform(dm_entity, dm_component_transform t, dm_context* context);
-void dm_ecs_entity_add_physics(dm_entity entity, dm_component_physics physics, dm_context* context);
+void dm_ecs_entity_add_transform(dm_entity, float pos_x,float pos_y,float pos_z, float scale_x,float scale_y,float scale_z, float rot_i,float rot_j,float rot_k,float rot_r, dm_context* context);
+void dm_ecs_entity_add_kinematics(dm_entity entity, float mass, float vel_x,float vel_y,float vel_z, float damping_v,float damping_w, float collider_data[6], dm_context* context);
 void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision c, dm_context* context);
-void dm_ecs_entity_add_box_collider(dm_entity entity, float center[3], float dim[3], dm_context* context);
-void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center[3], float radius, dm_context* context);
+void dm_ecs_entity_add_box_collider(dm_entity entity, float center_x,float center_y,float center_z, float dim_x,float dim_y,float dim_z, dm_context* context);
+void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center_x,float center_y,float center_z, float radius, dm_context* context);
+
+void dm_ecs_entity_add_velocity(dm_entity, float v_x, float v_y, float v_z, dm_context* context);
+void dm_ecs_entity_add_angular_velocity(dm_entity, float w_x, float w_y, float w_z, dm_context* context);
+void dm_ecs_entity_add_force(dm_entity, float f_x, float f_y, float f_z, dm_context* context);
 
 // inline ecs
 DM_INLINE
@@ -1359,6 +1362,10 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
 // framework funcs
 dm_context* dm_init(uint32_t window_x_pos, uint32_t windos_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title, const char* asset_path);
 void        dm_shutdown(dm_context* context);
+
+void        dm_start(dm_context* context);
+void        dm_end(dm_context* context);
+
 bool        dm_update_begin(dm_context* context);
 bool        dm_update_end(dm_context* context);
 bool        dm_renderer_begin_frame(dm_context* context);

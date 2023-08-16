@@ -4,6 +4,7 @@
 typedef struct vertex_t
 {
     float pos[N3];
+    float tex_coords[N2];
 } vertex;
 
 typedef struct inst_vertex_t
@@ -21,7 +22,7 @@ typedef struct uniform_t
 typedef struct render_pass_data_t
 {
     dm_render_handle vb, instb, ib, shader, pipe, uni;
-    basic_camera     camera;
+    dm_render_handle tex;
     
     uint32_t         entity_count, instance_count;
     
@@ -36,20 +37,68 @@ bool render_pass_init(dm_context* context)
     render_pass_data* pass_data = app_data->render_pass_data;
     
     {
+        // cube
         vertex vertices[] = {
-            { -0.5f,-0.5f,0 },
-            { 0.5f,-0.5f,0 },
-            { 0.5f,0.5f,0 },
-            { -0.5f,0.5f,0 },
+            // front face
+            { { -0.5f,-0.5f, 0.5f }, { 0,0 } },
+            { {  0.5f,-0.5f, 0.5f }, { 1,0 } },
+            { {  0.5f, 0.5f, 0.5f }, { 1,1 } },
+            { { -0.5f, 0.5f, 0.5f }, { 0,1 } },
+            
+            // back face
+            { {  0.5f,-0.5f,-0.5f }, { 0,0 } }, 
+            { { -0.5f,-0.5f,-0.5f }, { 1,0 } },
+            { { -0.5f, 0.5f,-0.5f }, { 1,1 } },
+            { {  0.5f, 0.5f,-0.5f }, { 0,1 } },
+            
+            // right
+            { {  0.5f,-0.5f, 0.5f }, { 0,0 } },
+            { {  0.5f,-0.5f,-0.5f }, { 1,0 } },
+            { {  0.5f, 0.5f,-0.5f }, { 1,1 } },
+            { {  0.5f, 0.5f, 0.5f }, { 0,1 } },
+            
+            // left
+            { { -0.5f, 0.5f, 0.5f }, { 0,0 } },
+            { { -0.5f, 0.5f,-0.5f }, { 1,0 } },
+            { { -0.5f,-0.5f,-0.5f }, { 1,1 } },
+            { { -0.5f,-0.5f, 0.5f }, { 0,1 } },
+            
+            // bottom
+            { { -0.5f,-0.5f,-0.5f }, { 0,0 } },
+            { {  0.5f,-0.5f,-0.5f }, { 1,0 } },
+            { {  0.5f,-0.5f, 0.5f }, { 1,1 } },
+            { { -0.5f,-0.5f, 0.5f }, { 0,1 } },
+            
+            // top
+            { { -0.5f, 0.5f, 0.5f }, { 0,0 } },
+            { {  0.5f, 0.5f, 0.5f }, { 1,0 } },
+            { {  0.5f, 0.5f,-0.5f }, { 1,1 } },
+            { { -0.5f, 0.5f,-0.5f }, { 0,1 } },
         };
         
         uint32_t indices[] = {
             0,1,2,
-            2,3,0
+            2,3,0,
+            
+            4,5,6,
+            6,7,4,
+            
+            8,9,10,
+            10,11,8,
+            
+            12,13,14,
+            14,15,12,
+            
+            16,17,18,
+            18,19,16,
+            
+            20,21,22,
+            22,23,20
         };
         
         dm_vertex_attrib_desc attrib_descs[] = {
             { .name="POSITION", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, pos), .count=3, .index=0, .normalized=false },
+            { .name="TEXCOORDS", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(vertex), .offset=offsetof(vertex, tex_coords), .count=2, .index=0, .normalized=false },
             { .name="MODEL", .data_t=DM_VERTEX_DATA_T_MATRIX_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, model), .count=4, .index=0, .normalized=false},
             { .name="COLOR", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_INSTANCE, .stride=sizeof(inst_vertex), .offset=offsetof(inst_vertex, color), .count=4, .index=0, .normalized=false }
         };
@@ -69,7 +118,7 @@ bool render_pass_init(dm_context* context)
 #elif defined(DM_OPENGL)
         strcpy(shader_desc.vertex, "assets/shaders/test_vertex.glsl");
         strcpy(shader_desc.pixel, "assets/shaders/test_pixel.glsl");
-
+        
         shader_desc.vb_count = 2;
         shader_desc.vb[0] = pass_data->vb;
         shader_desc.vb[1] = pass_data->instb;
@@ -83,6 +132,9 @@ bool render_pass_init(dm_context* context)
 #endif
         
         if(!dm_renderer_create_shader_and_pipeline(shader_desc, pipeline_desc, attrib_descs, DM_ARRAY_LEN(attrib_descs), &pass_data->shader, &pass_data->pipe, context)) return false;
+        
+        // assets
+        if(!dm_renderer_create_texture_from_file("assets/textures/default_texture.png", 4, false, "default", &pass_data->tex, context)) return false;
     }
     
     return true;
@@ -109,11 +161,15 @@ bool render_pass_render(dm_context* context)
     
     float obj_rm[M4];
     dm_component_transform transform = { 0 };
+    dm_component_collision collision = { 0 };
+    
     inst_vertex* inst = NULL;
     
     for(uint32_t i=0; i<pass_data->entity_count; i++)
     {
         transform = dm_ecs_entity_get_transform(pass_data->entities[i], context);
+        collision = dm_ecs_entity_get_collision(pass_data->entities[i], context);
+        
         inst = &pass_data->insts[i];
         
         dm_mat4_rotate_from_quat(transform.rot, obj_rm);
@@ -125,9 +181,41 @@ bool render_pass_render(dm_context* context)
         dm_mat4_transpose(inst->model, inst->model);
 #endif
         
-        inst->color[0] = 1; 
-        inst->color[1] = 1; 
-        inst->color[2] = 1; 
+        float dim[] = {
+            collision.aabb_global_max[0] - collision.aabb_global_min[0],
+            collision.aabb_global_max[1] - collision.aabb_global_min[1],
+            collision.aabb_global_max[2] - collision.aabb_global_min[2],
+        };
+        
+        float color[4] = { 0,0,0,1 };
+        if(collision.flag==DM_COLLISION_FLAG_YES)
+        {
+            color[0] = 1;
+        }
+        else if(collision.flag==DM_COLLISION_FLAG_POSSIBLE)
+        {
+            color[0] = 1;
+            color[1] = 1;
+        }
+        else
+        {
+            color[0] = 1;
+            color[1] = 1;
+            color[2] = 1;
+        }
+        
+        debug_render_aabb(transform.pos, dim, color, context);
+        
+#if 0
+        dim[0] = collision.internal[3] - collision.internal[0];
+        dim[1] = collision.internal[4] - collision.internal[1];
+        dim[2] = collision.internal[5] - collision.internal[2];
+        debug_render_cube(transform.pos, dim, transform.rot, color, context);
+#endif
+        
+        inst->color[0] = 1;
+        inst->color[1] = 1;
+        inst->color[2] = 1;
         inst->color[3] = 1;
         
         pass_data->instance_count++;
@@ -136,9 +224,7 @@ bool render_pass_render(dm_context* context)
     // uniform
     uniform uni = { 0 };
     
-    dm_mat4_identity(uni.view_proj);
-    dm_mat_translate(uni.view_proj, app_data->camera.pos,  uni.view_proj);
-    dm_mat4_mul_mat4(uni.view_proj, app_data->camera.proj, uni.view_proj);
+    dm_memcpy(uni.view_proj, app_data->camera.view_proj, sizeof(uni.view_proj));
 #ifdef DM_DIRECTX
     dm_mat4_transpose(uni.view_proj, uni.view_proj);
 #endif
@@ -149,14 +235,15 @@ bool render_pass_render(dm_context* context)
     
     dm_render_command_bind_shader(pass_data->shader, context);
     dm_render_command_bind_pipeline(pass_data->pipe, context);
+    dm_render_command_bind_texture(pass_data->tex, 0, context);
+    dm_render_command_toggle_wireframe(true, context);
     dm_render_command_bind_buffer(pass_data->vb, 0, context);
     dm_render_command_bind_buffer(pass_data->instb, 1, context);
     dm_render_command_update_buffer(pass_data->instb, pass_data->insts, sizeof(pass_data->insts), 0, context);
     dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_VERTEX, 0, context);
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
-    
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
-    dm_render_command_draw_instanced(6,pass_data->instance_count,0,0,0, context);
+    dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
     
     // reset counts back to 0
     pass_data->entity_count = 0;

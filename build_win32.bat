@@ -9,7 +9,7 @@ SET /A simd_256=1
 SET /A phys_simd=1
 SET /A phys_multi_th=0
 
-SET c_filenames=%SRC_DIR%\main.c %SRC_DIR%\app.c %SRC_DIR%\render_pass.c
+SET c_filenames=%SRC_DIR%\main.c %SRC_DIR%\app.c %SRC_DIR%\render_pass.c %SRC_DIR%\debug_render_pass.c
 SET dm_filenames=%SRC_DIR%\dm_impl.c %SRC_DIR%\dm_platform_win32.c %SRC_DIR%\dm_physics.c
 SET linker_flags=/link user32.lib gdi32.lib
 SET include_flags=/I%SRC_DIR%\lib
@@ -78,6 +78,7 @@ IF /I "%vulkan%" EQU "1" (
 		SET root=!fname:~0,-5!
 		SET output=!root!.fxc
 		SET shader_type=!root:~-5!
+		SET debug_shader=!root!.pdb
 
 		ECHO Compiling shader: !fname!
 		IF /I "!shader_type!" EQU "pixel" (
@@ -87,8 +88,13 @@ IF /I "%vulkan%" EQU "1" (
 		)
 		ECHO !shader_flags!
 
-		fxc %fxc_flags% !shader_flags! !fname! /Fo !output!
+		fxc %fxc_flags% !shader_flags! !fname! /Zi /Fd /Fo !output!
 
 		MOVE !output! build/assets/shaders
+		MOVE !debug_shader! build/assets/shaders
 	)
 )
+
+IF NOT EXIST "build\assets\textures" mkdir build\assets\textures
+
+copy /y "default_texture.png" build\assets\textures

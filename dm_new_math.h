@@ -38,6 +38,20 @@ void dm_vec2_sub_vec2(float left[N2], float right[N2], float out[N2])
 }
 
 DM_INLINE
+void dm_vec2_add_scalar(float vec[N2], float scalar, float out[N2])
+{
+    out[0] = vec[0] + scalar;
+    out[1] = vec[1] + scalar;;
+}
+
+DM_INLINE
+void dm_vec2_sub_scalar(float vec[N2], float scalar, float out[N2])
+{
+    out[0] = vec[0] - scalar;
+    out[1] = vec[1] - scalar;;
+}
+
+DM_INLINE
 float dm_vec2_dot(float left[N2], float right[N2])
 {
     return ((left[0] * right[0]) + (left[1] * right[1]) + (left[2] * right[2]));
@@ -67,7 +81,7 @@ void dm_vec2_norm(float vec[N2], float out[N2])
     if (mag == 0) return; 
     
     float s = 1.0f / mag;
-    dm_vec2_scale(out, s, out);
+    dm_vec2_scale(vec, s, out);
 }
 
 /****
@@ -90,7 +104,7 @@ void dm_vec3_sub_scalar(float vec[N3], float scalar, float out[N3])
 }
 
 DM_INLINE
-void dm_vec3_add_vec3(float left[N3], float right[N3], float out[N3])
+void dm_vec3_add_vec3(float left[N3], const float right[N3], float out[N3])
 {
     out[0] = left[0] + right[0];
     out[1] = left[1] + right[1];
@@ -114,9 +128,17 @@ void dm_vec3_mul_vec3(float left[N3], float right[N3], float out[N3])
 }
 
 DM_INLINE
+void dm_vec3_div_vec3(float left[N3], float right[N3], float out[N3])
+{
+    out[0] = left[0] / right[0];
+    out[1] = left[1] / right[1];
+    out[2] = left[2] / right[2];
+}
+
+DM_INLINE
 float dm_vec3_dot(float left[N3], float right[N3])
 {
-    return ((left[0] * right[0]) + (left[1] * right[1]) + (left[2] * right[2]));
+    return (left[0] * right[0]) + (left[1] * right[1]) + (left[2] * right[2]);
 }
 
 DM_INLINE
@@ -136,9 +158,9 @@ void dm_vec3_scale(float vec[N3], float s, float out[N3])
 }
 
 DM_INLINE
-float dm_vec3_mag(float vec[N3])
+float dm_vec3_mag(const float vec[N3])
 {
-    return dm_sqrtf((vec[0] * vec[0]) + (vec[1] * vec[2]) + (vec[2] * vec[2]));
+    return dm_sqrtf((vec[0] * vec[0]) + (vec[1] * vec[1]) + (vec[2] * vec[2]));
 }
 
 DM_INLINE
@@ -150,21 +172,23 @@ void dm_vec3_norm(float vec[N3], float out[N3])
     if (mag == 0) return; 
     
     float s = 1.0f / mag;
-    dm_vec3_scale(out, s, out);
+    dm_vec3_scale(vec, s, out);
 }
 
 DM_INLINE
-void dm_vec3_rotate(float vec[N3], float quat[N4], float out[N3])
+void dm_vec3_rotate(float vec[N3], const float quat[N4], float out[N3])
 {
     float qv[N3] = { quat[0],quat[1],quat[2] };
-    float t[N3];
-    float a[N3];
+    float t[N3]  = { 0 };
+    float a[N3]  = { 0 };
     
     dm_vec3_cross(qv, vec, t);
     dm_vec3_scale(t, 2, t);
+    
     dm_vec3_cross(qv, t, a);
     dm_vec3_scale(t, quat[3], t);
-    dm_vec3_add_vec3(vec,a,out);
+    dm_vec3_add_vec3(t, a, a);
+    dm_vec3_add_vec3(vec, a, out);
 }
 
 DM_INLINE
@@ -240,7 +264,7 @@ void dm_vec4_norm(float vec[N4], float out[N4])
     if (mag == 0) return; 
     
     float s = 1.0f / mag;
-    dm_vec4_scale(out, s, out);
+    dm_vec4_scale(vec, s, out);
 }
 
 /**********
@@ -365,12 +389,13 @@ float dm_quat_angle(float left[N4], float right[N4])
 DM_INLINE
 void dm_quat_from_axis_angle(float axis[N3], float angle, float out[N4])
 {
-    float s = dm_sin(angle * 0.5f);
+    const float half_a = angle * 0.5f;
+    const float s = dm_sin(half_a);
     
     out[0] = axis[0] * s;
     out[1] = axis[1] * s; 
     out[2] = axis[2] * s;
-    out[3] = dm_cos(angle * 0.5f);
+    out[3] = dm_cos(half_a);
     
     dm_quat_norm(out,out);
 }
@@ -625,89 +650,28 @@ void dm_mat3_sub_mat3(float left[M3], float right[M3], float out[M3])
     out[8] = left[8] - right[8];
 }
 
+// https://github.com/recp/cglm/blob/cdd4d0e83e9ee79f73aeb0a4fb60b4abd8ecf947/include/cglm/mat3.h#L341
 DM_INLINE
-void dm_mat3_minor(float mat[M3], int cols[N2], int rows[N2], float out[M2])
+void dm_mat3_inverse(float mat[M3], float dest[M3])
 {
-	for (int i = 0; i < N2; i++)
-	{
-		for (int j = 0; j < N2; j++)
-		{
-			out[j * N2 + i] = mat[rows[j] * N3 + cols[i]];
-		}
-	}
-}
-
-DM_INLINE
-float dm_mat3_det(float mat[M3])
-{
-	float m1[M2]; 
-    float m2[M2]; 
-    float m3[M3]; 
+	float det;
+    float a = mat[0], b = mat[1], c = mat[2],
+    d = mat[3], e = mat[4], f = mat[5],
+    g = mat[6], h = mat[7], i = mat[8];
     
-    dm_mat3_minor(mat, (int[]) { 1, 2 }, (int[]) { 1, 2 }, m1);
-    dm_mat3_minor(mat, (int[]) { 0, 2 }, (int[]) { 1, 2 }, m2);
-    dm_mat3_minor(mat, (int[]) { 0, 1 }, (int[]) { 1, 2 }, m3);
+    dest[0] =   e * i - f * h;
+    dest[1] = -(b * i - h * c);
+    dest[2] =   b * f - e * c;
+    dest[3] = -(d * i - g * f);
+    dest[4] =   a * i - c * g;
+    dest[5] = -(a * f - d * c);
+    dest[6] =   d * h - g * e;
+    dest[7] = -(a * h - g * b);
+    dest[8] =   a * e - b * d;
     
-    float det1 = dm_mat2_det(m1);
-	float det2 = dm_mat2_det(m2);
-	float det3 = dm_mat2_det(m3);
+    det = 1.0f / (a * dest[0] + b * dest[3] + c * dest[6]);
     
-	return mat[0] * det1 - mat[1] * det2 + mat[2] * det3;
-}
-
-DM_INLINE
-void dm_mat3_cofactors(float mat[M3], float out[M3])
-{
-	float m1[M2];
-    float m2[M2];
-    float m3[M2];
-    
-    dm_mat3_minor(mat, (int[]) { 1, 2 }, (int[]) { 1, 2 }, m1);
-    dm_mat3_minor(mat, (int[]) { 0, 2 }, (int[]) { 1, 2 }, m2);
-    dm_mat3_minor(mat, (int[]) { 0, 1 }, (int[]) { 1, 2 }, m3);
-    
-    out[0] = dm_mat2_det(m1);
-	out[1] = dm_mat2_det(m2);
-	out[2] = dm_mat2_det(m3);
-    
-    dm_mat3_minor(mat, (int[]) { 1, 2 }, (int[]) { 0, 2 }, m1);
-    dm_mat3_minor(mat, (int[]) { 0, 2 }, (int[]) { 0, 2 }, m2);
-    dm_mat3_minor(mat, (int[]) { 0, 1 }, (int[]) { 0, 2 }, m3);
-    
-    out[3] = dm_mat2_det(m1);
-	out[4] = dm_mat2_det(m2);
-	out[5] = dm_mat2_det(m3);
-    
-    dm_mat3_minor(mat, (int[]) { 1, 2 }, (int[]) { 0, 1 }, m1);
-    dm_mat3_minor(mat, (int[]) { 0, 2 }, (int[]) { 0, 1 }, m2);
-    dm_mat3_minor(mat, (int[]) { 0, 1 }, (int[]) { 0, 1 }, m3);
-    
-	out[6] = dm_mat2_det(m1);
-	out[7] = dm_mat2_det(m2);
-	out[8] = dm_mat2_det(m3);
-}
-
-DM_INLINE
-void dm_mat3_inverse(float mat[M3], float out[M3])
-{
-	float det = dm_mat3_det(mat);
-	if (det == 0) dm_memcpy(out, mat, sizeof(float) * M3);
-	
-	det = 1.0f / det;
-    
-	// cofactors
-	dm_mat3_cofactors(mat, out);
-	for (int i = 0; i < N3; i++)
-	{
-		for (int j = 0; j < N3; j++)
-		{
-			out[i * N3 + j] = dm_powf(-1.0f, (float)(i + j)) * mat[i * N3 + j];
-		}
-	}
-    
-	// adjugate
-	dm_mat3_transpose(out, out);
-	dm_mat3_mul_scalar(out, det, out);
+    dm_mat3_mul_scalar(dest, det, dest);
 }
 
 DM_INLINE
@@ -789,18 +753,19 @@ void dm_mat4_transpose(float mat[M4], float out[M4])
     d[15] = mat[15];
     
     // swap rest
-    d[1] = mat[4];
-    d[2] = mat[8];
-    d[3] = mat[12];
+    d[1]  = mat[4];
+    d[4]  = mat[1];
     
-    d[4] = mat[1];
-    d[8] = mat[2];
-    d[12] = out[3];
+    d[2]  = mat[8];
+    d[8]  = mat[2];
     
-    d[6] = mat[9];
-    d[7] = mat[13];
+    d[3]  = mat[12];
+    d[12] = mat[3];
     
-    d[9] = mat[6];
+    d[6]  = mat[9];
+    d[9]  = mat[6];
+    
+    d[7]  = mat[13];
     d[13] = mat[7];
     
     d[11] = mat[14];
@@ -831,7 +796,7 @@ void dm_mat4_mul_mat4(float left[M4], float right[M4], float out[M4])
     
     d[12] = left[12] * right[0] + left[13] * right[4] + left[14] * right[8]  + left[15] * right[12];
     d[13] = left[12] * right[1] + left[13] * right[5] + left[14] * right[9]  + left[15] * right[13];
-    d[14] = left[12] * right[1] + left[13] * right[6] + left[14] * right[10] + left[15] * right[14];
+    d[14] = left[12] * right[2] + left[13] * right[6] + left[14] * right[10] + left[15] * right[14];
     d[15] = left[12] * right[3] + left[13] * right[7] + left[14] * right[11] + left[15] * right[15];
     
     dm_memcpy(out, d, sizeof(d));
@@ -929,108 +894,50 @@ void dm_mat4_sub_mat4(float  left[M4], float right[M4], float out[M4])
     out[15] = left[15] - right[15];
 }
 
+// https://github.com/recp/cglm/blob/cdd4d0e83e9ee79f73aeb0a4fb60b4abd8ecf947/include/cglm/mat4.h#L640
 DM_INLINE
-void dm_mat4_minor(float mat[M4], int cols[3], int rows[3], float out[M4])
+void dm_mat4_inverse(float mat[M4], float dest[M4])
 {
-	for (int i = 0; i < N3; i++)
-	{
-		for (int j = 0; j < N3; j++)
-		{
-			out[j * N3 + i] = mat[rows[j] * N3 + cols[i]];
-		}
-	}
-}
-
-DM_INLINE
-float dm_mat4_det(float mat[M4])
-{
-    float m1[M3];
-    float m2[M3];
-    float m3[M3];
-    float m4[M4];
+	float t[6];
+    float det;
+    float a = mat[0], b = mat[1], c = mat[2], d = mat[3],
+    e = mat[4], f = mat[5], g = mat[6], h = mat[7],
+    i = mat[8], j = mat[9], k = mat[10], l = mat[11],
+    m = mat[12], n = mat[13], o = mat[14], p = mat[15];
     
-    dm_mat4_minor(mat, (int[]) { 1, 2, 3 }, (int[]) { 1, 2, 3 }, m1);
-    dm_mat4_minor(mat, (int[]) { 0, 2, 3 }, (int[]) { 1, 2, 3 }, m2);
-    dm_mat4_minor(mat, (int[]) { 0, 1, 3 }, (int[]) { 1, 2, 3 }, m3);
-    dm_mat4_minor(mat, (int[]) { 0, 1, 2 }, (int[]) { 1, 2, 3 }, m4);
+    t[0] = k * p - o * l; t[1] = j * p - n * l; t[2] = j * o - n * k;
+    t[3] = i * p - m * l; t[4] = i * o - m * k; t[5] = i * n - m * j;
     
-	float det1 = dm_mat3_det(m1);
-	float det2 = dm_mat3_det(m2);
-	float det3 = dm_mat3_det(m3);
-	float det4 = dm_mat3_det(m4);
+    dest[0] =  f * t[0] - g * t[1] + h * t[2];
+    dest[4] =-(e * t[0] - g * t[3] + h * t[4]);
+    dest[8] =  e * t[1] - f * t[3] + h * t[5];
+    dest[12] =-(e * t[2] - f * t[4] + g * t[5]);
     
-	return mat[0] * det1 - mat[1] * det2 + mat[2] * det3 - mat[3] * det4;
-}
-
-DM_INLINE
-void dm_mat4_cofactors(float mat[M4], float out[M4])
-{
-	float m1[M3];
-    float m2[M3];
-    float m3[M3];
-    float m4[M4];
+    dest[1] =-(b * t[0] - c * t[1] + d * t[2]);
+    dest[5] =  a * t[0] - c * t[3] + d * t[4];
+    dest[9] =-(a * t[1] - b * t[3] + d * t[5]);
+    dest[13] =  a * t[2] - b * t[4] + c * t[5];
     
-    dm_mat4_minor(mat, (int[]) { 1, 2, 3 }, (int[]) { 1, 2, 3 }, m1);
-    dm_mat4_minor(mat, (int[]) { 0, 2, 3 }, (int[]) { 1, 2, 3 }, m2);
-    dm_mat4_minor(mat, (int[]) { 0, 1, 3 }, (int[]) { 1, 2, 3 }, m3);
-    dm_mat4_minor(mat, (int[]) { 0, 1, 2 }, (int[]) { 1, 2, 3 }, m4);
+    t[0] = g * p - o * h; t[1] = f * p - n * h; t[2] = f * o - n * g;
+    t[3] = e * p - m * h; t[4] = e * o - m * g; t[5] = e * n - m * f;
     
-    out[0] = dm_mat3_det(m1);
-	out[1] = dm_mat3_det(m2);
-	out[2] = dm_mat3_det(m3);
-	out[3] = dm_mat3_det(m4);
+    dest[2] =  b * t[0] - c * t[1] + d * t[2];
+    dest[6] =-(a * t[0] - c * t[3] + d * t[4]);
+    dest[10] =  a * t[1] - b * t[3] + d * t[5];
+    dest[14] =-(a * t[2] - b * t[4] + c * t[5]);
     
-    dm_mat4_minor(mat, (int[]) { 1, 2, 3 }, (int[]) { 0, 2, 3 }, m1);
-    dm_mat4_minor(mat, (int[]) { 0, 2, 3 }, (int[]) { 0, 2, 3 }, m2);
-    dm_mat4_minor(mat, (int[]) { 0, 1, 3 }, (int[]) { 0, 2, 3 }, m3);
-    dm_mat4_minor(mat, (int[]) { 0, 1, 2 }, (int[]) { 0, 2, 3 }, m4);
+    t[0] = g * l - k * h; t[1] = f * l - j * h; t[2] = f * k - j * g;
+    t[3] = e * l - i * h; t[4] = e * k - i * g; t[5] = e * j - i * f;
     
-	out[4] = dm_mat3_det(m1);
-	out[5] = dm_mat3_det(m2);
-	out[6] = dm_mat3_det(m3);
-	out[7] = dm_mat3_det(m4);
+    dest[3] =-(b * t[0] - c * t[1] + d * t[2]);
+    dest[7] =  a * t[0] - c * t[3] + d * t[4];
+    dest[11] =-(a * t[1] - b * t[3] + d * t[5]);
+    dest[15] =  a * t[2] - b * t[4] + c * t[5];
     
-    dm_mat4_minor(mat, (int[]) { 1, 2, 3 }, (int[]) { 0, 1, 3 }, m1);
-    dm_mat4_minor(mat, (int[]) { 0, 2, 3 }, (int[]) { 0, 1, 3 }, m2);
-    dm_mat4_minor(mat, (int[]) { 0, 1, 3 }, (int[]) { 0, 1, 3 }, m3);
-    dm_mat4_minor(mat, (int[]) { 0, 1, 2 }, (int[]) { 0, 1, 3 }, m3);
+    det = 1.0f / (a * dest[0] + b * dest[4]
+                  + c * dest[8] + d * dest[12]);
     
-	out[8]  = dm_mat3_det(m1);
-	out[9]  = dm_mat3_det(m2);
-	out[10] = dm_mat3_det(m3);
-	out[11] = dm_mat3_det(m4);
-    
-    dm_mat4_minor(mat, (int[]) { 1, 2, 3 }, (int[]) { 0, 1, 2 }, m1);
-    dm_mat4_minor(mat, (int[]) { 0, 2, 3 }, (int[]) { 0, 1, 2 }, m2);
-    dm_mat4_minor(mat, (int[]) { 0, 1, 3 }, (int[]) { 0, 1, 2 }, m3);
-    dm_mat4_minor(mat, (int[]) { 0, 1, 2 }, (int[]) { 0, 1, 2 }, m4);
-    
-	out[12] = dm_mat3_det(m1);
-	out[13] = dm_mat3_det(m2);
-	out[14] = dm_mat3_det(m3);
-	out[15] = dm_mat3_det(m4);
-}
-
-DM_INLINE
-void dm_mat4_inverse(float mat[M4], float out[M4])
-{
-	float det = dm_mat4_det(mat);
-	if (det == 0) dm_memcpy(out, mat, sizeof(float) * M4);
-	det = 1.0f / det;
-    
-	// cofactors
-	dm_mat4_cofactors(mat, out);
-	for (int i = 0; i < N4; i++)
-	{
-		for (int j = 0; j < N4; j++)
-		{
-			out[i * N4 + j] = dm_powf(-1.0f, (float)(i + j)) * mat[i * N4 + j];
-		}
-	}
-    
-	// adjugate
-	dm_mat4_transpose(out, out);
-    dm_mat4_mul_scalar(out, det, out);
+    dm_mat4_mul_scalar(dest, det, dest);
 }
 
 DM_INLINE
@@ -1048,7 +955,7 @@ DM_INLINE
 void dm_mat4_from_mat3(float mat[M3], float out[M4])
 {
     dm_memzero(out, sizeof(float) * M4);
-    dm_memcpy(out, mat, sizeof(float) * M3);
+    //dm_memcpy(out, mat, sizeof(float) * M3);
     
     out[0] = mat[0];
     out[1] = mat[1];
@@ -1089,20 +996,22 @@ void dm_mat_scale_make(float scale[N3], float out[M4])
 DM_INLINE
 void dm_mat_scale(float mat[M4], float scale[N3], float out[M4])
 {
-    out[0] = mat[0] * scale[0];
-    out[1] = mat[1] * scale[0];
-    out[2] = mat[2] * scale[0];
-    out[3] = mat[3] * scale[0];
+    dm_memcpy(out, mat, sizeof(float) * M4);
     
-    out[4] = mat[4] * scale[1];
-    out[5] = mat[5] * scale[1];
-    out[6] = mat[6] * scale[1];
-    out[7] = mat[7] * scale[1];
+    out[0] *= scale[0];
+    out[1] *= scale[0];
+    out[2] *= scale[0];
+    out[3] *= scale[0];
     
-    out[8]  = mat[8]  * scale[2];
-    out[9]  = mat[9]  * scale[2];
-    out[10] = mat[10] * scale[2];
-    out[11] = mat[11] * scale[2];
+    out[4] *= scale[1];
+    out[5] *= scale[1];
+    out[6] *= scale[1];
+    out[7] *= scale[1];
+    
+    out[8]  *= scale[2];
+    out[9]  *= scale[2];
+    out[10] *= scale[2];
+    out[11] *= scale[2];
 }
 
 DM_INLINE
@@ -1198,13 +1107,13 @@ void dm_mat_view(float view_origin[N3], float target[N3], float up[N3], float ou
 DM_INLINE
 void dm_mat_perspective(float fov, float aspect_ratio, float n, float f, float out[M4])
 {
-	float t = 1.0f / dm_tan(fov * 0.5f);
+	float t  = 1.0f / dm_tan(fov * 0.5f);
 	float fn = 1.0f / (n - f);
 	
     dm_memzero(out, sizeof(float) * M4);
     
-    out[0] = t / aspect_ratio;
-	out[5] = t;
+    out[0]  = t / aspect_ratio;
+	out[5]  = t;
 	out[10] = (f + n) * fn;
 	out[11] = -1.0f;
 	out[14] = 2.0f * n * f * fn;
@@ -1215,8 +1124,8 @@ void dm_mat_ortho(float left, float right, float bottom, float top, float n, flo
 {
     dm_memzero(out, sizeof(float) * M4);
     
-	out[0] = 2.0f / (right - left);
-	out[5] = 2.0f / (top - bottom);
+	out[0]  = 2.0f / (right - left);
+	out[5]  = 2.0f / (top - bottom);
 	out[10] = 2.0f / (n - f);
 	out[12] = -(right + left) / (right - left);
 	out[13] = -(top + bottom) / (top - bottom);
