@@ -8,7 +8,7 @@ struct ps_input
 };
 
 layout(location=0) in ps_input vs_output;
-layout(location=1) out vec4 frag_color;
+out vec4 frag_color;
 
 uniform sampler2D default_texture;
 
