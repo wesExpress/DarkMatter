@@ -477,9 +477,9 @@ void dm_physics_support_func_box(const float pos[3], const float rot[4], const f
     float inv_rot[4];
     float d_rot[3];
     
-    dm_memcpy(inv_rot, rot, sizeof(inv_rot));
+    //dm_memcpy(inv_rot, rot, sizeof(inv_rot));
     
-    dm_quat_inverse(inv_rot, inv_rot);
+    dm_quat_inverse(rot, inv_rot);
     dm_vec3_rotate(d, inv_rot, d_rot);
     
     support[0] = (d_rot[0] > 0) ? internals[3] : internals[0];
@@ -613,7 +613,7 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
         // are we actually in region 1?
         if(dm_vec3_same_direction(ac, ao))
         {
-            float points[2][3];
+            float points[4][3];
             dm_memcpy(points[0], a, sizeof(a));
             dm_memcpy(points[1], c, sizeof(c));
             dm_simplex_reconstruct(points, 2, simplex);
@@ -626,7 +626,7 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
             // are we in region 4?
             if(dm_vec3_same_direction(ab, ao))
             {
-                float points[2][3];
+                float points[4][3];
                 dm_memcpy(points[0], a, sizeof(a));
                 dm_memcpy(points[1], b, sizeof(b));
                 dm_simplex_reconstruct(points, 2, simplex);
@@ -637,7 +637,7 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
             // must be in region 5
             else
             {
-                float points[1][3];
+                float points[4][3];
                 dm_memcpy(points[0], a, sizeof(a));
                 dm_simplex_reconstruct(points, 1, simplex);
                 
@@ -654,7 +654,7 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
             // are we in region 4?
             if(dm_vec3_same_direction(ab, ao))
             {
-                float points[2][3];
+                float points[4][3];
                 dm_memcpy(points[0], a, sizeof(a));
                 dm_memcpy(points[1], b, sizeof(b));
                 dm_simplex_reconstruct(points, 2, simplex);
@@ -665,7 +665,7 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
             // must be in region 5
             else
             {
-                float points[1][3];
+                float points[4][3];
                 dm_memcpy(points[0], a, sizeof(a));
                 dm_simplex_reconstruct(points, 2, simplex);
                 
@@ -678,7 +678,7 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
             // are we above plane? (region 2)
             if(dm_vec3_same_direction(abc, ao)) 
             {
-                float points[3][3];
+                float points[4][3];
                 dm_memcpy(points[0], b, sizeof(b));
                 dm_memcpy(points[1], c, sizeof(c));
                 dm_memcpy(points[2], a, sizeof(a));
@@ -720,7 +720,7 @@ bool dm_simplex_tetrahedron(float direction[3], dm_simplex* simplex)
     
     if(dm_vec3_same_direction(acb, ao))
     {
-        float points[3][3];
+        float points[4][3];
         dm_memcpy(points[0], a, sizeof(a));
         dm_memcpy(points[1], c, sizeof(c));
         dm_memcpy(points[2], b, sizeof(b));
@@ -732,7 +732,7 @@ bool dm_simplex_tetrahedron(float direction[3], dm_simplex* simplex)
     }
     else if(dm_vec3_same_direction(adc, ao))
     {
-        float points[3][3];
+        float points[4][3];
         dm_memcpy(points[0], a, sizeof(a));
         dm_memcpy(points[1], d, sizeof(d));
         dm_memcpy(points[2], c, sizeof(c));
@@ -744,7 +744,7 @@ bool dm_simplex_tetrahedron(float direction[3], dm_simplex* simplex)
     }
     else if(dm_vec3_same_direction(abd, ao))
     {
-        float points[3][3];
+        float points[4][3];
         dm_memcpy(points[0], a, sizeof(a));
         dm_memcpy(points[1], b, sizeof(b));
         dm_memcpy(points[2], d, sizeof(d));
@@ -870,7 +870,7 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
     float normals[DM_PHYSICS_EPA_MAX_FACES][3]  = { 0 };
     
     float a[3], b[3], c[3], d[3];
-    float dum1[3], dum2[3];
+    float dum1[3];
     
     dm_memcpy(a, simplex->points[3], sizeof(a));
     dm_memcpy(b, simplex->points[2], sizeof(b));
@@ -908,11 +908,9 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
     
     float    min_distance, distance;
     
-    float    support[3]                                  = { 0 };
-    float    supports[2][3]                              = { 0 };
-    float    loose_edges[DM_PHYSICS_EPA_MAX_FACES][2][3] = { 0 };
-    float    current_edge[2][3]                          = { 0 };
-    bool     found;
+    float    support[3]                                      = { 0 };
+    float    supports[2][3]                                  = { 0 };
+    float    loose_edges[DM_PHYSICS_EPA_MAX_FACES * 3][2][3] = { 0 };
     //////////////////////////
     for(uint32_t iter=0; iter<DM_PHYSICS_EPA_MAX_FACES; iter++)
     {
@@ -945,6 +943,7 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
         }
         
         // revamp polytope
+        num_loose = 0;
         for(uint32_t i=0; i<num_faces; i++)
         {
             // is triangle visible?
@@ -1001,7 +1000,7 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
                 num_loose--;
                 j--;
             }
-            
+
             if(!ab_dup) dm_memcpy(loose_edges[num_loose++], ab, sizeof(ab));
             if(!bc_dup) dm_memcpy(loose_edges[num_loose++], bc, sizeof(bc));
             if(!ca_dup) dm_memcpy(loose_edges[num_loose++], ca, sizeof(ca));
@@ -1242,7 +1241,7 @@ void dm_physics_plane_edge_intersect(dm_plane plane, float start[3], float end[3
     
     if(dm_fabs(ab_d) <= DM_PHYSICS_TEST_EPSILON)
     {
-        dm_memcpy(out, start, sizeof(start));
+        dm_memcpy(out, start, sizeof(float) * 3);
     }
     else
     {
@@ -1403,7 +1402,7 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
         dm_vec3_negate(manifold->normal, neg_norm);
         
         static const float baumgarte_coef = 0.9f;
-        static const float baumgarte_slop = 0.005f;
+        //static const float baumgarte_slop = 0.005f;
         dm_vec3_sub_vec3(on_a_d, on_b_d, dum1);
         float d = dm_vec3_dot(dum1, neg_norm);
         //d = DM_MAX(d - baumgarte_slop, 0.0f);
@@ -1414,7 +1413,7 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     // restitution
     {
         static const float rest_coef = 0.99f;
-        static const float rest_slop = 0.5f;
+        //static const float rest_slop = 0.5f;
         //float d = DM_MAX(rel_vn - rest_slop, 0.0f);
         
         b += rest_coef * rel_vn;
@@ -1819,7 +1818,7 @@ bool dm_physics_narrowphase(dm_ecs_system_manager* system, dm_physics_manager* m
         if(!dm_physics_collide_entities(pos, rots, cens, internals, vels, ws, shapes, &simplex, manifold, context)) return false;
         
         // resize manifolds
-        float load = (float)manager->num_manifolds / (float)manager->manifold_capacity;
+        load = (float)manager->num_manifolds / (float)manager->manifold_capacity;
         if(load < DM_PHYSICS_LOAD_FACTOR) continue;
         
         manager->manifold_capacity *= DM_PHYSICS_RESIZE_FACTOR;
@@ -2261,7 +2260,7 @@ bool dm_physics_system_run(dm_ecs_system_timing timing, dm_ecs_id system_id, voi
     
     uint32_t iters = 0;
     
-    //while(manager->accum_time >= DM_PHYSICS_FIXED_DT)
+    while(manager->accum_time >= DM_PHYSICS_FIXED_DT)
     {
         iters++;
         

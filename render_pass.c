@@ -1,4 +1,5 @@
 #include "render_pass.h"
+#include "debug_render_pass.h"
 #include "app.h"
 
 typedef struct vertex_t

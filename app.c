@@ -9,8 +9,6 @@ dm_entity create_entity(dm_context* context)
 {
     dm_entity entity = dm_ecs_create_entity(context);
     
-    dm_component_transform t = { 0 };
-    
     float w = (float)WORLD_SIZE_X * 0.5f;
     float h = (float)WORLD_SIZE_Y * 0.5f;
     
@@ -51,7 +49,6 @@ dm_entity create_entity(dm_context* context)
 void init_camera(const float pos[N3], const float forward[N3], float near_plane, float far_plane, float fov, uint32_t width, uint32_t height, float move_speed, float look_sens, basic_camera* camera)
 {
     static const size_t vec3_size = sizeof(float) * 3;
-    static const size_t mat4_size = sizeof(float) * 16;
     
     camera->fov        = fov;
     camera->near_plane = near_plane;

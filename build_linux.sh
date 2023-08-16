@@ -14,7 +14,7 @@ SRC_DIR=$PWD
 mkdir -p build
 cd build
 
-c_files="$SRC_DIR/main.c $SRC_DIR/app.c $SRC_DIR/render_pass.c"
+c_files="$SRC_DIR/main.c $SRC_DIR/app.c $SRC_DIR/render_pass.c $SRC_DIR/debug_render_pass.c"
 dm_files="$SRC_DIR/dm_impl.c $SRC_DIR/dm_platform_linux.c ${SRC_DIR}/dm_physics.c"
 
 if ((vulkan)); then
@@ -25,7 +25,7 @@ else
 	defines="-DDM_OPENGL"
 fi
 
-compiler_flags="-g -MD -std=gnu99 -fPIC -Wall -Wuninitialized -Wno-missing-braces"
+compiler_flags="-g -MD -std=gnu99 -fPIC -Wall -Wuninitialized -Wno-missing-braces -fno-stack-protector"
 
 if ((simd_256)); then
 	defines="$defines -DDM_SIMD_256"
@@ -89,3 +89,6 @@ for file in *.glsl; do
 		cp $file build/assets/shaders
 	fi
 done
+
+mkdir -p build/assets/textures
+cp "default_texture.png" build/assets/textures

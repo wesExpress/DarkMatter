@@ -64,7 +64,7 @@ bool debug_render_pass_init(dm_context* context)
     debug_render_vertex vertices[2 + 8 + 4] = { 0 };
     uint32_t            indices[2 + 24 + 6] = { 0 };
     uint32_t            vertex_count=0, index_count=0;
-    uint32_t            vertex_offset, index_offset;
+    uint32_t            index_offset;
     
     // line (line list)
     pass_data->line_vertex_offset = vertex_count;
@@ -241,7 +241,7 @@ bool debug_render_pass_render(dm_context* context)
 #ifdef DM_DIRECTX
     dm_mat4_transpose(app_data->camera.view_proj, uni.view_proj);
 #else
-    uni.view_proj = app_data->camera.view_proj;
+    dm_memcpy(uni.view_proj, app_data->camera.view_proj, sizeof(uni.view_proj));
 #endif
     
     dm_render_command_bind_shader(pass_data->shader, context);
@@ -261,7 +261,7 @@ bool debug_render_pass_render(dm_context* context)
 }
 
 // rendering funcs
-void debug_render_line(float pos_0[3], float pos_1[3], float color[4], dm_context* context)
+void debug_render_line(const float pos_0[3], const float pos_1[3], const float color[4], dm_context* context)
 {
     application_data*       app_data = context->app_data;
     debug_render_pass_data* pass_data = app_data->debug_render_pass_data;
@@ -300,13 +300,13 @@ void debug_render_line(float pos_0[3], float pos_1[3], float color[4], dm_contex
     dm_memcpy(pass_data->line_insts + pass_data->line_count++, &inst, sizeof(inst));
 }
 
-void debug_render_arrow(float pos_0[3], float pos_1[3], float color[4], dm_context* context)
+void debug_render_arrow(const float pos_0[3], const float pos_1[3], const float color[4], dm_context* context)
 {
     debug_render_line(pos_0, pos_1, color, context);
     debug_render_bilboard(pos_1, 0.05f,0.05f, color, context); 
 }
 
-void debug_render_bilboard(float pos[3], float width, float height, float color[4], dm_context* context)
+void debug_render_bilboard(const float pos[3], const float width, const float height, const float color[4], dm_context* context)
 {
     application_data*       app_data = context->app_data;
     debug_render_pass_data* pass_data = app_data->debug_render_pass_data;
@@ -326,7 +326,7 @@ void debug_render_bilboard(float pos[3], float width, float height, float color[
     dm_memcpy(pass_data->bilboard_insts + pass_data->bilboard_count++, &inst, sizeof(inst));
 }
 
-void debug_render_aabb(float pos[3], float dim[3], float color[4], dm_context* context)
+void debug_render_aabb(const float pos[3], const float dim[3], const float color[4], dm_context* context)
 {
     application_data*       app_data = context->app_data;
     debug_render_pass_data* pass_data = app_data->debug_render_pass_data;
@@ -345,7 +345,7 @@ void debug_render_aabb(float pos[3], float dim[3], float color[4], dm_context* c
     dm_memcpy(pass_data->cube_insts + pass_data->cube_count++, &inst, sizeof(inst));
 }
 
-void debug_render_cube(float pos[3], float dim[3], float orientation[4], float color[4], dm_context* context)
+void debug_render_cube(const float pos[3], const float dim[3], const float orientation[4], const float color[4], dm_context* context)
 {
     application_data*       app_data = context->app_data;
     debug_render_pass_data* pass_data = app_data->debug_render_pass_data;

@@ -1506,8 +1506,7 @@ void dm_ecs_reinsert_entities(uint32_t old_capacity, dm_context* context)
 bool dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
 {
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    uint32_t component_count, component_index, block_index, old_capacity, entity_count;
-    size_t   block_size;
+    uint32_t component_count, component_index, block_index, entity_count;
     
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
     
@@ -1530,7 +1529,7 @@ bool dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
             entity_container->entity       = entity;
             entity_container->entity_index = entity_index;
             
-            for(uint32_t c=0; c<manager->component_count; c++)
+            for(uint32_t c=0; c<component_count; c++)
             {
                 uint32_t c_id = manager->component_ids[c];
                 
@@ -1544,10 +1543,7 @@ bool dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
             manager->entity_count++;
             if((float)manager->entity_count / (float)manager->entity_capacity < 0.75f) continue;
             
-            old_capacity = manager->entity_capacity;
             manager->entity_capacity *= 2;
-            
-            block_size = sizeof(uint32_t) * component_count * manager->entity_capacity;
             manager->entity_containers = dm_realloc(manager->entity_containers, sizeof(dm_ecs_system_entity_container) * manager->entity_capacity);
         }
     }

@@ -993,6 +993,8 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
     }
     else glDisable(GL_CULL_FACE);
     
+    glFrontFace(internal_pipe.winding);
+
     // SAMPLER
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, internal_pipe.s_wrap);
     if(glCheckError()) return false;

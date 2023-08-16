@@ -88,7 +88,7 @@ void dm_vec2_norm(float vec[N2], float out[N2])
 VEC3
 ******/
 DM_INLINE
-void dm_vec3_add_scalar(float vec[N3], float scalar, float out[N3])
+void dm_vec3_add_scalar(const float vec[N3], const float scalar, float out[N3])
 {
     out[0] = vec[0] + scalar;
     out[1] = vec[1] + scalar;
@@ -96,7 +96,7 @@ void dm_vec3_add_scalar(float vec[N3], float scalar, float out[N3])
 }
 
 DM_INLINE
-void dm_vec3_sub_scalar(float vec[N3], float scalar, float out[N3])
+void dm_vec3_sub_scalar(const float vec[N3], const float scalar, float out[N3])
 {
     out[0] = vec[0] - scalar;
     out[1] = vec[1] - scalar;
@@ -104,7 +104,7 @@ void dm_vec3_sub_scalar(float vec[N3], float scalar, float out[N3])
 }
 
 DM_INLINE
-void dm_vec3_add_vec3(float left[N3], const float right[N3], float out[N3])
+void dm_vec3_add_vec3(const float left[N3], const float right[N3], float out[N3])
 {
     out[0] = left[0] + right[0];
     out[1] = left[1] + right[1];
@@ -112,7 +112,7 @@ void dm_vec3_add_vec3(float left[N3], const float right[N3], float out[N3])
 }
 
 DM_INLINE
-void dm_vec3_sub_vec3(float left[N3], float right[N3], float out[N3])
+void dm_vec3_sub_vec3(const float left[N3], const float right[N3], float out[N3])
 {
     out[0] = left[0] - right[0];
     out[1] = left[1] - right[1];
@@ -120,7 +120,7 @@ void dm_vec3_sub_vec3(float left[N3], float right[N3], float out[N3])
 }
 
 DM_INLINE
-void dm_vec3_mul_vec3(float left[N3], float right[N3], float out[N3])
+void dm_vec3_mul_vec3(const float left[N3], const float right[N3], float out[N3])
 {
     out[0] = left[0] * right[0];
     out[1] = left[1] * right[1];
@@ -128,7 +128,7 @@ void dm_vec3_mul_vec3(float left[N3], float right[N3], float out[N3])
 }
 
 DM_INLINE
-void dm_vec3_div_vec3(float left[N3], float right[N3], float out[N3])
+void dm_vec3_div_vec3(const float left[N3], const float right[N3], float out[N3])
 {
     out[0] = left[0] / right[0];
     out[1] = left[1] / right[1];
@@ -136,13 +136,13 @@ void dm_vec3_div_vec3(float left[N3], float right[N3], float out[N3])
 }
 
 DM_INLINE
-float dm_vec3_dot(float left[N3], float right[N3])
+float dm_vec3_dot(const float left[N3], const float right[N3])
 {
     return (left[0] * right[0]) + (left[1] * right[1]) + (left[2] * right[2]);
 }
 
 DM_INLINE
-void dm_vec3_cross(float left[N3], float right[N3], float out[N3])
+void dm_vec3_cross(const float left[N3], const float right[N3], float out[N3])
 {
     out[0] = left[1] * right[2] - left[2] * right[1];
     out[1] = left[2] * right[0] - left[0] * right[2];
@@ -150,7 +150,7 @@ void dm_vec3_cross(float left[N3], float right[N3], float out[N3])
 }
 
 DM_INLINE
-void dm_vec3_scale(float vec[N3], float s, float out[N3])
+void dm_vec3_scale(const float vec[N3], float s, float out[N3])
 {
     out[0] = vec[0] * s;
     out[1] = vec[1] * s;
@@ -164,7 +164,7 @@ float dm_vec3_mag(const float vec[N3])
 }
 
 DM_INLINE
-void dm_vec3_norm(float vec[N3], float out[N3])
+void dm_vec3_norm(const float vec[N3], float out[N3])
 {
     float mag = dm_vec3_mag(vec);
 	
@@ -176,7 +176,7 @@ void dm_vec3_norm(float vec[N3], float out[N3])
 }
 
 DM_INLINE
-void dm_vec3_rotate(float vec[N3], const float quat[N4], float out[N3])
+void dm_vec3_rotate(const float vec[N3], const float quat[N4], float out[N3])
 {
     float qv[N3] = { quat[0],quat[1],quat[2] };
     float t[N3]  = { 0 };
@@ -192,7 +192,7 @@ void dm_vec3_rotate(float vec[N3], const float quat[N4], float out[N3])
 }
 
 DM_INLINE
-void dm_vec3_negate(float vec[N3], float out[N3])
+void dm_vec3_negate(const float vec[N3], float out[N3])
 {
     out[0] = -vec[0];
     out[1] = -vec[1];
@@ -200,13 +200,13 @@ void dm_vec3_negate(float vec[N3], float out[N3])
 }
 
 DM_INLINE
-bool dm_vec3_same_direction(float left[N3], float right[N3])
+bool dm_vec3_same_direction(const float left[N3], const float right[N3])
 {
     return dm_vec3_dot(left,right) > 0;
 }
 
 DM_INLINE
-bool dm_vec3_equals_vec3(float left[N3], float right[N3])
+bool dm_vec3_equals_vec3(const float left[N3], const float right[N3])
 {
     return ((left[0]==right[0]) && (left[1]==right[1]) && (left[2]==right[2]));
 }
@@ -215,7 +215,7 @@ bool dm_vec3_equals_vec3(float left[N3], float right[N3])
 VEC4
 ******/
 DM_INLINE
-void dm_vec4_add_vec4(float left[N4], float right[N4], float out[N4])
+void dm_vec4_add_vec4(const float left[N4], const float right[N4], float out[N4])
 {
     out[0] = left[0] + right[0];
     out[1] = left[1] + right[1];
@@ -224,7 +224,7 @@ void dm_vec4_add_vec4(float left[N4], float right[N4], float out[N4])
 }
 
 DM_INLINE
-void dm_vec4_sub_vec4(float left[N4], float right[N4], float out[N4])
+void dm_vec4_sub_vec4(const float left[N4], const float right[N4], float out[N4])
 {
     out[0] = left[0] - right[0];
     out[1] = left[1] - right[1];
@@ -233,13 +233,13 @@ void dm_vec4_sub_vec4(float left[N4], float right[N4], float out[N4])
 }
 
 DM_INLINE
-float dm_vec4_dot(float left[N4], float right[N4])
+float dm_vec4_dot(const float left[N4], const float right[N4])
 {
     return ((left[0] * right[0]) + (left[1] * right[1]) + (left[2] * right[2]) + (left[3] * right[3]));
 }
 
 DM_INLINE
-void dm_vec4_scale(float vec[N4], float s, float out[N4])
+void dm_vec4_scale(const float vec[N4], float s, float out[N4])
 {
     out[0] = vec[0] * s;
     out[1] = vec[1] * s;
@@ -248,13 +248,13 @@ void dm_vec4_scale(float vec[N4], float s, float out[N4])
 }
 
 DM_INLINE
-float dm_vec4_mag(float vec[N4])
+float dm_vec4_mag(const float vec[N4])
 {
     return dm_sqrtf((vec[0] * vec[0]) + (vec[1] * vec[2]) + (vec[2] * vec[2]) + (vec[3] * vec[3]));
 }
 
 DM_INLINE
-void dm_vec4_norm(float vec[N4], float out[N4])
+void dm_vec4_norm(const float vec[N4], float out[N4])
 {
 	dm_memcpy(out, vec, sizeof(float) * N4);
 	
@@ -271,7 +271,7 @@ void dm_vec4_norm(float vec[N4], float out[N4])
 QUATERNION
 ************/
 DM_INLINE
-void dm_quat_add_quat(float left[N4], float right[N4], float out[N4])
+void dm_quat_add_quat(const float left[N4], const float right[N4], float out[N4])
 {
     out[0] = left[0] + right[0];
     out[1] = left[1] + right[1];
@@ -280,7 +280,7 @@ void dm_quat_add_quat(float left[N4], float right[N4], float out[N4])
 }
 
 DM_INLINE
-void dm_quat_sub_quat(float left[N4], float right[N4], float out[N4])
+void dm_quat_sub_quat(const float left[N4], const float right[N4], float out[N4])
 {
     out[0] = left[0] - right[0];
     out[1] = left[1] - right[1];
@@ -289,7 +289,7 @@ void dm_quat_sub_quat(float left[N4], float right[N4], float out[N4])
 }
 
 DM_INLINE
-void dm_quat_cross(float left[N4], float right[N4], float out[N4])
+void dm_quat_cross(const float left[N4], const float right[N4], float out[N4])
 {
     out[0] = (left[3] * right[0]) + (left[0] * right[3]) + (left[1] * right[2]) - (left[2] * right[1]);
     out[1] = (left[3] * right[1]) + (left[1] * right[3]) + (left[2] * right[0]) - (left[0] * right[2]);
@@ -299,7 +299,7 @@ void dm_quat_cross(float left[N4], float right[N4], float out[N4])
 }
 
 DM_INLINE
-void dm_quat_mul_quat(float left[N4], float right[N4], float out[N4])
+void dm_quat_mul_quat(const float left[N4], const float right[N4], float out[N4])
 {
     out[0] = (left[3] * right[0]) + (left[0] * right[3]) + (left[1] * right[2]) - (left[2] * right[1]);
     out[1] = (left[3] * right[1]) - (left[0] * right[2]) + (left[1] * right[3]) + (left[2] * right[0]);
@@ -308,20 +308,20 @@ void dm_quat_mul_quat(float left[N4], float right[N4], float out[N4])
 }
 
 DM_INLINE
-void dm_vec3_mul_quat(float v[N3], float q[N4], float out[N4])
+void dm_vec3_mul_quat(const float v[N3], const float q[N4], float out[N4])
 {
     float vq[N4] = { v[0],v[1],v[2],0 };
     dm_quat_mul_quat(vq, q, out);
 }
 
 DM_INLINE
-float dm_quat_mag(float quat[N4])
+float dm_quat_mag(const float quat[N4])
 {
 	return dm_sqrtf((quat[0] * quat[0]) + (quat[1] * quat[1]) + (quat[2] * quat[2]) + (quat[3] * quat[3]));
 }
 
 DM_INLINE
-void dm_quat_scale(float quat[N4], float s, float out[N4])
+void dm_quat_scale(const float quat[N4], float s, float out[N4])
 {
     out[0] = quat[0] * s;
     out[1] = quat[1] * s;
@@ -330,7 +330,7 @@ void dm_quat_scale(float quat[N4], float s, float out[N4])
 }
 
 DM_INLINE
-void dm_quat_norm(float quat[N4], float out[N4])
+void dm_quat_norm(const float quat[N4], float out[N4])
 {
 	float mag = dm_quat_mag(quat);
     
@@ -348,7 +348,7 @@ void dm_quat_norm(float quat[N4], float out[N4])
 
 
 DM_INLINE
-void dm_quat_conjugate(float quat[N4], float out[N4])
+void dm_quat_conjugate(const float quat[N4], float out[N4])
 {
     out[0] = -quat[0];
     out[1] = -quat[1];
@@ -357,7 +357,7 @@ void dm_quat_conjugate(float quat[N4], float out[N4])
 }
 
 DM_INLINE
-void dm_quat_inverse(float quat[N4], float out[N4])
+void dm_quat_inverse(const float quat[N4], float out[N4])
 {
     dm_quat_conjugate(quat,out);
     
@@ -370,13 +370,13 @@ void dm_quat_inverse(float quat[N4], float out[N4])
 }
 
 DM_INLINE
-float dm_quat_dot(float left[N4], float right[N4])
+float dm_quat_dot(const float left[N4], const float right[N4])
 {
 	return (left[0] * right[0]) + (left[1] * right[1]) + (left[2] * right[2]) + (left[3] * right[3]);
 }
 
 DM_INLINE
-float dm_quat_angle(float left[N4], float right[N4])
+float dm_quat_angle(const float left[N4], const float right[N4])
 {
 	float mag = dm_quat_mag(left) * dm_quat_mag(right);
     
@@ -387,7 +387,7 @@ float dm_quat_angle(float left[N4], float right[N4])
 }
 
 DM_INLINE
-void dm_quat_from_axis_angle(float axis[N3], float angle, float out[N4])
+void dm_quat_from_axis_angle(const float axis[N3], float angle, float out[N4])
 {
     const float half_a = angle * 0.5f;
     const float s = dm_sin(half_a);
@@ -401,13 +401,13 @@ void dm_quat_from_axis_angle(float axis[N3], float angle, float out[N4])
 }
 
 DM_INLINE
-void dm_quat_from_axis_angle_deg(float axis[N3], float angle, float out[N4])
+void dm_quat_from_axis_angle_deg(const float axis[N3], float angle, float out[N4])
 {
     dm_quat_from_axis_angle(axis, dm_deg_to_rad(angle), out);
 }
 
 DM_INLINE
-void dm_quat_from_vectors(float vec1[N3], float vec2[N3], float out[N4])
+void dm_quat_from_vectors(const float vec1[N3], const float vec2[N3], float out[N4])
 {
     float u[N3];
     float w[N3]; 
@@ -424,13 +424,13 @@ void dm_quat_from_vectors(float vec1[N3], float vec2[N3], float out[N4])
 }
 
 DM_INLINE
-void dm_quat_negate(float quat[N4], float out[N4])
+void dm_quat_negate(const float quat[N4], float out[N4])
 {
     dm_quat_scale(quat, -1, out);
 }
 
 DM_INLINE
-void dm_quat_nlerp(float quat_a[N4], float quat_b[N4], float t, float out[N4])
+void dm_quat_nlerp(const float quat_a[N4], const float quat_b[N4], float t, float out[N4])
 {
     float lerp[N4]; 
     float s[N4];
@@ -701,7 +701,7 @@ void dm_mat3_rotation_degrees(float degrees, float axis[3], float out[M3])
 }
 
 DM_INLINE
-void dm_mat3_rotate_from_quat(float quat[N4], float out[M3])
+void dm_mat3_rotate_from_quat(const float quat[N4], float out[M3])
 {
     float xx = quat[0] * quat[0];
     float yy = quat[1] * quat[1];
@@ -971,7 +971,7 @@ void dm_mat4_from_mat3(float mat[M3], float out[M4])
 }
 
 DM_INLINE
-void dm_mat4_rotate_from_quat(float quat[N4], float out[M4])
+void dm_mat4_rotate_from_quat(const float quat[N4], float out[M4])
 {
     float rot[M3];
     dm_mat3_rotate_from_quat(quat, rot);
@@ -984,7 +984,7 @@ void dm_mat4_rotate_from_quat(float quat[N4], float out[M4])
 MATRIX TRANSFORMS
 *******************/
 DM_INLINE
-void dm_mat_scale_make(float scale[N3], float out[M4])
+void dm_mat_scale_make(const float scale[N3], float out[M4])
 {
 	dm_mat4_identity(out);
     
@@ -994,7 +994,7 @@ void dm_mat_scale_make(float scale[N3], float out[M4])
 }
 
 DM_INLINE
-void dm_mat_scale(float mat[M4], float scale[N3], float out[M4])
+void dm_mat_scale(float mat[M4], const float scale[N3], float out[M4])
 {
     dm_memcpy(out, mat, sizeof(float) * M4);
     
@@ -1033,7 +1033,7 @@ void dm_mat_rotation_degrees_make(float degrees, float axis[N3], float out[M4])
 }
 
 DM_INLINE
-void dm_mat_translate_make(float translation[N3], float out[M4])
+void dm_mat_translate_make(const float translation[N3], float out[M4])
 {
     dm_mat4_identity(out);
     
@@ -1043,7 +1043,7 @@ void dm_mat_translate_make(float translation[N3], float out[M4])
 }
 
 DM_INLINE
-void dm_mat_translate(float mat[M4], float translation[N3], float out[M4])
+void dm_mat_translate(float mat[M4], const float translation[N3], float out[M4])
 {
     out[12] = translation[0];
     out[13] = translation[1];
@@ -1069,7 +1069,7 @@ void dm_mat_rotate_degrees(float mat[M4], float degrees, float axis[N3], float o
 CAMERA MATRICES
 *****************/
 DM_INLINE
-void dm_mat_view(float view_origin[N3], float target[N3], float up[N3], float out[M4])
+void dm_mat_view(const float view_origin[N3], const float target[N3], const float up[N3], float out[M4])
 {
 	float w[N3];
     float u[N3];
