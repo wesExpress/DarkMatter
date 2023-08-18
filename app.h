@@ -15,7 +15,7 @@ typedef struct basic_camera_t
     float proj[M4], view[M4], inv_view[M4], view_proj[M4];
 } basic_camera;
 
-#define MAX_ENTITIES 1024
+#define MAX_ENTITIES 512
 typedef struct application_data_t
 {
     uint32_t     entity_count;

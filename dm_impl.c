@@ -1324,10 +1324,15 @@ bool dm_ecs_init(dm_context* context)
     
     // transform component
     ecs_manager->default_components.transform = dm_ecs_register_component(sizeof(dm_component_transform_block), context);
-    if(ecs_manager->default_components.transform!=DM_ECS_INVALID_ID) return true;
+    if(ecs_manager->default_components.transform==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register transform component"); return false; }
     
-    DM_LOG_FATAL("Could not register transform component"); 
-    return false;
+    ecs_manager->default_components.collision = dm_ecs_register_component(sizeof(dm_component_collision_block), context);
+    if(ecs_manager->default_components.collision==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register collision component"); return false; }
+    
+    ecs_manager->default_components.physics = dm_ecs_register_component(sizeof(dm_component_physics_block), context);
+    if(ecs_manager->default_components.physics==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register physics component"); return false; }
+    
+    return true;
 }
 
 void dm_ecs_shutdown(dm_context* context)
@@ -1341,12 +1346,15 @@ void dm_ecs_shutdown(dm_context* context)
         dm_free(ecs_manager->components[i].data);
     }
     
+    dm_ecs_system_manager* system = NULL;
     for(i=0; i<DM_ECS_SYSTEM_TIMING_UNKNOWN; i++)
     {
         for(uint32_t j=0; j<ecs_manager->num_registered_systems[i]; j++)
         {
-            ecs_manager->systems[i][j].shutdown_func(i,j,(void*)context);
+            system = &ecs_manager->systems[i][j];
+            system->shutdown_func((void*)system,(void*)context);
             dm_free(ecs_manager->systems[i][j].entity_containers);
+            dm_free(ecs_manager->systems[i][j].system_data);
         }
     }
     
@@ -1371,7 +1379,7 @@ dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* con
     return id;
 }
 
-dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing,  bool (*run_func)(dm_ecs_system_timing,dm_ecs_id,void*), void (*shutdown_func)(dm_ecs_system_timing,dm_ecs_id,void*), dm_context* context)
+dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing,  bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), dm_context* context)
 {
     if(context->ecs_manager.num_registered_systems[timing] >= DM_ECS_MAX) return DM_ECS_INVALID_ID;
     
@@ -1555,9 +1563,11 @@ bool dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
 
 bool dm_ecs_run_systems(dm_ecs_system_timing timing, dm_context* context)
 {
+    dm_ecs_system_manager* manager = NULL;
     for(uint32_t i=0; i<context->ecs_manager.num_registered_systems[timing]; i++)
     {
-        if(!context->ecs_manager.systems[timing][i].run_func(timing,i,context)) return false;
+        manager = &context->ecs_manager.systems[timing][i];
+        if(!manager->run_func(manager, context)) return false;
     }
     
     return true;
@@ -1750,7 +1760,7 @@ void dm_ecs_entity_add_angular_velocity(dm_entity entity, float w_x, float w_y, 
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
     const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
     dm_component_physics_block* physics_block = context->ecs_manager.components[physics_id].data;
-
+    
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     uint32_t block_index  = context->ecs_manager.entity_block_indices[entity_index][physics_id];
     uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][physics_id];
@@ -1759,7 +1769,7 @@ void dm_ecs_entity_add_angular_velocity(dm_entity entity, float w_x, float w_y, 
     {
         DM_LOG_INFO("HERE");
     }
-
+    
     (physics_block + block_index)->w_x[comp_index] += w_x;
     (physics_block + block_index)->w_y[comp_index] += w_y;
     (physics_block + block_index)->w_z[comp_index] += w_z;
@@ -1770,7 +1780,7 @@ void dm_ecs_entity_add_force(dm_entity entity, float f_x, float f_y, float f_z, 
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
     const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
     dm_component_physics_block* physics_block = context->ecs_manager.components[physics_id].data;
-
+    
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     uint32_t block_index  = context->ecs_manager.entity_block_indices[entity_index][physics_id];
     uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][physics_id];
@@ -2044,8 +2054,6 @@ const dm_component_physics dm_ecs_entity_get_physics(dm_entity entity, dm_contex
 /*********
 FRAMEWORK
 ***********/
-extern bool dm_physics_system_init(dm_ecs_id* physics_id, dm_ecs_id* collision_id, dm_context* context);
-
 typedef enum dm_context_flags_t
 {
     DM_CONTEXT_FLAG_IS_RUNNING,
@@ -2076,6 +2084,7 @@ dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t windo
     
     dm_ecs_init(context);
     
+#if 0
     if(!dm_physics_system_init(&context->ecs_manager.default_components.physics, &context->ecs_manager.default_components.collision, context))
     {
         dm_renderer_shutdown(context);
@@ -2084,6 +2093,7 @@ dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t windo
         dm_free(context);
         return NULL;
     }
+#endif
     
     // random init
     init_genrand(&context->random, (uint32_t)dm_platform_get_time(&context->platform_data));

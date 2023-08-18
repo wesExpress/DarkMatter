@@ -838,8 +838,8 @@ typedef struct dm_ecs_system_manager_t
     dm_ecs_id component_mask;
     dm_ecs_id component_ids[DM_ECS_MAX];
     
-    bool (*run_func)(dm_ecs_system_timing,dm_ecs_id,void*);
-    void (*shutdown_func)(dm_ecs_system_timing,dm_ecs_id,void*);
+    bool (*run_func)(void*,void*);
+    void (*shutdown_func)(void*,void*);
     
     void* system_data;
     
@@ -911,6 +911,73 @@ typedef struct dm_component_transform_t
 /*******
 PHYSICS
 *********/
+#define DM_PHYSICS_MAX_GJK_ITER      64
+#define DM_PHYSICS_EPA_MAX_FACES     64
+#define DM_PHYSICS_EPA_MAX_ITER      64
+
+#ifndef DM_DEBUG
+#define DM_PHYSICS_FIXED_DT          0.00416f // 1 / 240
+#define DM_PHYSICS_FIXED_DT_INV      240
+#else
+#define DM_PHYSICS_FIXED_DT          0.00833f // 1 / 120
+#define DM_PHYSICS_FIXED_DT_INV      120
+#endif
+
+typedef struct dm_plane
+{
+    float normal[3];
+    float distance;
+} dm_plane;
+
+typedef struct dm_simplex
+{
+    float    points[4][3];
+    uint32_t size;
+} dm_simplex;
+
+typedef struct dm_contact_constraint
+{
+    float  jacobian[4][3];
+    float  delta_v[4][3];
+    float  b;
+    double lambda, warm_lambda, impulse_sum, impulse_min, impulse_max;
+} dm_contact_constraint;
+
+typedef struct dm_contact_point
+{
+    dm_contact_constraint normal;
+    dm_contact_constraint friction_a, friction_b;
+    
+    float global_pos[2][3];
+    float local_pos[2][3];
+    float penetration;
+} dm_contact_point;
+
+typedef struct dm_contact_data_t
+{
+    float mass, inv_mass;
+    float i_body_inv_00, i_body_inv_11, i_body_inv_22;
+    float v_damp, w_damp;
+    
+    float *vel_x, *vel_y, *vel_z;
+    float *w_x, *w_y, *w_z;
+} dm_contact_data;
+
+#define DM_PHYSICS_CLIP_MAX_PTS 15
+typedef struct dm_contact_manifold
+{
+    float     normal[3];
+    float     tangent_a[3]; 
+    float     tangent_b[3];
+    float     orientation_a[4];
+    float     orientation_b[4];
+    
+    dm_contact_data contact_data[2];
+    
+    dm_contact_point points[DM_PHYSICS_CLIP_MAX_PTS];
+    uint32_t         point_count;
+} dm_contact_manifold;
+
 // physics component
 typedef enum dm_physics_body_type_t
 {
@@ -1284,7 +1351,7 @@ void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 
 // ecs
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
-dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*run_func)(dm_ecs_system_timing,dm_ecs_id,void*), void (*shutdown_func)(dm_ecs_system_timing,dm_ecs_id,void*), dm_context* context);
+dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), dm_context* context);
 
 void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm_context* context);
 
@@ -1355,6 +1422,14 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
     // success only if this equals the component mask
     return (result == component_mask);
 }
+
+// physics
+bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);
+void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float penetration[3], float polytope[DM_PHYSICS_EPA_MAX_FACES][3][3], float polytope_normals[DM_PHYSICS_EPA_MAX_FACES][3], uint32_t* polytope_count, dm_simplex* simplex);
+bool dm_physics_collide_entities(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold, dm_context* context);
+void dm_physics_constraint_lambda(dm_contact_constraint* constraint, dm_contact_manifold* manifold);
+void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_manifold* manifold);
+void dm_physics_apply_constraints(dm_contact_manifold* manifold);
 
 // framework funcs
 dm_context* dm_init(uint32_t window_x_pos, uint32_t windos_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title, const char* asset_path);
