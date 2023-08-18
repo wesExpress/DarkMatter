@@ -1748,14 +1748,18 @@ void dm_ecs_entity_add_velocity(dm_entity entity, float v_x, float v_y, float v_
 void dm_ecs_entity_add_angular_velocity(dm_entity entity, float w_x, float w_y, float w_z, dm_context* context)
 {
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
-    uint32_t index;
     const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
-    dm_component_physics_block* physics_block = dm_ecs_get_current_component_block(physics_id, &index, context);
-    
+    dm_component_physics_block* physics_block = context->ecs_manager.components[physics_id].data;
+
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     uint32_t block_index  = context->ecs_manager.entity_block_indices[entity_index][physics_id];
     uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][physics_id];
     
+    if(comp_index==511)
+    {
+        DM_LOG_INFO("HERE");
+    }
+
     (physics_block + block_index)->w_x[comp_index] += w_x;
     (physics_block + block_index)->w_y[comp_index] += w_y;
     (physics_block + block_index)->w_z[comp_index] += w_z;
@@ -1764,10 +1768,9 @@ void dm_ecs_entity_add_angular_velocity(dm_entity entity, float w_x, float w_y, 
 void dm_ecs_entity_add_force(dm_entity entity, float f_x, float f_y, float f_z, dm_context* context)
 {
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
-    uint32_t index;
     const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
-    dm_component_physics_block* physics_block = dm_ecs_get_current_component_block(physics_id, &index, context);
-    
+    dm_component_physics_block* physics_block = context->ecs_manager.components[physics_id].data;
+
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     uint32_t block_index  = context->ecs_manager.entity_block_indices[entity_index][physics_id];
     uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][physics_id];

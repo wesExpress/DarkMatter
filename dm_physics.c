@@ -103,11 +103,6 @@ typedef struct dm_physics_manager_t
     
     dm_collision_pair*   possible_collisions;
     dm_contact_manifold* manifolds;
-    
-    uint32_t min_count, min_capacity;
-    float*   min_x;
-    float*   min_y;
-    float*   min_z;
 } dm_physics_manager;
 
 typedef struct dm_physics_broadphase_sort_data_t
@@ -234,9 +229,6 @@ void dm_physics_update_world_aabb(uint32_t t_index, uint32_t c_index,  dm_compon
 
 int dm_physics_broadphase_get_variance_axis(dm_ecs_system_manager* system, dm_context* context)
 {
-    dm_physics_manager* manager = system->system_data;
-    manager->min_count = 0;
-    
     float center_sum[3]    = { 0 };
     float center_sq_sum[3] = { 0 };
     
@@ -269,21 +261,6 @@ int dm_physics_broadphase_get_variance_axis(dm_ecs_system_manager* system, dm_co
         
         // update global aabb
         dm_physics_update_world_aabb(t_index, c_index, t_block, c_block);
-        
-        // update min arrays
-        manager->min_x[manager->min_count] = c_block->aabb_global_min_x[c_index];
-        manager->min_y[manager->min_count] = c_block->aabb_global_min_y[c_index];
-        manager->min_z[manager->min_count] = c_block->aabb_global_min_z[c_index];
-        manager->min_count++;
-        
-        float load = (float)manager->min_count / (float)manager->min_capacity;
-        if(load >= DM_PHYSICS_LOAD_FACTOR)
-        {
-            manager->min_capacity *= DM_PHYSICS_RESIZE_FACTOR;
-            manager->min_x         = dm_realloc(manager->min_x, sizeof(float) * manager->min_capacity);
-            manager->min_y         = dm_realloc(manager->min_y, sizeof(float) * manager->min_capacity);
-            manager->min_z         = dm_realloc(manager->min_z, sizeof(float) * manager->min_capacity);
-        }
         
         // add to center and center sq vectors
         center[0] = 0.5f * (c_block->aabb_global_max_x[c_index] - c_block->aabb_global_min_x[c_index]);
@@ -330,7 +307,7 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
     data.index = context->ecs_manager.default_components.collision;
     data.block_size = sizeof(dm_component_collision_block);
     
-    dm_component_collision_block* block = context->ecs_manager.components[data.index].data;
+    dm_component_collision_block* master_block = context->ecs_manager.components[data.index].data;
     dm_component_collision_block* a_block;
     dm_component_collision_block* b_block;
     
@@ -338,15 +315,15 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
     switch(axis)
     {
         case 0:
-        data.min = manager->min_x;
+        data.min = master_block->aabb_global_min_x;
         break;
         
         case 1:
-        data.min = manager->min_y;
+        data.min = master_block->aabb_global_min_y;
         break;
         
         case 2:
-        data.min = manager->min_z;
+        data.min = master_block->aabb_global_min_z;
         break;
     }
     
@@ -375,7 +352,7 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
         
         a_c_index = entity_a.component_indices[data.index];
         
-        a_block = block + entity_a.block_indices[data.index];
+        a_block = master_block + entity_a.block_indices[data.index];
         
         a_dim[0] = 0.5f * dm_fabs(a_block->aabb_global_max_x[a_c_index] - a_block->aabb_global_min_x[a_c_index]);
         a_dim[1] = 0.5f * dm_fabs(a_block->aabb_global_max_y[a_c_index] - a_block->aabb_global_min_y[a_c_index]);
@@ -407,7 +384,7 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
             
             b_c_index = entity_b.component_indices[data.index];
             
-            b_block = block + entity_b.block_indices[data.index];
+            b_block = master_block + entity_b.block_indices[data.index];
             
             b_dim[0] = 0.5f * dm_fabs(b_block->aabb_global_max_x[b_c_index] - b_block->aabb_global_min_x[b_c_index]);
             b_dim[1] = 0.5f * dm_fabs(b_block->aabb_global_max_y[b_c_index] - b_block->aabb_global_min_y[b_c_index]);
@@ -1258,7 +1235,7 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     DM_QUAT_COPY(manifold->orientation_a, rot[0]);
     DM_QUAT_COPY(manifold->orientation_b, rot[1]);
     
-    float dum1[3], dum2[3];
+    float dum1[3];
     
     dm_memcpy(manifold->normal, normal, DM_VEC3_SIZE);
     
@@ -1310,7 +1287,6 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
         
 #define DM_PHYSICS_BAUMGARTE_COEF 0.3f
 #define DM_PHYSICS_BAUMGARTE_SLOP 0.001f
-        //float d = DM_MIN(depth + DM_PHYSICS_BAUMGARTE_SLOP, 0.0f);
         float ba[3];
         dm_vec3_sub_vec3(on_b, on_a, ba);
         float d = dm_vec3_dot(ba, neg_norm);
@@ -1322,30 +1298,19 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     {
 #define DM_PHYSICS_REST_COEF 0.5f
 #define DM_PHYSICS_REST_SLOP 0.5f
-        
-        float d1[3], d2[3];
-        dm_vec3_cross(r_a, w[0], d1);
-        dm_vec3_add_vec3(vel[0], d1, d1);
-        dm_vec3_cross(r_b, w[1], d2);
-        dm_vec3_add_vec3(vel[1], d2, d2);
-        dm_vec3_sub_vec3(d2, d1, d1);
-        
-        float elasticity_term = DM_PHYSICS_REST_COEF * dm_vec3_dot(manifold->normal, d1);
-        
-        float d = DM_MIN(elasticity_term + DM_PHYSICS_REST_SLOP, 0.0f);
-        
-        //b += DM_PHYSICS_REST_COEF * d;
+
         b += (DM_PHYSICS_REST_COEF * rel_vn); 
     }
     
     // point position data
+    float inv_rot[4];
     dm_contact_point p = { 0 };
     DM_VEC3_COPY(p.global_pos[0], on_a);
     DM_VEC3_COPY(p.global_pos[1], on_b);
-    dm_quat_inverse(manifold->orientation_a, dum1);
-    dm_vec3_rotate(r_a, dum1, p.local_pos[0]);
-    dm_quat_inverse(manifold->orientation_b, dum1);
-    dm_vec3_rotate(r_b, dum1, p.local_pos[1]);
+    dm_quat_inverse(manifold->orientation_a, inv_rot);
+    dm_vec3_rotate(r_a, inv_rot, p.local_pos[0]);
+    dm_quat_inverse(manifold->orientation_b, inv_rot);
+    dm_vec3_rotate(r_b, inv_rot, p.local_pos[1]);
     p.penetration = depth;
     
     // normal constraint
@@ -1404,6 +1369,7 @@ bool dm_physics_collide_sphere_other(const float pos[2][3], const float rots[2][
 
 void dm_physics_collide_poly_sphere(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_context* context)
 {
+#if 0 
     float polytope[DM_PHYSICS_EPA_MAX_FACES][3][3]      = { 0 };
     float polytope_normals[DM_PHYSICS_EPA_MAX_FACES][3] = { 0 };
     uint32_t num_faces;
@@ -1416,6 +1382,7 @@ void dm_physics_collide_poly_sphere(const float pos[2][3], const float rots[2][4
     float    normal_box[3];
     dm_plane planes[5];
     uint32_t num_planes;
+#endif
 }
 
 void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold, dm_context* context)
@@ -2217,10 +2184,7 @@ void dm_physics_system_shutdown(dm_ecs_system_timing timing, dm_ecs_id system_id
     dm_context* context = c;
     dm_ecs_system_manager* physics_system = &context->ecs_manager.systems[timing][system_id];
     dm_physics_manager* manager = physics_system->system_data;
-    
-    dm_free(manager->min_x);
-    dm_free(manager->min_y);
-    dm_free(manager->min_z);
+
     dm_free(manager->possible_collisions);
     dm_free(manager->manifolds);
     dm_free(physics_system->system_data);
@@ -2252,12 +2216,6 @@ bool dm_physics_system_init(dm_ecs_id* physics_id, dm_ecs_id* collision_id, dm_c
     manager->manifold_capacity   = DM_PHYSICS_DEFAULT_MANIFOLD_CAPACITY;
     manager->possible_collisions = dm_alloc(sizeof(dm_collision_pair) * manager->collision_capacity);
     manager->manifolds           = dm_alloc(sizeof(dm_contact_manifold) * manager->manifold_capacity);
-    
-    manager->min_capacity = DM_PHYSICS_DEFAULT_COLLISION_CAPACITY;
-    manager->min_x        = dm_alloc(sizeof(float) * manager->min_capacity);
-    manager->min_y        = dm_alloc(sizeof(float) * manager->min_capacity);
-    manager->min_z        = dm_alloc(sizeof(float) * manager->min_capacity);
-    manager->min_count    = 0 ;
     
     return true;
 }

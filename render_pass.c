@@ -162,14 +162,12 @@ bool render_pass_render(dm_context* context)
     
     float obj_rm[M4];
     dm_component_transform transform = { 0 };
-    dm_component_collision collision = { 0 };
     
     inst_vertex* inst = NULL;
     
     for(uint32_t i=0; i<pass_data->entity_count; i++)
     {
         transform = dm_ecs_entity_get_transform(pass_data->entities[i], context);
-        collision = dm_ecs_entity_get_collision(pass_data->entities[i], context);
         
         inst = &pass_data->insts[i];
         
@@ -181,6 +179,9 @@ bool render_pass_render(dm_context* context)
 #ifdef DM_DIRECTX
         dm_mat4_transpose(inst->model, inst->model);
 #endif
+
+#if 0
+        dm_component_collision collision = dm_ecs_entity_get_collision(pass_data->entities[i], context);
         
         float dim[] = {
             collision.aabb_global_max[0] - collision.aabb_global_min[0],
@@ -205,7 +206,6 @@ bool render_pass_render(dm_context* context)
             color[2] = 1;
         }
         
-#if 1
         //debug_render_aabb(transform.pos, dim, color, context);
         dim[0] = collision.internal[3] - collision.internal[0];
         dim[1] = collision.internal[4] - collision.internal[1];
@@ -243,7 +243,7 @@ bool render_pass_render(dm_context* context)
     dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_VERTEX, 0, context);
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
-    //dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
+    dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
     
     // reset counts back to 0
     pass_data->entity_count = 0;

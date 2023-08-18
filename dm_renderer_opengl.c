@@ -621,7 +621,7 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
     
     DM_OPENGL_GET_RENDERER;
     
-    dm_opengl_buffer vb_buffers[2];
+    dm_opengl_buffer vb_buffers[2] = { 0 };
     
     vb_buffers[0] = opengl_renderer->buffers[shader_desc.vb[0]];
     if(shader_desc.vb_count > 1) vb_buffers[1] = opengl_renderer->buffers[shader_desc.vb[1]];

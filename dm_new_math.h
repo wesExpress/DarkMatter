@@ -165,7 +165,8 @@ void dm_vec3_cross(const float left[N3], const float right[N3], float out[N3])
     out[2] = left[0] * right[1] - left[1] * right[0];
 }
 
-DM_INLINE dm_vec3_cross_cross(const float first[N3], const float second[N3], const float third[N3], float out[N3])
+DM_INLINE 
+void dm_vec3_cross_cross(const float first[N3], const float second[N3], const float third[N3], float out[N3])
 {
     dm_vec3_cross(first, second, out);
     dm_vec3_cross(out,   third, out);
@@ -439,9 +440,9 @@ void dm_quat_from_axis_angle_deg(const float axis[N3], float angle, float out[N4
 DM_INLINE
 void dm_quat_from_vectors(const float vec1[N3], const float vec2[N3], float out[N4])
 {
-    float u[N3];
-    float w[N3]; 
-    float axis[N3];
+    float u[N3]    = { 0 };
+    float w[N3]    = { 0 }; 
+    float axis[N3] = { 0 };
     
     dm_vec3_norm(vec1, u);
     dm_vec3_norm(vec2, w);

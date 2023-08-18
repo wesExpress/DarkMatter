@@ -9,8 +9,8 @@ dm_entity create_entity(dm_context* context)
 {
     dm_entity entity = dm_ecs_create_entity(context);
     
-    float w = (float)WORLD_SIZE_X * 0.5f;
-    float h = (float)WORLD_SIZE_Y * 0.5f;
+    static const float w = (float)WORLD_SIZE_X * 0.5f;
+    static const float h = (float)WORLD_SIZE_Y * 0.5f;
     
     float pos_x = dm_random_float(context) * w * 2 - w;
     float pos_y = dm_random_float(context) * h * 2 - h;
@@ -41,7 +41,7 @@ dm_entity create_entity(dm_context* context)
         scale_y * 0.5f,
         scale_z * 0.5f
     };
-    dm_ecs_entity_add_kinematics(entity, 1, 0,0,0, 0,0, dim, context);
+    dm_ecs_entity_add_kinematics(entity, dm_random_float(context) * 10, 0,0,0, 0,0, dim, context);
     dm_ecs_entity_add_angular_velocity(entity, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
     
     return entity;
