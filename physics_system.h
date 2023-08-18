@@ -3,7 +3,7 @@
 
 #include "dm.h"
 
-bool physics_system_init(dm_context* context);
+bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_context* context);
 void physics_system_shutdown(void* s, void* c);
 bool physics_system_run(void* s, void* c);
 

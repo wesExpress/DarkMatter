@@ -1304,7 +1304,6 @@ bool dm_ecs_init(dm_context* context)
 {
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
     
-    // entities
     ecs_manager->entity_capacity          = DM_ECS_MANAGER_ENTITY_CAPACITY;
     
     size_t block_size     = sizeof(dm_entity) * ecs_manager->entity_capacity;
@@ -1321,16 +1320,6 @@ bool dm_ecs_init(dm_context* context)
     block_size                            = sizeof(dm_ecs_id) * ecs_manager->entity_capacity;
     ecs_manager->entity_component_masks   = dm_alloc(block_size);
     dm_memzero(ecs_manager->entity_component_masks, block_size);
-    
-    // transform component
-    ecs_manager->default_components.transform = dm_ecs_register_component(sizeof(dm_component_transform_block), context);
-    if(ecs_manager->default_components.transform==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register transform component"); return false; }
-    
-    ecs_manager->default_components.collision = dm_ecs_register_component(sizeof(dm_component_collision_block), context);
-    if(ecs_manager->default_components.collision==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register collision component"); return false; }
-    
-    ecs_manager->default_components.physics = dm_ecs_register_component(sizeof(dm_component_physics_block), context);
-    if(ecs_manager->default_components.physics==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register physics component"); return false; }
     
     return true;
 }
@@ -1551,10 +1540,7 @@ bool dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
             }
             
             manager->entity_count++;
-            if((float)manager->entity_count / (float)manager->entity_capacity < 0.75f) continue;
-            
-            manager->entity_capacity *= 2;
-            manager->entity_containers = dm_realloc(manager->entity_containers, sizeof(dm_ecs_system_entity_container) * manager->entity_capacity);
+            dm_grow_dyn_array(&manager->entity_containers, manager->entity_count, &manager->entity_capacity, sizeof(dm_ecs_system_entity_container), 0.75f, 2);
         }
     }
     
@@ -1666,389 +1652,6 @@ void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm
     manager->data = dm_realloc(manager->data, manager->block_count * manager->block_size);
     void* data = (char*)manager->data + (manager->block_count-1) * manager->block_size;
     dm_memzero(data, manager->block_size);
-}
-
-void dm_ecs_entity_add_transform(dm_entity entity, float pos_x,float pos_y,float pos_z, float scale_x,float scale_y,float scale_z, float rot_i,float rot_j,float rot_k,float rot_r, dm_context* context)
-{
-    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add transform to invalid entity"); return; }
-    
-    uint32_t index;
-    const dm_ecs_id transform_id = context->ecs_manager.default_components.transform;
-    dm_component_transform_block* transform_block = dm_ecs_get_current_component_block(transform_id, &index, context);
-    
-    transform_block->pos_x[index] = pos_x;
-    transform_block->pos_y[index] = pos_y;
-    transform_block->pos_z[index] = pos_z;
-    
-    transform_block->scale_x[index] = scale_x;
-    transform_block->scale_y[index] = scale_y;
-    transform_block->scale_z[index] = scale_z;
-    
-    transform_block->rot_i[index] = rot_i;
-    transform_block->rot_j[index] = rot_j;
-    transform_block->rot_k[index] = rot_k;
-    transform_block->rot_r[index] = rot_r;
-    
-    dm_ecs_iterate_component_block(entity, transform_id, context);
-}
-
-void dm_ecs_entity_add_kinematics(dm_entity entity, float mass, float vel_x,float vel_y,float vel_z, float damping_v,float damping_w, float collider_data[6], dm_context* context)
-{
-    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
-    uint32_t index;
-    const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
-    dm_component_physics_block* physics_block = dm_ecs_get_current_component_block(physics_id, &index, context);
-    
-    float dim_x = collider_data[3] - collider_data[0];
-    float dim_y = collider_data[4] - collider_data[1];
-    float dim_z = collider_data[5] - collider_data[2];
-    
-    dim_x *= dim_x;
-    dim_y *= dim_y;
-    dim_z *= dim_z;
-    
-    physics_block->vel_x[index] = vel_x;
-    physics_block->vel_y[index] = vel_y;
-    physics_block->vel_z[index] = vel_z;
-    
-    physics_block->mass[index]     = mass;
-    physics_block->inv_mass[index] = 1.0f / mass;
-    
-    float i_body_00 = (dim_y + dim_z) * mass * DM_MATH_INV_12;
-    float i_body_11 = (dim_x + dim_z) * mass * DM_MATH_INV_12;
-    float i_body_22 = (dim_x + dim_y) * mass * DM_MATH_INV_12;
-    
-    physics_block->i_body_00[index] = i_body_00;
-    physics_block->i_body_11[index] = i_body_11;
-    physics_block->i_body_22[index] = i_body_22;
-    
-    physics_block->i_body_inv_00[index] = 1.0f / i_body_00;
-    physics_block->i_body_inv_11[index] = 1.0f / i_body_11;
-    physics_block->i_body_inv_22[index] = 1.0f / i_body_22;
-    
-    physics_block->i_inv_00[index] = physics_block->i_body_inv_00[index];
-    physics_block->i_inv_11[index] = physics_block->i_body_inv_11[index];
-    physics_block->i_inv_22[index] = physics_block->i_body_inv_22[index];
-    
-    physics_block->damping_v[index] = damping_v;
-    physics_block->damping_w[index] = damping_w;
-    
-    // default for now
-    physics_block->body_type[index] = DM_PHYSICS_BODY_TYPE_RIGID;
-    physics_block->movement_type[index] = DM_PHYSICS_MOVEMENT_KINEMATIC;
-    
-    dm_ecs_iterate_component_block(entity, physics_id, context);
-}
-
-void dm_ecs_entity_add_velocity(dm_entity entity, float v_x, float v_y, float v_z, dm_context* context)
-{
-    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
-    const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
-    dm_component_physics_block* physics_block = context->ecs_manager.components[physics_id].data;
-    
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    uint32_t block_index  = context->ecs_manager.entity_block_indices[entity_index][physics_id];
-    uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][physics_id];
-    
-    (physics_block + block_index)->vel_x[comp_index] += v_x;
-    (physics_block + block_index)->vel_y[comp_index] += v_y;
-    (physics_block + block_index)->vel_z[comp_index] += v_z;
-}
-
-void dm_ecs_entity_add_angular_velocity(dm_entity entity, float w_x, float w_y, float w_z, dm_context* context)
-{
-    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
-    const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
-    dm_component_physics_block* physics_block = context->ecs_manager.components[physics_id].data;
-    
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    uint32_t block_index  = context->ecs_manager.entity_block_indices[entity_index][physics_id];
-    uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][physics_id];
-    
-    if(comp_index==511)
-    {
-        DM_LOG_INFO("HERE");
-    }
-    
-    (physics_block + block_index)->w_x[comp_index] += w_x;
-    (physics_block + block_index)->w_y[comp_index] += w_y;
-    (physics_block + block_index)->w_z[comp_index] += w_z;
-}
-
-void dm_ecs_entity_add_force(dm_entity entity, float f_x, float f_y, float f_z, dm_context* context)
-{
-    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
-    const dm_ecs_id physics_id = context->ecs_manager.default_components.physics;
-    dm_component_physics_block* physics_block = context->ecs_manager.components[physics_id].data;
-    
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    uint32_t block_index  = context->ecs_manager.entity_block_indices[entity_index][physics_id];
-    uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][physics_id];
-    
-    (physics_block + block_index)->force_x[comp_index] += f_x;
-    (physics_block + block_index)->force_y[comp_index] += f_y;
-    (physics_block + block_index)->force_z[comp_index] += f_z;
-}
-
-void dm_ecs_entity_add_collision(dm_entity entity, dm_component_collision collision, dm_context* context)
-{
-    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add collision to invalid entity"); return; }
-    
-    uint32_t index;
-    const dm_ecs_id collision_id = context->ecs_manager.default_components.collision;
-    dm_component_collision_block* collision_block = dm_ecs_get_current_component_block(collision_id, &index, context);
-    
-    collision_block->aabb_local_min_x[index] = collision.aabb_local_min[0];
-    collision_block->aabb_local_min_y[index] = collision.aabb_local_min[1];
-    collision_block->aabb_local_min_z[index] = collision.aabb_local_min[2];
-    
-    collision_block->aabb_local_max_x[index] = collision.aabb_local_max[0];
-    collision_block->aabb_local_max_y[index] = collision.aabb_local_max[1];
-    collision_block->aabb_local_max_z[index] = collision.aabb_local_max[2];
-    
-    collision_block->aabb_global_min_x[index] = collision.aabb_global_min[0];
-    collision_block->aabb_global_min_y[index] = collision.aabb_global_min[1];
-    collision_block->aabb_global_min_z[index] = collision.aabb_global_min[2];
-    
-    collision_block->aabb_global_max_x[index] = collision.aabb_global_max[0];
-    collision_block->aabb_global_max_y[index] = collision.aabb_global_max[1];
-    collision_block->aabb_global_max_z[index] = collision.aabb_global_max[2];
-    
-    collision_block->center_x[index] = collision.center[0];
-    collision_block->center_y[index] = collision.center[1];
-    collision_block->center_z[index] = collision.center[2];
-    
-    collision_block->internal_0[index] = collision.internal[0];
-    collision_block->internal_1[index] = collision.internal[1];
-    collision_block->internal_2[index] = collision.internal[2];
-    collision_block->internal_3[index] = collision.internal[3];
-    collision_block->internal_4[index] = collision.internal[4];
-    collision_block->internal_5[index] = collision.internal[5];
-    
-    collision_block->shape[index] = collision.shape;
-    collision_block->flag[index]  = collision.flag;
-    
-    dm_ecs_iterate_component_block(entity, collision_id, context);
-}
-
-void dm_ecs_entity_add_box_collider(dm_entity entity, float center_x,float center_y,float center_z, float scale_x,float scale_y,float scale_z, dm_context* context)
-{
-    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add collision to invalid entity"); return; }
-    
-    uint32_t index;
-    const dm_ecs_id collision_id = context->ecs_manager.default_components.collision;
-    dm_component_collision_block* collision_block = dm_ecs_get_current_component_block(collision_id, &index, context);
-    
-    scale_x *= 0.5f;
-    scale_y *= 0.5f;
-    scale_z *= 0.5f;
-    
-    float min_x = center_x - scale_x;
-    float min_y = center_y - scale_y;
-    float min_z = center_z - scale_z;
-    
-    float max_x = center_x + scale_x;
-    float max_y = center_y + scale_y;
-    float max_z = center_z + scale_z;
-    
-    collision_block->aabb_local_min_x[index] = min_x;
-    collision_block->aabb_local_min_y[index] = min_y;
-    collision_block->aabb_local_min_z[index] = min_z;
-    
-    collision_block->aabb_local_max_x[index] = max_x;
-    collision_block->aabb_local_max_y[index] = max_y;
-    collision_block->aabb_local_max_z[index] = max_z;
-    
-    collision_block->aabb_global_min_x[index] = min_x;
-    collision_block->aabb_global_min_y[index] = min_y;
-    collision_block->aabb_global_min_z[index] = min_z;
-    
-    collision_block->aabb_global_max_x[index] = max_x;
-    collision_block->aabb_global_max_y[index] = max_y;
-    collision_block->aabb_global_max_z[index] = max_z;
-    
-    collision_block->center_x[index] = center_x;
-    collision_block->center_y[index] = center_y;
-    collision_block->center_z[index] = center_z;
-    
-    collision_block->internal_0[index] = min_x;
-    collision_block->internal_1[index] = min_y;
-    collision_block->internal_2[index] = min_z;
-    collision_block->internal_3[index] = max_x;
-    collision_block->internal_4[index] = max_y;
-    collision_block->internal_5[index] = max_z;
-    
-    collision_block->shape[index] = DM_COLLISION_SHAPE_BOX;
-    collision_block->flag[index]  = DM_COLLISION_FLAG_NO;
-    
-    dm_ecs_iterate_component_block(entity, collision_id, context);
-}
-
-void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center_x,float center_y,float center_z, float radius, dm_context* context)
-{
-    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add collision to invalid entity"); return; }
-    
-    uint32_t index;
-    const dm_ecs_id collision_id = context->ecs_manager.default_components.collision;
-    dm_component_collision_block* collision_block = dm_ecs_get_current_component_block(collision_id, &index, context);
-    
-    float min_x = center_x - radius;
-    float min_y = center_y - radius;
-    float min_z = center_z - radius;
-    
-    float max_x = center_x + radius;
-    float max_y = center_y + radius;
-    float max_z = center_z + radius;
-    
-    collision_block->aabb_local_min_x[index] = min_x;
-    collision_block->aabb_local_min_y[index] = min_y;
-    collision_block->aabb_local_min_z[index] = min_z;
-    
-    collision_block->aabb_local_max_x[index] = max_x;
-    collision_block->aabb_local_max_y[index] = max_y;
-    collision_block->aabb_local_max_z[index] = max_z;
-    
-    collision_block->aabb_global_min_x[index] = min_x;
-    collision_block->aabb_global_min_y[index] = min_y;
-    collision_block->aabb_global_min_z[index] = min_z;
-    
-    collision_block->aabb_global_max_x[index] = max_x;
-    collision_block->aabb_global_max_y[index] = max_y;
-    collision_block->aabb_global_max_z[index] = max_z;
-    
-    collision_block->center_x[index] = center_x;
-    collision_block->center_y[index] = center_y;
-    collision_block->center_z[index] = center_z;
-    
-    collision_block->internal_0[index] = radius;
-    
-    collision_block->shape[index] = DM_COLLISION_SHAPE_SPHERE;
-    collision_block->flag[index]  = DM_COLLISION_FLAG_NO;
-    
-    dm_ecs_iterate_component_block(entity, collision_id, context);
-}
-
-const dm_component_transform dm_ecs_entity_get_transform(dm_entity entity, dm_context* context)
-{
-    uint32_t index;
-    dm_component_transform_block* transform_block = dm_ecs_entity_get_component_block(entity, context->ecs_manager.default_components.transform, &index, context);
-    if(!transform_block) return (dm_component_transform){ 0 };
-    
-    dm_component_transform transform = { 0 };
-    
-    transform.pos[0] = transform_block->pos_x[index];
-    transform.pos[1] = transform_block->pos_y[index];
-    transform.pos[2] = transform_block->pos_z[index];
-    
-    transform.scale[0] = transform_block->scale_x[index];
-    transform.scale[1] = transform_block->scale_y[index];
-    transform.scale[2] = transform_block->scale_z[index];
-    
-    transform.rot[0] = transform_block->rot_i[index];
-    transform.rot[1] = transform_block->rot_j[index];
-    transform.rot[2] = transform_block->rot_k[index];
-    transform.rot[3] = transform_block->rot_r[index];
-    
-    return transform;
-}
-
-const dm_component_collision dm_ecs_entity_get_collision(dm_entity entity, dm_context* context)
-{
-    uint32_t index;
-    dm_component_collision_block* collision_block = dm_ecs_entity_get_component_block(entity, context->ecs_manager.default_components.collision, &index, context);
-    
-    dm_component_collision collision = { 0 };
-    
-    collision.aabb_local_min[0] = collision_block->aabb_local_min_x[index];
-    collision.aabb_local_min[1] = collision_block->aabb_local_min_y[index];
-    collision.aabb_local_min[2] = collision_block->aabb_local_min_z[index];
-    
-    collision.aabb_local_max[0] = collision_block->aabb_local_max_x[index];
-    collision.aabb_local_max[1] = collision_block->aabb_local_max_y[index];
-    collision.aabb_local_max[2] = collision_block->aabb_local_max_z[index];
-    
-    collision.aabb_global_min[0] = collision_block->aabb_global_min_x[index];
-    collision.aabb_global_min[1] = collision_block->aabb_global_min_y[index];
-    collision.aabb_global_min[2] = collision_block->aabb_global_min_z[index];
-    
-    collision.aabb_global_max[0] = collision_block->aabb_global_max_x[index];
-    collision.aabb_global_max[1] = collision_block->aabb_global_max_y[index];
-    collision.aabb_global_max[2] = collision_block->aabb_global_max_z[index];
-    
-    collision.center[0] = collision_block->center_x[index];
-    collision.center[1] = collision_block->center_y[index];
-    collision.center[2] = collision_block->center_z[index];
-    
-    collision.internal[0] = collision_block->internal_0[index];
-    collision.internal[1] = collision_block->internal_1[index];
-    collision.internal[2] = collision_block->internal_2[index];
-    collision.internal[3] = collision_block->internal_3[index];
-    collision.internal[4] = collision_block->internal_4[index];
-    collision.internal[5] = collision_block->internal_5[index];
-    
-    collision.shape = collision_block->shape[index];
-    collision.flag = collision_block->flag[index];
-    
-    return collision;
-}
-
-const dm_component_physics dm_ecs_entity_get_physics(dm_entity entity, dm_context* context)
-{
-    uint32_t index;
-    dm_component_physics_block* physics_block = dm_ecs_entity_get_component_block(entity, context->ecs_manager.default_components.physics, &index, context);
-    
-    dm_component_physics physics = { 0 };
-    
-    physics.vel[0] = physics_block->vel_x[index];
-    physics.vel[1] = physics_block->vel_y[index];
-    physics.vel[2] = physics_block->vel_z[index];
-    
-    physics.w[0] = physics_block->w_x[index];
-    physics.w[1] = physics_block->w_y[index];
-    physics.w[2] = physics_block->w_z[index];
-    
-    physics.l[0] = physics_block->l_x[index];
-    physics.l[1] = physics_block->l_y[index];
-    physics.l[2] = physics_block->l_z[index];
-    
-    physics.force[0] = physics_block->force_x[index];
-    physics.force[1] = physics_block->force_y[index];
-    physics.force[2] = physics_block->force_z[index];
-    
-    physics.torque[0] = physics_block->torque_x[index];
-    physics.torque[1] = physics_block->torque_y[index];
-    physics.torque[2] = physics_block->torque_z[index];
-    
-    physics.mass = physics_block->mass[index];
-    physics.inv_mass = physics_block->inv_mass[index];
-    
-    physics.i_body[0] = physics_block->i_body_00[index];
-    physics.i_body[1] = physics_block->i_body_11[index];
-    physics.i_body[2] = physics_block->i_body_22[index];
-    
-    physics.i_body_inv[0] = physics_block->i_body_inv_00[index];
-    physics.i_body_inv[1] = physics_block->i_body_inv_11[index];
-    physics.i_body_inv[2] = physics_block->i_body_inv_22[index];
-    
-    physics.i_inv_0[0] = physics_block->i_inv_00[index];
-    physics.i_inv_0[1] = physics_block->i_inv_01[index];
-    physics.i_inv_0[2] = physics_block->i_inv_02[index];
-    
-    physics.i_inv_1[0] = physics_block->i_inv_10[index];
-    physics.i_inv_1[1] = physics_block->i_inv_11[index];
-    physics.i_inv_1[2] = physics_block->i_inv_12[index];
-    
-    physics.i_inv_2[0] = physics_block->i_inv_20[index];
-    physics.i_inv_2[1] = physics_block->i_inv_21[index];
-    physics.i_inv_2[2] = physics_block->i_inv_22[index];
-    
-    physics.damping[0] = physics_block->damping_v[index];
-    physics.damping[1] = physics_block->damping_w[index];
-    
-    physics.body_type     = physics_block->body_type[index];
-    physics.movement_type = physics_block->movement_type[index];
-    
-    return physics;
 }
 
 /*********
@@ -2303,6 +1906,35 @@ uint32_t __dm_get_screen_height(dm_context* context)
 {
     return context->platform_data.window_data.height;
 }
+
+void dm_grow_dyn_array(void** array, uint32_t count, uint32_t* capacity, size_t elem_size, float load_factor, uint32_t resize_factor)
+{
+    if((float)count / (float)*capacity < load_factor) return;
+    
+    *capacity *= resize_factor;
+    *array = dm_realloc(*array, *capacity * elem_size);
+}
+
+void dm_qsort(void* array, size_t count, size_t elem_size, int (compar)(const void* a, const void* b))
+{
+    qsort(array, count, elem_size, compar);
+}
+
+#ifdef DM_LINUX
+void dm_qsrot_p(void* array, size_t count, size_t elem_size, int (compar)(const void* a, const void* b, void* c), void* d)
+{
+    qsort_r(array, count, elem_size, compar, d);
+}
+#else
+void dm_qsrot_p(void* array, size_t count, size_t elem_size, int (compar)(void* c, const void* a, const void* b), void* d)
+{
+#ifdef DM_PLATFORM_WIN32
+    qsort_s(array, count, elem_size, compar, d);
+#elif defined(DM_PLATFORM_APPLE)
+    qsort_r(array, count, elem_size, d, compar);
+#endif
+}
+#endif
 
 /*****
 TIMER

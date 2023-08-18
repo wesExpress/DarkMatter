@@ -15,12 +15,21 @@ typedef struct basic_camera_t
     float proj[M4], view[M4], inv_view[M4], view_proj[M4];
 } basic_camera;
 
-#define MAX_ENTITIES 512
+typedef struct component_ids_t
+{
+    dm_ecs_id transform;
+    dm_ecs_id collision;
+    dm_ecs_id physics;
+} component_ids;
+
+#define MAX_ENTITIES 510
 typedef struct application_data_t
 {
     uint32_t     entity_count;
     dm_entity    entities[MAX_ENTITIES];
     basic_camera camera;
+    
+    component_ids components;
     
     void*        render_pass_data;
     void*        debug_render_pass_data;

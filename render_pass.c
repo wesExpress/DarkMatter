@@ -1,6 +1,7 @@
 #include "render_pass.h"
 #include "debug_render_pass.h"
 #include "app.h"
+#include "components.h"
 
 typedef struct vertex_t
 {
@@ -161,13 +162,13 @@ bool render_pass_render(dm_context* context)
     render_pass_data* pass_data = app_data->render_pass_data;
     
     float obj_rm[M4];
-    dm_component_transform transform = { 0 };
+    component_transform transform = { 0 };
     
     inst_vertex* inst = NULL;
     
     for(uint32_t i=0; i<pass_data->entity_count; i++)
     {
-        transform = dm_ecs_entity_get_transform(pass_data->entities[i], context);
+        transform = entity_get_transform(pass_data->entities[i], app_data->components.transform, context);
         
         inst = &pass_data->insts[i];
         
@@ -179,7 +180,7 @@ bool render_pass_render(dm_context* context)
 #ifdef DM_DIRECTX
         dm_mat4_transpose(inst->model, inst->model);
 #endif
-
+        
 #if 0
         dm_component_collision collision = dm_ecs_entity_get_collision(pass_data->entities[i], context);
         

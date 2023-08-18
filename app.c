@@ -1,4 +1,5 @@
 #include "app.h"
+#include "components.h"
 #include "render_pass.h"
 #include "debug_render_pass.h"
 #include "physics_system.h"
@@ -6,7 +7,7 @@
 #define WORLD_SIZE_X 30
 #define WORLD_SIZE_Y 30
 
-dm_entity create_entity(dm_context* context)
+dm_entity create_entity(application_data* app_data, dm_context* context)
 {
     dm_entity entity = dm_ecs_create_entity(context);
     
@@ -31,8 +32,8 @@ dm_entity create_entity(dm_context* context)
     rot_k /= mag;
     rot_r /= mag;
     
-    dm_ecs_entity_add_transform(entity, pos_x,pos_y,pos_z, scale_x,scale_y,scale_z, rot_i,rot_j,rot_k,rot_r, context);
-    dm_ecs_entity_add_box_collider(entity, 0,0,0, scale_x,scale_y,scale_z, context);
+    entity_add_transform(entity, app_data->components.transform, pos_x,pos_y,pos_z, scale_x,scale_y,scale_z, rot_i,rot_j,rot_k,rot_r, context);
+    entity_add_box_collider(entity, app_data->components.collision, 0,0,0, scale_x,scale_y,scale_z, context);
     
     float dim[6] = {
         -scale_x * 0.5f,
@@ -42,8 +43,9 @@ dm_entity create_entity(dm_context* context)
         scale_y * 0.5f,
         scale_z * 0.5f
     };
-    dm_ecs_entity_add_kinematics(entity, dm_random_float(context) * 10, 0,0,0, 0,0, dim, context);
-    dm_ecs_entity_add_angular_velocity(entity, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
+    
+    entity_add_kinematics(entity, app_data->components.physics, dm_random_float(context) * 10, 0,0,0, 0,0, dim, context);
+    entity_add_angular_velocity(entity, app_data->components.physics, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
     
     return entity;
 }
@@ -182,8 +184,18 @@ bool app_init(dm_context* context)
     if(!render_pass_init(context))       return false;
     if(!debug_render_pass_init(context)) return false;
     
+    // components
+    app_data->components.transform = dm_ecs_register_component(sizeof(component_transform_block), context);
+    if(app_data->components.transform==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register transform component"); return false; }
+    
+    app_data->components.collision = dm_ecs_register_component(sizeof(component_collision_block), context);
+    if(app_data->components.collision==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register collision component"); return false; }
+    
+    app_data->components.physics = dm_ecs_register_component(sizeof(component_physics_block), context);
+    if(app_data->components.physics==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register physics component"); return false; }
+    
     // systems
-    if(!physics_system_init(context))    return false;
+    if(!physics_system_init(app_data->components.transform, app_data->components.collision, app_data->components.physics, context))    return false;
     
     // camera
     const float cam_pos[] = { -5,0,-5 };
@@ -195,7 +207,7 @@ bool app_init(dm_context* context)
     // entities
     for(uint32_t i=0; i<MAX_ENTITIES; i++)
     {
-        app_data->entities[app_data->entity_count++] = create_entity(context);
+        app_data->entities[app_data->entity_count++] = create_entity(app_data, context);
     }
     
     return true;
