@@ -463,32 +463,33 @@ bool dm_physics_broadphase(dm_ecs_system_manager* system, dm_physics_manager* ma
 NARROWPHASE
 *************/
 // 3d support funcs
-void dm_physics_support_func_sphere(const float pos[3], const float cen[3], const float internals[6], float d[3], float support[3])
+void dm_physics_support_func_sphere(const float pos[3], const float cen[3], const float internals[6], const float dir[3], float support[3])
 {
-    float radius = internals[0];
+    const float radius = internals[0];
     
-    support[0] = (d[0] * radius) + (pos[0] + cen[0]); 
-    support[1] = (d[1] * radius) + (pos[1] + cen[1]); 
-    support[2] = (d[2] * radius) + (pos[2] + cen[2]);
+    support[0] = (dir[0] * radius) + (pos[0] + cen[0]); 
+    support[1] = (dir[1] * radius) + (pos[1] + cen[1]); 
+    support[2] = (dir[2] * radius) + (pos[2] + cen[2]);
 }
 
-void dm_physics_support_func_box(const float pos[3], const float rot[4], const float cen[3], const float internals[6], float d[3], float support[3])
+void dm_physics_support_func_box(const float pos[3], const float rot[4], const float cen[3], const float internals[6], const float dir[3], float support[3])
 {
-    float inv_rot[4];
-    float d_rot[3];
+    float inv_rot[4] = { 0 };
+    float d_rot[3]   = { 0 };
+    float sup[3]     = { 0 };
     
-    //dm_memcpy(inv_rot, rot, sizeof(inv_rot));
-    
+    // put direction into local space
     dm_quat_inverse(rot, inv_rot);
-    dm_vec3_rotate(d, inv_rot, d_rot);
+    dm_vec3_rotate(dir, inv_rot, d_rot);
     
-    support[0] = (d_rot[0] > 0) ? internals[3] : internals[0];
-    support[1] = (d_rot[1] > 0) ? internals[4] : internals[1];
-    support[2] = (d_rot[2] > 0) ? internals[5] : internals[2];
+    sup[0] = (d_rot[0] > 0) ? internals[3] : internals[0];
+    sup[1] = (d_rot[1] > 0) ? internals[4] : internals[1];
+    sup[2] = (d_rot[2] > 0) ? internals[5] : internals[2];
     
-    dm_vec3_rotate(support,   rot, support);
-    dm_vec3_add_vec3(support, pos, support);
-    dm_vec3_add_vec3(support, cen, support);
+    // rotate back into world space
+    dm_vec3_rotate(sup, rot, sup);
+    dm_vec3_add_vec3(sup, cen, sup);
+    dm_vec3_add_vec3(sup, pos, support);
 }
 
 // gjk
@@ -519,35 +520,23 @@ void dm_physics_support(const float pos[2][3], const float rot[2][4], const floa
     dm_vec3_negate(direction, dir_neg);
     
     dm_physics_support_entity(pos[0], rot[0], cen[0], internals[0], shapes[0], direction, support_a);
-    dm_physics_support_entity(pos[1], rot[1], cen[1], internals[1], shapes[1], dir_neg,  support_b);
+    dm_physics_support_entity(pos[1], rot[1], cen[1], internals[1], shapes[1], dir_neg,   support_b);
     
-    dm_memcpy(supports[0], support_a, sizeof(support_a));
-    dm_memcpy(supports[1], support_b, sizeof(support_b));
+    DM_VEC3_COPY(supports[0], support_a);
+    DM_VEC3_COPY(supports[1], support_b);
     
     dm_vec3_sub_vec3(support_a, support_b, support);
 }
 
 void dm_simplex_push_front(float point[3], dm_simplex* simplex)
 {
-#if 0
-    dm_memcpy(simplex->points + 1, simplex->points, sizeof(float) * 3 * 3);
-    dm_memcpy(simplex->points[3], simplex->points[2], sizeof(float) * 3);
-    dm_memcpy(simplex->points[2], simplex->points[1], sizeof(float) * 3);
-    dm_memcpy(simplex->points[1], simplex->points[0], sizeof(float) * 3);
-    dm_memcpy(simplex->points[0], point, sizeof(float) * 3);
-#endif
-    assert(simplex->size < 4);
-    dm_memcpy(simplex->points[simplex->size++], point, sizeof(float) * 3);
-    simplex->size = DM_MIN(simplex->size, 4);
-}
-
-void dm_simplex_reconstruct(float points[4][3], uint32_t num_points, dm_simplex* simplex)
-{
-    for(uint32_t i=0; i<num_points; i++)
-    {
-        dm_memcpy(simplex->points[i], points[i], sizeof(float) * 3);
-    }
-    simplex->size = num_points;
+    DM_VEC3_COPY(simplex->points[3], simplex->points[2]);
+    DM_VEC3_COPY(simplex->points[2], simplex->points[1]);
+    DM_VEC3_COPY(simplex->points[1], simplex->points[0]);
+    DM_VEC3_COPY(simplex->points[0], point);
+    
+    simplex->size++;
+    simplex->size = DM_CLAMP(simplex->size, 0, 4);
 }
 
 /*
@@ -556,22 +545,23 @@ if ao is not in the same direction as ab, we need to restart
 */
 bool dm_simplex_line(float direction[3], dm_simplex* simplex)
 {
-    float ab[3];
-    float ao[3];
+    float a[3], b[3];
+    float ab[3]; float ao[3];
     
-    dm_vec3_sub_vec3(simplex->points[1], simplex->points[0], ab);
-    dm_vec3_negate(simplex->points[0], ao);
+    DM_VEC3_COPY(a, simplex->points[0]);
+    DM_VEC3_COPY(b, simplex->points[1]);
+    
+    dm_vec3_sub_vec3(b, a, ab);
+    dm_vec3_negate(a, ao);
     
     if(dm_vec3_same_direction(ab, ao)) 
     {
-        float abo[3];
-        dm_vec3_cross(ab, ao, abo);
-        dm_vec3_cross(abo, ab, direction);
+        dm_vec3_cross_cross(ab, ao, ab, direction);
     }
     else 
     {
-        //simplex->size = 1;
-        dm_memcpy(direction, ao, sizeof(ao));
+        simplex->size = 1;
+        DM_VEC3_COPY(direction, ao);
     }
     
     return false;
@@ -595,81 +585,68 @@ TODO: I think some of these checks are not needed
 bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
 {
     float a[3], b[3], c[3];
-    float ab[3], ac[3], ao[3], abc[3], d[3];
+    float ab[3], ac[3], ao[3], abc[3];
+    float dum[3];
     
-    dm_memcpy(a, simplex->points[2], sizeof(a));
-    dm_memcpy(b, simplex->points[1], sizeof(b));
-    dm_memcpy(c, simplex->points[0], sizeof(c));
+    DM_VEC3_COPY(a, simplex->points[0]);
+    DM_VEC3_COPY(b, simplex->points[1]);
+    DM_VEC3_COPY(c, simplex->points[2]);
     
     dm_vec3_sub_vec3(b, a, ab);
     dm_vec3_sub_vec3(c, a, ac);
     dm_vec3_negate(a, ao);
+    
     dm_vec3_cross(ab, ac, abc);
     
     // check beyond AC plane (region 1 and 5)
-    dm_vec3_cross(abc, ac, d);
-    if(dm_vec3_same_direction(d, ao))
+    dm_vec3_cross(abc, ac, dum);
+    if(dm_vec3_same_direction(dum, ao))
     {
         // are we actually in region 1?
         if(dm_vec3_same_direction(ac, ao))
         {
-            float points[4][3];
-            dm_memcpy(points[0], a, sizeof(a));
-            dm_memcpy(points[1], c, sizeof(c));
-            dm_simplex_reconstruct(points, 2, simplex);
+            DM_VEC3_COPY(simplex->points[1], c);
+            simplex->size = 2;
             
-            dm_vec3_cross(ac, ao, d);
-            dm_vec3_cross(d, ac, direction);
+            dm_vec3_cross_cross(ac, ao, ac, direction);
         }
         else 
         {
             // are we in region 4?
             if(dm_vec3_same_direction(ab, ao))
             {
-                float points[4][3];
-                dm_memcpy(points[0], a, sizeof(a));
-                dm_memcpy(points[1], b, sizeof(b));
-                dm_simplex_reconstruct(points, 2, simplex);
+                simplex->size = 2;
                 
-                dm_vec3_cross(ab, ao, d);
-                dm_vec3_cross(d, ab, direction);
+                dm_vec3_cross_cross(ab, ao, ab, direction);
             }
             // must be in region 5
             else
             {
-                float points[4][3];
-                dm_memcpy(points[0], a, sizeof(a));
-                dm_simplex_reconstruct(points, 1, simplex);
+                simplex->size = 1;
                 
-                dm_memcpy(direction, ao, sizeof(ao));
+                DM_VEC3_COPY(direction, ao);
             }
         }
     }
     else
     {
         // check beyond AB plane (region 4 and 5)
-        dm_vec3_cross(ab, abc, d);
-        if(dm_vec3_same_direction(d, ao))
+        dm_vec3_cross(ab, abc, dum);
+        if(dm_vec3_same_direction(dum, ao))
         {
             // are we in region 4?
             if(dm_vec3_same_direction(ab, ao))
             {
-                float points[4][3];
-                dm_memcpy(points[0], a, sizeof(a));
-                dm_memcpy(points[1], b, sizeof(b));
-                dm_simplex_reconstruct(points, 2, simplex);
+                simplex->size = 2;
                 
-                dm_vec3_cross(ab, ao, d);
-                dm_vec3_cross(d, ab, direction);
+                dm_vec3_cross_cross(ab, ao, ab, direction);
             }
             // must be in region 5
             else
             {
-                float points[4][3];
-                dm_memcpy(points[0], a, sizeof(a));
-                dm_simplex_reconstruct(points, 2, simplex);
+                simplex->size = 1;
                 
-                dm_memcpy(direction, ao, sizeof(ao));
+                DM_VEC3_COPY(direction, ao);
             }
         }
         // origin must be in triangle
@@ -678,17 +655,15 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
             // are we above plane? (region 2)
             if(dm_vec3_same_direction(abc, ao)) 
             {
-                float points[4][3];
-                dm_memcpy(points[0], b, sizeof(b));
-                dm_memcpy(points[1], c, sizeof(c));
-                dm_memcpy(points[2], a, sizeof(a));
-                dm_simplex_reconstruct(points, 3, simplex);
-                
                 dm_memcpy(direction, abc, sizeof(abc));
             }
             // below plane (region 3)
             else
             {
+                DM_VEC3_COPY(simplex->points[1], c);
+                DM_VEC3_COPY(simplex->points[2], b);
+                simplex->size = 3;
+                
                 dm_vec3_negate(abc, direction);
             }
         }
@@ -702,57 +677,49 @@ bool dm_simplex_tetrahedron(float direction[3], dm_simplex* simplex)
 {
     float a[3], b[3], c[3], d[3];
     float ab[3], ac[3], ad[3], ao[3];
-    float acb[3], adc[3], abd[3];
+    float abc[3], acd[3], adb[3];
     
-    dm_memcpy(a, simplex->points[3], sizeof(a));
-    dm_memcpy(b, simplex->points[2], sizeof(b));
-    dm_memcpy(c, simplex->points[1], sizeof(c));
-    dm_memcpy(d, simplex->points[0], sizeof(d));
+    DM_VEC3_COPY(a, simplex->points[0]);
+    DM_VEC3_COPY(b, simplex->points[1]);
+    DM_VEC3_COPY(c, simplex->points[2]);
+    DM_VEC3_COPY(d, simplex->points[3]);
     
     dm_vec3_sub_vec3(b, a, ab);
     dm_vec3_sub_vec3(c, a, ac);
     dm_vec3_sub_vec3(d, a, ad);
     dm_vec3_negate(a, ao);
     
-    dm_vec3_cross(ac, ab, acb);
-    dm_vec3_cross(ad, ac, adc);
-    dm_vec3_cross(ab, ad, abd);
+    dm_vec3_cross(ab, ac, abc);
+    dm_vec3_cross(ac, ad, acd);
+    dm_vec3_cross(ad, ab, adb);
     
-    if(dm_vec3_same_direction(acb, ao))
+    if(dm_vec3_same_direction(abc, ao))
     {
-        float points[4][3];
-        dm_memcpy(points[0], a, sizeof(a));
-        dm_memcpy(points[1], c, sizeof(c));
-        dm_memcpy(points[2], b, sizeof(b));
-        dm_simplex_reconstruct(points, 3, simplex);
+        DM_VEC3_COPY(direction, abc);
         
-        dm_memcpy(direction, acb, sizeof(acb));
-        
-        return dm_simplex_triangle(direction, simplex);
+        return false;
     }
-    else if(dm_vec3_same_direction(adc, ao))
+    else if(dm_vec3_same_direction(acd, ao))
     {
-        float points[4][3];
-        dm_memcpy(points[0], a, sizeof(a));
-        dm_memcpy(points[1], d, sizeof(d));
-        dm_memcpy(points[2], c, sizeof(c));
-        dm_simplex_reconstruct(points, 3, simplex);
+        DM_VEC3_COPY(simplex->points[0], a);
+        DM_VEC3_COPY(simplex->points[1], c);
+        DM_VEC3_COPY(simplex->points[2], d);
+        simplex->size = 3;
         
-        dm_memcpy(direction, adc, sizeof(adc));
+        DM_VEC3_COPY(direction, acd);
         
-        return dm_simplex_triangle(direction, simplex);
+        return false;
     }
-    else if(dm_vec3_same_direction(abd, ao))
+    else if(dm_vec3_same_direction(adb, ao))
     {
-        float points[4][3];
-        dm_memcpy(points[0], a, sizeof(a));
-        dm_memcpy(points[1], b, sizeof(b));
-        dm_memcpy(points[2], d, sizeof(d));
-        dm_simplex_reconstruct(points, 3, simplex);
+        DM_VEC3_COPY(simplex->points[0], a);
+        DM_VEC3_COPY(simplex->points[1], d);
+        DM_VEC3_COPY(simplex->points[2], b);
+        simplex->size = 3;
         
-        dm_memcpy(direction, abd, sizeof(abd));
+        DM_VEC3_COPY(direction, adb);
         
-        return dm_simplex_triangle(direction, simplex);
+        return false;
     }
     
     return true;
@@ -778,7 +745,11 @@ bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float c
     // initial guess should not matter, but algorithm WILL FAIL if initial guess is
     // perfectly aligned with global unit axes
     
-    float direction[3] = { 0,1,0 };
+    float direction[3] = { 0 };
+    float sep[3];
+    dm_vec3_sub_vec3(pos[0], pos[1], sep);
+    if(sep[1]==0 && sep[2]==0) direction[1] = 1;
+    else direction[0] = 1;
     
     // start simplex
     float support[3];
@@ -810,53 +781,7 @@ void dm_triangle_normal(float triangle[3][3], float normal[3])
     dm_vec3_sub_vec3(triangle[1], triangle[0], ab);
     dm_vec3_sub_vec3(triangle[2], triangle[0], ac);
     dm_vec3_cross(ab, ac, normal);
-    
-    // having some really bad problems with constructing valid triangles
-    if(normal[0]!=0 && normal[1]!=0 && normal[2]!=0) { dm_vec3_norm(normal, normal); return; }
-    
-#if 1
-    // 'triangle' is a single point
-    if(ab[0]==ac[0] && ab[1]==ac[1] && ab[2]==ac[2])
-    {
-        float d[3] = { 1,0,0 };
-        dm_memcpy(normal, d, sizeof(d));
-    }
-    // 'triangle' is really a line segment
-    else if(dm_vec3_equals_vec3(triangle[1], triangle[2]))
-    {
-        float d[3] = { 1,0,0 };
-        dm_vec3_add_vec3(ab, d, d);
-        
-        dm_vec3_cross(ab, d, normal);
-        assert(normal[0]!=0 || normal[1]!=0 || normal[2]!=0);
-    }
-    // ab and ac are parallel, but in opposite directions
-    else
-    {
-        float bc[3];
-        dm_vec3_sub_vec3(triangle[2], triangle[1], bc);
-        
-        float d[3] = { 0 };
-        if(bc[0] || bc[2]) d[1] = 1;
-        else               d[0] = 1;
-        
-        dm_vec3_add_vec3(bc, d, d);
-        
-        dm_vec3_cross(bc, d, normal);
-        assert(normal[0]!=0 || normal[1]!=0 || normal[2]!=0);
-    }
-#endif
-    
     dm_vec3_norm(normal, normal);
-}
-
-bool dm_physics_bad_triangle(float triangle[3][3])
-{
-    bool check1 = dm_vec3_equals_vec3(triangle[0], triangle[1]);
-    bool check2 = dm_vec3_equals_vec3(triangle[0], triangle[2]);
-    bool check3 = dm_vec3_equals_vec3(triangle[1], triangle[2]);
-    
-    return check1 || check2 || check3;
 }
 
 /**********************************************************
@@ -870,35 +795,35 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
     float normals[DM_PHYSICS_EPA_MAX_FACES][3]  = { 0 };
     
     float a[3], b[3], c[3], d[3];
-    float dum1[3];
+    float dum1[3], dum2[3];
     
-    dm_memcpy(a, simplex->points[3], sizeof(a));
-    dm_memcpy(b, simplex->points[2], sizeof(b));
-    dm_memcpy(c, simplex->points[1], sizeof(c));
-    dm_memcpy(d, simplex->points[0], sizeof(d));
+    DM_VEC3_COPY(a, simplex->points[0]);
+    DM_VEC3_COPY(b, simplex->points[1]);
+    DM_VEC3_COPY(c, simplex->points[2]);
+    DM_VEC3_COPY(d, simplex->points[3]);
     
     // face a,b,c
-    dm_memcpy(faces[0][0], a, sizeof(a));
-    dm_memcpy(faces[0][1], c, sizeof(c));
-    dm_memcpy(faces[0][2], b, sizeof(b));
+    DM_VEC3_COPY(faces[0][0], a);
+    DM_VEC3_COPY(faces[0][1], b);
+    DM_VEC3_COPY(faces[0][2], c);
     dm_triangle_normal(faces[0], normals[0]);
     
     // face a,c,d
-    dm_memcpy(faces[1][0], a, sizeof(a));
-    dm_memcpy(faces[1][1], d, sizeof(d));
-    dm_memcpy(faces[1][2], c, sizeof(c));
+    DM_VEC3_COPY(faces[1][0], a);
+    DM_VEC3_COPY(faces[1][1], c);
+    DM_VEC3_COPY(faces[1][2], d);
     dm_triangle_normal(faces[1], normals[1]);
     
     // face a,d,b
-    dm_memcpy(faces[2][0], a, sizeof(a));
-    dm_memcpy(faces[2][1], b, sizeof(b));
-    dm_memcpy(faces[2][2], d, sizeof(d));
+    DM_VEC3_COPY(faces[2][0], a);
+    DM_VEC3_COPY(faces[2][1], d);
+    DM_VEC3_COPY(faces[2][2], b);
     dm_triangle_normal(faces[2], normals[2]);
     
     // face b,d,c
-    dm_memcpy(faces[3][0], b, sizeof(b));
-    dm_memcpy(faces[3][1], c, sizeof(c));
-    dm_memcpy(faces[3][2], d, sizeof(b));
+    DM_VEC3_COPY(faces[3][0], b);
+    DM_VEC3_COPY(faces[3][1], d);
+    DM_VEC3_COPY(faces[3][2], c);
     dm_triangle_normal(faces[3], normals[3]);
     
     /////////////////////////
@@ -908,18 +833,23 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
     
     float    min_distance, distance;
     
-    float    support[3]                                      = { 0 };
-    float    supports[2][3]                                  = { 0 };
-    float    loose_edges[DM_PHYSICS_EPA_MAX_FACES * 3][2][3] = { 0 };
+    float    support[3]                                  = { 0 };
+    float    supports[2][3]                              = { 0 };
+    float    loose_edges[DM_PHYSICS_EPA_MAX_FACES][2][3] = { 0 };
+    float    current_edge[2][3]                          = { 0 };
+    
+    bool     remove = false;
     //////////////////////////
     for(uint32_t iter=0; iter<DM_PHYSICS_EPA_MAX_FACES; iter++)
     {
+        assert(num_faces);
+        
         // get closest face to origin
         min_distance = FLT_MAX;
         closest_face = 0;
         for(uint32_t i=0; i<num_faces; i++)
         {
-            distance = dm_fabs(dm_vec3_dot(faces[i][0], normals[i]));
+            distance = dm_vec3_dot(faces[i][0], normals[i]);
             if(distance >= min_distance) continue;
             
             min_distance = distance;
@@ -935,8 +865,8 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
             float depth = dm_vec3_dot(support, normals[closest_face]);
             dm_vec3_scale(normals[closest_face], depth, penetration);
             
-            dm_memcpy(polytope,         faces,   sizeof(float) * 3 * 3 * num_faces);
-            dm_memcpy(polytope_normals, normals, sizeof(float) * 3 * num_faces);
+            dm_memcpy(polytope,         faces,   DM_VEC3_SIZE * num_faces * 3);
+            dm_memcpy(polytope_normals, normals, DM_VEC3_SIZE * num_faces);
             *polytope_count = num_faces;
             
             return;
@@ -946,74 +876,66 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
         num_loose = 0;
         for(uint32_t i=0; i<num_faces; i++)
         {
-            // is triangle visible?
             dm_vec3_sub_vec3(support, faces[i][0], dum1);
             if(!dm_vec3_same_direction(normals[i], dum1)) continue;
             
-            // get edges of triangle
-            float t[3][3];
-            dm_memcpy(t, faces[i], sizeof(t));
+            for(uint32_t j=0; j<3; j++)
+            {
+                DM_VEC3_COPY(current_edge[0], faces[i][j]);
+                DM_VEC3_COPY(current_edge[1], faces[i][(j+1)%3]);
+                bool found = false;
+                
+                for(uint32_t k=0; k<num_loose; k++)
+                {
+                    bool cond1 = dm_vec3_equals_vec3(loose_edges[k][1], current_edge[0]);
+                    bool cond2 = dm_vec3_equals_vec3(loose_edges[k][0], current_edge[1]);
+                    remove = cond1 && cond2;
+                    if(!remove) continue;
+                    
+                    DM_VEC3_COPY(loose_edges[k][0], loose_edges[num_loose-1][0]);
+                    DM_VEC3_COPY(loose_edges[k][1], loose_edges[num_loose-1][1]);
+                    num_loose--;
+                    found = true;
+                    k = num_loose;
+                }
+                
+                if(found) continue;
+                if(num_loose >= DM_PHYSICS_EPA_MAX_FACES) break;
+                
+                DM_VEC3_COPY(loose_edges[num_loose][0], current_edge[0]);
+                DM_VEC3_COPY(loose_edges[num_loose][1], current_edge[1]);
+                num_loose++;
+            }
             
-            float ab[2][3], bc[2][3], ca[2][3];
-            dm_memcpy(ab[0], t[0], sizeof(t[0]));
-            dm_memcpy(ab[1], t[1], sizeof(t[1]));
-            dm_memcpy(bc[0], t[1], sizeof(t[1]));
-            dm_memcpy(bc[1], t[2], sizeof(t[2]));
-            dm_memcpy(ca[0], t[2], sizeof(t[2]));
-            dm_memcpy(ca[1], t[0], sizeof(t[0]));
-            
-            // triangle is visible from new point, remove it
-            dm_memcpy(faces[i],   faces[num_faces-1],   sizeof(faces[i]));
-            dm_memcpy(normals[i], normals[num_faces-1], sizeof(normals[i]));
+            // triangle is visible, remove it
+            DM_VEC3_COPY(faces[i][0], faces[num_faces-1][0]);
+            DM_VEC3_COPY(faces[i][1], faces[num_faces-1][1]);
+            DM_VEC3_COPY(faces[i][2], faces[num_faces-1][2]);
+            DM_VEC3_COPY(normals[i],  normals[num_faces-1]);
             num_faces--;
             i--;
-            
-            bool ab_dup = false;
-            bool bc_dup = false;
-            bool ca_dup = false;
-            
-            // loop over all loose edges
-            for(uint32_t j=0; j<num_loose; j++)
-            {
-                bool remove = false;
-                
-                if(dm_vec3_equals_vec3(loose_edges[j][0], ab[1]) && dm_vec3_equals_vec3(loose_edges[j][1], ab[0]))
-                {
-                    ab_dup = true;
-                    remove = true;
-                }
-                if(dm_vec3_equals_vec3(loose_edges[j][0], bc[1]) && dm_vec3_equals_vec3(loose_edges[j][1], bc[0]))
-                {
-                    bc_dup = true;
-                    remove = true;
-                }
-                if(dm_vec3_equals_vec3(loose_edges[j][0], ca[1]) && dm_vec3_equals_vec3(loose_edges[j][1], ca[0]))
-                {
-                    ca_dup = true;
-                    remove = true;
-                }
-                
-                if(!remove) continue;
-                
-                // already have edge, remove it
-                dm_memcpy(loose_edges[j], loose_edges[num_loose-1], sizeof(loose_edges[j]));
-                num_loose--;
-                j--;
-            }
-
-            if(!ab_dup) dm_memcpy(loose_edges[num_loose++], ab, sizeof(ab));
-            if(!bc_dup) dm_memcpy(loose_edges[num_loose++], bc, sizeof(bc));
-            if(!ca_dup) dm_memcpy(loose_edges[num_loose++], ca, sizeof(ca));
         }
         
-        // reconstruct polytope
         for(uint32_t i=0; i<num_loose; i++)
         {
-            if(num_faces >= DM_PHYSICS_EPA_MAX_FACES) break;
+            DM_VEC3_COPY(faces[num_faces][0], loose_edges[i][0]);
+            DM_VEC3_COPY(faces[num_faces][1], loose_edges[i][1]);
+            DM_VEC3_COPY(faces[num_faces][2], support);
             
-            dm_memcpy(faces[num_faces],    loose_edges[i], sizeof(loose_edges[i]));
-            dm_memcpy(faces[num_faces][2], support,        sizeof(support));
-            dm_triangle_normal(faces[num_faces], normals[num_faces]);
+            dm_vec3_sub_vec3(faces[num_faces][0], faces[num_faces][1], dum1);
+            dm_vec3_sub_vec3(faces[num_faces][0], faces[num_faces][2], dum2);
+            dm_vec3_cross(dum1, dum2, normals[num_faces]);
+            dm_vec3_norm(normals[num_faces], normals[num_faces]);
+            
+            static const float bias = 0.00001f;
+            if(dm_vec3_dot(faces[num_faces][0], normals[num_faces])+bias < 0)
+            {
+                float temp[3];
+                DM_VEC3_COPY(temp, faces[num_faces][0]);
+                DM_VEC3_COPY(faces[num_faces][0], faces[num_faces][1]);
+                DM_VEC3_COPY(faces[num_faces][1], temp);
+                dm_vec3_negate(normals[num_faces], normals[num_faces]);
+            }
             
             num_faces++;
         }
@@ -1023,7 +945,7 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
     float depth = dm_vec3_dot(faces[closest_face][0], normals[closest_face]);
     dm_vec3_scale(normals[closest_face], depth, penetration);
     
-    dm_memcpy(polytope,         faces,   sizeof(float) * 3 * num_faces);
+    dm_memcpy(polytope,         faces,   sizeof(float) * 3 * 3 * num_faces);
     dm_memcpy(polytope_normals, normals, sizeof(float) * 3 * num_faces);
     *polytope_count = num_faces;
 }
@@ -1096,14 +1018,14 @@ void dm_support_face_box_planes(dm_plane planes[5], float points[10][3], float f
     
     for(uint32_t i=0; i<4; i++)
     {
-        dm_memcpy(ref_pt, points[i], sizeof(ref_pt));
+        DM_VEC3_COPY(ref_pt, points[i]);
         
         dm_vec3_sub_vec3(points[ids[i]], ref_pt, dum1);
         dm_vec3_cross(dum1, neg_normal, dum2);
         dm_vec3_norm(dum2, normal);
         distance = -dm_vec3_dot(normal, ref_pt);
         
-        dm_memcpy(planes[i+1].normal, normal, sizeof(normal));
+        DM_VEC3_COPY(planes[i+1].normal, normal);
         planes[i+1].distance=distance;
     }
 }
@@ -1123,7 +1045,7 @@ void dm_support_face_box(const float pos[3], const float rot[4], const float cen
     };
     
     float inv_rot[4];
-    dm_memcpy(inv_rot, rot, sizeof(inv_rot));
+    DM_VEC4_COPY(inv_rot, rot);
     dm_quat_inverse(inv_rot, inv_rot);
     dm_vec3_rotate(direction, inv_rot, direction);
     
@@ -1140,7 +1062,7 @@ void dm_support_face_box(const float pos[3], const float rot[4], const float cen
     for(uint32_t i=0; i<3; i++)
     {
         float proximity = dm_vec3_dot(direction, axes[i]);
-        float s = DM_SIGN(proximity);
+        float s = DM_SIGNF(proximity);
         proximity *= s;
         if(proximity <= best_proximity) continue;
         
@@ -1217,7 +1139,7 @@ void dm_support_face_box(const float pos[3], const float rot[4], const float cen
     dm_vec3_rotate(normal, rot, normal);
     dm_vec3_norm(normal, normal);
     
-    dm_memcpy(planes[0].normal, normal, sizeof(planes[0].normal));
+    DM_VEC3_COPY(planes[0].normal, normal);
     planes[0].distance = -dm_vec3_dot(planes[0].normal, points[0]);
     
     dm_support_face_box_planes(planes, points, normal);
@@ -1241,7 +1163,7 @@ void dm_physics_plane_edge_intersect(dm_plane plane, float start[3], float end[3
     
     if(dm_fabs(ab_d) <= DM_PHYSICS_TEST_EPSILON)
     {
-        dm_memcpy(out, start, sizeof(float) * 3);
+        DM_VEC3_COPY(out, start);
     }
     else
     {
@@ -1253,7 +1175,7 @@ void dm_physics_plane_edge_intersect(dm_plane plane, float start[3], float end[3
         dm_vec3_scale(ab, fac, ab);
         dm_vec3_add_vec3(start, ab, ab);
         
-        dm_memcpy(out, ab, sizeof(ab));
+        DM_VEC3_COPY(out, ab);
     }
 }
 
@@ -1263,7 +1185,7 @@ void dm_physics_sutherland_hodgman(float input_face[10][3], uint32_t num_input, 
     uint32_t input_count = 0;
     
     float    output[10][3] = { 0 };
-    dm_memcpy(output, input_face, sizeof(float) * 3 * num_input);
+    dm_memcpy(output, input_face, DM_VEC3_SIZE * num_input);
     uint32_t output_count = num_input;
     
     float start[3], end[3];
@@ -1279,34 +1201,34 @@ void dm_physics_sutherland_hodgman(float input_face[10][3], uint32_t num_input, 
         output_count = 0;
         
         const dm_plane plane = clip_planes[i];
-        dm_memcpy(start, input[input_count-1], sizeof(start));
+        DM_VEC3_COPY(start, input[input_count-1]);
         
         for(uint32_t j=0; j<input_count; j++)
         {
-            dm_memcpy(end, input[j], sizeof(end));
+            DM_VEC3_COPY(end, input[j]);
             
             bool start_in_plane = dm_physics_point_in_plane(start, plane);
             bool end_in_plane   = dm_physics_point_in_plane(end, plane);
             
             if(start_in_plane && end_in_plane)
             {
-                dm_memcpy(output[output_count++], end, sizeof(end));
+                DM_VEC3_COPY(output[output_count++], end);
             }
             else if(start_in_plane && !end_in_plane)
             {
                 float new_p[3];
                 dm_physics_plane_edge_intersect(plane, start, end, new_p);
-                dm_memcpy(output[output_count++], new_p, sizeof(new_p));
+                DM_VEC3_COPY(output[output_count++], new_p);
             }
             else if(!start_in_plane && end_in_plane)
             {
                 float new_p[3];
                 dm_physics_plane_edge_intersect(plane, end, start, new_p);
-                dm_memcpy(output[output_count++], new_p, sizeof(new_p));
-                dm_memcpy(output[output_count++], end,   sizeof(end));
+                DM_VEC3_COPY(output[output_count++], new_p);
+                DM_VEC3_COPY(output[output_count++], end);
             }
             
-            dm_memcpy(start, end, sizeof(end));
+            DM_VEC3_COPY(start, end);
         }
     }
     
@@ -1324,7 +1246,7 @@ void dm_physics_init_constraint(float vec[3], float r_a[3], float r_b[3], float 
     dm_vec3_negate(vec, constraint->jacobian[0]);
     dm_vec3_cross(r_a, vec, constraint->jacobian[1]);
     dm_vec3_negate(constraint->jacobian[1], constraint->jacobian[1]);
-    dm_memcpy(constraint->jacobian[2], vec, sizeof(float) * 3);
+    DM_VEC3_COPY(constraint->jacobian[2], vec);
     dm_vec3_cross(r_b, vec, constraint->jacobian[3]);
     constraint->b = b;
     constraint->impulse_min = impulse_min;
@@ -1333,66 +1255,51 @@ void dm_physics_init_constraint(float vec[3], float r_a[3], float r_b[3], float 
 
 void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], const float normal[3], const float depth, const float pos[2][3], const float rot[2][4], const float vel[2][3], const float w[2][3], dm_contact_manifold* manifold, dm_context* context)
 {
-    dm_memcpy(manifold->orientation_a, rot[0], sizeof(float) * 4);
-    dm_memcpy(manifold->orientation_b, rot[1], sizeof(float) * 4);
+    DM_QUAT_COPY(manifold->orientation_a, rot[0]);
+    DM_QUAT_COPY(manifold->orientation_b, rot[1]);
     
     float dum1[3], dum2[3];
-    float on_a_d[3], on_b_d[3];
-    float w_a[3], w_b[3];
-    float vel_a[3], vel_b[3];
     
-    dm_memcpy(on_a_d, on_a, sizeof(on_a_d));
-    dm_memcpy(on_b_d, on_b, sizeof(on_b_d));
-    
-    dm_memcpy(vel_a, vel[0], sizeof(vel_a));
-    dm_memcpy(vel_b, vel[1], sizeof(vel_b));
-    
-    dm_memcpy(w_a, w[0], sizeof(w_a));
-    dm_memcpy(w_b, w[1], sizeof(w_b));
-    
-    dm_memcpy(manifold->normal, normal, sizeof(float) * 3);
+    dm_memcpy(manifold->normal, normal, DM_VEC3_SIZE);
     
     // get r vectors
     float r_a[3], r_b[3];
-    dm_memcpy(dum1, pos[0], sizeof(dum1));
-    dm_memcpy(dum2, pos[1], sizeof(dum2));
     
-    dm_vec3_sub_vec3(on_a_d, dum1, r_a);
-    dm_vec3_sub_vec3(on_b_d, dum2, r_b);
+    dm_vec3_sub_vec3(on_a, pos[0], r_a);
+    dm_vec3_sub_vec3(on_b, pos[1], r_b);
     
     // tangent vectors
     float v_a[3], v_b[3], rel_v[3];
     
-    dm_vec3_cross(w_a, r_a, dum1);
-    dm_vec3_add_vec3(vel_a, dum1, v_a);
+    dm_vec3_cross(w[0], r_a, dum1);
+    dm_vec3_add_vec3(vel[0], dum1, v_a);
     
-    dm_vec3_cross(w_b, r_b, dum1);
-    dm_vec3_add_vec3(vel_b, dum1, v_b);
+    dm_vec3_cross(w[1], r_b, dum1);
+    dm_vec3_add_vec3(vel[1], dum1, v_b);
     
     dm_vec3_sub_vec3(v_b, v_a, rel_v);
     float rel_vn = dm_vec3_dot(rel_v, manifold->normal);
-    
     dm_vec3_scale(manifold->normal, rel_vn, dum1);
     dm_vec3_sub_vec3(rel_v, dum1, manifold->tangent_a);
+    
+    if(dm_vec3_dot(manifold->tangent_a, manifold->tangent_a) < 0.001f)
+    {
+        float x[3] = { 1,0,0 };
+        dm_vec3_cross(manifold->normal, x, manifold->tangent_a);
+        if(dm_vec3_dot(manifold->tangent_a, manifold->tangent_a) < 0.001f)
+        {
+            float z[3] = { 0,0,1 };
+            dm_vec3_cross(manifold->normal, z, manifold->tangent_a);
+            if(dm_vec3_dot(manifold->tangent_a, manifold->tangent_a) < 0.001f)
+            {
+                float y[3] = { 0,1,0 };
+                dm_vec3_cross(manifold->normal, y, manifold->tangent_a);
+            }
+        }
+    }
+    
     dm_vec3_norm(manifold->tangent_a, manifold->tangent_a);
     dm_vec3_cross(manifold->normal, manifold->tangent_a, manifold->tangent_b);
-    
-#if 1 
-    float s = 0.1f;
-    
-    debug_render_bilboard(on_a, s,s, (float[]){ 1,0,0,0.75f }, context);
-    debug_render_line(pos[0], on_a, (float[]){ 1,0,0,0.75f }, context);
-    
-    float d[3];
-    dm_vec3_add_vec3(on_a, manifold->normal, d);
-    debug_render_arrow(on_a, d, (float[]){ 1,0,0,1 }, context);
-    
-    dm_vec3_add_vec3(on_a, manifold->tangent_a, d);
-    debug_render_arrow(on_a, d, (float[]){ 1,0,0,1 }, context);
-    
-    dm_vec3_add_vec3(on_a, manifold->tangent_b, d);
-    debug_render_arrow(on_a, d, (float[]){ 1,0,0,1 }, context);
-#endif
     
     float b = 0.0f;
     
@@ -1401,28 +1308,40 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
         float neg_norm[3];
         dm_vec3_negate(manifold->normal, neg_norm);
         
-        static const float baumgarte_coef = 0.9f;
-        //static const float baumgarte_slop = 0.005f;
-        dm_vec3_sub_vec3(on_a_d, on_b_d, dum1);
-        float d = dm_vec3_dot(dum1, neg_norm);
-        //d = DM_MAX(d - baumgarte_slop, 0.0f);
+#define DM_PHYSICS_BAUMGARTE_COEF 0.3f
+#define DM_PHYSICS_BAUMGARTE_SLOP 0.001f
+        //float d = DM_MIN(depth + DM_PHYSICS_BAUMGARTE_SLOP, 0.0f);
+        float ba[3];
+        dm_vec3_sub_vec3(on_b, on_a, ba);
+        float d = dm_vec3_dot(ba, neg_norm);
         
-        b -= (baumgarte_coef * DM_PHYSICS_FIXED_DT_INV) * d;
+        b -= (DM_PHYSICS_BAUMGARTE_COEF * DM_PHYSICS_FIXED_DT_INV) * d;
     }
     
     // restitution
     {
-        static const float rest_coef = 0.99f;
-        //static const float rest_slop = 0.5f;
-        //float d = DM_MAX(rel_vn - rest_slop, 0.0f);
+#define DM_PHYSICS_REST_COEF 0.5f
+#define DM_PHYSICS_REST_SLOP 0.5f
         
-        b += rest_coef * rel_vn;
+        float d1[3], d2[3];
+        dm_vec3_cross(r_a, w[0], d1);
+        dm_vec3_add_vec3(vel[0], d1, d1);
+        dm_vec3_cross(r_b, w[1], d2);
+        dm_vec3_add_vec3(vel[1], d2, d2);
+        dm_vec3_sub_vec3(d2, d1, d1);
+        
+        float elasticity_term = DM_PHYSICS_REST_COEF * dm_vec3_dot(manifold->normal, d1);
+        
+        float d = DM_MIN(elasticity_term + DM_PHYSICS_REST_SLOP, 0.0f);
+        
+        //b += DM_PHYSICS_REST_COEF * d;
+        b += (DM_PHYSICS_REST_COEF * rel_vn); 
     }
     
     // point position data
     dm_contact_point p = { 0 };
-    dm_memcpy(p.global_pos[0], on_a_d, sizeof(on_a_d));
-    dm_memcpy(p.global_pos[1], on_b_d, sizeof(on_b_d));
+    DM_VEC3_COPY(p.global_pos[0], on_a);
+    DM_VEC3_COPY(p.global_pos[1], on_b);
     dm_quat_inverse(manifold->orientation_a, dum1);
     dm_vec3_rotate(r_a, dum1, p.local_pos[0]);
     dm_quat_inverse(manifold->orientation_b, dum1);
@@ -1430,7 +1349,7 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     p.penetration = depth;
     
     // normal constraint
-    dm_physics_init_constraint(manifold->normal, r_a, r_b, b, 0, FLT_MAX, &p.normal);
+    dm_physics_init_constraint(manifold->normal,    r_a, r_b, b, 0, FLT_MAX, &p.normal);
     
     // friction a constraint
     dm_physics_init_constraint(manifold->tangent_a, r_a, r_b, 0, -FLT_MAX, FLT_MAX, &p.friction_a);
@@ -1508,7 +1427,7 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
     
     dm_physics_epa(pos, rots, cens, internals, shapes, penetration, polytope, polytope_normals, &num_faces, simplex);
     
-    dm_physics_draw_polytope(polytope, polytope_normals, num_faces, penetration, context);
+    //dm_physics_draw_polytope(polytope, polytope_normals, num_faces, penetration, context);
     
     if(dm_vec3_mag(penetration)==0) return;
     
@@ -1535,63 +1454,37 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
     dm_support_face_entity(pos[1], rots[1], cens[1], internals[1], shapes[1], neg_pen, points_b, &num_pts_b, planes_b, &num_planes_b, normal_b);
     
 #if 0
+    float dum[3];
     for(uint32_t i=0; i<num_pts_a; i++)
     {
-        debug_render_bilboard(points_a[i], 0.15f,0.15f, (float[]){ 1,1,0,1 }, context);
+        debug_render_bilboard(points_a[i], 0.15f,0.15f, (float[]){ 1,0,0,1 }, context);
     }
     for(uint32_t i=0; i<num_pts_b; i++)
     {
-        debug_render_bilboard(points_b[i], 0.15f,0.15f, (float[]){ 1,0,1,1 }, context);
+        debug_render_bilboard(points_b[i], 0.15f,0.15f, (float[]){ 1,1,0,1 }, context);
     }
 #endif
     
     bool flipped = dm_fabs(dm_vec3_dot(norm_pen, normal_a)) > dm_fabs(dm_vec3_dot(norm_pen, normal_b));
     
-    float     incident[10][3];
-    uint32_t  num_inc;
-    dm_plane  ref_plane;
-    dm_plane  adj_planes[5];
-    uint32_t  num_planes;
-    
+    dm_plane ref_plane;
     float    clipped_face[10][3];
     uint32_t num_clipped = 0;
     
-    if(flipped)
+    if(flipped) 
     {
-        dm_memcpy(ref_plane.normal, normal_b, sizeof(float) * 3);
-        ref_plane.distance = -dm_vec3_dot(normal_b, points_b[0]);
+        dm_memcpy(ref_plane.normal, normal_b, sizeof(normal_b));
+        ref_plane.distance = dm_vec3_dot(normal_b, points_b[0]);
         
-        dm_memcpy(adj_planes, planes_b, sizeof(dm_plane) * 5);
-        num_planes = num_planes_b;
-        
-        dm_memcpy(incident, points_a, sizeof(float) * 10 * 3);
-        num_inc  = num_pts_a;
+        dm_physics_sutherland_hodgman(points_a, num_pts_a, planes_b, num_planes_b, clipped_face, &num_clipped);
     }
     else
     {
-        dm_memcpy(ref_plane.normal, normal_a, sizeof(float) * 3);
-        ref_plane.distance = -dm_vec3_dot(normal_a, points_a[0]);
+        dm_memcpy(ref_plane.normal, normal_a, sizeof(normal_a));
+        ref_plane.distance = dm_vec3_dot(normal_a, points_a[0]);
         
-        dm_memcpy(adj_planes, planes_a, sizeof(dm_plane) * 5);
-        num_planes = num_planes_a;
-        
-        dm_memcpy(incident, points_b, sizeof(float) * 10 * 3);
-        num_inc  = num_pts_b;
+        dm_physics_sutherland_hodgman(points_b, num_pts_b, planes_a, num_planes_a, clipped_face, &num_clipped);
     }
-    
-    dm_physics_sutherland_hodgman(incident, num_inc, adj_planes, num_planes, clipped_face, &num_clipped);
-    
-#if 0
-    for(uint32_t i=0; i<num_clipped; i++)
-    {
-        debug_render_bilboard(clipped_face[i], 0.15f,0.15f, (float[]){ 1,1,0,1 }, context);
-    }
-    
-    for(uint32_t i=0; i<num_inc; i++)
-    {
-        debug_render_bilboard(incident[i], 0.15f,0.15f, (float[]){ 0,1,0,1 }, context);
-    }
-#endif
     
     for(uint32_t i=0; i<num_clipped; i++)
     {
@@ -1603,17 +1496,16 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
         float contact_pen = -dm_fabs(dm_vec3_dot(point, ref_plane.normal) + ref_plane.distance);
         contact_pen = DM_MIN(contact_pen, pen_depth);
         
+        dm_vec3_scale(ref_plane.normal, contact_pen, dum);
         if(flipped)
         {
-            dm_vec3_scale(ref_plane.normal, contact_pen, dum);
-            dm_vec3_sub_vec3(point, dum, on_b);
-            dm_memcpy(on_a, point, sizeof(point));
+            dm_vec3_sub_vec3(point, dum, on_a);
+            dm_memcpy(on_b, point, sizeof(point));
         }
         else
         {
-            dm_vec3_scale(ref_plane.normal, contact_pen, dum);
-            dm_vec3_sub_vec3(point, dum, on_a);
-            dm_memcpy(on_b, point, sizeof(point));
+            dm_vec3_add_vec3(point, dum, on_b);
+            dm_memcpy(on_a, point, sizeof(point));
         }
         
         contact_pen = -(dm_fabs(contact_pen) + pen_depth) * 0.5f;
@@ -1674,8 +1566,8 @@ bool dm_physics_narrowphase(dm_ecs_system_manager* system, dm_physics_manager* m
     float              pos[2][3], rots[2][4], cens[2][3], internals[2][6], vels[2][3], ws[2][3];
     dm_collision_shape shapes[2];
     
-    uint32_t a_t_b_index, a_t_c_index, a_c_b_index, a_c_c_index, a_p_b_index, a_p_c_index;
-    uint32_t b_t_b_index, b_t_c_index, b_c_b_index, b_c_c_index, b_p_b_index, b_p_c_index;
+    uint32_t a_t_c_index, a_c_c_index, a_p_c_index;
+    uint32_t b_t_c_index, b_c_c_index, b_p_c_index;
     
     dm_component_transform_block* a_t_block, *b_t_block;
     dm_component_collision_block* a_c_block, *b_c_block;
@@ -1698,26 +1590,15 @@ bool dm_physics_narrowphase(dm_ecs_system_manager* system, dm_physics_manager* m
         entity_b = collision_pair.entity_b;
         
         // get all data
-        a_t_b_index = entity_a.block_indices[t_id];
+        
+        // entity a
         a_t_c_index = entity_a.component_indices[t_id];
-        a_c_b_index = entity_a.block_indices[c_id];
         a_c_c_index = entity_a.component_indices[c_id];
-        a_p_b_index = entity_a.block_indices[p_id];
         a_p_c_index = entity_a.component_indices[p_id];
         
-        b_t_b_index = entity_b.block_indices[t_id];
-        b_t_c_index = entity_b.component_indices[t_id];
-        b_c_b_index = entity_b.block_indices[c_id];
-        b_c_c_index = entity_b.component_indices[c_id];
-        b_p_b_index = entity_b.block_indices[p_id];
-        b_p_c_index = entity_b.component_indices[p_id];
-        
-        a_t_block = t_block + a_t_b_index;
-        a_c_block = c_block + a_c_b_index;
-        a_p_block = p_block + a_p_b_index;
-        b_t_block = t_block + b_t_b_index;
-        b_c_block = c_block + b_c_b_index;
-        b_p_block = p_block + b_p_b_index;
+        a_t_block = t_block + entity_a.block_indices[t_id];;
+        a_c_block = c_block + entity_a.block_indices[c_id];;
+        a_p_block = p_block + entity_a.block_indices[p_id];;
         
         pos[0][0]       = a_t_block->pos_x[a_t_c_index];
         pos[0][1]       = a_t_block->pos_y[a_t_c_index];
@@ -1742,6 +1623,15 @@ bool dm_physics_narrowphase(dm_ecs_system_manager* system, dm_physics_manager* m
         ws[0][0]        = a_p_block->w_x[a_p_c_index];
         ws[0][1]        = a_p_block->w_y[a_p_c_index];
         ws[0][2]        = a_p_block->w_z[a_p_c_index];
+        
+        // entity b
+        b_t_c_index = entity_b.component_indices[t_id];
+        b_c_c_index = entity_b.component_indices[c_id];
+        b_p_c_index = entity_b.component_indices[p_id];
+        
+        b_t_block = t_block + entity_b.block_indices[t_id];;
+        b_c_block = c_block + entity_b.block_indices[c_id];;
+        b_p_block = p_block + entity_b.block_indices[p_id];;
         
         pos[1][0]       = b_t_block->pos_x[b_t_c_index];
         pos[1][1]       = b_t_block->pos_y[b_t_c_index];
@@ -1773,12 +1663,26 @@ bool dm_physics_narrowphase(dm_ecs_system_manager* system, dm_physics_manager* m
         float supports[2][3];
         if(!dm_physics_gjk(pos, rots, cens, internals, shapes, supports, &simplex)) continue;
         
-#if 0
-        debug_render_bilboard(supports[0], 0.1f,0.1f, (float[]){ 1,0,0,0.75 }, context);
-        debug_render_bilboard(supports[1], 0.1f,0.1f, (float[]){ 1,1,0,0.75 }, context);
-#endif
-        
         assert(simplex.size==4);
+        
+#if 0 
+        debug_render_bilboard((float[]){0,0,0}, 0.1f,0.1f, (float[]){ 1,0,1,0.75 }, context);
+        
+        float color[4] = { 1,1,1,0.75f };
+        debug_render_bilboard(simplex.points[0], 0.1f,0.1f, color, context);
+        debug_render_bilboard(simplex.points[1], 0.1f,0.1f, color, context);
+        debug_render_bilboard(simplex.points[2], 0.1f,0.1f, color, context);
+        debug_render_bilboard(simplex.points[3], 0.1f,0.1f, color, context);
+        
+        debug_render_line(simplex.points[0], simplex.points[1], color, context);
+        debug_render_line(simplex.points[0], simplex.points[2], color, context);
+        debug_render_line(simplex.points[0], simplex.points[3], color, context);
+        
+        debug_render_line(simplex.points[1], simplex.points[2], color, context);
+        debug_render_line(simplex.points[1], simplex.points[3], color, context);
+        
+        debug_render_line(simplex.points[2], simplex.points[3], color, context);
+#endif
         
         manifold = &manager->manifolds[manager->num_manifolds++];
         *manifold = (dm_contact_manifold){ 0 };
@@ -1888,7 +1792,7 @@ void dm_physics_constraint_lambda(dm_contact_constraint* constraint, dm_contact_
     constraint->lambda += dm_vec3_dot(constraint->jacobian[2], vel_b);
     constraint->lambda += dm_vec3_dot(constraint->jacobian[3], w_b);
     constraint->lambda += constraint->b;
-    constraint->lambda *= effective_mass;
+    constraint->lambda *= -effective_mass;
 }
 
 void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_manifold* manifold)
@@ -1898,7 +1802,7 @@ void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_m
     constraint->impulse_sum = DM_CLAMP(constraint->impulse_sum, constraint->impulse_min, constraint->impulse_max);
     constraint->lambda = constraint->impulse_sum - old_sum;
     
-    float delta_v[4][3] = { 0 };
+    float delta_v[4][3]    = { 0 };
     float i_body_inv_a[M3] = { 0 };
     float i_body_inv_b[M3] = { 0 };
     float dum1[N3], dum2[N3];
@@ -1912,7 +1816,7 @@ void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_m
     i_body_inv_b[8] = manifold->contact_data[1].i_body_inv_22;
     
     dm_mat3_mul_vec3(i_body_inv_a, constraint->jacobian[1], dum1);
-    dm_mat3_mul_vec3(i_body_inv_b, constraint->jacobian[2], dum2);
+    dm_mat3_mul_vec3(i_body_inv_b, constraint->jacobian[3], dum2);
     
     dm_vec3_scale(constraint->jacobian[0], manifold->contact_data[0].inv_mass * constraint->lambda, delta_v[0]);
     dm_vec3_scale(dum1, constraint->lambda, delta_v[1]);
@@ -1946,7 +1850,7 @@ void dm_physics_apply_constraints(dm_contact_manifold* manifold)
         dm_contact_point* point = &manifold->points[p];
         
         // calculate constraint lambdas
-        dm_physics_constraint_lambda(&point->normal, manifold);
+        dm_physics_constraint_lambda(&point->normal,     manifold);
         dm_physics_constraint_lambda(&point->friction_a, manifold);
         dm_physics_constraint_lambda(&point->friction_b, manifold);
         
@@ -1968,9 +1872,12 @@ void dm_physics_apply_constraints(dm_contact_manifold* manifold)
 
 void dm_physics_solve_constraints(dm_physics_manager* manager)
 {
-    for(uint32_t m=0; m<manager->num_manifolds; m++)
+    for(uint32_t iter=0; iter<DM_PHYSICS_CONSTRAINT_ITER; iter++)
     {
-        dm_physics_apply_constraints(&manager->manifolds[m]);
+        for(uint32_t m=0; m<manager->num_manifolds; m++)
+        {
+            dm_physics_apply_constraints(&manager->manifolds[m]);
+        }
     }
 }
 
@@ -2278,7 +2185,7 @@ bool dm_physics_system_run(dm_ecs_system_timing timing, dm_ecs_id system_id, voi
         
         // collision resolution
         dm_timer_start(&t, context);
-        //dm_physics_solve_constraints(manager);
+        dm_physics_solve_constraints(manager);
         collision_time += dm_timer_elapsed_ms(&t, context);
         total_time += collision_time;
         
@@ -2351,10 +2258,6 @@ bool dm_physics_system_init(dm_ecs_id* physics_id, dm_ecs_id* collision_id, dm_c
     manager->min_y        = dm_alloc(sizeof(float) * manager->min_capacity);
     manager->min_z        = dm_alloc(sizeof(float) * manager->min_capacity);
     manager->min_count    = 0 ;
-    
-    ////
-    DM_LOG_FATAL("SOMETHING IS WRONG WITH EPA FUNCTION. IT IS 'WORKING' BUT NOT REALLY");
-    ////
     
     return true;
 }

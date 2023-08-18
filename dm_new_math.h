@@ -8,6 +8,22 @@
 #define M3 N3 * N3
 #define M4 N4 * N4
 
+#define DM_VEC2_SIZE sizeof(float) * N2
+#define DM_VEC3_SIZE sizeof(float) * N3
+#define DM_VEC4_SIZE sizeof(float) * N4
+#define DM_QUAT_SIZE DM_VEC4_SIZE
+#define DM_MAT2_SIZE sizeof(float) * N2
+#define DM_MAT3_SIZE sizeof(float) * M3
+#define DM_MAT4_SIZE sizeof(float) * M4
+
+#define DM_VEC2_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC2_SIZE)
+#define DM_VEC3_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC3_SIZE)
+#define DM_VEC4_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC4_SIZE)
+#define DM_QUAT_COPY(DEST, SRC) DM_VEC4_COPY(DEST, SRC)
+#define DM_MAT2_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT2_SIZE)
+#define DM_MAT3_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT3_SIZE)
+#define DM_MAT4_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT4_SIZE)
+
 DM_INLINE
 float dm_rad_to_deg(float radians)
 {
@@ -149,6 +165,12 @@ void dm_vec3_cross(const float left[N3], const float right[N3], float out[N3])
     out[2] = left[0] * right[1] - left[1] * right[0];
 }
 
+DM_INLINE dm_vec3_cross_cross(const float first[N3], const float second[N3], const float third[N3], float out[N3])
+{
+    dm_vec3_cross(first, second, out);
+    dm_vec3_cross(out,   third, out);
+}
+
 DM_INLINE
 void dm_vec3_scale(const float vec[N3], float s, float out[N3])
 {
@@ -209,6 +231,14 @@ DM_INLINE
 bool dm_vec3_equals_vec3(const float left[N3], const float right[N3])
 {
     return ((left[0]==right[0]) && (left[1]==right[1]) && (left[2]==right[2]));
+}
+
+DM_INLINE
+void dm_vec3_sign(const float vec[N3], float out[N3])
+{
+    out[0] = DM_SIGNF(vec[0]);
+    out[1] = DM_SIGNF(vec[1]);
+    out[2] = DM_SIGNF(vec[2]);
 }
 
 /****

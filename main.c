@@ -21,7 +21,7 @@ int main(int argc, char** argv)
 {
     error_code e = ERROR_CODE_SUCCESS;
     
-    dm_context* context = dm_init(100,100,1000,1000,"test","assets");
+    dm_context* context = dm_init(100,100,1280,720,"test","assets");
     
     if(!context) return ERROR_CODE_INIT_FAIL;
     

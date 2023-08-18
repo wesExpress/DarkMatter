@@ -102,7 +102,8 @@ MATH
 // math macros
 #define DM_MAX(X, Y) (X > Y ? X : Y)
 #define DM_MIN(X, Y) (X < Y ? X : Y)
-#define DM_SIGN(X) (X < 0.0f ? -1.0f : 1.0f)
+#define DM_SIGN(X) ((0 < X) - (X < 0))
+#define DM_SIGNF(X) (float)((0 < X) - (X < 0))
 #define DM_CLAMP(X, MIN, MAX) DM_MIN(DM_MAX(X, MIN), MAX)
 #define DM_BIT_SHIFT(X) (1 << X)
 
@@ -1140,11 +1141,7 @@ float dm_logf(float x);
 float dm_log2f(float x);
 bool  dm_isnan(float x);
 
-#if 0
-#include "dm_math.h"
-#else
 #include "dm_new_math.h"
-#endif
 
 // SIMD
 // TODO: no apple support yet

@@ -2,8 +2,8 @@
 #include "render_pass.h"
 #include "debug_render_pass.h"
 
-#define WORLD_SIZE_X 3
-#define WORLD_SIZE_Y 3
+#define WORLD_SIZE_X 30
+#define WORLD_SIZE_Y 30
 
 dm_entity create_entity(dm_context* context)
 {
@@ -42,6 +42,7 @@ dm_entity create_entity(dm_context* context)
         scale_z * 0.5f
     };
     dm_ecs_entity_add_kinematics(entity, 1, 0,0,0, 0,0, dim, context);
+    dm_ecs_entity_add_angular_velocity(entity, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
     
     return entity;
 }
@@ -177,22 +178,22 @@ bool app_init(dm_context* context)
     app_data->entity_count = 0;
     
     // entities
-#if 0
+#if 1
     for(uint32_t i=0; i<MAX_ENTITIES; i++)
     {
-        app_data->entities[i] = create_entity(context);
+        app_data->entities[app_data->entity_count++] = create_entity(context);
     }
 #else
     app_data->entities[app_data->entity_count++] = dm_ecs_create_entity(context);
-    dm_ecs_entity_add_transform(app_data->entities[0], 0,1,1, 1,1,1, 0,0,0,1, context);
+    dm_ecs_entity_add_transform(app_data->entities[0], 0,0,0, 1,1,1, 0,0,0,1, context);
     dm_ecs_entity_add_box_collider(app_data->entities[0], 0,0,0, 1,1,1, context);
     dm_ecs_entity_add_kinematics(app_data->entities[0], 1, 0,0,0, 0,0, (float[]){-0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f}, context);
     
     app_data->entities[app_data->entity_count++] = dm_ecs_create_entity(context);
-    dm_ecs_entity_add_transform(app_data->entities[1], 0.75f,1.1f,1.1f, 1,1,1, 0,0,0,1, context);
+    dm_ecs_entity_add_transform(app_data->entities[1], 0.9f,0,0, 1,1,1, 0,0,0,1, context);
     dm_ecs_entity_add_box_collider(app_data->entities[1], 0,0,0, 1,1,1, context);
-    dm_ecs_entity_add_kinematics(app_data->entities[1], 1, 0,0,0, 0,0, (float[]){-0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f}, context);
-    dm_ecs_entity_add_angular_velocity(app_data->entities[1], 0,0.1f,0, context);
+    dm_ecs_entity_add_kinematics(app_data->entities[1], 10, 0,0,0, 0,0, (float[]){-0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f}, context);
+    //dm_ecs_entity_add_angular_velocity(app_data->entities[1], 0,1,0, context);
 #endif
     
     const float cam_pos[] = { -5,0,-5 };

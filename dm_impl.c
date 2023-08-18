@@ -1521,6 +1521,8 @@ bool dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
             // early out if we don't have what this system needs
             if(!dm_ecs_entity_has_component_multiple(entity, manager->component_mask, context)) continue;
             
+            //if(manager->entity_count
+            
             entity_count    = manager->entity_count;
             component_count = manager->component_count;
             
@@ -1702,15 +1704,17 @@ void dm_ecs_entity_add_kinematics(dm_entity entity, float mass, float vel_x,floa
     physics_block->mass[index]     = mass;
     physics_block->inv_mass[index] = 1.0f / mass;
     
-    physics_block->movement_type[index] = DM_PHYSICS_MOVEMENT_KINEMATIC;
+    float i_body_00 = (dim_y + dim_z) * mass * DM_MATH_INV_12;
+    float i_body_11 = (dim_x + dim_z) * mass * DM_MATH_INV_12;
+    float i_body_22 = (dim_x + dim_y) * mass * DM_MATH_INV_12;
     
-    physics_block->i_body_00[index] = (dim_y + dim_z) * mass * DM_MATH_INV_12;
-    physics_block->i_body_11[index] = (dim_x + dim_z) * mass * DM_MATH_INV_12;
-    physics_block->i_body_22[index] = (dim_x + dim_y) * mass * DM_MATH_INV_12;
+    physics_block->i_body_00[index] = i_body_00;
+    physics_block->i_body_11[index] = i_body_11;
+    physics_block->i_body_22[index] = i_body_22;
     
-    physics_block->i_body_inv_00[index] = 1.0f / physics_block->i_body_00[index];
-    physics_block->i_body_inv_11[index] = 1.0f / physics_block->i_body_11[index];
-    physics_block->i_body_inv_22[index] = 1.0f / physics_block->i_body_22[index];
+    physics_block->i_body_inv_00[index] = 1.0f / i_body_00;
+    physics_block->i_body_inv_11[index] = 1.0f / i_body_11;
+    physics_block->i_body_inv_22[index] = 1.0f / i_body_22;
     
     physics_block->i_inv_00[index] = physics_block->i_body_inv_00[index];
     physics_block->i_inv_11[index] = physics_block->i_body_inv_11[index];
@@ -1721,6 +1725,7 @@ void dm_ecs_entity_add_kinematics(dm_entity entity, float mass, float vel_x,floa
     
     // default for now
     physics_block->body_type[index] = DM_PHYSICS_BODY_TYPE_RIGID;
+    physics_block->movement_type[index] = DM_PHYSICS_MOVEMENT_KINEMATIC;
     
     dm_ecs_iterate_component_block(entity, physics_id, context);
 }
@@ -1826,8 +1831,8 @@ void dm_ecs_entity_add_box_collider(dm_entity entity, float center_x,float cente
     scale_z *= 0.5f;
     
     float min_x = center_x - scale_x;
-    float min_y = center_y - scale_x;
-    float min_z = center_z - scale_x;
+    float min_y = center_y - scale_y;
+    float min_z = center_z - scale_z;
     
     float max_x = center_x + scale_x;
     float max_y = center_y + scale_y;
@@ -1874,32 +1879,29 @@ void dm_ecs_entity_add_sphere_collider(dm_entity entity, float center_x,float ce
     const dm_ecs_id collision_id = context->ecs_manager.default_components.collision;
     dm_component_collision_block* collision_block = dm_ecs_get_current_component_block(collision_id, &index, context);
     
-    float min[3];
-    float max[3];
+    float min_x = center_x - radius;
+    float min_y = center_y - radius;
+    float min_z = center_z - radius;
     
-    min[0] = center_x - radius;
-    min[1] = center_y - radius;
-    min[2] = center_z - radius;
+    float max_x = center_x + radius;
+    float max_y = center_y + radius;
+    float max_z = center_z + radius;
     
-    max[0] = center_x + radius;
-    max[1] = center_y + radius;
-    max[2] = center_z + radius;
+    collision_block->aabb_local_min_x[index] = min_x;
+    collision_block->aabb_local_min_y[index] = min_y;
+    collision_block->aabb_local_min_z[index] = min_z;
     
-    collision_block->aabb_local_min_x[index] = min[0];
-    collision_block->aabb_local_min_y[index] = min[1];
-    collision_block->aabb_local_min_z[index] = min[2];
+    collision_block->aabb_local_max_x[index] = max_x;
+    collision_block->aabb_local_max_y[index] = max_y;
+    collision_block->aabb_local_max_z[index] = max_z;
     
-    collision_block->aabb_local_max_x[index] = max[0];
-    collision_block->aabb_local_max_y[index] = max[1];
-    collision_block->aabb_local_max_z[index] = max[2];
+    collision_block->aabb_global_min_x[index] = min_x;
+    collision_block->aabb_global_min_y[index] = min_y;
+    collision_block->aabb_global_min_z[index] = min_z;
     
-    collision_block->aabb_global_min_x[index] = min[0];
-    collision_block->aabb_global_min_y[index] = min[1];
-    collision_block->aabb_global_min_z[index] = min[2];
-    
-    collision_block->aabb_global_max_x[index] = max[0];
-    collision_block->aabb_global_max_y[index] = max[1];
-    collision_block->aabb_global_max_z[index] = max[2];
+    collision_block->aabb_global_max_x[index] = max_x;
+    collision_block->aabb_global_max_y[index] = max_y;
+    collision_block->aabb_global_max_z[index] = max_z;
     
     collision_block->center_x[index] = center_x;
     collision_block->center_y[index] = center_y;

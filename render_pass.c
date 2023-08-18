@@ -205,9 +205,8 @@ bool render_pass_render(dm_context* context)
             color[2] = 1;
         }
         
-        debug_render_aabb(transform.pos, dim, color, context);
-        
-#if 0
+#if 1
+        //debug_render_aabb(transform.pos, dim, color, context);
         dim[0] = collision.internal[3] - collision.internal[0];
         dim[1] = collision.internal[4] - collision.internal[1];
         dim[2] = collision.internal[5] - collision.internal[2];
@@ -237,14 +236,14 @@ bool render_pass_render(dm_context* context)
     dm_render_command_bind_shader(pass_data->shader, context);
     dm_render_command_bind_pipeline(pass_data->pipe, context);
     dm_render_command_bind_texture(pass_data->tex, 0, context);
-    dm_render_command_toggle_wireframe(true, context);
+    //dm_render_command_toggle_wireframe(true, context);
     dm_render_command_bind_buffer(pass_data->vb, 0, context);
     dm_render_command_bind_buffer(pass_data->instb, 1, context);
     dm_render_command_update_buffer(pass_data->instb, pass_data->insts, sizeof(pass_data->insts), 0, context);
     dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_VERTEX, 0, context);
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
-    dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
+    //dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
     
     // reset counts back to 0
     pass_data->entity_count = 0;
