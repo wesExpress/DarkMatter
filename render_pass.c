@@ -166,6 +166,8 @@ bool render_pass_render(dm_context* context)
     
     inst_vertex* inst = NULL;
     
+    dm_timer t = { 0 };
+    dm_timer_start(&t, context);
     for(uint32_t i=0; i<pass_data->entity_count; i++)
     {
         transform = entity_get_transform(pass_data->entities[i], app_data->components.transform, context);
@@ -245,6 +247,8 @@ bool render_pass_render(dm_context* context)
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
     dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
+    
+    DM_LOG_DEBUG("Renderer took: %lf ms", dm_timer_elapsed_ms(&t, context));
     
     // reset counts back to 0
     pass_data->entity_count = 0;

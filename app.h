@@ -22,7 +22,7 @@ typedef struct component_ids_t
     dm_ecs_id physics;
 } component_ids;
 
-#define MAX_ENTITIES 510
+#define MAX_ENTITIES 1024
 typedef struct application_data_t
 {
     uint32_t     entity_count;

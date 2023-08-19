@@ -1607,6 +1607,13 @@ dm_entity dm_ecs_create_entity(dm_context* context)
     return entity;
 }
 
+void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context)
+{
+    if(component_id==DM_ECS_INVALID_ID) { DM_LOG_ERROR("Trying to get invalid component block"); return NULL; }
+    
+    return context->ecs_manager.components[component_id].data;
+}
+
 void* dm_ecs_get_current_component_block(dm_ecs_id component_id, uint32_t* insert_index, dm_context* context)
 {
     dm_ecs_component_manager* manager = &context->ecs_manager.components[component_id];

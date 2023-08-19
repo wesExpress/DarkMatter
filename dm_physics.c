@@ -802,7 +802,7 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
         float neg_norm[3];
         dm_vec3_negate(manifold->normal, neg_norm);
         
-#define DM_PHYSICS_BAUMGARTE_COEF 0.3f
+#define DM_PHYSICS_BAUMGARTE_COEF 0.1f
 #define DM_PHYSICS_BAUMGARTE_SLOP 0.001f
         float ba[3];
         dm_vec3_sub_vec3(on_b, on_a, ba);
@@ -813,7 +813,7 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     
     // restitution
     {
-#define DM_PHYSICS_REST_COEF 0.5f
+#define DM_PHYSICS_REST_COEF 0.1f
 #define DM_PHYSICS_REST_SLOP 0.5f
         
         b += (DM_PHYSICS_REST_COEF * rel_vn); 
@@ -934,18 +934,6 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
     
     dm_support_face_entity(pos[0], rots[0], cens[0], internals[0], shapes[0], norm_pen, points_a, &num_pts_a, planes_a, &num_planes_a, normal_a);
     dm_support_face_entity(pos[1], rots[1], cens[1], internals[1], shapes[1], neg_pen, points_b, &num_pts_b, planes_b, &num_planes_b, normal_b);
-    
-#if 0
-    float dum[3];
-    for(uint32_t i=0; i<num_pts_a; i++)
-    {
-        debug_render_bilboard(points_a[i], 0.15f,0.15f, (float[]){ 1,0,0,1 }, context);
-    }
-    for(uint32_t i=0; i<num_pts_b; i++)
-    {
-        debug_render_bilboard(points_b[i], 0.15f,0.15f, (float[]){ 1,1,0,1 }, context);
-    }
-#endif
     
     bool flipped = dm_fabs(dm_vec3_dot(norm_pen, normal_a)) > dm_fabs(dm_vec3_dot(norm_pen, normal_b));
     

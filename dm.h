@@ -871,30 +871,6 @@ typedef struct dm_ecs_manager_t
     dm_ecs_system_manager    systems[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
 } dm_ecs_manager;
 
-// components
-typedef struct dm_component_transform_block_t
-{
-    float pos_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float pos_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float pos_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float scale_x[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float scale_y[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float scale_z[DM_ECS_COMPONENT_BLOCK_SIZE];
-    
-    float rot_i[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float rot_j[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float rot_k[DM_ECS_COMPONENT_BLOCK_SIZE];
-    float rot_r[DM_ECS_COMPONENT_BLOCK_SIZE];
-} dm_component_transform_block;
-
-typedef struct dm_component_transform_t
-{
-    float pos[3];
-    float scale[3];
-    float rot[4];
-} dm_component_transform;
-
 /*******
 PHYSICS
 *********/
@@ -1188,6 +1164,7 @@ void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm
 dm_entity dm_ecs_create_entity(dm_context* context);
 dm_entity dm_ecs_entity_get_component_entity(dm_entity entity, dm_ecs_id component_id, dm_context* context);
 
+void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context);
 void* dm_ecs_get_current_component_block(dm_ecs_id component_id, uint32_t* insert_index, dm_context* context);
 void* dm_ecs_entity_get_component_block(dm_entity entity, dm_ecs_id component_id, uint32_t* index, dm_context* context);
 

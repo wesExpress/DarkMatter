@@ -3,20 +3,19 @@
 #include "render_pass.h"
 #include "debug_render_pass.h"
 #include "physics_system.h"
+#include "gravity_system.h"
 
-#define WORLD_SIZE_X 30
-#define WORLD_SIZE_Y 30
+#define WORLD_SIZE 100
 
 dm_entity create_entity(application_data* app_data, dm_context* context)
 {
     dm_entity entity = dm_ecs_create_entity(context);
     
-    static const float w = (float)WORLD_SIZE_X * 0.5f;
-    static const float h = (float)WORLD_SIZE_Y * 0.5f;
+    static const float h = (float)WORLD_SIZE * 0.5f;
     
-    float pos_x = dm_random_float(context) * w * 2 - w;
-    float pos_y = dm_random_float(context) * h * 2 - h;
-    float pos_z = dm_random_float(context) * h * 2 - h;
+    float pos_x = (dm_random_float(context) * 2 - 1) * h;
+    float pos_y = (dm_random_float(context) * 2 - 1) * h;
+    float pos_z = (dm_random_float(context) * 2 - 1) * h;
     
     float scale_x = dm_random_float_range(0.5,3,context);
     float scale_y = dm_random_float_range(0.5,3,context);
@@ -44,8 +43,9 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
         scale_z * 0.5f
     };
     
-    entity_add_kinematics(entity, app_data->components.physics, dm_random_float(context) * 10, 0,0,0, 0,0, dim, context);
-    entity_add_angular_velocity(entity, app_data->components.physics, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
+    float mass = dm_random_float(context) * 1e4;
+    entity_add_kinematics(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, dim, context);
+    //entity_add_angular_velocity(entity, app_data->components.physics, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
     
     return entity;
 }
@@ -195,7 +195,8 @@ bool app_init(dm_context* context)
     if(app_data->components.physics==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register physics component"); return false; }
     
     // systems
-    if(!physics_system_init(app_data->components.transform, app_data->components.collision, app_data->components.physics, context))    return false;
+    if(!physics_system_init(app_data->components.transform, app_data->components.collision, app_data->components.physics, context)) { DM_LOG_FATAL("Could not initialize physics system"); return false; }
+    if(!gravity_system_init(app_data->components.transform, app_data->components.physics, context)) { DM_LOG_FATAL("Could not initialize gravity system"); return false; }
     
     // camera
     const float cam_pos[] = { -5,0,-5 };

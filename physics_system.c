@@ -40,9 +40,12 @@ typedef struct physics_system_manager_t
     uint32_t num_manifolds, manifold_capacity;
     
     dm_ecs_id transform, collision, physics;
+    uint32_t  copied_entity_count;
     
     physics_system_collision_pair*   possible_collisions;
     dm_contact_manifold* manifolds;
+    
+    dm_ecs_system_entity_container* copied_entities;
 } physics_system_manager;
 
 bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* context);
@@ -58,7 +61,7 @@ bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_cont
 {
     dm_ecs_id comps[] = { t_id, c_id, p_id, };
     
-    dm_ecs_system_timing timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
+    dm_ecs_system_timing timing = DM_ECS_SYSTEM_TIMING_UPDATE_END;
     dm_ecs_id id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, physics_system_run, physics_system_shutdown, context);
     
     dm_ecs_system_manager* system = &context->ecs_manager.systems[timing][id];
@@ -75,6 +78,8 @@ bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_cont
     manager->collision = c_id;
     manager->physics   = p_id;
     
+    manager->copied_entity_count = 0;
+    
     return true;
 }
 
@@ -85,6 +90,7 @@ void physics_system_shutdown(void* s, void* c)
     
     physics_system_manager* manager = system->system_data;
     
+    if(manager->copied_entities) dm_free(manager->copied_entities);
     dm_free(manager->possible_collisions);
     dm_free(manager->manifolds);
 }
@@ -272,8 +278,8 @@ int physics_system_broadphase_get_variance_axis(dm_ecs_system_manager* system, d
     const uint32_t t_id = manager->transform;
     const uint32_t c_id = manager->collision;
     
-    component_transform_block* master_t_block = context->ecs_manager.components[t_id].data;;
-    component_collision_block* master_c_block = context->ecs_manager.components[c_id].data;
+    component_transform_block* master_t_block = dm_ecs_get_component_block(t_id, context);
+    component_collision_block* master_c_block = dm_ecs_get_component_block(c_id, context);
     
     component_transform_block* t_block = NULL;
     component_collision_block* c_block = NULL;
@@ -339,6 +345,19 @@ bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* contex
     physics_system_manager* manager = system->system_data;
     manager->broadphase_checks = 0;
     
+    if(manager->copied_entity_count==0) 
+    {
+        manager->copied_entity_count = system->entity_count;
+        manager->copied_entities = dm_alloc(sizeof(dm_ecs_system_entity_container) * system->entity_count);
+        dm_memcpy(manager->copied_entities, system->entity_containers, sizeof(dm_ecs_system_entity_container) * manager->copied_entity_count);
+    }
+    else if(manager->copied_entity_count!=system->entity_count)
+    {
+        manager->copied_entity_count = system->entity_count;
+        manager->copied_entities = dm_realloc(manager->copied_entities, sizeof(dm_ecs_system_entity_container) * system->entity_count);
+        dm_memcpy(manager->copied_entities, system->entity_containers, sizeof(dm_ecs_system_entity_container) * manager->copied_entity_count);
+    }
+    
     //manager->collision_capacity = DM_PHYSICS_DEFAULT_COLLISION_CAPACITY;
     manager->num_possible_collisions = 0;
     
@@ -348,7 +367,7 @@ bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* contex
     data.index = manager->collision;
     data.block_size = sizeof(component_collision_block);
     
-    component_collision_block* master_block = context->ecs_manager.components[data.index].data;
+    component_collision_block* master_block = dm_ecs_get_component_block(manager->collision, context);
     
     // sort
     switch(axis)
@@ -367,11 +386,11 @@ bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* contex
     }
     
 #ifdef DM_PLATFORM_WIN32
-    qsort_s(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), physics_system_broadphase_sort, &data);
+    qsort_s(manager->copied_entities, manager->copied_entity_count, sizeof(dm_ecs_system_entity_container), physics_system_broadphase_sort, &data);
 #elif defined(DM_PLATFORM_LINUX)
-    qsort_r(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), physics_system_broadphase_sort, &data);
+    qsort_r(manager->copied_entities, manager->copied_entity_count, sizeof(dm_ecs_system_entity_container), physics_system_broadphase_sort, &data);
 #elif defined(DM_PLATFORM_APPLE)
-    qsort_r(system->entity_containers, system->entity_count, sizeof(dm_ecs_system_entity_container), &data, physics_system_broadphase_sort);
+    qsort_r(manager->copied_entities, manager->copied_entity_count, sizeof(dm_ecs_system_entity_container), &data, physics_system_broadphase_sort);
 #endif
     
     // sweep
@@ -388,9 +407,10 @@ bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* contex
     component_collision_block* a_block = NULL;
     component_collision_block* b_block = NULL;
     
-    for(uint32_t i=0; i<system->entity_count; i++)
+    for(uint32_t i=0; i<manager->copied_entity_count; i++)
     {
-        entity_a = system->entity_containers[i];
+        //entity_a = system->entity_containers[i];
+        entity_a = manager->copied_entities[i];
         
         a_c_index = entity_a.component_indices[data.index];
         
@@ -422,7 +442,8 @@ bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* contex
         
         for(uint32_t j=i+1; j<system->entity_count; j++)
         {
-            entity_b = system->entity_containers[j];
+            //entity_b = system->entity_containers[j];
+            entity_b = manager->copied_entities[j];
             
             b_c_index = entity_b.component_indices[data.index];
             
@@ -491,9 +512,9 @@ bool physics_system_narrowphase(dm_ecs_system_manager* system, dm_context* conte
     const dm_ecs_id c_id = manager->collision;
     const dm_ecs_id p_id = manager->physics;
     
-    component_transform_block* t_block = context->ecs_manager.components[t_id].data;
-    component_collision_block* c_block = context->ecs_manager.components[c_id].data;
-    component_physics_block*   p_block = context->ecs_manager.components[p_id].data;
+    component_transform_block* t_block = dm_ecs_get_component_block(t_id, context);
+    component_collision_block* c_block = dm_ecs_get_component_block(c_id, context);
+    component_physics_block*   p_block = dm_ecs_get_component_block(p_id, context);
     
     float              pos[2][3], rots[2][4], cens[2][3], internals[2][6], vels[2][3], ws[2][3];
     dm_collision_shape shapes[2];
@@ -672,8 +693,8 @@ void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* c
     const uint32_t t_id = manager->transform;
     const uint32_t p_id = manager->physics;
     
-    component_transform_block* master_t_block = context->ecs_manager.components[t_id].data;
-    component_physics_block*   master_p_block = context->ecs_manager.components[p_id].data;
+    component_transform_block* master_t_block = dm_ecs_get_component_block(t_id, context);
+    component_physics_block*   master_p_block = dm_ecs_get_component_block(p_id, context);
     
     uint32_t t_index, p_index;
     
@@ -903,7 +924,7 @@ void physics_system_reset_forces(dm_ecs_system_manager* system, dm_context* cont
     physics_system_manager* manager = system->system_data;
     
     const uint32_t p_id = manager->physics;
-    component_physics_block* master_p_block = context->ecs_manager.components[p_id].data;
+    component_physics_block* master_p_block = dm_ecs_get_component_block(p_id, context);
     
     uint32_t p_index;
     
