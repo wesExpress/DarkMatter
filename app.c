@@ -5,7 +5,7 @@
 #include "physics_system.h"
 #include "gravity_system.h"
 
-#define WORLD_SIZE 100
+#define WORLD_SIZE 150
 
 dm_entity create_entity(application_data* app_data, dm_context* context)
 {
@@ -32,7 +32,16 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     rot_r /= mag;
     
     entity_add_transform(entity, app_data->components.transform, pos_x,pos_y,pos_z, scale_x,scale_y,scale_z, rot_i,rot_j,rot_k,rot_r, context);
-    entity_add_box_collider(entity, app_data->components.collision, 0,0,0, scale_x,scale_y,scale_z, context);
+    if(dm_random_float(context) > 0.5f)
+    {
+        scale_y = scale_z = scale_x;
+        
+        entity_add_sphere_collider(entity, app_data->components.collision, 0,0,0, scale_x, context);
+    }
+    else
+    {
+        entity_add_box_collider(entity, app_data->components.collision, 0,0,0, scale_x,scale_y,scale_z, context);
+    }
     
     float dim[6] = {
         -scale_x * 0.5f,
@@ -43,9 +52,9 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
         scale_z * 0.5f
     };
     
-    float mass = dm_random_float(context) * 1e4;
+    float mass = dm_random_float(context) * 4e3;
     entity_add_kinematics(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, dim, context);
-    //entity_add_angular_velocity(entity, app_data->components.physics, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
+    entity_add_angular_velocity(entity, app_data->components.physics, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
     
     return entity;
 }

@@ -183,8 +183,8 @@ bool render_pass_render(dm_context* context)
         dm_mat4_transpose(inst->model, inst->model);
 #endif
         
-#if 0
-        dm_component_collision collision = dm_ecs_entity_get_collision(pass_data->entities[i], context);
+#if 1
+        component_collision collision = entity_get_collision(pass_data->entities[i], app_data->components.collision, context);
         
         float dim[] = {
             collision.aabb_global_max[0] - collision.aabb_global_min[0],
@@ -193,11 +193,11 @@ bool render_pass_render(dm_context* context)
         };
         
         float color[4] = { 0,0,0,1 };
-        if(collision.flag==DM_COLLISION_FLAG_YES)
+        if(collision.flag==COLLISION_FLAG_YES)
         {
             color[0] = 1;
         }
-        else if(collision.flag==DM_COLLISION_FLAG_POSSIBLE)
+        else if(collision.flag==COLLISION_FLAG_POSSIBLE)
         {
             color[0] = 1;
             color[1] = 1;
@@ -246,7 +246,7 @@ bool render_pass_render(dm_context* context)
     dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_VERTEX, 0, context);
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
-    dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
+    //dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
     
     DM_LOG_DEBUG("Renderer took: %lf ms", dm_timer_elapsed_ms(&t, context));
     

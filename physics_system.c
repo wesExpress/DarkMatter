@@ -50,7 +50,7 @@ typedef struct physics_system_manager_t
 
 bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* context);
 bool physics_system_narrowphase(dm_ecs_system_manager* system, dm_context* context);
-void physics_system_solve_constraints(physics_system_manager* manager);
+void physics_system_solve_constraints(physics_system_manager* manager, dm_context* context);
 void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* context);
 void physics_system_reset_forces(dm_ecs_system_manager* system, dm_context* context);
 
@@ -61,7 +61,7 @@ bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_cont
 {
     dm_ecs_id comps[] = { t_id, c_id, p_id, };
     
-    dm_ecs_system_timing timing = DM_ECS_SYSTEM_TIMING_UPDATE_END;
+    dm_ecs_system_timing timing = DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN;
     dm_ecs_id id = dm_ecs_register_system(comps, DM_ARRAY_LEN(comps), timing, physics_system_run, physics_system_shutdown, context);
     
     dm_ecs_system_manager* system = &context->ecs_manager.systems[timing][id];
@@ -131,7 +131,7 @@ bool physics_system_run(void* s, void* d)
         
         // collision resolution
         dm_timer_start(&t, context);
-        physics_system_solve_constraints(manager);
+        physics_system_solve_constraints(manager, context);
         collision_time += dm_timer_elapsed_ms(&t, context);
         
         // update
@@ -653,7 +653,7 @@ bool physics_system_narrowphase(dm_ecs_system_manager* system, dm_context* conte
         manifold->contact_data[1].i_body_inv_11 = b_p_block->i_body_inv_11[b_p_c_index];
         manifold->contact_data[1].i_body_inv_22 = b_p_block->i_body_inv_22[b_p_c_index];
         
-        if(!dm_physics_collide_entities(pos, rots, cens, internals, vels, ws, shapes, &simplex, manifold, context)) return false;
+        if(!dm_physics_collide_entities(pos, rots, cens, internals, vels, ws, shapes, &simplex, manifold)) return false;
         
         // resize manifolds
         dm_grow_dyn_array(&manager->manifolds, manager->num_manifolds, &manager->manifold_capacity, sizeof(dm_contact_manifold), PHYSICS_SYSTEM_LOAD_FACTOR, PHYSICS_SYSTEM_RESIZE_FACTOR);
@@ -667,7 +667,7 @@ COLLISION RESOLUTION
 solves constraints generated in narrowphase
 using impulse solver
 **********************/
-void physics_system_solve_constraints(physics_system_manager* manager)
+void physics_system_solve_constraints(physics_system_manager* manager, dm_context* context)
 {
     for(uint32_t iter=0; iter<PHYSICS_SYSTEM_CONSTRAINT_ITER; iter++)
     {

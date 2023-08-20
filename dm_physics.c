@@ -538,12 +538,11 @@ void dm_support_face_box(const float pos[3], const float rot[4], const float cen
         internals[5],
     };
     
-    float inv_rot[4];
-    DM_VEC4_COPY(inv_rot, rot);
-    dm_quat_inverse(inv_rot, inv_rot);
-    dm_vec3_rotate(direction, inv_rot, direction);
+    float inv_rot[4], dir[3];
+    dm_quat_inverse(rot, inv_rot);
+    dm_vec3_rotate(direction, inv_rot, dir);
     
-    float axes[][3] = {
+    static const float axes[][3] = {
         {1,0,0},
         {0,1,0},
         {0,0,1}
@@ -555,7 +554,7 @@ void dm_support_face_box(const float pos[3], const float rot[4], const float cen
     
     for(uint32_t i=0; i<3; i++)
     {
-        float proximity = dm_vec3_dot(direction, axes[i]);
+        float proximity = dm_vec3_dot(dir, axes[i]);
         float s = DM_SIGNF(proximity);
         proximity *= s;
         if(proximity <= best_proximity) continue;
@@ -747,7 +746,7 @@ void dm_physics_init_constraint(float vec[3], float r_a[3], float r_b[3], float 
     constraint->impulse_max = impulse_max;
 }
 
-void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], const float normal[3], const float depth, const float pos[2][3], const float rot[2][4], const float vel[2][3], const float w[2][3], dm_contact_manifold* manifold, dm_context* context)
+void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], const float normal[3], const float depth, const float pos[2][3], const float rot[2][4], const float vel[2][3], const float w[2][3], dm_contact_manifold* manifold)
 {
     DM_QUAT_COPY(manifold->orientation_a, rot[0]);
     DM_QUAT_COPY(manifold->orientation_b, rot[1]);
@@ -848,32 +847,75 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     manifold->points[manifold->point_count++] = p;
 }
 
-// support face funcs
-void dm_support_face_entity(const float pos[3], const float rot[4], const float cen[3], const float internals[6], const dm_collision_shape shape, float direction[3], float points[10][3], uint32_t* num_pts, dm_plane planes[5], uint32_t* num_planes, float normal[3])
+// collisions
+void dm_physics_collide_sphere_sphere(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], dm_contact_manifold* manifold)
 {
-    switch(shape)
-    {
-        case DM_COLLISION_SHAPE_SPHERE:
-        break;
-        
-        case DM_COLLISION_SHAPE_BOX:
-        dm_support_face_box(pos, rot, cen, internals, direction, points, num_pts, planes, num_planes, normal);
-        break;
-        
-        default:
-        DM_LOG_ERROR("Unknown or unsupported collider type");
-        return;
-    }
+    const float radius_a = internals[0][0];
+    const float radius_b = internals[1][0];
+    
+    float axis[3], on_a[3], on_b[3];
+    float d, depth;
+    
+    dm_vec3_sub_vec3(pos[1], pos[0], axis);
+    d     = dm_vec3_mag(axis);
+    depth = d - (radius_b - radius_a);
+    dm_vec3_scale(axis, 1 / d, axis);
+    
+    dm_vec3_scale(axis, radius_a, on_a);
+    dm_vec3_add_vec3(pos[0], on_a, on_a);
+    
+    dm_vec3_scale(axis, radius_b, on_b);
+    dm_vec3_sub_vec3(pos[1], on_b, on_b);
+    
+    dm_physics_add_contact_point(on_a, on_b, axis, depth, pos, rots, vels, ws, manifold);
 }
 
-bool dm_physics_collide_sphere_other(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex)
+void dm_physics_collide_sphere_poly(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold)
+{
+    float polytope[DM_PHYSICS_EPA_MAX_FACES][3][3]      = { 0 };
+    float polytope_normals[DM_PHYSICS_EPA_MAX_FACES][3] = { 0 };
+    uint32_t num_faces = 0;
+    float penetration[3] = { 0 };
+    
+    dm_physics_epa(pos, rots, cens, internals, shapes, penetration, polytope, polytope_normals, &num_faces, simplex);
+    
+    float norm_pen[3];
+    dm_vec3_norm(penetration, norm_pen);
+    
+    float points[10][3], normal[3], neg_pen[3], sphere_support[3];
+    dm_plane planes[10];
+    uint32_t num_points, num_planes;
+    
+    dm_vec3_negate(penetration, neg_pen);
+    
+    dm_physics_support_func_sphere(pos[0], cens[0], internals[0], penetration, sphere_support);
+    dm_support_face_box(pos[1], rots[1], cens[1], internals[1], neg_pen, points, &num_points, planes, &num_planes, normal);
+    
+    dm_plane ref_plane = { 0 };
+    DM_VEC3_COPY(ref_plane.normal, normal);
+    ref_plane.distance = dm_vec3_dot(points[0], normal);
+    
+    float div = ref_plane.distance - dm_vec3_dot(sphere_support, ref_plane.normal);
+    float rcp = dm_vec3_dot(penetration, ref_plane.normal);
+    float t = div / rcp;
+    
+    float on_b[3];
+    dm_vec3_scale(norm_pen, t, on_b);
+    dm_vec3_add_vec3(sphere_support, on_b, on_b);
+    
+    dm_physics_add_contact_point(sphere_support, on_b, norm_pen, 0.0f, pos, rots, vels, ws, manifold);
+}
+
+bool dm_physics_collide_sphere_other(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold)
 {
     switch(shapes[1])
     {
         case DM_COLLISION_SHAPE_SPHERE:
+        dm_physics_collide_sphere_sphere(pos, rots, cens, internals, vels, ws, manifold);
         break;
         
         case DM_COLLISION_SHAPE_BOX:
+        dm_physics_collide_sphere_poly(pos, rots, cens, internals, vels, ws, shapes, simplex, manifold);
         break;
         
         default:
@@ -884,29 +926,47 @@ bool dm_physics_collide_sphere_other(const float pos[2][3], const float rots[2][
     return true;
 }
 
-void dm_physics_collide_poly_sphere(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_context* context)
+void dm_physics_collide_poly_sphere(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold)
 {
-#if 0 
     float polytope[DM_PHYSICS_EPA_MAX_FACES][3][3]      = { 0 };
     float polytope_normals[DM_PHYSICS_EPA_MAX_FACES][3] = { 0 };
-    uint32_t num_faces;
+    uint32_t num_faces = 0;
     float penetration[3] = { 0 };
     
     dm_physics_epa(pos, rots, cens, internals, shapes, penetration, polytope, polytope_normals, &num_faces, simplex);
     
-    float    points_box[10][3];
-    uint32_t num_pts;
-    float    normal_box[3];
-    dm_plane planes[5];
-    uint32_t num_planes;
-#endif
+    float norm_pen[3];
+    dm_vec3_norm(penetration, norm_pen);
+    
+    float points[10][3], normal[3], neg_pen[3], sphere_support[3];
+    dm_plane planes[10];
+    uint32_t num_points, num_planes;
+    
+    dm_vec3_negate(penetration, neg_pen);
+    
+    dm_support_face_box(pos[0], rots[0], cens[0], internals[0], norm_pen, points, &num_points, planes, &num_planes, normal);
+    dm_physics_support_func_sphere(pos[1], cens[1], internals[1], neg_pen, sphere_support);
+    
+    dm_plane ref_plane = { 0 };
+    DM_VEC3_COPY(ref_plane.normal, normal);
+    ref_plane.distance = dm_vec3_dot(points[0], normal);
+    
+    float div = ref_plane.distance - dm_vec3_dot(sphere_support, ref_plane.normal);
+    float rcp = dm_vec3_dot(penetration, ref_plane.normal);
+    float t = div / rcp;
+    
+    float on_a[3];
+    dm_vec3_scale(neg_pen, t, on_a);
+    dm_vec3_add_vec3(sphere_support, on_a, on_a);
+    
+    dm_physics_add_contact_point(on_a, sphere_support, norm_pen, 0.0f, pos, rots, vels, ws, manifold);
 }
 
-void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold, dm_context* context)
+void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold)
 {
     float polytope[DM_PHYSICS_EPA_MAX_FACES][3][3]      = { 0 };
     float polytope_normals[DM_PHYSICS_EPA_MAX_FACES][3] = { 0 };
-    uint32_t num_faces;
+    uint32_t num_faces = 0;
     float penetration[3] = { 0 };
     
     dm_physics_epa(pos, rots, cens, internals, shapes, penetration, polytope, polytope_normals, &num_faces, simplex);
@@ -932,8 +992,8 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
     dm_vec3_negate(norm_pen, neg_pen);
     float pen_depth = dm_vec3_mag(penetration);
     
-    dm_support_face_entity(pos[0], rots[0], cens[0], internals[0], shapes[0], norm_pen, points_a, &num_pts_a, planes_a, &num_planes_a, normal_a);
-    dm_support_face_entity(pos[1], rots[1], cens[1], internals[1], shapes[1], neg_pen, points_b, &num_pts_b, planes_b, &num_planes_b, normal_b);
+    dm_support_face_box(pos[0], rots[0], cens[0], internals[0], norm_pen, points_a, &num_pts_a, planes_a, &num_planes_a, normal_a);
+    dm_support_face_box(pos[1], rots[1], cens[1], internals[1], neg_pen,  points_b, &num_pts_b, planes_b, &num_planes_b, normal_b);
     
     bool flipped = dm_fabs(dm_vec3_dot(norm_pen, normal_a)) > dm_fabs(dm_vec3_dot(norm_pen, normal_b));
     
@@ -943,57 +1003,58 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
     
     if(flipped) 
     {
-        dm_memcpy(ref_plane.normal, normal_b, sizeof(normal_b));
-        ref_plane.distance = dm_vec3_dot(normal_b, points_b[0]);
+        DM_VEC3_COPY(ref_plane.normal, normal_b);
+        ref_plane.distance = -dm_vec3_dot(normal_b, points_b[0]);
         
         dm_physics_sutherland_hodgman(points_a, num_pts_a, planes_b, num_planes_b, clipped_face, &num_clipped);
     }
     else
     {
-        dm_memcpy(ref_plane.normal, normal_a, sizeof(normal_a));
-        ref_plane.distance = dm_vec3_dot(normal_a, points_a[0]);
+        DM_VEC3_COPY(ref_plane.normal, normal_a);
+        ref_plane.distance = -dm_vec3_dot(normal_a, points_a[0]);
         
         dm_physics_sutherland_hodgman(points_b, num_pts_b, planes_a, num_planes_a, clipped_face, &num_clipped);
     }
     
+    float point[3];
+    float on_a[3], on_b[3], dum[3];
+    float contact_pen;
+    
     for(uint32_t i=0; i<num_clipped; i++)
     {
-        float point[3];
-        dm_memcpy(point, clipped_face[i], sizeof(point));
+        DM_VEC3_COPY(point, clipped_face[i]);
         
-        float on_a[3], on_b[3], dum[3];
-        
-        float contact_pen = -dm_fabs(dm_vec3_dot(point, ref_plane.normal) + ref_plane.distance);
+        contact_pen = -dm_fabs(dm_vec3_dot(point, ref_plane.normal) + ref_plane.distance);
         contact_pen = DM_MIN(contact_pen, pen_depth);
         
-        dm_vec3_scale(ref_plane.normal, contact_pen, dum);
+        dm_vec3_scale(norm_pen, contact_pen, dum);
         if(flipped)
         {
             dm_vec3_sub_vec3(point, dum, on_a);
-            dm_memcpy(on_b, point, sizeof(point));
+            DM_VEC3_COPY(on_b, point);
         }
         else
         {
+            DM_VEC3_COPY(on_a, point);
             dm_vec3_add_vec3(point, dum, on_b);
-            dm_memcpy(on_a, point, sizeof(point));
         }
         
-        contact_pen = -(dm_fabs(contact_pen) + pen_depth) * 0.5f;
+        contact_pen = -(dm_fabs(contact_pen) + dm_fabs(pen_depth)) * 0.5f;
         
-        dm_physics_add_contact_point(on_a, on_b, norm_pen, contact_pen, pos, rots, vels, ws, manifold, context);
+        dm_physics_add_contact_point(on_a, on_b, norm_pen, contact_pen, pos, rots, vels, ws, manifold);
     }
 }
 
-bool dm_physics_collide_poly_other(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold, dm_context* context)
+bool dm_physics_collide_poly_other(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold)
 {
     switch(shapes[1])
     {
         case DM_COLLISION_SHAPE_SPHERE:
-        dm_physics_collide_poly_sphere(pos, rots, cens, internals, vels, ws, shapes, simplex, context);
+        dm_physics_collide_poly_sphere(pos, rots, cens, internals, vels, ws, shapes, simplex, manifold);
         break;
         
         case DM_COLLISION_SHAPE_BOX:
-        dm_physics_collide_poly_poly(pos, rots, cens, internals, vels, ws, shapes, simplex, manifold, context);
+        dm_physics_collide_poly_poly(pos, rots, cens, internals, vels, ws, shapes, simplex, manifold);
         break;
         
         default:
@@ -1004,16 +1065,16 @@ bool dm_physics_collide_poly_other(const float pos[2][3], const float rots[2][4]
     return true;
 }
 
-bool dm_physics_collide_entities(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold, dm_context* context)
+bool dm_physics_collide_entities(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold)
 {
     switch(shapes[0])
     {
         case DM_COLLISION_SHAPE_SPHERE:
-        return dm_physics_collide_sphere_other(pos, rots, cens, internals, vels, ws, shapes, simplex);
+        return dm_physics_collide_sphere_other(pos, rots, cens, internals, vels, ws, shapes, simplex, manifold);
         break;
         
         case DM_COLLISION_SHAPE_BOX:
-        return dm_physics_collide_poly_other(pos, rots, cens, internals, vels, ws, shapes, simplex, manifold, context);
+        return dm_physics_collide_poly_other(pos, rots, cens, internals, vels, ws, shapes, simplex, manifold);
         break;
         
         default:
@@ -1070,9 +1131,9 @@ void dm_physics_constraint_lambda(dm_contact_constraint* constraint, dm_contact_
     dm_mat3_mul_vec3(i_body_inv_b, constraint->jacobian[3], dum2);
     
     // effective mass
-    effective_mass += manifold->contact_data[0].inv_mass;
+    effective_mass += manifold->contact_data[0].inv_mass * dm_vec3_dot(constraint->jacobian[0], constraint->jacobian[0]);
     effective_mass += dm_vec3_dot(constraint->jacobian[1], dum1);
-    effective_mass += manifold->contact_data[1].inv_mass;
+    effective_mass += manifold->contact_data[1].inv_mass * dm_vec3_dot(constraint->jacobian[2], constraint->jacobian[2]);
     effective_mass += dm_vec3_dot(constraint->jacobian[3], dum2);
     effective_mass  = 1.0f / effective_mass;
     

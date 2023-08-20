@@ -97,6 +97,10 @@ void naive_gravity(dm_ecs_system_manager* system, dm_context* context)
         
         mass_a = a_p_block->mass[a_p_index];
         
+        float f_x = a_p_block->force_x[a_t_index];
+        float f_y = a_p_block->force_y[a_t_index];
+        float f_z = a_p_block->force_z[a_t_index];
+        
         for(uint32_t j=i+1; j<system->entity_count; j++)
         {
             entity_b = system->entity_containers[j];

@@ -1220,7 +1220,7 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
 // physics
 bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);
 void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float penetration[3], float polytope[DM_PHYSICS_EPA_MAX_FACES][3][3], float polytope_normals[DM_PHYSICS_EPA_MAX_FACES][3], uint32_t* polytope_count, dm_simplex* simplex);
-bool dm_physics_collide_entities(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold, dm_context* context);
+bool dm_physics_collide_entities(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold);
 void dm_physics_constraint_lambda(dm_contact_constraint* constraint, dm_contact_manifold* manifold);
 void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_manifold* manifold);
 void dm_physics_apply_constraints(dm_contact_manifold* manifold);
