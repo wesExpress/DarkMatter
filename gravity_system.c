@@ -137,6 +137,11 @@ void naive_gravity(dm_ecs_system_manager* system, dm_context* context)
             local_f_y = sep_y * grav;
             local_f_z = sep_z * grav;
             
+            if(local_f_x != local_f_x)
+            {
+                DM_LOG_FATAL("HERE");
+            }
+            
             // a gets force, b gets negative!
             a_p_block->force_x[a_p_index] += local_f_x;
             a_p_block->force_y[a_p_index] += local_f_y;

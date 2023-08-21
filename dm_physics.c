@@ -18,13 +18,13 @@ void dm_physics_support_func_sphere(const float pos[3], const float cen[3], cons
     const float radius = internals[0];
     float dir_norm[3] = { 0 };
     dm_vec3_norm(dir, dir_norm);
-
+    
     float sup[3] = {
         (dir_norm[0] * radius) + (pos[0] + cen[0]),
         (dir_norm[1] * radius) + (pos[1] + cen[1]),
         (dir_norm[2] * radius) + (pos[2] + cen[2])
     };
-
+    
     DM_VEC3_COPY(support, sup);
 }
 
@@ -424,7 +424,7 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
             dm_memcpy(polytope,         faces,   DM_VEC3_SIZE * num_faces * 3);
             dm_memcpy(polytope_normals, normals, DM_VEC3_SIZE * num_faces);
             *polytope_count = num_faces;
-
+            
             return;
         }
         
@@ -471,7 +471,7 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
             num_faces--;
             i--;
         }
-
+        
         for(uint32_t i=0; i<num_loose; i++)
         {
             DM_VEC3_COPY(faces[num_faces][0], loose_edges[i][0]);
@@ -494,7 +494,7 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
             }
             
             num_faces++;
-
+            
             // might not be needed, not sure. better safe than sorry (stack overflows)
             if(num_faces >= DM_PHYSICS_EPA_MAX_FACES) break;
         }
@@ -754,12 +754,17 @@ void dm_physics_init_constraint(float vec[3], float r_a[3], float r_b[3], float 
     constraint->b = b;
     constraint->impulse_min = impulse_min;
     constraint->impulse_max = impulse_max;
+    
+    if(constraint->jacobian[0][0] != constraint->jacobian[0][0])
+    {
+        DM_LOG_ERROR("HERE");
+    }
 }
 
 void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], const float normal[3], const float depth, const float pos[2][3], const float rot[2][4], const float vel[2][3], const float w[2][3], dm_contact_manifold* manifold)
 {
     if(manifold->point_count>DM_PHYSICS_MAX_MANIFOLDS) return;
-
+    
     DM_QUAT_COPY(manifold->orientation_a, rot[0]);
     DM_QUAT_COPY(manifold->orientation_b, rot[1]);
     
@@ -886,7 +891,8 @@ void dm_physics_collide_sphere_poly(const float pos[2][3], const float rots[2][4
     dm_physics_epa(pos, rots, cens, internals, shapes, penetration, polytope, polytope_normals, &num_faces, simplex);
     
     if(penetration[0]!=penetration[0]) return;
-
+    if(dm_vec3_mag(penetration)==0) return;
+    
     float norm_pen[3] = { 0 };
     dm_vec3_norm(penetration, norm_pen);
     
@@ -947,7 +953,8 @@ void dm_physics_collide_poly_sphere(const float pos[2][3], const float rots[2][4
     dm_physics_epa(pos, rots, cens, internals, shapes, penetration, polytope, polytope_normals, &num_faces, simplex);
     
     if(penetration[0]!=penetration[0]) return;
-
+    if(dm_vec3_mag(penetration)==0) return;
+    
     float norm_pen[3] = { 0 };
     dm_vec3_norm(penetration, norm_pen);
     

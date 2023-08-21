@@ -395,7 +395,7 @@ bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* contex
     float max_i, min_j;
     dm_ecs_system_entity_container entity_a, entity_b;
     uint32_t a_c_index, b_c_index;
-
+    
     bool x_check, y_check, z_check;
     
     float a_pos[3], a_dim[3];
@@ -734,6 +734,11 @@ void physics_system_update_entities(dm_ecs_system_manager* system, dm_context* c
         t_block->pos_x[t_index] += p_block->vel_x[p_index] * DM_PHYSICS_FIXED_DT;
         t_block->pos_y[t_index] += p_block->vel_y[p_index] * DM_PHYSICS_FIXED_DT;
         t_block->pos_z[t_index] += p_block->vel_z[p_index] * DM_PHYSICS_FIXED_DT;
+        
+        if(t_block->pos_x[t_index]!=t_block->pos_x[t_index])
+        {
+            DM_LOG_ERROR("HERE");
+        }
         
         // integrate velocity
         dt_mass = p_block->mass[p_index] * DM_PHYSICS_FIXED_DT;

@@ -20,7 +20,7 @@ typedef struct uniform_t
     float view_proj[M4];
 } uniform;
 
-#define MAX_ENTITIES_PER_FRAME MAX_ENTITIES
+#define MAX_ENTITIES_PER_FRAME 1024
 typedef struct render_pass_data_t
 {
     dm_render_handle vb, instb, ib, shader, pipe, uni;
@@ -183,7 +183,7 @@ bool render_pass_render(dm_context* context)
         dm_mat4_transpose(inst->model, inst->model);
 #endif
         
-#if 1
+#if 0
         component_collision collision = entity_get_collision(pass_data->entities[i], app_data->components.collision, context);
         
         float dim[] = {
@@ -217,11 +217,11 @@ bool render_pass_render(dm_context* context)
             dim[1] = collision.internal[4] - collision.internal[1];
             dim[2] = collision.internal[5] - collision.internal[2];
             break;
-
+            
             case DM_COLLISION_SHAPE_SPHERE:
             dim[0] = dim[1] = dim[2] = collision.internal[0] * 2;
             break;
-
+            
             default:
             break;
         }
@@ -259,7 +259,7 @@ bool render_pass_render(dm_context* context)
     dm_render_command_bind_uniform(pass_data->uni, 0, DM_UNIFORM_STAGE_VERTEX, 0, context);
     dm_render_command_update_uniform(pass_data->uni, &uni, sizeof(uni), context);
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
-    //dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
+    dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
     
     DM_LOG_DEBUG("Renderer took: %lf ms", dm_timer_elapsed_ms(&t, context));
     
