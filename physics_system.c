@@ -85,9 +85,7 @@ bool physics_system_init(dm_ecs_id t_id, dm_ecs_id c_id, dm_ecs_id p_id, dm_cont
 
 void physics_system_shutdown(void* s, void* c)
 {
-    dm_context* context = c;
-    dm_ecs_system_manager* system = s;
-    
+    dm_ecs_system_manager* system = s;   
     physics_system_manager* manager = system->system_data;
     
     if(manager->copied_entities) dm_free(manager->copied_entities);
@@ -397,8 +395,7 @@ bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* contex
     float max_i, min_j;
     dm_ecs_system_entity_container entity_a, entity_b;
     uint32_t a_c_index, b_c_index;
-    
-    float load;
+
     bool x_check, y_check, z_check;
     
     float a_pos[3], a_dim[3];
@@ -490,7 +487,7 @@ bool physics_system_broadphase(dm_ecs_system_manager* system, dm_context* contex
             manager->possible_collisions[manager->num_possible_collisions].entity_b = entity_b;
             manager->num_possible_collisions++;
             
-            dm_grow_dyn_array(&manager->possible_collisions, manager->num_possible_collisions, &manager->collision_capacity, sizeof(physics_system_collision_pair), PHYSICS_SYSTEM_LOAD_FACTOR, PHYSICS_SYSTEM_RESIZE_FACTOR);
+            dm_grow_dyn_array((void**)&manager->possible_collisions, manager->num_possible_collisions, &manager->collision_capacity, sizeof(physics_system_collision_pair), PHYSICS_SYSTEM_LOAD_FACTOR, PHYSICS_SYSTEM_RESIZE_FACTOR);
         }
     }
     
@@ -532,8 +529,6 @@ bool physics_system_narrowphase(dm_ecs_system_manager* system, dm_context* conte
     dm_contact_manifold* manifold;
     
     dm_simplex simplex;
-    
-    float load;
     
     for(uint32_t i=0; i<manager->num_possible_collisions; i++)
     {
@@ -656,7 +651,7 @@ bool physics_system_narrowphase(dm_ecs_system_manager* system, dm_context* conte
         if(!dm_physics_collide_entities(pos, rots, cens, internals, vels, ws, shapes, &simplex, manifold)) return false;
         
         // resize manifolds
-        dm_grow_dyn_array(&manager->manifolds, manager->num_manifolds, &manager->manifold_capacity, sizeof(dm_contact_manifold), PHYSICS_SYSTEM_LOAD_FACTOR, PHYSICS_SYSTEM_RESIZE_FACTOR);
+        dm_grow_dyn_array((void**)&manager->manifolds, manager->num_manifolds, &manager->manifold_capacity, sizeof(dm_contact_manifold), PHYSICS_SYSTEM_LOAD_FACTOR, PHYSICS_SYSTEM_RESIZE_FACTOR);
     }
     
     return true;

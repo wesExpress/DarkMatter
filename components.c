@@ -24,19 +24,11 @@ void entity_add_transform(dm_entity entity, dm_ecs_id t_id, float pos_x,float po
     dm_ecs_iterate_component_block(entity, t_id, context);
 }
 
-void entity_add_kinematics(dm_entity entity, dm_ecs_id p_id, float mass, float vel_x,float vel_y,float vel_z, float damping_v,float damping_w, float collider_data[6], dm_context* context)
+void entity_add_kinematics_box_rigid_body(dm_entity entity, dm_ecs_id p_id, float mass, float vel_x, float vel_y, float vel_z, float damping_v, float damping_w, float min_x,float min_y, float min_z, float max_x, float max_y, float max_z, dm_context* context)
 {
     if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
     uint32_t index;
     component_physics_block* physics_block = dm_ecs_get_current_component_block(p_id, &index, context);
-    
-    float dim_x = collider_data[3] - collider_data[0];
-    float dim_y = collider_data[4] - collider_data[1];
-    float dim_z = collider_data[5] - collider_data[2];
-    
-    dim_x *= dim_x;
-    dim_y *= dim_y;
-    dim_z *= dim_z;
     
     physics_block->vel_x[index] = vel_x;
     physics_block->vel_y[index] = vel_y;
@@ -45,10 +37,63 @@ void entity_add_kinematics(dm_entity entity, dm_ecs_id p_id, float mass, float v
     physics_block->mass[index]     = mass;
     physics_block->inv_mass[index] = 1.0f / mass;
     
-    float i_body_00 = (dim_y + dim_z) * mass * DM_MATH_INV_12;
-    float i_body_11 = (dim_x + dim_z) * mass * DM_MATH_INV_12;
-    float i_body_22 = (dim_x + dim_y) * mass * DM_MATH_INV_12;
+    float i_body_00, i_body_11, i_body_22;
+
+    float dim_x = max_x - min_x;
+    float dim_y = max_y - min_y;
+    float dim_z = max_z - min_z;
     
+    dim_x *= dim_x;
+    dim_y *= dim_y;
+    dim_z *= dim_z;
+    
+    i_body_00 = (dim_y + dim_z) * mass * DM_MATH_INV_12;
+    i_body_11 = (dim_x + dim_z) * mass * DM_MATH_INV_12;
+    i_body_22 = (dim_x + dim_y) * mass * DM_MATH_INV_12;
+
+    physics_block->i_body_00[index] = i_body_00;
+    physics_block->i_body_11[index] = i_body_11;
+    physics_block->i_body_22[index] = i_body_22;
+    
+    physics_block->i_body_inv_00[index] = 1.0f / i_body_00;
+    physics_block->i_body_inv_11[index] = 1.0f / i_body_11;
+    physics_block->i_body_inv_22[index] = 1.0f / i_body_22;
+    
+    physics_block->i_inv_00[index] = physics_block->i_body_inv_00[index];
+    physics_block->i_inv_11[index] = physics_block->i_body_inv_11[index];
+    physics_block->i_inv_22[index] = physics_block->i_body_inv_22[index];
+    
+    physics_block->damping_v[index] = damping_v;
+    physics_block->damping_w[index] = damping_w;
+    
+    // default for now
+    physics_block->body_type[index] = PHYSICS_BODY_TYPE_RIGID;
+    physics_block->movement_type[index] = PHYSICS_MOVEMENT_KINEMATIC;
+    
+    dm_ecs_iterate_component_block(entity, p_id, context);
+}
+
+void entity_add_kinematics_sphere_rigid_body(dm_entity entity, dm_ecs_id p_id, float mass, float vel_x, float vel_y, float vel_z, float damping_v, float damping_w, float radius, dm_context* context)
+{
+    if(entity==DM_ECS_INVALID_ENTITY) { DM_LOG_ERROR("Trying to add physics to invalid entity"); return; }
+    uint32_t index;
+    component_physics_block* physics_block = dm_ecs_get_current_component_block(p_id, &index, context);
+    
+    physics_block->vel_x[index] = vel_x;
+    physics_block->vel_y[index] = vel_y;
+    physics_block->vel_z[index] = vel_z;
+    
+    physics_block->mass[index]     = mass;
+    physics_block->inv_mass[index] = 1.0f / mass;
+    
+    float i_body_00, i_body_11, i_body_22;
+
+    float scalar = 2.0f * 0.2f * mass * radius * radius;
+
+    i_body_00 = scalar;
+    i_body_11 = scalar;
+    i_body_22 = scalar;
+
     physics_block->i_body_00[index] = i_body_00;
     physics_block->i_body_11[index] = i_body_11;
     physics_block->i_body_22[index] = i_body_22;
@@ -93,11 +138,6 @@ void entity_add_angular_velocity(dm_entity entity, dm_ecs_id p_id, float w_x, fl
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     uint32_t block_index  = context->ecs_manager.entity_block_indices[entity_index][p_id];
     uint32_t comp_index   = context->ecs_manager.entity_component_indices[entity_index][p_id];
-    
-    if(comp_index==511)
-    {
-        DM_LOG_INFO("HERE");
-    }
     
     (physics_block + block_index)->w_x[comp_index] += w_x;
     (physics_block + block_index)->w_y[comp_index] += w_y;

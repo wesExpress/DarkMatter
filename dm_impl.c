@@ -1540,7 +1540,7 @@ bool dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
             }
             
             manager->entity_count++;
-            dm_grow_dyn_array(&manager->entity_containers, manager->entity_count, &manager->entity_capacity, sizeof(dm_ecs_system_entity_container), 0.75f, 2);
+            dm_grow_dyn_array((void**)&manager->entity_containers, manager->entity_count, &manager->entity_capacity, sizeof(dm_ecs_system_entity_container), 0.75f, 2);
         }
     }
     

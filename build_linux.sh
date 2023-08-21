@@ -4,7 +4,7 @@ set echo on
 output="app"
 
 vulkan=0
-debug=0
+debug=1
 simd_256=1
 phys_simd=1
 phys_multi_th=0
@@ -14,7 +14,7 @@ SRC_DIR=$PWD
 mkdir -p build
 cd build
 
-c_files="$SRC_DIR/main.c $SRC_DIR/app.c $SRC_DIR/render_pass.c $SRC_DIR/debug_render_pass.c"
+c_files="$SRC_DIR/main.c $SRC_DIR/app.c $SRC_DIR/render_pass.c $SRC_DIR/debug_render_pass.c $SRC_DIR/components.c $SRC_DIR/physics_system.c $SRC_DIR/gravity_system.c"
 dm_files="$SRC_DIR/dm_impl.c $SRC_DIR/dm_platform_linux.c ${SRC_DIR}/dm_physics.c"
 
 if ((vulkan)); then
@@ -43,7 +43,8 @@ if ((phys_multi_th)); then
 fi
 
 if ((debug)); then
-	defines="$defines -DDM_DEBUG"
+	defines="$defines -DDM_DEBUG -O0"
+	#defines="$defines -DDM_DEBUG -O0 -fsanitize=address"
 	#compiler_flags="$compiler_flags -O0 -fsanitize=address -fno-omit-frame-pointer"
 else
 	compiler_flags="$compiler_flags -O2"

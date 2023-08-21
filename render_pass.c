@@ -210,9 +210,22 @@ bool render_pass_render(dm_context* context)
         }
         
         //debug_render_aabb(transform.pos, dim, color, context);
-        dim[0] = collision.internal[3] - collision.internal[0];
-        dim[1] = collision.internal[4] - collision.internal[1];
-        dim[2] = collision.internal[5] - collision.internal[2];
+        switch(collision.shape)
+        {
+            case DM_COLLISION_SHAPE_BOX:
+            dim[0] = collision.internal[3] - collision.internal[0];
+            dim[1] = collision.internal[4] - collision.internal[1];
+            dim[2] = collision.internal[5] - collision.internal[2];
+            break;
+
+            case DM_COLLISION_SHAPE_SPHERE:
+            dim[0] = dim[1] = dim[2] = collision.internal[0] * 2;
+            break;
+
+            default:
+            break;
+        }
+        
         debug_render_cube(transform.pos, dim, transform.rot, color, context);
 #endif
         

@@ -191,7 +191,8 @@ const component_physics   entity_get_physics(dm_entity entity, dm_ecs_id p_id, d
 const component_collision entity_get_collision(dm_entity entity, dm_ecs_id c_id, dm_context* context);
 
 void entity_add_transform(dm_entity entity, dm_ecs_id t_id, float pos_x,float pos_y,float pos_z, float scale_x,float scale_y,float scale_z, float rot_i,float rot_j,float rot_k,float rot_r, dm_context* context);
-void entity_add_kinematics(dm_entity entity, dm_ecs_id p_id, float mass, float vel_x,float vel_y,float vel_z, float damping_v,float damping_w, float collider_data[6], dm_context* context);
+void entity_add_kinematics_box_rigid_body(dm_entity entity, dm_ecs_id p_id, float mass, float vel_x, float vel_y, float vel_z, float damping_v, float damping_w, float min_x,float min_y, float min_z, float max_x, float max_y, float max_z, dm_context* context);
+void entity_add_kinematics_sphere_rigid_body(dm_entity entity, dm_ecs_id p_id, float mass, float vel_x, float vel_y, float vel_z, float damping_v, float damping_w, float radius, dm_context* context);
 void entity_add_box_collider(dm_entity entity, dm_ecs_id c_id, float center_x,float center_y,float center_z, float dim_x,float dim_y,float dim_z, dm_context* context);
 void entity_add_sphere_collider(dm_entity entity, dm_ecs_id c_id, float center_x,float center_y,float center_z, float radius, dm_context* context);
 

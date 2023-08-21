@@ -1014,7 +1014,7 @@ float dm_logf(float x);
 float dm_log2f(float x);
 bool  dm_isnan(float x);
 
-#include "dm_new_math.h"
+#include "dm_math.h"
 
 // SIMD
 // TODO: no apple support yet

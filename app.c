@@ -31,29 +31,22 @@ dm_entity create_entity(application_data* app_data, dm_context* context)
     rot_k /= mag;
     rot_r /= mag;
     
-    entity_add_transform(entity, app_data->components.transform, pos_x,pos_y,pos_z, scale_x,scale_y,scale_z, rot_i,rot_j,rot_k,rot_r, context);
+    float mass = dm_random_float(context) * 4e3;
     if(dm_random_float(context) > 0.5f)
     {
         scale_y = scale_z = scale_x;
         
-        entity_add_sphere_collider(entity, app_data->components.collision, 0,0,0, scale_x, context);
+        entity_add_sphere_collider(entity, app_data->components.collision, 0,0,0, scale_x * 0.5f, context);
+        entity_add_kinematics_sphere_rigid_body(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, scale_x * 0.5f, context);
     }
     else
     {
         entity_add_box_collider(entity, app_data->components.collision, 0,0,0, scale_x,scale_y,scale_z, context);
+        entity_add_kinematics_box_rigid_body(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, -scale_x * 0.5f,-scale_y * 0.5f,-scale_z * 0.5f,scale_x * 0.5f,scale_y * 0.5f,scale_z * 0.5f, context);
     }
     
-    float dim[6] = {
-        -scale_x * 0.5f,
-        -scale_y * 0.5f,
-        -scale_z * 0.5f,
-        scale_x * 0.5f,
-        scale_y * 0.5f,
-        scale_z * 0.5f
-    };
+    entity_add_transform(entity, app_data->components.transform, pos_x,pos_y,pos_z, scale_x,scale_y,scale_z, rot_i,rot_j,rot_k,rot_r, context);
     
-    float mass = dm_random_float(context) * 4e3;
-    entity_add_kinematics(entity, app_data->components.physics, mass, 0,0,0, 0,0.1f, dim, context);
     entity_add_angular_velocity(entity, app_data->components.physics, dm_random_float(context),dm_random_float(context),dm_random_float(context), context);
     
     return entity;
@@ -215,11 +208,28 @@ bool app_init(dm_context* context)
     init_camera(cam_pos, cam_forward, 0.01f, 1000.0f, 75.0f, DM_SCREEN_WIDTH(context), DM_SCREEN_HEIGHT(context), 10.0f, 1.0f, &app_data->camera); 
     
     // entities
+#if 1
     for(uint32_t i=0; i<MAX_ENTITIES; i++)
     {
         app_data->entities[app_data->entity_count++] = create_entity(app_data, context);
     }
+#else
+    dm_entity entity = dm_ecs_create_entity(context);
     
+    entity_add_transform(entity, app_data->components.transform, 0.9f,0,0, 1,1,1, 0,0,0,1, context);
+    //entity_add_box_collider(entity, app_data->components.collision, 0,0,0, 1,1,1, context);
+    entity_add_sphere_collider(entity, app_data->components.collision, 0,0,0, 0.5f, context);
+    entity_add_kinematics_sphere_rigid_body(entity, app_data->components.physics, 1, 0,0,0, 0,0.1f, 0.5f, context);
+
+    app_data->entities[app_data->entity_count++] = entity;
+
+    entity = dm_ecs_create_entity(context);
+    entity_add_transform(entity, app_data->components.transform, 0,0,0, 1,1,1, 0,0,0,1, context);
+    entity_add_box_collider(entity, app_data->components.collision, 0,0,0, 1,1,1, context);
+    entity_add_kinematics_box_rigid_body(entity, app_data->components.physics, 1, 0,0,0, 0,0.1f, -0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f, context);
+
+    app_data->entities[app_data->entity_count++] = entity;
+#endif
     return true;
 }
 
