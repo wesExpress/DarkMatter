@@ -770,7 +770,7 @@ typedef struct dm_render_command_manager_t
 #define DM_RENDERER_MAX_RESOURCE_COUNT 100
 typedef struct dm_renderer_t
 {
-    dm_font fonts[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_font  fonts[DM_RENDERER_MAX_RESOURCE_COUNT];
     uint32_t font_count;
     
     dm_render_command_manager command_manager;

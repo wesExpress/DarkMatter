@@ -3,6 +3,8 @@
 
 #include "app.h"
 
+#include "imgui_render_pass.h"
+
 typedef enum error_code_t
 {
     ERROR_CODE_SUCCESS,
@@ -41,12 +43,14 @@ int main(int argc, char** argv)
     dm_timer_start(&t, context);
     while(dm_context_is_running(context))
     {
-        if(dm_timer_elapsed(&t, context) > 1)
-        {
-            DM_LOG_INFO("FPS: %u", frame_count);
-            frame_count = 0;
-            dm_timer_start(&t, context);
-        }
+        imgui_pass_draw_text_fmt(context->renderer.width-100,20, 0,1,0,1, context, "FPS: %0.2lf", 1.0f / context->delta);
+        
+        //if(dm_timer_elapsed(&t, context) > 1)
+        //{
+        //DM_LOG_INFO("FPS: %u", frame_count);
+        //frame_count = 0;
+        //dm_timer_start(&t, context);
+        //}
         
         ////////////////////
         dm_start(context);

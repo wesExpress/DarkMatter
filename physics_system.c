@@ -1,6 +1,7 @@
 #include "physics_system.h"
-#include "debug_render_pass.h"
 #include "components.h"
+#include "debug_render_pass.h"
+#include "imgui_render_pass.h"
 
 #include <limits.h>
 #include <float.h>
@@ -143,12 +144,12 @@ bool physics_system_run(void* s, void* d)
     physics_system_reset_forces(system, context);
     total_time = dm_timer_elapsed_ms(&full, context);
     
-    DM_LOG_WARN("Physics broadphase average:           %lf ms (%u checks)", broad_time / (float)iters, manager->broadphase_checks);
-    DM_LOG_WARN("Physics narrowphase average:          %lf ms (%u checks)", narrow_time / (float)iters, manager->num_possible_collisions);
-    DM_LOG_WARN("Physics collision resolution average: %lf ms (%u manifolds)", collision_time / (float)iters, manager->num_manifolds);
-    DM_LOG_WARN("Updating entities average:            %lf ms", update_time / (float)iters);
+    imgui_pass_draw_text_fmt(20,20, 1,1,0,1, context, "Physics broadphase average: %0.3lf ms (%u checks)", broad_time / (float)iters, manager->broadphase_checks);
+    imgui_pass_draw_text_fmt(20,40, 1,1,0,1, context, "Physics narrowphase average: %0.3lf ms (%u checks)", narrow_time / (float)iters, manager->num_possible_collisions);
+    imgui_pass_draw_text_fmt(20,60, 1,1,0,1, context, "Physics collision resolution average: %0.3lf ms (%u manifolds)", collision_time / (float)iters, manager->num_manifolds);
+    imgui_pass_draw_text_fmt(20,80, 1,1,0,1, context, "Updating entities average: %0.3lf ms", update_time / (float)iters);
     
-    DM_LOG_WARN("Physics took:                         %lf ms, %u iterations", total_time, iters);
+    imgui_pass_draw_text_fmt(20,100, 1,0,1,1, context, "Physics took: %lf ms, %u iterations", total_time, iters);
     
     return true;
 }

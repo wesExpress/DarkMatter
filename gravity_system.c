@@ -1,6 +1,8 @@
 #include "gravity_system.h"
 #include "components.h"
+
 #include "debug_render_pass.h"
+#include "imgui_render_pass.h"
 
 #define G 6.673e-11f
 
@@ -45,7 +47,7 @@ bool gravity_system_run(void* s, void* c)
     dm_timer t = { 0 };
     dm_timer_start(&t, context);
     naive_gravity(system, context);
-    DM_LOG_INFO("Gravity took: %lf ms (%u entities)", dm_timer_elapsed_ms(&t, context), system->entity_count);
+    imgui_pass_draw_text_fmt(20,120, 0,1,0,1, context, "Gravity took: %0.3lf ms (%u entities)", dm_timer_elapsed_ms(&t, context), system->entity_count);
     
     return true;
 }

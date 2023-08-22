@@ -33,6 +33,7 @@ typedef struct application_data_t
     
     void*        render_pass_data;
     void*        debug_render_pass_data;
+    void*        imgui_pass_data;
 } application_data;
 
 bool app_init(dm_context* context);

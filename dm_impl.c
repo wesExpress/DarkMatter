@@ -525,11 +525,11 @@ void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list)
 /********
 PLATFORM
 **********/
-extern bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_platform_data* platform_data);
-extern void dm_platform_shutdown(dm_platform_data* platform_data);
+extern bool   dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_platform_data* platform_data);
+extern void   dm_platform_shutdown(dm_platform_data* platform_data);
 extern double dm_platform_get_time(dm_platform_data* platform_data);
-extern void dm_platform_write(const char* message, uint8_t color);
-extern bool dm_platform_pump_events(dm_platform_data* platform_data);
+extern void   dm_platform_write(const char* message, uint8_t color);
+extern bool   dm_platform_pump_events(dm_platform_data* platform_data);
 
 /*******
 LOGGING
@@ -759,7 +759,7 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
     uint32_t h = 512;
     uint32_t n_channels = 4;
     
-    unsigned char* alpha_bitmap = dm_alloc(w * h);;
+    unsigned char* alpha_bitmap = dm_alloc(w * h);
     unsigned char* bitmap = dm_alloc(w * h * n_channels);
     dm_memzero(alpha_bitmap, w * h);
     dm_memzero(bitmap, w * h * n_channels);
@@ -1691,6 +1691,9 @@ dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t windo
         dm_free(context);
         return NULL;
     }
+    
+    context->renderer.width = window_w;
+    context->renderer.height = window_h;
     
     dm_ecs_init(context);
     

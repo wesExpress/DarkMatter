@@ -1,9 +1,12 @@
 #include "app.h"
+
 #include "components.h"
-#include "render_pass.h"
-#include "debug_render_pass.h"
 #include "physics_system.h"
 #include "gravity_system.h"
+
+#include "render_pass.h"
+#include "debug_render_pass.h"
+#include "imgui_render_pass.h"
 
 #define WORLD_SIZE 150
 
@@ -185,6 +188,7 @@ bool app_init(dm_context* context)
     // rendering
     if(!render_pass_init(context))       return false;
     if(!debug_render_pass_init(context)) return false;
+    if(!imgui_render_pass_init(context)) return false;
     
     // components
     app_data->components.transform = dm_ecs_register_component(sizeof(component_transform_block), context);
@@ -220,14 +224,14 @@ bool app_init(dm_context* context)
     //entity_add_box_collider(entity, app_data->components.collision, 0,0,0, 1,1,1, context);
     entity_add_sphere_collider(entity, app_data->components.collision, 0,0,0, 0.5f, context);
     entity_add_kinematics_sphere_rigid_body(entity, app_data->components.physics, 1, 0,0,0, 0,0.1f, 0.5f, context);
-
+    
     app_data->entities[app_data->entity_count++] = entity;
-
+    
     entity = dm_ecs_create_entity(context);
     entity_add_transform(entity, app_data->components.transform, 0,0,0, 1,1,1, 0,0,0,1, context);
     entity_add_box_collider(entity, app_data->components.collision, 0,0,0, 1,1,1, context);
     entity_add_kinematics_box_rigid_body(entity, app_data->components.physics, 1, 0,0,0, 0,0.1f, -0.5f,-0.5f,-0.5f,0.5f,0.5f,0.5f, context);
-
+    
     app_data->entities[app_data->entity_count++] = entity;
 #endif
     return true;
@@ -237,6 +241,7 @@ void app_shutdown(dm_context* context)
 {
     render_pass_shutdown(context);
     debug_render_pass_shutdown(context);
+    imgui_render_pass_shutdown(context);
     
     dm_free(context->app_data);
 }
@@ -260,6 +265,7 @@ bool app_render(dm_context* context)
 {
     if(!render_pass_render(context))       return false;
     if(!debug_render_pass_render(context)) return false;
+    if(!imgui_render_pass_render(context)) return false;
     
     return true;
 }

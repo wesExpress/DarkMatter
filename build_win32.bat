@@ -9,7 +9,7 @@ SET /A simd_256=1
 SET /A phys_simd=1
 SET /A phys_multi_th=0
 
-SET c_filenames=%SRC_DIR%\main.c %SRC_DIR%\app.c %SRC_DIR%\render_pass.c %SRC_DIR%\debug_render_pass.c %SRC_DIR%\components.c %SRC_DIR%\physics_system.c %SRC_DIR%\gravity_system.c
+SET c_filenames=%SRC_DIR%\main.c %SRC_DIR%\app.c %SRC_DIR%\render_pass.c %SRC_DIR%\debug_render_pass.c %SRC_DIR%\imgui_render_pass.c %SRC_DIR%\components.c %SRC_DIR%\physics_system.c %SRC_DIR%\gravity_system.c
 SET dm_filenames=%SRC_DIR%\dm_impl.c %SRC_DIR%\dm_platform_win32.c %SRC_DIR%\dm_physics.c
 SET linker_flags=/link user32.lib gdi32.lib
 SET include_flags=/I%SRC_DIR%\lib
@@ -96,5 +96,7 @@ IF /I "%vulkan%" EQU "1" (
 )
 
 IF NOT EXIST "build\assets\textures" mkdir build\assets\textures
-
 copy /y "default_texture.png" build\assets\textures
+
+IF NOT EXIST "build\assets\fonts" mkdir build\assets\fonts
+copy /y "Chicago.ttf" build\assets\fonts
