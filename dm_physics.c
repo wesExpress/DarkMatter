@@ -755,10 +755,7 @@ void dm_physics_init_constraint(float vec[3], float r_a[3], float r_b[3], float 
     constraint->impulse_min = impulse_min;
     constraint->impulse_max = impulse_max;
     
-    if(constraint->jacobian[0][0] != constraint->jacobian[0][0])
-    {
-        DM_LOG_ERROR("HERE");
-    }
+    assert(constraint->jacobian[0][0]==constraint->jacobian[0][0]);
 }
 
 void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], const float normal[3], const float depth, const float pos[2][3], const float rot[2][4], const float vel[2][3], const float w[2][3], dm_contact_manifold* manifold)
