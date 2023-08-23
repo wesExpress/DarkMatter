@@ -1,4 +1,4 @@
-#include "dm_platform_win32.h"
+#include "platform/dm_platform_win32.h"
 
 #include <d3d11_1.h>
 #include <dxgi.h>
