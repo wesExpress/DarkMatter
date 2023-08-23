@@ -1,5 +1,6 @@
 #include "components.h"
 #include "dm.h"
+#include "app.h"
 
 void entity_add_transform(dm_entity entity, dm_ecs_id t_id, float pos_x,float pos_y,float pos_z, float scale_x,float scale_y,float scale_z, float rot_i,float rot_j,float rot_k,float rot_r, dm_context* context)
 {
@@ -38,7 +39,7 @@ void entity_add_kinematics_box_rigid_body(dm_entity entity, dm_ecs_id p_id, floa
     physics_block->inv_mass[index] = 1.0f / mass;
     
     float i_body_00, i_body_11, i_body_22;
-
+    
     float dim_x = max_x - min_x;
     float dim_y = max_y - min_y;
     float dim_z = max_z - min_z;
@@ -50,7 +51,7 @@ void entity_add_kinematics_box_rigid_body(dm_entity entity, dm_ecs_id p_id, floa
     i_body_00 = (dim_y + dim_z) * mass * DM_MATH_INV_12;
     i_body_11 = (dim_x + dim_z) * mass * DM_MATH_INV_12;
     i_body_22 = (dim_x + dim_y) * mass * DM_MATH_INV_12;
-
+    
     physics_block->i_body_00[index] = i_body_00;
     physics_block->i_body_11[index] = i_body_11;
     physics_block->i_body_22[index] = i_body_22;
@@ -87,13 +88,13 @@ void entity_add_kinematics_sphere_rigid_body(dm_entity entity, dm_ecs_id p_id, f
     physics_block->inv_mass[index] = 1.0f / mass;
     
     float i_body_00, i_body_11, i_body_22;
-
+    
     float scalar = 2.0f * 0.2f * mass * radius * radius;
-
+    
     i_body_00 = scalar;
     i_body_11 = scalar;
     i_body_22 = scalar;
-
+    
     physics_block->i_body_00[index] = i_body_00;
     physics_block->i_body_11[index] = i_body_11;
     physics_block->i_body_22[index] = i_body_22;
@@ -373,4 +374,23 @@ const component_physics entity_get_physics(dm_entity entity, dm_ecs_id p_id, dm_
     physics.movement_type = physics_block->movement_type[index];
     
     return physics;
+}
+
+/**********
+REGISTRING
+************/
+bool register_components(dm_context* context)
+{
+    application_data* app_data = context->app_data;
+    
+    app_data->components.transform = dm_ecs_register_component(sizeof(component_transform_block), context);
+    if(app_data->components.transform==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register transform component"); return false; }
+    
+    app_data->components.collision = dm_ecs_register_component(sizeof(component_collision_block), context);
+    if(app_data->components.collision==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register collision component"); return false; }
+    
+    app_data->components.physics = dm_ecs_register_component(sizeof(component_physics_block), context);
+    if(app_data->components.physics==DM_ECS_INVALID_ID) { DM_LOG_FATAL("Could not register physics component"); return false; }
+    
+    return true;
 }

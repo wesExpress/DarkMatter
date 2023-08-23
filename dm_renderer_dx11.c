@@ -1088,7 +1088,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     return true;
 }
 
-bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
+bool dm_renderer_backend_end_frame(dm_context* context)
 {
     dm_dx11_renderer* dx11_renderer = context->renderer.internal_renderer;
     
@@ -1096,7 +1096,7 @@ bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
     
     IDXGISwapChain* swap_chain = dx11_renderer->swap_chain;
     
-    uint32_t v = vsync ? 1 : 0;
+    uint32_t v = context->renderer.vsync ? 1 : 0;
     if (FAILED(hr = swap_chain->lpVtbl->Present(swap_chain, v, 0)))
     {
         if (hr == DXGI_ERROR_DEVICE_REMOVED) DM_LOG_FATAL("DirectX Device removed! Exiting...");

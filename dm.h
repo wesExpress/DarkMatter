@@ -780,6 +780,8 @@ typedef struct dm_renderer_t
     uint32_t uniform_bindings;
 #endif
     
+    bool vsync;
+    
     void* internal_renderer;
 } dm_renderer;
 
@@ -952,6 +954,14 @@ typedef enum dm_collision_shape_t
 /******************
 DARKMATTER CONTEXT
 ********************/
+typedef struct dm_context_init_packet_t
+{
+    uint32_t window_x, window_y;
+    uint32_t window_width, window_height;
+    char     window_title[512];
+    char     asset_folder[512];
+} dm_context_init_packet;
+
 typedef struct dm_context_t
 {
     dm_platform_data   platform_data;
@@ -963,7 +973,6 @@ typedef struct dm_context_t
     mt19937            random;
     mt19937_64         random_64;
     uint32_t           flags;
-    
     
     void*              app_data;
 } dm_context;
@@ -1226,7 +1235,7 @@ void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_m
 void dm_physics_apply_constraints(dm_contact_manifold* manifold);
 
 // framework funcs
-dm_context* dm_init(uint32_t window_x_pos, uint32_t windos_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title, const char* asset_path);
+dm_context* dm_init(dm_context_init_packet init_packet);
 void        dm_shutdown(dm_context* context);
 
 void        dm_start(dm_context* context);
@@ -1235,7 +1244,7 @@ void        dm_end(dm_context* context);
 bool        dm_update_begin(dm_context* context);
 bool        dm_update_end(dm_context* context);
 bool        dm_renderer_begin_frame(dm_context* context);
-bool        dm_renderer_end_frame(bool vsync, bool begin_frame, dm_context* context);
+bool        dm_renderer_end_frame(dm_context* context);
 bool        dm_context_is_running(dm_context* context);
 
 void* dm_read_bytes(const char* path, const char* mode, size_t* size);

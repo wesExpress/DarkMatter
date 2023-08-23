@@ -263,7 +263,7 @@ bool render_pass_render(dm_context* context)
     dm_render_command_bind_buffer(pass_data->ib, 0, context);
     dm_render_command_draw_instanced(36,pass_data->instance_count,0,0,0, context);
     
-    imgui_pass_draw_text_fmt(20,140, 0,1,1,1, context, "Renderer took: %0.3lf ms", dm_timer_elapsed_ms(&t, context));
+    imgui_draw_text_fmt(20,140, 0,1,1,1, context, "Renderer took: %0.3lf ms", dm_timer_elapsed_ms(&t, context));
     
     // reset counts back to 0
     pass_data->entity_count = 0;

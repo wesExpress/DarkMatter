@@ -574,7 +574,7 @@ RENDERING
 extern bool dm_renderer_backend_init(dm_context* context);
 extern void dm_renderer_backend_shutdown(dm_context* context);
 extern bool dm_renderer_backend_begin_frame(dm_renderer* renderer);
-extern bool dm_renderer_backend_end_frame(bool vsync, dm_context* context);
+extern bool dm_renderer_backend_end_frame(dm_context* context);
 extern void dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer);
 
 extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_renderer* renderer);
@@ -1670,16 +1670,16 @@ typedef enum dm_context_flags_t
     DM_CONTEXT_FLAG_UNKNOWN
 } dm_context_flags;
 
-dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title, const char* asset_path)
+dm_context* dm_init(dm_context_init_packet init_packet)
 {
     dm_context* context = dm_alloc(sizeof(dm_context));
     
-    context->platform_data.window_data.width = window_w;
-    context->platform_data.window_data.height = window_h;
-    strcpy(context->platform_data.window_data.title, window_title);
-    strcpy(context->platform_data.asset_path, asset_path);
+    context->platform_data.window_data.width = init_packet.window_width;
+    context->platform_data.window_data.height = init_packet.window_height;
+    strcpy(context->platform_data.window_data.title, init_packet.window_title);
+    strcpy(context->platform_data.asset_path, init_packet.asset_folder);
     
-    if(!dm_platform_init(window_x_pos, window_y_pos, &context->platform_data))
+    if(!dm_platform_init(init_packet.window_x, init_packet.window_y, &context->platform_data))
     {
         dm_free(context);
         return NULL;
@@ -1692,8 +1692,8 @@ dm_context* dm_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t windo
         return NULL;
     }
     
-    context->renderer.width = window_w;
-    context->renderer.height = window_h;
+    context->renderer.width = init_packet.window_width;
+    context->renderer.height = init_packet.window_height;
     
     dm_ecs_init(context);
     
@@ -1853,13 +1853,13 @@ bool dm_renderer_begin_frame(dm_context* context)
     return true;
 }
 
-bool dm_renderer_end_frame(bool vsync, bool begin_frame, dm_context* context)
+bool dm_renderer_end_frame(dm_context* context)
 {
     // systems
     if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_RENDER_END, context)) return false;
     
     // command submission
-    if(begin_frame && !dm_renderer_submit_commands(context)) 
+    if(!dm_renderer_submit_commands(context)) 
     { 
         context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
         DM_LOG_FATAL("Submiting render commands failed"); 
@@ -1868,7 +1868,7 @@ bool dm_renderer_end_frame(bool vsync, bool begin_frame, dm_context* context)
     
     context->renderer.command_manager.command_count = 0;
     
-    if(begin_frame && !dm_renderer_backend_end_frame(vsync, context)) 
+    if(!dm_renderer_backend_end_frame(context)) 
     {
         context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
         DM_LOG_FATAL("End frame failed"); 
@@ -1967,4 +1967,75 @@ double dm_timer_elapsed(dm_timer* timer, dm_context* context)
 double dm_timer_elapsed_ms(dm_timer* timer, dm_context* context)
 {
     return dm_timer_elapsed(timer, context) * 1000;
+}
+
+/*********
+MAIN FUNC
+***********/
+// application funcs
+extern void dm_application_setup(dm_context_init_packet* init_packet);
+extern bool dm_application_init(dm_context* context);
+extern bool dm_application_update(dm_context* context);
+extern bool dm_application_render(dm_context* context);
+extern void dm_application_shutdown(dm_context* context);
+
+typedef enum dm_exit_code_t
+{
+    DM_EXIT_CODE_SUCCESS,
+    DM_EXIT_CODE_INIT_FAIL,
+    DM_EXIT_CODE_UNKNOWN
+} dm_exit_code;
+
+#define DM_DEFAULT_SCREEN_X      100
+#define DM_DEFAULT_SCREEN_Y      100
+#define DM_DEFAULT_SCREEN_WIDTH  1280
+#define DM_DEFAULT_SCREEN_HEIGHT 720
+#define DM_DEFAULT_TITLE         "DarkMatter Application"
+#define DM_DEFAULT_ASSETS_FOLDER "assets"
+int main(int argc, char** argv)
+{
+    dm_context_init_packet init_packet = {
+        DM_DEFAULT_SCREEN_X, DM_DEFAULT_SCREEN_Y,
+        DM_DEFAULT_SCREEN_WIDTH, DM_DEFAULT_SCREEN_HEIGHT,
+        DM_DEFAULT_TITLE,
+        DM_DEFAULT_ASSETS_FOLDER
+    };
+    
+    dm_application_setup(&init_packet);
+    
+    dm_context* context = dm_init(init_packet);
+    if(!context) return DM_EXIT_CODE_INIT_FAIL;
+    
+    if(!dm_application_init(context)) 
+    {
+        dm_shutdown(context);
+        getchar();
+        return DM_EXIT_CODE_INIT_FAIL;
+    }
+    
+    while(dm_context_is_running(context))
+    {
+        dm_start(context);
+        
+        // updating
+        if(!dm_update_begin(context)) break;
+        if(!dm_application_update(context)) break;
+        if(!dm_update_end(context)) break;
+        
+        // rendering
+        if(dm_renderer_begin_frame(context))
+        {
+            if(!dm_application_render(context)) break;
+            if(!dm_renderer_end_frame(context)) break;
+        }
+        
+        dm_end(context);
+    }
+    
+    dm_application_shutdown(context);
+    dm_shutdown(context);
+    
+    getchar();
+    
+    return DM_EXIT_CODE_SUCCESS;
 }

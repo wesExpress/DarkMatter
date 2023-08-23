@@ -186,6 +186,8 @@ typedef struct dm_component_physics_t
 } component_physics;
 
 // funcs
+bool  register_components(dm_context* context);
+
 const component_transform entity_get_transform(dm_entity entity, dm_ecs_id t_id, dm_context* context);
 const component_physics   entity_get_physics(dm_entity entity, dm_ecs_id p_id, dm_context* context);
 const component_collision entity_get_collision(dm_entity entity, dm_ecs_id c_id, dm_context* context);

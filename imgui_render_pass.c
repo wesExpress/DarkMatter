@@ -42,7 +42,7 @@ typedef struct imgui_pass_data_t
 /************
 SYSTEM FUNCS
 **************/
-void imgui_pass_draw_text_internal(imgui_pass_text_data_packet text_packet, dm_context* context);
+void imgui_draw_text_internal(imgui_pass_text_data_packet text_packet, dm_context* context);
 
 bool imgui_render_pass_init(dm_context* context)
 {
@@ -145,7 +145,7 @@ bool imgui_render_pass_render(dm_context* context)
     
     for(uint32_t i=0; i<pass_data->text_count; i++)
     {
-        imgui_pass_draw_text_internal(pass_data->text_packets[i], context);
+        imgui_draw_text_internal(pass_data->text_packets[i], context);
     }
     
     pass_data->text_count        = 0;
@@ -156,7 +156,7 @@ bool imgui_render_pass_render(dm_context* context)
 /****************
 RENDER FUNCTIONS
 ******************/
-void imgui_pass_set_font(dm_render_handle font, dm_context* context)
+void imgui_set_font(dm_render_handle font, dm_context* context)
 {
     application_data* app_data = context->app_data;
     imgui_pass_data* pass_data = app_data->imgui_pass_data;
@@ -164,15 +164,15 @@ void imgui_pass_set_font(dm_render_handle font, dm_context* context)
     pass_data->active_font = font;
 }
 
-void imgui_pass_draw_text(float x, float y, float r, float g, float b, float a, const char* text, dm_context* context)
+void imgui_draw_text(uint32_t x, uint32_t y, float r, float g, float b, float a, const char* text, dm_context* context)
 {
     application_data* app_data = context->app_data;
     imgui_pass_data* pass_data = app_data->imgui_pass_data;
     
     imgui_pass_text_data_packet* packet = &pass_data->text_packets[pass_data->text_count];
     
-    packet->x = x;
-    packet->y = y;
+    packet->x = (float)x;
+    packet->y = (float)y;
     packet->r = r;
     packet->g = g;
     packet->b = b;
@@ -188,7 +188,7 @@ void imgui_pass_draw_text(float x, float y, float r, float g, float b, float a, 
     pass_data->text_count++;
 }
 
-void imgui_pass_draw_text_fmt(float x, float y, float r, float g, float b, float a, dm_context* context, const char* text, ...)
+void imgui_draw_text_fmt(uint32_t x, uint32_t y, float r, float g, float b, float a, dm_context* context, const char* text, ...)
 {
     application_data* app_data = context->app_data;
     imgui_pass_data* pass_data = app_data->imgui_pass_data;
@@ -201,10 +201,10 @@ void imgui_pass_draw_text_fmt(float x, float y, float r, float g, float b, float
     vsnprintf(buffer, IMGUI_PASS_BUFFER_LEN, text, ar_ptr);
     va_end(ar_ptr);
     
-    imgui_pass_draw_text(x,y,r,g,b,a,buffer,context);
+    imgui_draw_text(x,y,r,g,b,a,buffer,context);
 }
 
-void imgui_pass_draw_text_internal(imgui_pass_text_data_packet text_packet, dm_context* context)
+void imgui_draw_text_internal(imgui_pass_text_data_packet text_packet, dm_context* context)
 {
     application_data* app_data = context->app_data;
     imgui_pass_data* pass_data = app_data->imgui_pass_data;
@@ -216,8 +216,8 @@ void imgui_pass_draw_text_internal(imgui_pass_text_data_packet text_packet, dm_c
     
     // get text length and max height
     uint32_t num_glyphs = 0;
-    float xf = text_packet.x;
-    float yf = text_packet.y;
+    float xf = (float)text_packet.x;
+    float yf = (float)text_packet.y;
     
     const char* runner = text_packet.text;
     
