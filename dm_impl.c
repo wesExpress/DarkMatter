@@ -1659,7 +1659,8 @@ dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_co
 
 void dm_ecs_entity_insert(dm_entity entity, dm_context* context)
 {
-    const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
+    //const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
+    const uint32_t index = entity % context->ecs_manager.entity_capacity;
     dm_entity* entities = context->ecs_manager.entities;
     
     if(entities[index]==DM_ECS_INVALID_ENTITY) 
@@ -1712,24 +1713,29 @@ void dm_ecs_reinsert_entities(uint32_t old_capacity, dm_context* context)
     dm_memset(new_blk_inds, DM_ECS_INVALID_ID, s_size);
     dm_memzero(new_masks, m_size);
     
+    static const size_t index_block_size = sizeof(uint32_t) * DM_ECS_MAX;
+    dm_entity entity;
+    uint32_t index, runner;
+
     for(uint32_t i=0; i<old_capacity; i++)
     {
-        dm_entity entity = ecs_manager->entities[i];
+        entity = ecs_manager->entities[i];
         if(entity==DM_ECS_INVALID_ENTITY) continue;
         
-        uint32_t index = dm_hash_32bit(entity) % ecs_manager->entity_capacity;
-        
+        //index = dm_hash_32bit(entity); 
+        index = entity % ecs_manager->entity_capacity;
+
         if(new_entities[index]==DM_ECS_INVALID_ENTITY)
         {
             new_entities[index] = entity;
-            dm_memcpy(new_comp_inds[index], ecs_manager->entity_component_indices[i], sizeof(uint32_t) * DM_ECS_MAX);
-            dm_memcpy(new_blk_inds[index], ecs_manager->entity_block_indices[i], sizeof(uint32_t) * DM_ECS_MAX);
+            dm_memcpy(new_comp_inds[index], ecs_manager->entity_component_indices[i], index_block_size);
+            dm_memcpy(new_blk_inds[index], ecs_manager->entity_block_indices[i], index_block_size);
             new_masks[index] = ecs_manager->entity_component_masks[i];
         }
         // hash conflict, so iterate
         else
         {
-            uint32_t runner = index + 1;
+            runner = index + 1;
             if(runner >= ecs_manager->entity_capacity) runner = 0;
             
             while(runner != index)
@@ -1737,8 +1743,8 @@ void dm_ecs_reinsert_entities(uint32_t old_capacity, dm_context* context)
                 if(new_entities[runner]==DM_ECS_INVALID_ENTITY)
                 {
                     new_entities[runner] = entity;
-                    dm_memcpy(new_comp_inds[runner], ecs_manager->entity_component_indices[i], sizeof(uint32_t) * DM_ECS_MAX);
-                    dm_memcpy(new_blk_inds[runner], ecs_manager->entity_block_indices[i], sizeof(uint32_t) * DM_ECS_MAX);
+                    dm_memcpy(new_comp_inds[runner], ecs_manager->entity_component_indices[i], index_block_size);
+                    dm_memcpy(new_blk_inds[runner], ecs_manager->entity_block_indices[i], index_block_size);
                     new_masks[runner] = ecs_manager->entity_component_masks[i];
                     
                     break;

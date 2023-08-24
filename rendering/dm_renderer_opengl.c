@@ -901,7 +901,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     return true;
 }
 
-bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
+bool dm_renderer_backend_end_frame(dm_context* context)
 {
     glDisable(GL_BLEND);
     glDisable(GL_DEPTH_TEST);
@@ -909,7 +909,7 @@ bool dm_renderer_backend_end_frame(bool vsync, dm_context* context)
     
     glDisable(GL_FRAMEBUFFER_SRGB);
     
-    dm_platform_swap_buffers(vsync, &context->platform_data);
+    dm_platform_swap_buffers(context->renderer.vsync, &context->platform_data);
     
     return true;
 }

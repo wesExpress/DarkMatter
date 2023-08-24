@@ -1181,7 +1181,8 @@ void* dm_ecs_entity_get_component_block(dm_entity entity, dm_ecs_id component_id
 DM_INLINE
 uint32_t dm_ecs_entity_get_index(dm_entity entity, dm_context* context)
 {
-    const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
+    //const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
+    const uint32_t index = entity % context->ecs_manager.entity_capacity;
     dm_entity* entities = context->ecs_manager.entities;
     
     if(entities[index]==entity) return index;
@@ -1197,6 +1198,19 @@ uint32_t dm_ecs_entity_get_index(dm_entity entity, dm_context* context)
         if(runner >= context->ecs_manager.entity_capacity) runner = 0;
     }
     
+    uint32_t duplicated_count = 0;
+    for(uint32_t i=0; i<context->ecs_manager.entity_capacity; i++)
+    {
+        for(uint32_t j=i+1; j<context->ecs_manager.entity_capacity; j++)
+        {
+            if(entities[i]!=entities[j]) continue;
+            if(entities[i]==DM_ECS_INVALID_ENTITY) continue;
+            
+            duplicated_count++;
+            DM_LOG_ERROR("Duplicated entities: %u:%u %u:%u", i,entities[i],j,entities[j]);
+        }
+    }
+
     DM_LOG_FATAL("Could not find entity index, should not be here...");
     return DM_ECS_INVALID_ID;
 }
