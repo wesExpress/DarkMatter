@@ -129,66 +129,6 @@ HASHING
 typedef uint32_t dm_hash;
 typedef uint64_t dm_hash64;
 
-DM_INLINE
-dm_hash64 dm_hash_fnv1a(const char* key)
-{
-    dm_hash64 hash = 14695981039346656037UL;
-	for (int i = 0; key[i]; i++)
-	{
-		hash ^= key[i];
-		hash *= 1099511628211;
-	}
-    
-	return hash;
-}
-
-// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
-DM_INLINE
-dm_hash dm_hash_32bit(uint32_t key)
-{
-    dm_hash hash = ((key >> 16) ^ key)   * 0x119de1f3;
-    hash         = ((hash >> 16) ^ hash) * 0x119de1f3;
-    hash         = (hash >> 16) ^ hash;
-    
-    return hash;
-}
-
-// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
-DM_INLINE
-dm_hash64 dm_hash_64bit(uint64_t key)
-{
-	dm_hash64 hash = (key ^ (key >> 30))   * UINT64_C(0xbf58476d1ce4e5b9);
-	hash           = (hash ^ (hash >> 27)) * UINT64_C(0x94d049bb133111eb);
-	hash           = hash ^ (hash >> 31);
-    
-	return hash;
-}
-
-// http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
-DM_INLINE
-dm_hash dm_hash_int_pair(int x, int y)
-{
-    if(y < x) return ( y << 16 ) + x;
-    
-    return (x << 16) + y;
-}
-
-// https://stackoverflow.com/questions/682438/hash-function-providing-unique-uint-from-an-integer-coordinate-pair
-DM_INLINE
-dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y)
-{
-    if(y < x) return ( (uint64_t)y << 32 ) ^ x;
-    
-    return ((uint64_t)x << 32) ^ y;
-}
-
-// alternative to modulo: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
-DM_INLINE
-uint32_t dm_hash_reduce(uint32_t x, uint32_t n)
-{
-    return ((uint64_t)x * (uint64_t)n) >> 32;
-}
-
 /******
 RANDOM
 ********/
@@ -842,8 +782,8 @@ typedef struct dm_ecs_system_manager_t
     
     bool (*run_func)(void*,void*);
     void (*shutdown_func)(void*,void*);
-    
-    void* system_data;
+    void (*insert_entity)(uint32_t*,uint32_t*,void*,void*)
+        void* system_data;
     
     dm_ecs_system_entity_container* entity_containers;
 } dm_ecs_system_manager;
@@ -1025,46 +965,6 @@ bool  dm_isnan(float x);
 
 #include "dm_math.h"
 
-// SIMD
-// TODO: no apple support yet
-#ifndef DM_PLATFORM_APPLE
-// casting
-dm_mm_int   dm_mm_cast_float_to_int(dm_mm_float mm);
-dm_mm_float dm_mm_cast_int_to_float(dm_mm_int mm);
-
-// float
-dm_mm_float dm_mm_load_ps(float* d);
-dm_mm_float dm_mm_set1_ps(float d);
-void        dm_mm_store_ps(float* d, dm_mm_float mm);
-
-dm_mm_float dm_mm_add_ps(dm_mm_float left, dm_mm_float right);
-dm_mm_float dm_mm_sub_ps(dm_mm_float left, dm_mm_float right);
-dm_mm_float dm_mm_mul_ps(dm_mm_float left, dm_mm_float right);
-dm_mm_float dm_mm_div_ps(dm_mm_float left, dm_mm_float right);
-dm_mm_float dm_mm_sqrt_ps(dm_mm_float mm);
-dm_mm_float dm_mm_hadd_ps(dm_mm_float left, dm_mm_float right);
-dm_mm_float dm_mm_fmadd_ps(dm_mm_float a, dm_mm_float b, dm_mm_float c);
-
-float       dm_mm_extract_float(dm_mm_float mm);
-float       dm_mm_sum_elements(dm_mm_float mm);
-
-// int
-dm_mm_int   dm_mm_load_i(int* d);
-dm_mm_int   dm_mm_set1_i(int d);
-void        dm_mm_store_i(int* i, dm_mm_int mm);
-
-dm_mm_int   dm_mm_add_i(dm_mm_int left, dm_mm_int right);
-dm_mm_int   dm_mm_sub_i(dm_mm_int left, dm_mm_int right);
-dm_mm_int   dm_mm_mul_i(dm_mm_int left, dm_mm_int right);
-dm_mm_int   dm_mm_div_i(dm_mm_int left, dm_mm_int right);
-dm_mm_int   dm_mm_sqrt_i(dm_mm_int mm);
-dm_mm_int   dm_mm_hadd_i(dm_mm_int left, dm_mm_int right);
-
-// shifting
-dm_mm_int   dm_mm_shiftl_1(dm_mm_int mm);
-dm_mm_int   dm_mm_shiftr_1(dm_mm_int mm);
-#endif
-
 // general input
 bool dm_input_is_key_pressed(dm_key_code key, dm_context* context);
 bool dm_input_is_mousebutton_pressed(dm_mousebutton_code button, dm_context* context);
@@ -1177,69 +1077,6 @@ void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context);
 void* dm_ecs_get_current_component_block(dm_ecs_id component_id, uint32_t* insert_index, dm_context* context);
 void* dm_ecs_entity_get_component_block(dm_entity entity, dm_ecs_id component_id, uint32_t* index, dm_context* context);
 
-// inline ecs
-DM_INLINE
-uint32_t dm_ecs_entity_get_index(dm_entity entity, dm_context* context)
-{
-    //const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
-    const uint32_t index = entity % context->ecs_manager.entity_capacity;
-    dm_entity* entities = context->ecs_manager.entities;
-    
-    if(entities[index]==entity) return index;
-    
-    uint32_t runner = index + 1;
-    if(runner >= context->ecs_manager.entity_capacity) runner = 0;
-    
-    while(runner != index)
-    {
-        if(entities[runner]==entity) return runner;
-        
-        runner++;
-        if(runner >= context->ecs_manager.entity_capacity) runner = 0;
-    }
-    
-    uint32_t duplicated_count = 0;
-    for(uint32_t i=0; i<context->ecs_manager.entity_capacity; i++)
-    {
-        for(uint32_t j=i+1; j<context->ecs_manager.entity_capacity; j++)
-        {
-            if(entities[i]!=entities[j]) continue;
-            if(entities[i]==DM_ECS_INVALID_ENTITY) continue;
-            
-            duplicated_count++;
-            DM_LOG_ERROR("Duplicated entities: %u:%u %u:%u", i,entities[i],j,entities[j]);
-        }
-    }
-
-    DM_LOG_FATAL("Could not find entity index, should not be here...");
-    return DM_ECS_INVALID_ID;
-}
-
-DM_INLINE
-bool dm_ecs_entity_has_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
-{
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==DM_ECS_INVALID_ENTITY) return false;
-    
-    return context->ecs_manager.entity_component_masks[entity_index] & component_id;
-}
-
-DM_INLINE
-bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_mask, dm_context* context)
-{
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==DM_ECS_INVALID_ENTITY) return false;
-    
-    dm_ecs_id entity_mask = context->ecs_manager.entity_component_masks[entity_index];
-    
-    // NAND entity mask with opposite of component mask
-    dm_ecs_id result = ~(entity_mask & ~component_mask);
-    // XOR with opposite of entity mask
-    result ^= ~entity_mask;
-    // success only if this equals the component mask
-    return (result == component_mask);
-}
-
 // physics
 bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);
 void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float penetration[3], float polytope[DM_PHYSICS_EPA_MAX_FACES][3][3], float polytope_normals[DM_PHYSICS_EPA_MAX_FACES][3], uint32_t* polytope_count, dm_simplex* simplex);
@@ -1285,5 +1122,403 @@ void   dm_timer_start(dm_timer* timer, dm_context* context);
 void   dm_timer_restart(dm_timer* timer, dm_context* context);
 double dm_timer_elapsed(dm_timer* timer, dm_context* context);
 double dm_timer_elapsed_ms(dm_timer* timer, dm_context* context);
+
+/*****************
+INLINED FUNCTIONS
+*******************/
+DM_INLINE
+dm_hash64 dm_hash_fnv1a(const char* key)
+{
+    dm_hash64 hash = 14695981039346656037UL;
+	for (int i = 0; key[i]; i++)
+	{
+		hash ^= key[i];
+		hash *= 1099511628211;
+	}
+    
+	return hash;
+}
+
+// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+DM_INLINE
+dm_hash dm_hash_32bit(uint32_t key)
+{
+    dm_hash hash = ((key >> 16) ^ key)   * 0x119de1f3;
+    hash         = ((hash >> 16) ^ hash) * 0x119de1f3;
+    hash         = (hash >> 16) ^ hash;
+    
+    return hash;
+}
+
+// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+DM_INLINE
+dm_hash64 dm_hash_64bit(uint64_t key)
+{
+	dm_hash64 hash = (key ^ (key >> 30))   * UINT64_C(0xbf58476d1ce4e5b9);
+	hash           = (hash ^ (hash >> 27)) * UINT64_C(0x94d049bb133111eb);
+	hash           = hash ^ (hash >> 31);
+    
+	return hash;
+}
+
+// http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
+DM_INLINE
+dm_hash dm_hash_int_pair(int x, int y)
+{
+    if(y < x) return ( y << 16 ) + x;
+    
+    return (x << 16) + y;
+}
+
+// https://stackoverflow.com/questions/682438/hash-function-providing-unique-uint-from-an-integer-coordinate-pair
+DM_INLINE
+dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y)
+{
+    if(y < x) return ( (uint64_t)y << 32 ) ^ x;
+    
+    return ((uint64_t)x << 32) ^ y;
+}
+
+// alternative to modulo: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+DM_INLINE
+uint32_t dm_hash_reduce(uint32_t x, uint32_t n)
+{
+    return ((uint64_t)x * (uint64_t)n) >> 32;
+}
+
+DM_INLINE
+uint32_t dm_ecs_entity_get_index(dm_entity entity, dm_context* context)
+{
+    //const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
+    const uint32_t index = entity % context->ecs_manager.entity_capacity;
+    dm_entity* entities = context->ecs_manager.entities;
+    
+    if(entities[index]==entity) return index;
+    
+    uint32_t runner = index + 1;
+    if(runner >= context->ecs_manager.entity_capacity) runner = 0;
+    
+    while(runner != index)
+    {
+        if(entities[runner]==entity) return runner;
+        
+        runner++;
+        if(runner >= context->ecs_manager.entity_capacity) runner = 0;
+    }
+    
+    uint32_t duplicated_count = 0;
+    for(uint32_t i=0; i<context->ecs_manager.entity_capacity; i++)
+    {
+        for(uint32_t j=i+1; j<context->ecs_manager.entity_capacity; j++)
+        {
+            if(entities[i]!=entities[j]) continue;
+            if(entities[i]==DM_ECS_INVALID_ENTITY) continue;
+            
+            duplicated_count++;
+            DM_LOG_ERROR("Duplicated entities: %u:%u %u:%u", i,entities[i],j,entities[j]);
+        }
+    }
+    
+    DM_LOG_FATAL("Could not find entity index, should not be here...");
+    return DM_ECS_INVALID_ID;
+}
+
+DM_INLINE
+bool dm_ecs_entity_has_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
+{
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    if(entity_index==DM_ECS_INVALID_ENTITY) return false;
+    
+    return context->ecs_manager.entity_component_masks[entity_index] & component_id;
+}
+
+DM_INLINE
+bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_mask, dm_context* context)
+{
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    if(entity_index==DM_ECS_INVALID_ENTITY) return false;
+    
+    dm_ecs_id entity_mask = context->ecs_manager.entity_component_masks[entity_index];
+    
+    // NAND entity mask with opposite of component mask
+    dm_ecs_id result = ~(entity_mask & ~component_mask);
+    // XOR with opposite of entity mask
+    result ^= ~entity_mask;
+    // success only if this equals the component mask
+    return (result == component_mask);
+}
+
+DM_INLINE
+dm_mm_int dm_mm_cast_float_to_int(dm_mm_float mm)
+{
+#ifdef DM_SIMD_256
+    return _mm256_castps_si256(mm);
+#else
+    return _mm_castps_si128(mm);
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_cast_int_to_float(dm_mm_int mm)
+{
+#ifdef DM_SIMD_256
+    return _mm256_castsi256_ps(mm);
+#else
+    return _mm_castsi128_ps(mm);
+#endif
+}
+
+/*
+float
+*/
+DM_INLINE
+dm_mm_float dm_mm_load_ps(float* d)
+{
+#ifdef DM_SIMD_256
+#ifdef DM_PLATFORM_LINUX
+    return _mm256_loadu_ps(d);
+#else
+    return _mm256_load_ps(d);
+#endif
+    
+#else
+#ifdef DM_PLATFORM_LINUX
+    return _mm_loadu_ps(d);
+#else
+    return _mm_load_ps(d);
+#endif
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_set1_ps(float d)
+{
+#ifdef DM_SIMD_256
+    return _mm256_set1_ps(d);
+#else
+    return _mm_set1_ps(d);
+#endif
+}
+
+DM_INLINE
+void dm_mm_store_ps(float* d, dm_mm_float mm)
+{
+#ifdef DM_SIMD_256
+    
+#ifdef DM_PLATFORM_LINUX
+    _mm256_storeu_ps(d, mm);
+#else
+    _mm256_store_ps(d, mm);
+#endif
+    
+#else
+#ifdef DM_PLATFORM_LINUX
+    _mm_storeu_ps(d, mm);
+#else
+    _mm_store_ps(d, mm);
+#endif
+    
+#endif // DM_SIMD_256
+}
+
+DM_INLINE
+dm_mm_float dm_mm_add_ps(dm_mm_float left, dm_mm_float right)
+{
+#ifdef DM_SIMD_256
+    return _mm256_add_ps(left, right);
+#else
+    return _mm_add_ps(left, right);
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_sub_ps(dm_mm_float left, dm_mm_float right)
+{
+#ifdef DM_SIMD_256
+    return _mm256_sub_ps(left, right);
+#else
+    return _mm_sub_ps(left, right);
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_mul_ps(dm_mm_float left, dm_mm_float right)
+{
+#ifdef DM_SIMD_256
+    return _mm256_mul_ps(left, right);
+#else
+    return _mm_mul_ps(left, right);
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_div_ps(dm_mm_float left, dm_mm_float right)
+{
+#ifdef DM_SIMD_256
+    return _mm256_div_ps(left, right);
+#else
+    return _mm_div_ps(left, right);
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_sqrt_ps(dm_mm_float mm)
+{
+#ifdef DM_SIMD_256
+    return _mm256_sqrt_ps(mm);
+#else
+    return _mm_sqrt_ps(mm);
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_hadd_ps(dm_mm_float left, dm_mm_float right)
+{
+#ifdef DM_SIMD_256
+    return _mm256_hadd_ps(left, right);
+#else
+    return _mm_hadd_ps(left, right);
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_fmadd_ps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
+{
+#ifdef DM_SIMD_256
+    return _mm256_fmadd_ps(a, b, c);
+#else
+    return _mm_fmadd_ps(a, b, c);
+#endif
+}
+
+DM_INLINE
+float dm_mm_extract_float(dm_mm_float mm)
+{
+#ifdef DM_SIMD_256
+    return _mm256_cvtss_f32(mm);
+#else
+    return _mm_cvtss_f32(mm);
+#endif
+}
+
+// https://stackoverflow.com/questions/13219146/how-to-sum-m256-horizontally
+DM_INLINE
+float dm_mm_sum_elements(dm_mm_float mm)
+{
+#ifdef DM_SIMD_256
+    // hiQuad = ( x7, x6, x5, x4 )
+    const __m128 hiQuad = _mm256_extractf128_ps(mm, 1);
+    // loQuad = ( x3, x2, x1, x0 )
+    const __m128 loQuad = _mm256_castps256_ps128(mm);
+    // sumQuad = ( x3 + x7, x2 + x6, x1 + x5, x0 + x4 )
+    const __m128 sumQuad = _mm_add_ps(loQuad, hiQuad);
+    // loDual = ( -, -, x1 + x5, x0 + x4 )
+    const __m128 loDual = sumQuad;
+    // hiDual = ( -, -, x3 + x7, x2 + x6 )
+    const __m128 hiDual = _mm_movehl_ps(sumQuad, sumQuad);
+    // sumDual = ( -, -, x1 + x3 + x5 + x7, x0 + x2 + x4 + x6 )
+    const __m128 sumDual = _mm_add_ps(loDual, hiDual);
+    // lo = ( -, -, -, x0 + x2 + x4 + x6 )
+    const __m128 lo = sumDual;
+    // hi = ( -, -, -, x1 + x3 + x5 + x7 )
+    const __m128 hi = _mm_shuffle_ps(sumDual, sumDual, 0x1);
+    // sum = ( -, -, -, x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7 )
+    const __m128 sum = _mm_add_ss(lo, hi);
+    return _mm_cvtss_f32(sum);
+#endif
+}
+
+/*
+ int
+*/
+DM_INLINE
+dm_mm_int dm_mm_load_i(int* d)
+{
+#ifdef DM_SIMD_256
+    return _mm256_load_si256((dm_mm_int*)d);
+#else
+    return _mm_load_si128((dm_mm_int*)d);
+#endif
+}
+
+DM_INLINE
+dm_mm_int dm_mm_set1_i(int d)
+{
+#ifdef DM_SIMD_256
+    return _mm256_set1_epi32(d);
+#else
+    return _mm_set1_epi32(d);
+#endif
+}
+
+DM_INLINE
+void dm_mm_store_i(int* i, dm_mm_int mm)
+{
+#ifdef DM_SIMD_256
+    _mm256_store_si256((dm_mm_int*)i, mm);
+#else
+    _mm_store_si128((dm_mm_int*)i, mm);
+#endif
+}
+
+DM_INLINE
+dm_mm_int dm_mm_add_i(dm_mm_int left, dm_mm_int right)
+{
+#ifdef DM_SIMD_256
+    return _mm256_add_epi32(left, right);
+#else
+    return _mm_add_epi32(left, right);
+#endif
+}
+
+DM_INLINE
+dm_mm_int dm_mm_sub_i(dm_mm_int left, dm_mm_int right)
+{
+#ifdef DM_SIMD_256
+    return _mm256_sub_epi32(left, right);
+#else
+    return _mm_sub_epi32(left, right);
+#endif
+}
+
+DM_INLINE
+dm_mm_int dm_mm_mul_i(dm_mm_int left, dm_mm_int right)
+{
+#ifdef DM_SIMD_256
+    return _mm256_mul_epi32(left, right);
+#else
+    return _mm_mul_epi32(left, right);
+#endif
+}
+
+DM_INLINE
+dm_mm_int dm_mm_hadd_i(dm_mm_int left, dm_mm_int right)
+{
+#ifdef DM_SIMD_256
+    return _mm256_hadd_epi32(left, right);
+#else
+    return _mm_hadd_epi32(left, right);
+#endif
+}
+
+DM_INLINE
+dm_mm_int dm_mm_shiftl_1(dm_mm_int mm)
+{
+#ifdef DM_SIMD_256
+    return _mm256_slli_si256(mm, sizeof(int));
+#else
+    return _mm_bslli_si128(mm, sizeof(int));
+#endif
+}
+
+DM_INLINE
+dm_mm_int dm_mm_shiftr_1(dm_mm_int mm)
+{
+#ifdef DM_SIMD_256
+    return _mm256_bsrli_epi128(mm, sizeof(int));
+#else
+    return _mm_bsrli_si128(mm, sizeof(int));
+#endif
+}
 
 #endif //DM_H

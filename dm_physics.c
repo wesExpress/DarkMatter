@@ -12,6 +12,13 @@
 #define DM_PHYSICS_W_LIM             50.0f
 #define DM_PHYSICS_MAX_MANIFOLDS     20
 
+#define DM_PHYSICS_BAUMGARTE_COEF 0.01f
+#define DM_PHYSICS_BAUMGARTE_SLOP 0.001f
+
+#define DM_PHYSICS_REST_COEF 0.01f
+#define DM_PHYSICS_REST_SLOP 0.5f
+
+
 // 3d support funcs
 void dm_physics_support_func_sphere(const float pos[3], const float cen[3], const float internals[6], const float dir[3], float support[3])
 {
@@ -815,8 +822,6 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
         float neg_norm[3];
         dm_vec3_negate(manifold->normal, neg_norm);
         
-#define DM_PHYSICS_BAUMGARTE_COEF 0.1f
-#define DM_PHYSICS_BAUMGARTE_SLOP 0.001f
         float ba[3];
         dm_vec3_sub_vec3(on_b, on_a, ba);
         float d = dm_vec3_dot(ba, neg_norm);
@@ -826,9 +831,6 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     
     // restitution
     {
-#define DM_PHYSICS_REST_COEF 0.1f
-#define DM_PHYSICS_REST_SLOP 0.5f
-        
         b += (DM_PHYSICS_REST_COEF * rel_vn); 
     }
     
