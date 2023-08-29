@@ -728,6 +728,10 @@ typedef struct dm_renderer_t
 /***
 ECS
 *****/
+#ifndef DM_ECS_MAX_ENTITIES
+#define DM_ECS_MAX_ENTITIES 1024
+#endif
+
 #define DM_ECS_COMPONENT_BLOCK_SIZE     512
 #define DM_ECS_INV_COMPONENT_BLOCK_SIZE 0.001953125f   // TODO: this is inverse 512, so if above changes, this should too
 
@@ -747,13 +751,8 @@ typedef uint32_t dm_ecs_id;
 #define DM_ECS_MAX_COMPONENT_MEMBER_NUM 32
 #endif
 
-#ifdef DM_ECS_MORE_ENTITIES
-typedef uint64_t dm_entity
-#define DM_ECS_INVALID_ENTITY ULONG_MAX
-#else
 typedef uint32_t dm_entity;
-#define DM_ECS_INVALID_ENTITY UINT_MAX
-#endif
+#define DM_ECS_INVALID_ENTITY ULONG_MAX
 
 typedef enum dm_ecs_system_timing_t
 {
@@ -764,53 +763,46 @@ typedef enum dm_ecs_system_timing_t
     DM_ECS_SYSTEM_TIMING_UNKNOWN
 } dm_ecs_system_timing;
 
-typedef struct dm_ecs_system_entity_container_t
-{
-    dm_entity entity;
-    uint32_t  entity_index;
-    
-    uint32_t component_indices[DM_ECS_MAX];
-    uint32_t block_indices[DM_ECS_MAX];
-} dm_ecs_system_entity_container;
-
 typedef struct dm_ecs_system_manager_t
 {
-    uint32_t  entity_count, entity_capacity, component_count;
-    
+    uint32_t  component_count;
     dm_ecs_id component_mask;
     dm_ecs_id component_ids[DM_ECS_MAX];
     
+    uint32_t entity_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
+    uint32_t entity_count;
+    
     bool (*run_func)(void*,void*);
     void (*shutdown_func)(void*,void*);
-    void (*insert_entity)(uint32_t*,uint32_t*,void*,void*)
-        void* system_data;
     
-    dm_ecs_system_entity_container* entity_containers;
+    void* system_data;
 } dm_ecs_system_manager;
 
 typedef struct dm_ecs_component_manager_t
 {
-    size_t   block_size;
-    uint32_t block_count;
+    size_t   size;
     uint32_t entity_count;
     void*    data;
 } dm_ecs_component_manager;
 
 typedef struct dm_ecs_manager_t
 {
-    uint32_t num_registered_components;
-    uint32_t entity_count, entity_capacity;
-    uint32_t num_registered_systems[DM_ECS_SYSTEM_TIMING_UNKNOWN];
-    
     // entities; indexed via hashing
-    dm_entity* entities;
-    uint32_t  (*entity_component_indices)[DM_ECS_MAX];
-    uint32_t  (*entity_block_indices)[DM_ECS_MAX];
-    dm_ecs_id* entity_component_masks;
+    dm_entity entities[DM_ECS_MAX_ENTITIES];
+    uint32_t  entity_count;
     
-    // components and systems
+    // precomputed entity hash data
+    uint32_t   entity_component_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
+    uint32_t   entity_block_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
+    dm_ecs_id  entity_component_masks[DM_ECS_MAX_ENTITIES];
+    
+    // components
     dm_ecs_component_manager components[DM_ECS_MAX];
-    dm_ecs_system_manager    systems[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
+    uint32_t                 num_registered_components;
+    
+    // systems
+    dm_ecs_system_manager systems[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
+    uint32_t              num_registered_systems[DM_ECS_SYSTEM_TIMING_UNKNOWN];
 } dm_ecs_manager;
 
 /*******
@@ -881,6 +873,8 @@ typedef struct dm_contact_manifold
     
     dm_contact_point points[DM_PHYSICS_CLIP_MAX_PTS];
     uint32_t         point_count;
+    
+    uint32_t  entity_a, entity_b;
 } dm_contact_manifold;
 
 // supported collision shapes
@@ -1068,14 +1062,11 @@ void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
 dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), dm_context* context);
 
-void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm_context* context);
-
 dm_entity dm_ecs_create_entity(dm_context* context);
-dm_entity dm_ecs_entity_get_component_entity(dm_entity entity, dm_ecs_id component_id, dm_context* context);
 
 void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context);
-void* dm_ecs_get_current_component_block(dm_ecs_id component_id, uint32_t* insert_index, dm_context* context);
-void* dm_ecs_entity_get_component_block(dm_entity entity, dm_ecs_id component_id, uint32_t* index, dm_context* context);
+void  dm_ecs_get_component_count(dm_ecs_id component_id, uint32_t* index, dm_context* context);
+void  dm_ecs_itreate_component_block(dm_ecs_id component_id, dm_context* context);
 
 // physics
 bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);
@@ -1190,37 +1181,33 @@ DM_INLINE
 uint32_t dm_ecs_entity_get_index(dm_entity entity, dm_context* context)
 {
     //const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
-    const uint32_t index = entity % context->ecs_manager.entity_capacity;
+    const uint32_t index = entity % DM_ECS_MAX_ENTITIES;
     dm_entity* entities = context->ecs_manager.entities;
     
     if(entities[index]==entity) return index;
     
     uint32_t runner = index + 1;
-    if(runner >= context->ecs_manager.entity_capacity) runner = 0;
+    if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
     
     while(runner != index)
     {
         if(entities[runner]==entity) return runner;
         
         runner++;
-        if(runner >= context->ecs_manager.entity_capacity) runner = 0;
-    }
-    
-    uint32_t duplicated_count = 0;
-    for(uint32_t i=0; i<context->ecs_manager.entity_capacity; i++)
-    {
-        for(uint32_t j=i+1; j<context->ecs_manager.entity_capacity; j++)
-        {
-            if(entities[i]!=entities[j]) continue;
-            if(entities[i]==DM_ECS_INVALID_ENTITY) continue;
-            
-            duplicated_count++;
-            DM_LOG_ERROR("Duplicated entities: %u:%u %u:%u", i,entities[i],j,entities[j]);
-        }
+        if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
     }
     
     DM_LOG_FATAL("Could not find entity index, should not be here...");
-    return DM_ECS_INVALID_ID;
+    return DM_ECS_INVALID_ENTITY;
+}
+
+DM_INLINE
+uint32_t dm_ecs_entity_get_component_index(dm_entity entity, dm_ecs_id component_id, dm_context* context)
+{
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    if(entity_index==DM_ECS_INVALID_ENTITY) return DM_ECS_INVALID_ENTITY;
+    
+    return context->ecs_manager.entity_component_indices[entity_index][component_id];
 }
 
 DM_INLINE
@@ -1248,277 +1235,1861 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
     return (result == component_mask);
 }
 
-DM_INLINE
-dm_mm_int dm_mm_cast_float_to_int(dm_mm_float mm)
+/**********
+INTRINSICS
+************/
+#include "dm_intrinsics.h"
+
+/**************
+IMPLEMENTATION
+****************/
+#ifdef DM_IMPLEMENTATION
+#include <string.h>
+#include <math.h>
+#include <time.h>
+#include <float.h>
+
+#include "mt19937/mt19937.h"
+#include "mt19937/mt19937_64.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image/stb_image.h"
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb_truetype/stb_truetype.h"
+
+// TODO: REMOVE
+#include "rendering/imgui_render_pass.h"
+
+/*********
+BYTE POOL
+***********/
+void __dm_byte_pool_insert(dm_byte_pool* byte_pool, void* data, size_t data_size)
 {
-#ifdef DM_SIMD_256
-    return _mm256_castps_si256(mm);
-#else
-    return _mm_castps_si128(mm);
-#endif
+    if(!byte_pool->data) byte_pool->data = dm_alloc(data_size);
+    else                 byte_pool->data = dm_realloc(byte_pool->data, byte_pool->size + data_size);
+    
+    void* dest = (char*)byte_pool->data + byte_pool->size;
+    dm_memcpy(dest, data, data_size);
+    byte_pool->size += data_size;
 }
 
-DM_INLINE
-dm_mm_float dm_mm_cast_int_to_float(dm_mm_int mm)
+#define DM_BYTE_POOL_INSERT(BYTE_POOL, DATA) __dm_byte_pool_insert(&BYTE_POOL, &DATA, sizeof(DATA))
+
+void* __dm_byte_pool_pop(dm_byte_pool* byte_pool, size_t data_size)
 {
-#ifdef DM_SIMD_256
-    return _mm256_castsi256_ps(mm);
-#else
-    return _mm_castsi128_ps(mm);
-#endif
+    if(!byte_pool->size)
+    {
+        DM_LOG_ERROR("Trying to pop from an empty byte pool");
+        return NULL;
+    }
+    
+    void* result = (char*)byte_pool->data + byte_pool->size - data_size;
+    byte_pool->size -= data_size;
+    return result;
+}
+#define DM_BYTE_POOL_POP(BYTE_POOL, T, NAME) T NAME = *(T*)__dm_byte_pool_pop(&BYTE_POOL, sizeof(T))
+
+/****
+MATH
+******/
+int dm_abs(int x)
+{
+    return abs(x);
 }
 
-/*
-float
-*/
-DM_INLINE
-dm_mm_float dm_mm_load_ps(float* d)
+float dm_sqrtf(float x)
 {
-#ifdef DM_SIMD_256
-#ifdef DM_PLATFORM_LINUX
-    return _mm256_loadu_ps(d);
-#else
-    return _mm256_load_ps(d);
+    return sqrtf(x);
+}
+
+float dm_fabs(float x)
+{
+    return fabsf(x);
+}
+
+float dm_math_angle_xy(float x, float y)
+{
+	float theta = 0.0f;
+    
+	if (x >= 0.0f)
+	{
+		theta = dm_atan(x, y);
+		if (theta < 0.0f) theta += 2.0f * DM_MATH_PI;
+	}
+	else theta = dm_atan(x, y) + DM_MATH_PI;
+    
+	return theta;
+}
+
+float dm_sin(float angle)
+{
+	return sinf(angle);
+}
+
+float dm_cos(float angle)
+{
+	return cosf(angle);
+}
+
+float dm_tan(float angle)
+{
+	return tanf(angle);
+}
+
+float dm_sind(float angle)
+{
+    return dm_sin(angle * DM_MATH_DEG_TO_RAD);
+}
+
+float dm_cosd(float angle)
+{
+    return dm_cos(angle * DM_MATH_DEG_TO_RAD);
+}
+
+float dm_asin(float value)
+{
+    return asinf(value);
+}
+
+float dm_acos(float value)
+{
+    return acosf(value);
+}
+
+float dm_atan(float x, float y)
+{
+    return atan2f(y, x);
+}
+
+float dm_smoothstep(float edge0, float edge1, float x)
+{
+    float h = (x - edge0) / (edge1 - edge0);
+    h = DM_CLAMP(h, 0, 1);
+    return h * h * (3 - 2 * h);
+}
+
+float dm_smootherstep(float edge0, float edge1, float x)
+{
+    float h = (x - edge0) / (edge1 - edge0);
+    h = DM_CLAMP(h, 0, 1);
+    return h * h * h * (h * (h * 6 - 15) + 10);
+}
+
+float dm_exp(float x)
+{
+    return expf(x);
+}
+
+float dm_powf(float x, float y)
+{
+    return powf(x, y);
+}
+
+float dm_roundf(float x)
+{
+    return roundf(x);
+}
+
+int dm_round(float x)
+{
+    return (int)round(x);
+}
+
+int dm_ceil(float x)
+{
+    return (int)ceil(x);
+}
+
+int dm_floor(float x)
+{
+    return (int)floor(x);
+}
+
+float dm_logf(float x)
+{
+    return logf(x);
+}
+
+float dm_log2f(float x)
+{
+    return log2f(x);
+}
+
+bool dm_isnan(float x)
+{
+    return isnan(x);
+}
+
+/******
+MEMORY
+********/
+void* dm_alloc(size_t size)
+{
+    void* temp = malloc(size);
+    if(!temp) return NULL;
+    dm_memzero(temp, size);
+    return temp;
+}
+
+void* dm_calloc(size_t count, size_t size)
+{
+    void* temp = calloc(count, size);
+    if(!temp) return NULL;
+    return temp;
+}
+
+void* dm_realloc(void* block, size_t size)
+{
+    void* temp = realloc(block, size);
+    if(temp) block = temp;
+    return block;
+}
+
+void dm_free(void* block)
+{
+    free(block);
+    block = NULL;
+}
+
+void* dm_memset(void* dest, int value, size_t size)
+{
+    return memset(dest, value, size);
+}
+
+void* dm_memzero(void* block, size_t size)
+{
+    return dm_memset(block, 0, size);
+}
+
+void* dm_memcpy(void* dest, const void* src, size_t size)
+{
+    return memcpy(dest, src, size);
+}
+
+void dm_memmove(void* dest, const void* src, size_t size)
+{
+    memmove(dest, src, size);
+}
+
+/***********
+RANDOM IMPL
+*************/
+int dm_random_int(dm_context* context)
+{
+    return dm_random_uint32(context) - INT_MAX;
+}
+
+int dm_random_int_range(int start, int end, dm_context* context)
+{
+    int old_range = UINT_MAX;
+    int new_range = end - start;
+    
+    return ((dm_random_int(context) + INT_MAX) * new_range) / old_range + start;
+}
+
+uint32_t dm_random_uint32(dm_context* context)
+{
+    return genrand_int32(&context->random);
+}
+
+uint32_t dm_random_uint32_range(uint32_t start, uint32_t end, dm_context* context)
+{
+    uint32_t old_range = UINT_MAX;
+    uint32_t new_range = end - start;
+    
+    return (dm_random_uint32(context) * new_range) / old_range + start;
+}
+
+uint64_t dm_random_uint64(dm_context* context)
+{
+    return genrand64_uint64(&context->random_64);
+}
+
+uint64_t dm_random_uint64_range(uint64_t start, uint64_t end, dm_context* context)
+{
+    uint64_t old_range = ULLONG_MAX;
+    uint64_t new_range = end - start;
+    
+    return (dm_random_uint64(context) - new_range) / old_range + start;
+}
+
+float dm_random_float(dm_context* context)
+{
+    return genrand_float32_full(&context->random);
+}
+
+float dm_random_float_range(float start, float end, dm_context* context)
+{
+    float range = end - start;
+    
+    return dm_random_float(context) * range + start;
+}
+
+double dm_random_double(dm_context* context)
+{
+    return genrand64_real1(&context->random_64);
+}
+
+double dm_random_double_range(double start, double end, dm_context* context)
+{
+    double range = end - start;
+    
+    return dm_random_double(context) * range + start;
+}
+
+/*****
+INPUT
+*******/
+void dm_input_clear_keyboard(dm_context* context)
+{
+	dm_memzero(context->input_states[0].keyboard.keys, sizeof(bool) * 256);
+}
+
+void dm_input_reset_mouse_x(dm_context* context)
+{
+	context->input_states[0].mouse.x = 0;
+}
+
+void dm_input_reset_mouse_y(dm_context* context)
+{
+	context->input_states[0].mouse.y = 0;
+}
+
+void dm_input_reset_mouse_pos(dm_context* context)
+{
+	dm_input_reset_mouse_x(context);
+	dm_input_reset_mouse_y(context);
+}
+
+void dm_input_reset_mouse_scroll(dm_context* context)
+{
+	context->input_states[0].mouse.scroll = 0;
+}
+
+void dm_input_clear_mousebuttons(dm_context* context)
+{
+	dm_memzero(context->input_states[0].mouse.buttons, sizeof(bool) * 3);
+}
+
+void dm_input_set_key_pressed(dm_key_code key, dm_context* context)
+{
+	context->input_states[0].keyboard.keys[key] = 1;
+}
+
+void dm_input_set_key_released(dm_key_code key, dm_context* context)
+{
+	context->input_states[0].keyboard.keys[key] = 0;
+}
+
+void dm_input_set_mousebutton_pressed(dm_mousebutton_code button, dm_context* context)
+{
+	context->input_states[0].mouse.buttons[button] = 1;
+}
+
+void dm_input_set_mousebutton_released(dm_mousebutton_code button, dm_context* context)
+{
+	context->input_states[0].mouse.buttons[button] = 0;
+}
+
+void dm_input_set_mouse_x(int x, dm_context* context)
+{
+	context->input_states[0].mouse.x = x;
+}
+
+void dm_input_set_mouse_y(int y, dm_context* context)
+{
+	context->input_states[0].mouse.y = y;
+}
+
+void dm_input_set_mouse_scroll(int delta, dm_context* context)
+{
+	context->input_states[0].mouse.scroll += delta;
+}
+
+void dm_input_update_state(dm_context* context)
+{
+	dm_memcpy(&context->input_states[1], &context->input_states[0], sizeof(dm_input_state));
+}
+
+bool dm_input_is_key_pressed(dm_key_code key, dm_context* context)
+{
+	return context->input_states[0].keyboard.keys[key];
+}
+
+bool dm_input_is_mousebutton_pressed(dm_mousebutton_code button, dm_context* context)
+{
+	return context->input_states[0].mouse.buttons[button];
+}
+
+bool dm_input_key_just_pressed(dm_key_code key, dm_context* context)
+{
+	return ((context->input_states[0].keyboard.keys[key] == 1) && (context->input_states[1].keyboard.keys[key] == 0));
+}
+
+bool dm_input_key_just_released(dm_key_code key, dm_context* context)
+{
+	return ((context->input_states[0].keyboard.keys[key] == 0) && (context->input_states[1].keyboard.keys[key] == 1));
+}
+
+bool dm_input_mousebutton_just_pressed(dm_mousebutton_code button, dm_context* context)
+{
+	return ((context->input_states[0].mouse.buttons[button] == 1) && (context->input_states[1].mouse.buttons[button] == 0));
+}
+
+bool dm_input_mousebutton_just_released(dm_mousebutton_code button, dm_context* context)
+{
+	return ((context->input_states[0].mouse.buttons[button] == 0) && (context->input_states[1].mouse.buttons[button] == 1));
+}
+
+bool dm_input_mouse_has_moved(dm_context* context)
+{
+	return ((context->input_states[0].mouse.x != context->input_states[1].mouse.x) || (context->input_states[0].mouse.y != context->input_states[1].mouse.y));
+}
+
+bool dm_input_mouse_has_scrolled(dm_context* context)
+{
+    return (context->input_states[0].mouse.scroll != context->input_states[1].mouse.scroll && context->input_states[0].mouse.scroll != 0);
+}
+
+uint32_t dm_input_get_mouse_x(dm_context* context)
+{
+	return context->input_states[0].mouse.x;
+}
+
+uint32_t dm_input_get_mouse_y(dm_context* context)
+{
+	return context->input_states[0].mouse.y;
+}
+
+int dm_input_get_mouse_delta_x(dm_context* context)
+{
+	return context->input_states[0].mouse.x - context->input_states[1].mouse.x;
+}
+
+int dm_input_get_mouse_delta_y(dm_context* context)
+{
+	return context->input_states[0].mouse.y - context->input_states[1].mouse.y;
+}
+
+void dm_input_get_mouse_pos(uint32_t* x, uint32_t* y, dm_context* context)
+{
+	*x = context->input_states[0].mouse.x;
+	*y = context->input_states[0].mouse.y;
+}
+
+void dm_input_get_mouse_delta(int* x, int* y, dm_context* context)
+{
+	*x = dm_input_get_mouse_delta_x(context);
+	*y = dm_input_get_mouse_delta_y(context);
+}
+
+int dm_input_get_prev_mouse_x(dm_context* context)
+{
+	return context->input_states[1].mouse.x;
+}
+
+int dm_input_get_prev_mouse_y(dm_context* context)
+{
+	return context->input_states[1].mouse.y;
+}
+
+void dm_input_get_prev_mouse_pos(uint32_t* x, uint32_t* y, dm_context* context)
+{
+	*x = context->input_states[1].mouse.x;
+	*y = context->input_states[1].mouse.y;
+}
+
+int dm_input_get_mouse_scroll(dm_context* context)
+{
+	return context->input_states[0].mouse.scroll;
+}
+
+int dm_input_get_prev_mouse_scroll(dm_context* context)
+{
+	return context->input_states[1].mouse.scroll;
+}
+
+/*****
+EVENT
+*******/
+void dm_add_window_close_event(dm_event_list* event_list)
+{
+    dm_event* e = &event_list->events[event_list->num++];
+    e->type = DM_EVENT_WINDOW_CLOSE;
+}
+
+void dm_add_window_resize_event(uint32_t new_width, uint32_t new_height, dm_event_list* event_list)
+{
+    dm_event* e = &event_list->events[event_list->num++];
+    e->type = DM_EVENT_WINDOW_RESIZE;
+    e->new_rect[0] = new_width;
+    e->new_rect[1] = new_height;
+}
+
+void dm_add_mousebutton_down_event(dm_mousebutton_code button, dm_event_list* event_list)
+{
+    dm_event* e = &event_list->events[event_list->num++];
+    e->type = DM_EVENT_MOUSEBUTTON_DOWN;
+    e->button = button;
+}
+
+void dm_add_mousebutton_up_event(dm_mousebutton_code button, dm_event_list* event_list)
+{
+    dm_event* e = &event_list->events[event_list->num++];
+    e->type = DM_EVENT_MOUSEBUTTON_UP;
+    e->button = button;
+}
+
+void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* event_list)
+{
+    dm_event* e = &event_list->events[event_list->num++];
+    e->type = DM_EVENT_MOUSE_MOVE;
+    e->coords[0] = mouse_x;
+    e->coords[1] = mouse_y;
+}
+
+void dm_add_mouse_scroll_event(uint32_t delta, dm_event_list* event_list)
+{
+    dm_event* e = &event_list->events[event_list->num++];
+    e->type = DM_EVENT_MOUSE_SCROLL;
+    e->delta = delta;
+}
+
+void dm_add_key_down_event(dm_key_code key, dm_event_list* event_list)
+{
+    dm_event* e = &event_list->events[event_list->num++];
+    e->type = DM_EVENT_KEY_DOWN;
+    e->key = key;
+}
+
+void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list)
+{
+    dm_event* e = &event_list->events[event_list->num++];
+    e->type = DM_EVENT_KEY_UP;
+    e->key = key;
+}
+
+/********
+PLATFORM
+**********/
+extern bool   dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_platform_data* platform_data);
+extern void   dm_platform_shutdown(dm_platform_data* platform_data);
+extern double dm_platform_get_time(dm_platform_data* platform_data);
+extern void   dm_platform_write(const char* message, uint8_t color);
+extern bool   dm_platform_pump_events(dm_platform_data* platform_data);
+
+/*******
+LOGGING
+*********/
+void __dm_log_output(log_level level, const char* message, ...)
+{
+	static const char* log_tag[6] = { "DM_TRCE", "DM_DEBG", "DM_INFO", "DM_WARN", "DM_ERRR", "DM_FATL" };
+    
+#define DM_MSG_LEN 4980
+    char msg_fmt[DM_MSG_LEN];
+	memset(msg_fmt, 0, sizeof(msg_fmt));
+    
+	// ar_ptr lets us move through any variable number of arguments. 
+	// start it one argument to the left of the va_args, here that is message.
+	// then simply shove each of those arguments into message, which should be 
+	// formatted appropriately beforehand
+	va_list ar_ptr;
+	va_start(ar_ptr, message);
+	vsnprintf(msg_fmt, DM_MSG_LEN, message, ar_ptr);
+	va_end(ar_ptr);
+    
+	// add log tag and time code of message
+	char out[5000];
+    
+	time_t now;
+	time(&now);
+	struct tm* local = localtime(&now);
+    
+    sprintf(out, 
+            "[%s] (%02d:%02d:%02d): %s\n",
+            log_tag[level],
+            local->tm_hour, local->tm_min, local->tm_sec,
+            
+            msg_fmt);
+    
+	dm_platform_write(out, level);
+}
+
+/*********
+RENDERING
+***********/
+extern bool dm_renderer_backend_init(dm_context* context);
+extern void dm_renderer_backend_shutdown(dm_context* context);
+extern bool dm_renderer_backend_begin_frame(dm_renderer* renderer);
+extern bool dm_renderer_backend_end_frame(dm_context* context);
+extern void dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer);
+
+extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
+
+extern void dm_render_command_backend_clear(float r, float g, float b, float a, dm_renderer* renderer);
+extern void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_set_primitive_topology(dm_primitive_topology topology, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_shader(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_uniform(dm_render_handle handle, dm_uniform_stage stage, uint32_t slot, uint32_t offset, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_uniform(dm_render_handle handle, void* data, size_t data_size, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_default_framebuffer(dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_framebuffer(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_framebuffer_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
+extern void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count, dm_renderer* renderer);
+extern void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
+extern void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer);
+extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer);
+
+// renderer
+bool dm_renderer_init(dm_context* context)
+{
+    if(!dm_renderer_backend_init(context)) { DM_LOG_FATAL("Could not initialize renderer backend"); return false; }
+    
+    return true;
+}
+
+void dm_renderer_shutdown(dm_context* context)
+{
+    dm_renderer_backend_shutdown(context);
+}
+
+// buffer
+bool dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_context* context)
+{
+    if(dm_renderer_backend_create_buffer(desc, data, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create buffer");
+    return false;
+}
+
+bool dm_renderer_create_static_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context)
+{
+    dm_buffer_desc desc = {
+        .type=DM_BUFFER_TYPE_VERTEX,
+        .usage=DM_BUFFER_USAGE_STATIC,
+        .cpu_access=DM_BUFFER_CPU_WRITE,
+        .buffer_size=data_size,
+        .elem_size=vertex_size
+    };
+    
+    return dm_renderer_create_buffer(desc, data, handle, context);
+}
+
+bool dm_renderer_create_dynamic_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context)
+{
+    dm_buffer_desc desc = {
+        .type=DM_BUFFER_TYPE_VERTEX,
+        .usage=DM_BUFFER_USAGE_DYNAMIC,
+        .cpu_access=DM_BUFFER_CPU_READ,
+        .buffer_size=data_size,
+        .elem_size=vertex_size
+    };
+    
+    return dm_renderer_create_buffer(desc, data, handle, context);
+}
+
+bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, dm_render_handle* handle, dm_context* context)
+{
+    dm_buffer_desc desc = {
+        .type=DM_BUFFER_TYPE_INDEX,
+        .usage=DM_BUFFER_USAGE_STATIC,
+        .cpu_access=DM_BUFFER_CPU_WRITE,
+        .buffer_size=data_size,
+        .elem_size=sizeof(uint32_t)
+    };
+    
+    return dm_renderer_create_buffer(desc, data, handle, context);
+}
+
+bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, dm_render_handle* handle, dm_context* context)
+{
+    dm_buffer_desc desc = {
+        .type=DM_BUFFER_TYPE_INDEX,
+        .usage=DM_BUFFER_USAGE_DYNAMIC,
+        .cpu_access=DM_BUFFER_CPU_READ,
+        .buffer_size=data_size,
+        .elem_size=sizeof(uint32_t)
+    };
+    
+    return dm_renderer_create_buffer(desc, data, handle, context);
+}
+
+bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context)
+{
+    if(dm_renderer_backend_create_shader_and_pipeline(shader_desc, pipe_desc, attrib_descs, attrib_count, shader_handle, pipe_handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Creating shader and pipeline failed");
+    return false;
+}
+
+bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context)
+{
+    if(dm_renderer_backend_create_uniform(size, stage, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Creating uniform failed");
+    return false;
+}
+
+bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context)
+{
+    DM_LOG_DEBUG("Loading image: %s", path);
+    
+    int width, height;
+    int num_channels = n_channels;
+#if defined(DM_DIRECTX) || defined(DM_METAL)
+    num_channels = 4;
 #endif
     
-#else
-#ifdef DM_PLATFORM_LINUX
-    return _mm_loadu_ps(d);
-#else
-    return _mm_load_ps(d);
-#endif
-#endif
-}
-
-DM_INLINE
-dm_mm_float dm_mm_set1_ps(float d)
-{
-#ifdef DM_SIMD_256
-    return _mm256_set1_ps(d);
-#else
-    return _mm_set1_ps(d);
-#endif
-}
-
-DM_INLINE
-void dm_mm_store_ps(float* d, dm_mm_float mm)
-{
-#ifdef DM_SIMD_256
+    stbi_set_flip_vertically_on_load(flipped);
+    unsigned char* data = stbi_load(path, &width, &height, &num_channels, num_channels);
     
-#ifdef DM_PLATFORM_LINUX
-    _mm256_storeu_ps(d, mm);
-#else
-    _mm256_store_ps(d, mm);
-#endif
+    if(!data)
+    {
+        // TODO: Need to not crash, but have a default texture
+        DM_LOG_FATAL("Failed to load image: %s", path);
+        return false;
+    }
     
-#else
-#ifdef DM_PLATFORM_LINUX
-    _mm_storeu_ps(d, mm);
-#else
-    _mm_store_ps(d, mm);
-#endif
+    n_channels = num_channels;
+    if(!dm_renderer_backend_create_texture(width, height, n_channels, data, name, handle, &context->renderer))
+    {
+        DM_LOG_FATAL("Failed to create texture from file: %s", path);
+        stbi_image_free(data);
+        return false;
+    }
     
-#endif // DM_SIMD_256
+    stbi_image_free(data);
+    
+    return true;
 }
 
-DM_INLINE
-dm_mm_float dm_mm_add_ps(dm_mm_float left, dm_mm_float right)
+bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, void* data, const char* name, dm_render_handle* handle, dm_context* context)
 {
-#ifdef DM_SIMD_256
-    return _mm256_add_ps(left, right);
+    if(!dm_renderer_backend_create_texture(width, height, n_channels, data, name, handle, &context->renderer))
+    {
+        DM_LOG_FATAL("Failed to create texture from data");
+        return false;
+    }
+    
+    return true;
+}
+
+bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context)
+{
+    DM_LOG_DEBUG("Loading font: %s", path);
+    
+    size_t size = 0;
+    void* buffer = dm_read_bytes(path, "rb", &size);
+    
+    if(!buffer) 
+    {
+        DM_LOG_FATAL("Font file '%s' not found");
+        return false;
+    }
+    
+    stbtt_fontinfo info;
+    if(!stbtt_InitFont(&info, buffer, 0))
+    {
+        DM_LOG_FATAL("Could not initialize font: %s", path);
+        return false;
+    }
+    
+    uint32_t w = 512;
+    uint32_t h = 512;
+    uint32_t n_channels = 4;
+    
+    unsigned char* alpha_bitmap = dm_alloc(w * h);
+    unsigned char* bitmap = dm_alloc(w * h * n_channels);
+    dm_memzero(alpha_bitmap, w * h);
+    dm_memzero(bitmap, w * h * n_channels);
+    
+    dm_font font = { 0 };
+    stbtt_BakeFontBitmap(buffer, 0, 16, alpha_bitmap, 512, 512, 32, 96, (stbtt_bakedchar*)font.glyphs);
+    
+    // bitmaps are single alpha values, so make 4 channel texture
+    for(uint32_t y=0; y<h; y++)
+    {
+        for(uint32_t x=0; x<w; x++)
+        {
+            uint32_t index = y * w + x;
+            uint32_t bitmap_index = index * n_channels;
+            unsigned char a = alpha_bitmap[index];
+            
+            bitmap[bitmap_index]     = 255;
+            bitmap[bitmap_index + 1] = 255;
+            bitmap[bitmap_index + 2] = 255;
+            bitmap[bitmap_index + 3] = a;
+        }
+    }
+    
+    font.texture_index = -1;
+    if(!dm_renderer_create_texture_from_data(w, h, n_channels, bitmap, "font_texture", &font.texture_index, context)) 
+    { 
+        DM_LOG_FATAL("Could not create texture for font: %s"); 
+        return false; 
+    }
+    
+    dm_free(alpha_bitmap);
+    dm_free(bitmap);
+    dm_free(buffer);
+    
+    dm_memcpy(context->renderer.fonts + context->renderer.font_count, &font, sizeof(dm_font));
+    *handle = context->renderer.font_count++;
+    
+    return true;
+}
+
+void __dm_renderer_submit_render_command(dm_render_command* command, dm_render_command_manager* manager)
+{
+    dm_render_command* c = &manager->commands[manager->command_count++];
+    c->type = command->type;
+    c->params.size = command->params.size;
+    if(!c->params.data) c->params.data = dm_alloc(command->params.size);
+    else c->params.data = dm_realloc(c->params.data, command->params.size);
+    dm_memcpy(c->params.data, command->params.data, command->params.size);
+    
+    dm_free(command->params.data);
+}
+#define DM_SUBMIT_RENDER_COMMAND(COMMAND) __dm_renderer_submit_render_command(&COMMAND, &context->renderer.command_manager)
+#define DM_SUBMIT_RENDER_COMMAND_MANAGER(COMMAND, MANAGER) __dm_renderer_submit_render_command(&COMMAND, &MANAGER)
+#define DM_TOO_MANY_COMMANDS context->renderer.command_manager.command_count > DM_MAX_RENDER_COMMANDS
+
+void dm_render_command_clear(float r, float g, float b, float a, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_CLEAR;
+    
+    DM_BYTE_POOL_INSERT(command.params, r);
+    DM_BYTE_POOL_INSERT(command.params, g);
+    DM_BYTE_POOL_INSERT(command.params, b);
+    DM_BYTE_POOL_INSERT(command.params, a);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_set_viewport(uint32_t width, uint32_t height, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_SET_VIEWPORT;
+    
+    DM_BYTE_POOL_INSERT(command.params, width);
+    DM_BYTE_POOL_INSERT(command.params, height);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_set_default_viewport(dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_SET_VIEWPORT;
+    
+    DM_BYTE_POOL_INSERT(command.params, context->platform_data.window_data.width);
+    DM_BYTE_POOL_INSERT(command.params, context->platform_data.window_data.height);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_set_primitive_topology(dm_primitive_topology topology, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_SET_TOPOLOGY;
+    
+    DM_BYTE_POOL_INSERT(command.params, topology);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+#if 0
+void dm_render_command_begin_renderpass(dm_render_handle pass_index, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BEGIN_RENDER_PASS;
+    
+    DM_BYTE_POOL_INSERT(command.params, pass_index);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_end_renderpass(dm_render_handle pass_index, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_END_RENDER_PASS;
+    
+    DM_BYTE_POOL_INSERT(command.params, pass_index);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+#endif
+
+void dm_render_command_bind_shader(dm_render_handle handle, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BIND_SHADER;
+    
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_bind_pipeline(dm_render_handle handle, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BIND_PIPELINE;
+    
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_bind_buffer(dm_render_handle handle, uint32_t slot, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BIND_BUFFER;
+    
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    DM_BYTE_POOL_INSERT(command.params, slot);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_bind_uniform(dm_render_handle uniform_handle, uint32_t slot, dm_uniform_stage stage, uint32_t offset, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BIND_UNIFORM;
+    
+    DM_BYTE_POOL_INSERT(command.params, uniform_handle);
+    DM_BYTE_POOL_INSERT(command.params, slot);
+    DM_BYTE_POOL_INSERT(command.params, stage);
+    DM_BYTE_POOL_INSERT(command.params, offset);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_update_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_UPDATE_BUFFER;
+    
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    __dm_byte_pool_insert(&command.params, data, data_size);
+    DM_BYTE_POOL_INSERT(command.params, data_size);
+    DM_BYTE_POOL_INSERT(command.params, offset);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_update_uniform(dm_render_handle uniform_handle, void* data, size_t data_size, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_UPDATE_UNIFORM;
+    
+    DM_BYTE_POOL_INSERT(command.params, uniform_handle);
+    __dm_byte_pool_insert(&command.params, data, data_size);
+    DM_BYTE_POOL_INSERT(command.params, data_size);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_bind_texture(dm_render_handle handle, uint32_t slot, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BIND_TEXTURE;
+    
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    DM_BYTE_POOL_INSERT(command.params, slot);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_UPDATE_TEXTURE;
+    
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    DM_BYTE_POOL_INSERT(command.params, width);
+    DM_BYTE_POOL_INSERT(command.params, height);
+    __dm_byte_pool_insert(&command.params, data, data_size);
+    DM_BYTE_POOL_INSERT(command.params, data_size);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_bind_default_framebuffer(dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BIND_DEFAULT_FRAMEBUFFER;
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_bind_framebuffer(dm_render_handle handle, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BIND_FRAMEBUFFER;
+    
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_bind_framebuffer_texture(dm_render_handle handle, uint32_t slot, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BIND_FRAMEBUFFER_TEXTURE;
+    
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    DM_BYTE_POOL_INSERT(command.params, slot);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_DRAW_ARRAYS;
+    
+    DM_BYTE_POOL_INSERT(command.params, start);
+    DM_BYTE_POOL_INSERT(command.params, count);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_DRAW_INDEXED;
+    
+    DM_BYTE_POOL_INSERT(command.params, num_indices);
+    DM_BYTE_POOL_INSERT(command.params, index_offset);
+    DM_BYTE_POOL_INSERT(command.params, vertex_offset);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_DRAW_INSTANCED;
+    
+    DM_BYTE_POOL_INSERT(command.params, num_indices);
+    DM_BYTE_POOL_INSERT(command.params, num_insts);
+    DM_BYTE_POOL_INSERT(command.params, index_offset);
+    DM_BYTE_POOL_INSERT(command.params, vertex_offset);
+    DM_BYTE_POOL_INSERT(command.params, inst_offset);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_TOGGLE_WIREFRAME;
+    
+    DM_BYTE_POOL_INSERT(command.params, wireframe);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+bool dm_renderer_submit_commands(dm_context* context)
+{
+    dm_timer t = { 0 };
+    dm_timer_start(&t, context);
+    
+    for(uint32_t i=0; i<context->renderer.command_manager.command_count; i++)
+    {
+        dm_render_command command = context->renderer.command_manager.commands[i];
+        
+        switch(command.type)
+        {
+            case DM_RENDER_COMMAND_CLEAR:
+            {
+                DM_BYTE_POOL_POP(command.params, float, a);
+                DM_BYTE_POOL_POP(command.params, float, b);
+                DM_BYTE_POOL_POP(command.params, float, g);
+                DM_BYTE_POOL_POP(command.params, float, r);
+                
+                dm_render_command_backend_clear(r, g, b, a, &context->renderer);
+            } break;
+            
+            case DM_RENDER_COMMAND_SET_VIEWPORT:
+            {
+                DM_BYTE_POOL_POP(command.params, uint32_t, height);
+                DM_BYTE_POOL_POP(command.params, uint32_t, width);
+                
+                dm_render_command_backend_set_viewport(width, height, &context->renderer);
+            } break;
+            
+            case DM_RENDER_COMMAND_SET_TOPOLOGY:
+            {
+                DM_BYTE_POOL_POP(command.params, dm_primitive_topology, topology);
+                
+                if(!dm_render_command_backend_set_primitive_topology(topology, &context->renderer)) { DM_LOG_FATAL("Set topology failed"); return false; }
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_SHADER:
+            {
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                
+                if(!dm_render_command_backend_bind_shader(handle, &context->renderer)) { DM_LOG_FATAL("Bind shader failed"); return false; }
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_PIPELINE:
+            {
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                
+                if(!dm_render_command_backend_bind_pipeline(handle, &context->renderer)) { DM_LOG_FATAL("Bind pipeline failed"); return false; }
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_BUFFER:
+            {
+                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                
+                if(!dm_render_command_backend_bind_buffer(handle, slot, &context->renderer)) { DM_LOG_FATAL("Bind buffer failed"); return false; }
+            } break;
+            case DM_RENDER_COMMAND_UPDATE_BUFFER:
+            {
+                DM_BYTE_POOL_POP(command.params, size_t, offset);
+                DM_BYTE_POOL_POP(command.params, size_t, data_size);
+                void* data = __dm_byte_pool_pop(&command.params, data_size);
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                
+                if(!dm_render_command_backend_update_buffer(handle, data, data_size, offset, &context->renderer)) { DM_LOG_FATAL("Update buffer failed"); return false; }
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_UNIFORM:
+            {
+                DM_BYTE_POOL_POP(command.params, uint32_t, offset);
+                DM_BYTE_POOL_POP(command.params, dm_uniform_stage, stage);
+                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, uniform_handle);
+                
+                if(!dm_render_command_backend_bind_uniform(uniform_handle, stage, slot, offset, &context->renderer)) { DM_LOG_FATAL("Bind uniform failed"); return false; }
+            } break;
+            case DM_RENDER_COMMAND_UPDATE_UNIFORM:
+            {
+                DM_BYTE_POOL_POP(command.params, size_t, data_size);
+                void* data = __dm_byte_pool_pop(&command.params, data_size);
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, uniform_handle);
+                
+                if(!dm_render_command_backend_update_uniform(uniform_handle, data, data_size, &context->renderer)) { DM_LOG_FATAL("Update uniform failed"); return false; }
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_TEXTURE:
+            {
+                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                
+                if(!dm_render_command_backend_bind_texture(handle, slot, &context->renderer)) { DM_LOG_FATAL("Bind texture failed"); return false; }
+            } break;
+            case DM_RENDER_COMMAND_UPDATE_TEXTURE:
+            {
+                DM_BYTE_POOL_POP(command.params, size_t, data_size);
+                void* data = __dm_byte_pool_pop(&command.params, data_size);
+                DM_BYTE_POOL_POP(command.params, uint32_t, height);
+                DM_BYTE_POOL_POP(command.params, uint32_t, width);
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                
+                if(!dm_render_command_backend_update_texture(handle, width, height, data, data_size, &context->renderer)) { DM_LOG_FATAL("Update texture failed"); return false; }
+            } break;
+            
+            case DM_RENDER_COMMAND_BIND_DEFAULT_FRAMEBUFFER:
+            {
+                if(!dm_render_command_backend_bind_default_framebuffer(&context->renderer)) { DM_LOG_FATAL("Bind default framebuffer failed"); return false; } 
+            } break;
+            case DM_RENDER_COMMAND_BIND_FRAMEBUFFER:
+            {
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                
+                if(!dm_render_command_backend_bind_framebuffer(handle, &context->renderer)) { DM_LOG_FATAL("Bind framebuffer failed"); return false; }
+            } break;
+            case DM_RENDER_COMMAND_BIND_FRAMEBUFFER_TEXTURE:
+            {
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
+                
+                if(!dm_render_command_backend_bind_framebuffer_texture(handle, slot, &context->renderer)) { DM_LOG_FATAL("Bind framebuffer texture failed"); return false; }
+            } break;
+            
+            case DM_RENDER_COMMAND_DRAW_ARRAYS:
+            {
+                DM_BYTE_POOL_POP(command.params, uint32_t, count);
+                DM_BYTE_POOL_POP(command.params, uint32_t, start);
+                
+                dm_render_command_backend_draw_arrays(start, count, &context->renderer);
+            } break;
+            case DM_RENDER_COMMAND_DRAW_INDEXED:
+            {
+                DM_BYTE_POOL_POP(command.params, uint32_t, vertex_offset);
+                DM_BYTE_POOL_POP(command.params, uint32_t, index_offset);
+                DM_BYTE_POOL_POP(command.params, uint32_t, num_indices);
+                
+                dm_render_command_backend_draw_indexed(num_indices, index_offset, vertex_offset, &context->renderer);
+            } break;
+            case DM_RENDER_COMMAND_DRAW_INSTANCED:
+            {
+                DM_BYTE_POOL_POP(command.params, uint32_t, inst_offset);
+                DM_BYTE_POOL_POP(command.params, uint32_t, vertex_offset);
+                DM_BYTE_POOL_POP(command.params, uint32_t, index_offset);
+                DM_BYTE_POOL_POP(command.params, uint32_t, num_insts);
+                DM_BYTE_POOL_POP(command.params, uint32_t, num_indices);
+                
+                dm_render_command_backend_draw_instanced(num_indices, num_insts, index_offset, vertex_offset, inst_offset, &context->renderer);
+            } break;
+            
+            case DM_RENDER_COMMAND_TOGGLE_WIREFRAME:
+            {
+                DM_BYTE_POOL_POP(command.params, bool, wireframe);
+                
+                dm_render_command_backend_toggle_wireframe(wireframe, &context->renderer);
+            } break;
+            
+            default:
+            DM_LOG_ERROR("Unknown render command! Shouldn't be here...");
+            // TODO: do we kill here? Probably not, just ignore...
+            //return false;
+            break;
+        }
+    }
+    
+    imgui_draw_text_fmt(10,150, 0,1,1,1, context, "Rendering took %0.3lf ms", dm_timer_elapsed_ms(&t, context));
+    return true;
+}
+
+dm_pipeline_desc dm_renderer_default_pipeline()
+{
+    dm_pipeline_desc pipeline_desc = { 0 };
+    pipeline_desc.cull_mode = DM_CULL_BACK;
+    pipeline_desc.winding_order = DM_WINDING_COUNTER_CLOCK;
+    pipeline_desc.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
+    
+    pipeline_desc.depth = true;
+    pipeline_desc.depth_comp = DM_COMPARISON_LESS;
+    
+    pipeline_desc.blend = true;
+    pipeline_desc.blend_eq = DM_BLEND_EQUATION_ADD;
+    pipeline_desc.blend_src_f = DM_BLEND_FUNC_SRC_ALPHA;
+    pipeline_desc.blend_dest_f = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
+    
+    return pipeline_desc;
+}
+
+/***
+ECS
+*****/
+bool dm_ecs_init(dm_context* context)
+{
+    dm_ecs_manager* ecs_manager = &context->ecs_manager;
+    
+    dm_memset(ecs_manager->entities, DM_ECS_INVALID_ENTITY, sizeof(dm_entity) * DM_ECS_MAX_ENTITIES);
+    
+    size_t size = sizeof(uint32_t) * DM_ECS_MAX_ENTITIES * DM_ECS_MAX;
+    dm_memset(ecs_manager->entity_component_indices, DM_ECS_INVALID_ID, size);
+    dm_memset(ecs_manager->entity_block_indices,     DM_ECS_INVALID_ID, size);
+    dm_memzero(ecs_manager->entity_component_masks, sizeof(dm_ecs_id) * DM_ECS_MAX_ENTITIES);
+    
+    return true;
+}
+
+void dm_ecs_shutdown(dm_context* context)
+{
+    uint32_t i;
+    
+    dm_ecs_manager* ecs_manager = &context->ecs_manager;
+    
+    for(i=0; i<ecs_manager->num_registered_components; i++)
+    {
+        dm_free(ecs_manager->components[i].data);
+    }
+    
+    dm_ecs_system_manager* system = NULL;
+    for(i=0; i<DM_ECS_SYSTEM_TIMING_UNKNOWN; i++)
+    {
+        for(uint32_t j=0; j<ecs_manager->num_registered_systems[i]; j++)
+        {
+            system = &ecs_manager->systems[i][j];
+            
+            system->shutdown_func((void*)system,(void*)context);
+            
+            dm_free(system->system_data);
+        }
+    }
+}
+
+dm_ecs_id dm_ecs_register_component(size_t size, dm_context* context)
+{
+    if(context->ecs_manager.num_registered_components >= DM_ECS_MAX) return DM_ECS_INVALID_ID;
+    
+    dm_ecs_id id = context->ecs_manager.num_registered_components++;
+    
+    context->ecs_manager.components[id].size = size;
+    context->ecs_manager.components[id].data = dm_alloc(size);
+    
+    return id;
+}
+
+dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing,  bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), dm_context* context)
+{
+    if(context->ecs_manager.num_registered_systems[timing] >= DM_ECS_MAX) return DM_ECS_INVALID_ID;
+    
+    
+    dm_ecs_id id = context->ecs_manager.num_registered_systems[timing]++;
+    dm_ecs_system_manager* manager = &context->ecs_manager.systems[timing][id];
+    
+    for(uint32_t i=0; i<component_count; i++)
+    {
+        manager->component_mask |= DM_BIT_SHIFT(component_ids[i]);
+        manager->component_ids[i] = component_ids[i];
+    }
+    
+    manager->component_count = component_count;
+    
+    manager->run_func      = run_func;
+    manager->shutdown_func = shutdown_func;
+    
+    return id;
+}
+
+void dm_ecs_entity_insert(dm_entity entity, dm_context* context)
+{
+    //const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
+    const uint32_t index = entity % DM_ECS_MAX_ENTITIES;
+    dm_entity* entities = context->ecs_manager.entities;
+    
+    if(entities[index]==DM_ECS_INVALID_ENTITY) 
+    {
+        entities[index] = entity;
+        return;
+    }
+    
+    uint32_t runner = index + 1;
+    if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
+    
+    while(runner != index)
+    {
+        if(entities[runner]==DM_ECS_INVALID_ENTITY) 
+        {
+            entities[runner] = entity;
+            return;
+        }
+        
+        runner++;
+        if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
+    }
+    
+    DM_LOG_FATAL("Could not insert entity, should not be here...");
+}
+
+void dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
+{
+    uint32_t  entity_index = dm_ecs_entity_get_index(entity, context);
+    uint32_t  component_count, entity_count, component_index;
+    dm_ecs_id comp_id;
+    
+    dm_ecs_manager* ecs_manager = &context->ecs_manager;
+    dm_ecs_system_manager* system = NULL;
+    
+    // for all system timings
+    for(uint32_t t=0; t<DM_ECS_SYSTEM_TIMING_UNKNOWN; t++)
+    {
+        // for all systems in timing
+        for(uint32_t s=0; s<ecs_manager->num_registered_systems[t]; s++)
+        {
+            system = &ecs_manager->systems[t][s];
+            
+            // early out if we don't have what this system needs
+            if(!dm_ecs_entity_has_component_multiple(entity, system->component_mask, context)) continue;
+            
+            entity_count    = system->entity_count;
+            component_count = system->component_count;
+            
+            for(uint32_t c=0; c<component_count; c++)
+            {
+                comp_id = system->component_ids[c];
+                
+                component_index = ecs_manager->entity_component_indices[entity_index][comp_id];
+                system->entity_indices[system->entity_count][comp_id] = component_index;
+            }
+            
+            system->entity_count++;
+        }
+    }
+}
+
+bool dm_ecs_run_systems(dm_ecs_system_timing timing, dm_context* context)
+{
+    dm_ecs_system_manager* system = NULL;
+    for(uint32_t i=0; i<context->ecs_manager.num_registered_systems[timing]; i++)
+    {
+        system = &context->ecs_manager.systems[timing][i];
+        if(!system->run_func(system, context)) return false;
+        
+        // reset entity_count
+        system->entity_count = 0;
+    }
+    
+    return true;
+}
+
+dm_entity dm_ecs_create_entity(dm_context* context)
+{
+    dm_ecs_manager* ecs_manager = &context->ecs_manager;
+    
+    dm_entity entity = dm_random_uint32(context);
+    ecs_manager->entity_count++;
+    
+    dm_ecs_entity_insert(entity, context);
+    
+    return entity;
+}
+
+void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context)
+{
+    if(component_id==DM_ECS_INVALID_ID) return NULL;
+    
+    return context->ecs_manager.components[component_id].data;
+}
+
+void dm_ecs_get_component_count(dm_ecs_id component_id, uint32_t* index, dm_context* context)
+{
+    if(component_id==DM_ECS_INVALID_ID) return;
+    
+    *index = context->ecs_manager.components[component_id].entity_count;
+}
+
+void dm_ecs_iterate_component_block(dm_ecs_id component_id, dm_context* context)
+{
+    if(component_id==DM_ECS_INVALID_ID) return;
+    
+    context->ecs_manager.components[component_id].entity_count++;
+}
+
+/*********
+FRAMEWORK
+***********/
+typedef enum dm_context_flags_t
+{
+    DM_CONTEXT_FLAG_IS_RUNNING,
+    DM_CONTEXT_FLAG_UNKNOWN
+} dm_context_flags;
+
+dm_context* dm_init(dm_context_init_packet init_packet)
+{
+    dm_context* context = dm_alloc(sizeof(dm_context));
+    
+    context->platform_data.window_data.width = init_packet.window_width;
+    context->platform_data.window_data.height = init_packet.window_height;
+    strcpy(context->platform_data.window_data.title, init_packet.window_title);
+    strcpy(context->platform_data.asset_path, init_packet.asset_folder);
+    
+    if(!dm_platform_init(init_packet.window_x, init_packet.window_y, &context->platform_data))
+    {
+        dm_free(context);
+        return NULL;
+    }
+    
+    if(!dm_renderer_init(context))
+    {
+        dm_platform_shutdown(&context->platform_data);
+        dm_free(context);
+        return NULL;
+    }
+    
+    context->renderer.width = init_packet.window_width;
+    context->renderer.height = init_packet.window_height;
+    
+    dm_ecs_init(context);
+    
+    // random init
+    init_genrand(&context->random, (uint32_t)dm_platform_get_time(&context->platform_data));
+    init_genrand64(&context->random_64, (uint64_t)dm_platform_get_time(&context->platform_data));
+    
+    context->delta = 1.0f / DM_DEFAULT_MAX_FPS;
+    context->flags |= DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+    
+    context->renderer.vsync = true;
+    
+    return context;
+}
+
+void dm_shutdown(dm_context* context)
+{
+    for(uint32_t i=0; i<DM_MAX_RENDER_COMMANDS; i++)
+    {
+        if(context->renderer.command_manager.commands[i].params.data) dm_free(context->renderer.command_manager.commands[i].params.data);
+    }
+    
+    dm_renderer_shutdown(context);
+    dm_platform_shutdown(&context->platform_data);
+    dm_ecs_shutdown(context);
+    
+    dm_free(context);
+}
+
+void dm_poll_events(dm_context* context)
+{
+    for(uint32_t i=0; i<context->platform_data.event_list.num; i++)
+    {
+        dm_event e = context->platform_data.event_list.events[i];
+        switch(e.type)
+        {
+            case DM_EVENT_WINDOW_CLOSE:
+            {
+                context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+                DM_LOG_WARN("Window close event received");
+                return;
+            } break;
+            
+            case DM_EVENT_KEY_DOWN:
+            {
+                if(e.key == DM_KEY_ESCAPE)
+                {
+                    dm_event* e2 = &context->platform_data.event_list.events[context->platform_data.event_list.num++];
+                    e2->type = DM_EVENT_WINDOW_CLOSE;
+                }
+                
+                if(!dm_input_is_key_pressed(e.key, context)) dm_input_set_key_pressed(e.key, context);
+            } break;
+            case DM_EVENT_KEY_UP:
+            {
+                if(dm_input_is_key_pressed(e.key, context)) dm_input_set_key_released(e.key, context);
+            } break;
+            
+            case DM_EVENT_MOUSEBUTTON_DOWN:
+            {
+                if(!dm_input_is_mousebutton_pressed(e.button, context)) dm_input_set_mousebutton_pressed(e.button, context);
+            } break;
+            case DM_EVENT_MOUSEBUTTON_UP:
+            {
+                if(dm_input_is_mousebutton_pressed(e.button, context)) dm_input_set_mousebutton_released(e.button, context);
+            } break;
+            
+            case DM_EVENT_MOUSE_MOVE:
+            {
+                dm_input_set_mouse_x(e.coords[0], context);
+                dm_input_set_mouse_y(e.coords[1], context);
+            } break;
+            
+            case DM_EVENT_MOUSE_SCROLL:
+            {
+                dm_input_set_mouse_scroll(e.delta, context);
+            } break;
+            
+            case DM_EVENT_WINDOW_RESIZE:
+            {
+                context->platform_data.window_data.width  = e.new_rect[0];
+                context->platform_data.window_data.height = e.new_rect[1];
+                dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer);
+            } break;
+            
+            case DM_EVENT_UNKNOWN:
+            {
+                DM_LOG_ERROR("Unknown event! Shouldn't be here...");
+            } break;
+        }
+    }
+}
+
+void dm_start(dm_context* context)
+{
+    context->start = dm_platform_get_time(&context->platform_data);
+}
+
+void dm_end(dm_context* context)
+{
+    context->end = dm_platform_get_time(&context->platform_data);
+    context->delta = context->end - context->start;
+}
+
+bool dm_update_begin(dm_context* context)
+{
+    // update input states
+    context->input_states[1] = context->input_states[0];
+    //dm_memzero(&context->input_states[0], sizeof(context->input_states[0]));
+    context->input_states[0].mouse.scroll = 0;
+    
+    if(!dm_platform_pump_events(&context->platform_data)) 
+    {
+        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+        return false;
+    }
+    
+    dm_poll_events(context);
+    
+    // reinsert entities
+    for(uint32_t i=0; i<context->ecs_manager.entity_count; i++)
+    {
+        dm_ecs_entity_insert_into_systems(context->ecs_manager.entities[i], context);
+    }
+    
+    // systems
+    if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN, context)) return false;
+    
+    return true;
+}
+
+bool dm_update_end(dm_context* context)
+{
+    // systems
+    if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_UPDATE_END, context)) return false;
+    
+    // cleaning
+    context->platform_data.event_list.num = 0;
+    
+    return true;
+}
+
+bool dm_renderer_begin_frame(dm_context* context)
+{
+    if(!dm_renderer_backend_begin_frame(&context->renderer))
+    {
+        DM_LOG_FATAL("Begin frame failed");
+        return false;
+    }
+    
+    // systems
+    if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_RENDER_BEGIN, context)) return false;
+    
+    return true;
+}
+
+bool dm_renderer_end_frame(dm_context* context)
+{
+    // systems
+    if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_RENDER_END, context)) return false;
+    
+    // command submission
+    if(!dm_renderer_submit_commands(context)) 
+    { 
+        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+        DM_LOG_FATAL("Submiting render commands failed"); 
+        return false; 
+    }
+    
+    context->renderer.command_manager.command_count = 0;
+    
+    if(!dm_renderer_backend_end_frame(context)) 
+    {
+        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+        DM_LOG_FATAL("End frame failed"); 
+        return false; 
+    }
+    
+    return true;
+}
+
+void* dm_read_bytes(const char* path, const char* mode, size_t* size)
+{
+    void* buffer = NULL;
+    FILE* fp = fopen(path, mode);
+    if(fp)
+    {
+        fseek(fp, 0, SEEK_END);
+        *size = ftell(fp);
+        fseek(fp, 0, SEEK_SET);
+        
+        buffer = dm_alloc(*size);
+        
+        size_t t = fread(buffer, *size, 1, fp);
+        if(t!=1) 
+        {
+            DM_LOG_ERROR("Something bad happened with fread");
+            return NULL;
+        }
+        
+        fclose(fp);
+    }
+    return buffer;
+}
+
+bool dm_context_is_running(dm_context* context)
+{
+    return context->flags & DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+}
+
+uint32_t __dm_get_screen_width(dm_context* context)
+{
+    return context->platform_data.window_data.width;
+}
+
+uint32_t __dm_get_screen_height(dm_context* context)
+{
+    return context->platform_data.window_data.height;
+}
+
+void dm_grow_dyn_array(void** array, uint32_t count, uint32_t* capacity, size_t elem_size, float load_factor, uint32_t resize_factor)
+{
+    if((float)count / (float)*capacity < load_factor) return;
+    
+    *capacity *= resize_factor;
+    *array = dm_realloc(*array, *capacity * elem_size);
+}
+
+void dm_qsort(void* array, size_t count, size_t elem_size, int (compar)(const void* a, const void* b))
+{
+    qsort(array, count, elem_size, compar);
+}
+
+#ifdef DM_LINUX
+void dm_qsrot_p(void* array, size_t count, size_t elem_size, int (compar)(const void* a, const void* b, void* c), void* d)
+{
+    qsort_r(array, count, elem_size, compar, d);
+}
 #else
-    return _mm_add_ps(left, right);
+void dm_qsrot_p(void* array, size_t count, size_t elem_size, int (compar)(void* c, const void* a, const void* b), void* d)
+{
+#ifdef DM_PLATFORM_WIN32
+    qsort_s(array, count, elem_size, compar, d);
+#elif defined(DM_PLATFORM_APPLE)
+    qsort_r(array, count, elem_size, d, compar);
 #endif
+}
+#endif
+
+/*****
+TIMER
+*******/
+void dm_timer_start(dm_timer* timer, dm_context* context)
+{
+    timer->start = dm_platform_get_time(&context->platform_data);
 }
 
-DM_INLINE
-dm_mm_float dm_mm_sub_ps(dm_mm_float left, dm_mm_float right)
+void dm_timer_restart(dm_timer* timer, dm_context* context)
 {
-#ifdef DM_SIMD_256
-    return _mm256_sub_ps(left, right);
-#else
-    return _mm_sub_ps(left, right);
-#endif
+    dm_timer_start(timer, context);
 }
 
-DM_INLINE
-dm_mm_float dm_mm_mul_ps(dm_mm_float left, dm_mm_float right)
+double dm_timer_elapsed(dm_timer* timer, dm_context* context)
 {
-#ifdef DM_SIMD_256
-    return _mm256_mul_ps(left, right);
-#else
-    return _mm_mul_ps(left, right);
-#endif
+    return (dm_platform_get_time(&context->platform_data) - timer->start);
 }
 
-DM_INLINE
-dm_mm_float dm_mm_div_ps(dm_mm_float left, dm_mm_float right)
+double dm_timer_elapsed_ms(dm_timer* timer, dm_context* context)
 {
-#ifdef DM_SIMD_256
-    return _mm256_div_ps(left, right);
-#else
-    return _mm_div_ps(left, right);
-#endif
+    return dm_timer_elapsed(timer, context) * 1000;
 }
 
-DM_INLINE
-dm_mm_float dm_mm_sqrt_ps(dm_mm_float mm)
-{
-#ifdef DM_SIMD_256
-    return _mm256_sqrt_ps(mm);
-#else
-    return _mm_sqrt_ps(mm);
-#endif
-}
+/*********
+MAIN FUNC
+***********/
+// application funcs
+extern void dm_application_setup(dm_context_init_packet* init_packet);
+extern bool dm_application_init(dm_context* context);
+extern bool dm_application_update(dm_context* context);
+extern bool dm_application_render(dm_context* context);
+extern void dm_application_shutdown(dm_context* context);
 
-DM_INLINE
-dm_mm_float dm_mm_hadd_ps(dm_mm_float left, dm_mm_float right)
+typedef enum dm_exit_code_t
 {
-#ifdef DM_SIMD_256
-    return _mm256_hadd_ps(left, right);
-#else
-    return _mm_hadd_ps(left, right);
-#endif
-}
+    DM_EXIT_CODE_SUCCESS,
+    DM_EXIT_CODE_INIT_FAIL,
+    DM_EXIT_CODE_UNKNOWN
+} dm_exit_code;
 
-DM_INLINE
-dm_mm_float dm_mm_fmadd_ps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
+#define DM_DEFAULT_SCREEN_X      100
+#define DM_DEFAULT_SCREEN_Y      100
+#define DM_DEFAULT_SCREEN_WIDTH  1280
+#define DM_DEFAULT_SCREEN_HEIGHT 720
+#define DM_DEFAULT_TITLE         "DarkMatter Application"
+#define DM_DEFAULT_ASSETS_FOLDER "assets"
+int main(int argc, char** argv)
 {
-#ifdef DM_SIMD_256
-    return _mm256_fmadd_ps(a, b, c);
-#else
-    return _mm_fmadd_ps(a, b, c);
-#endif
+    dm_context_init_packet init_packet = {
+        DM_DEFAULT_SCREEN_X, DM_DEFAULT_SCREEN_Y,
+        DM_DEFAULT_SCREEN_WIDTH, DM_DEFAULT_SCREEN_HEIGHT,
+        DM_DEFAULT_TITLE,
+        DM_DEFAULT_ASSETS_FOLDER
+    };
+    
+    dm_application_setup(&init_packet);
+    
+    dm_context* context = dm_init(init_packet);
+    if(!context) return DM_EXIT_CODE_INIT_FAIL;
+    
+    if(!dm_application_init(context)) 
+    {
+        dm_shutdown(context);
+        getchar();
+        return DM_EXIT_CODE_INIT_FAIL;
+    }
+    
+    while(dm_context_is_running(context))
+    {
+        dm_start(context);
+        
+        // updating
+        if(!dm_update_begin(context)) break;
+        if(!dm_application_update(context)) break;
+        if(!dm_update_end(context)) break;
+        
+        // rendering
+        if(dm_renderer_begin_frame(context))
+        {
+            if(!dm_application_render(context)) break;
+            if(!dm_renderer_end_frame(context)) break;
+        }
+        
+        dm_end(context);
+    }
+    
+    dm_application_shutdown(context);
+    dm_shutdown(context);
+    
+    getchar();
+    
+    return DM_EXIT_CODE_SUCCESS;
 }
-
-DM_INLINE
-float dm_mm_extract_float(dm_mm_float mm)
-{
-#ifdef DM_SIMD_256
-    return _mm256_cvtss_f32(mm);
-#else
-    return _mm_cvtss_f32(mm);
 #endif
-}
-
-// https://stackoverflow.com/questions/13219146/how-to-sum-m256-horizontally
-DM_INLINE
-float dm_mm_sum_elements(dm_mm_float mm)
-{
-#ifdef DM_SIMD_256
-    // hiQuad = ( x7, x6, x5, x4 )
-    const __m128 hiQuad = _mm256_extractf128_ps(mm, 1);
-    // loQuad = ( x3, x2, x1, x0 )
-    const __m128 loQuad = _mm256_castps256_ps128(mm);
-    // sumQuad = ( x3 + x7, x2 + x6, x1 + x5, x0 + x4 )
-    const __m128 sumQuad = _mm_add_ps(loQuad, hiQuad);
-    // loDual = ( -, -, x1 + x5, x0 + x4 )
-    const __m128 loDual = sumQuad;
-    // hiDual = ( -, -, x3 + x7, x2 + x6 )
-    const __m128 hiDual = _mm_movehl_ps(sumQuad, sumQuad);
-    // sumDual = ( -, -, x1 + x3 + x5 + x7, x0 + x2 + x4 + x6 )
-    const __m128 sumDual = _mm_add_ps(loDual, hiDual);
-    // lo = ( -, -, -, x0 + x2 + x4 + x6 )
-    const __m128 lo = sumDual;
-    // hi = ( -, -, -, x1 + x3 + x5 + x7 )
-    const __m128 hi = _mm_shuffle_ps(sumDual, sumDual, 0x1);
-    // sum = ( -, -, -, x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7 )
-    const __m128 sum = _mm_add_ss(lo, hi);
-    return _mm_cvtss_f32(sum);
-#endif
-}
-
-/*
- int
-*/
-DM_INLINE
-dm_mm_int dm_mm_load_i(int* d)
-{
-#ifdef DM_SIMD_256
-    return _mm256_load_si256((dm_mm_int*)d);
-#else
-    return _mm_load_si128((dm_mm_int*)d);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_set1_i(int d)
-{
-#ifdef DM_SIMD_256
-    return _mm256_set1_epi32(d);
-#else
-    return _mm_set1_epi32(d);
-#endif
-}
-
-DM_INLINE
-void dm_mm_store_i(int* i, dm_mm_int mm)
-{
-#ifdef DM_SIMD_256
-    _mm256_store_si256((dm_mm_int*)i, mm);
-#else
-    _mm_store_si128((dm_mm_int*)i, mm);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_add_i(dm_mm_int left, dm_mm_int right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_add_epi32(left, right);
-#else
-    return _mm_add_epi32(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_sub_i(dm_mm_int left, dm_mm_int right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_sub_epi32(left, right);
-#else
-    return _mm_sub_epi32(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_mul_i(dm_mm_int left, dm_mm_int right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_mul_epi32(left, right);
-#else
-    return _mm_mul_epi32(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_hadd_i(dm_mm_int left, dm_mm_int right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_hadd_epi32(left, right);
-#else
-    return _mm_hadd_epi32(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_shiftl_1(dm_mm_int mm)
-{
-#ifdef DM_SIMD_256
-    return _mm256_slli_si256(mm, sizeof(int));
-#else
-    return _mm_bslli_si128(mm, sizeof(int));
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_shiftr_1(dm_mm_int mm)
-{
-#ifdef DM_SIMD_256
-    return _mm256_bsrli_epi128(mm, sizeof(int));
-#else
-    return _mm_bsrli_si128(mm, sizeof(int));
-#endif
-}
 
 #endif //DM_H

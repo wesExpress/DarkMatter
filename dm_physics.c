@@ -18,7 +18,6 @@
 #define DM_PHYSICS_REST_COEF 0.01f
 #define DM_PHYSICS_REST_SLOP 0.5f
 
-
 // 3d support funcs
 void dm_physics_support_func_sphere(const float pos[3], const float cen[3], const float internals[6], const float dir[3], float support[3])
 {
