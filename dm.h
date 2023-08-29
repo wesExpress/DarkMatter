@@ -752,7 +752,7 @@ typedef uint32_t dm_ecs_id;
 #endif
 
 typedef uint32_t dm_entity;
-#define DM_ECS_INVALID_ENTITY ULONG_MAX
+#define DM_ECS_INVALID_ENTITY UINT_MAX
 
 typedef enum dm_ecs_system_timing_t
 {
@@ -793,7 +793,6 @@ typedef struct dm_ecs_manager_t
     
     // precomputed entity hash data
     uint32_t   entity_component_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
-    uint32_t   entity_block_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
     dm_ecs_id  entity_component_masks[DM_ECS_MAX_ENTITIES];
     
     // components
@@ -1066,7 +1065,7 @@ dm_entity dm_ecs_create_entity(dm_context* context);
 
 void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context);
 void  dm_ecs_get_component_count(dm_ecs_id component_id, uint32_t* index, dm_context* context);
-void  dm_ecs_itreate_component_block(dm_ecs_id component_id, dm_context* context);
+void  dm_ecs_iterate_component_block(dm_ecs_id component_id, dm_context* context);
 
 // physics
 bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);
@@ -2536,7 +2535,6 @@ bool dm_ecs_init(dm_context* context)
     
     size_t size = sizeof(uint32_t) * DM_ECS_MAX_ENTITIES * DM_ECS_MAX;
     dm_memset(ecs_manager->entity_component_indices, DM_ECS_INVALID_ID, size);
-    dm_memset(ecs_manager->entity_block_indices,     DM_ECS_INVALID_ID, size);
     dm_memzero(ecs_manager->entity_component_masks, sizeof(dm_ecs_id) * DM_ECS_MAX_ENTITIES);
     
     return true;
@@ -2634,7 +2632,7 @@ void dm_ecs_entity_insert(dm_entity entity, dm_context* context)
 void dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
 {
     uint32_t  entity_index = dm_ecs_entity_get_index(entity, context);
-    uint32_t  component_count, entity_count, component_index;
+    uint32_t  component_count, component_index;
     dm_ecs_id comp_id;
     
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
@@ -2651,7 +2649,6 @@ void dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
             // early out if we don't have what this system needs
             if(!dm_ecs_entity_has_component_multiple(entity, system->component_mask, context)) continue;
             
-            entity_count    = system->entity_count;
             component_count = system->component_count;
             
             for(uint32_t c=0; c<component_count; c++)
@@ -2686,7 +2683,13 @@ dm_entity dm_ecs_create_entity(dm_context* context)
 {
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
     
-    dm_entity entity = dm_random_uint32(context);
+    dm_entity entity;
+    
+    while(true)
+    {
+        entity = dm_random_uint32(context);
+        if(entity!=DM_ECS_INVALID_ENTITY) break;
+    }
     ecs_manager->entity_count++;
     
     dm_ecs_entity_insert(entity, context);
