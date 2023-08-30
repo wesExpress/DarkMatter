@@ -1,6 +1,11 @@
 #ifndef DM_H
 #define DM_H
 
+/***********
+APP DEFINES
+*************/
+#include "dm_app_defines.h"
+
 /********************************************
 DETERMINE PLATFORM AND RENDERING BACKEND
 
