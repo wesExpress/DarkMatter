@@ -768,7 +768,7 @@ typedef enum dm_ecs_system_timing_t
     DM_ECS_SYSTEM_TIMING_UNKNOWN
 } dm_ecs_system_timing;
 
-typedef struct dm_ecs_system_manager_t
+typedef struct dm_ecs_system_t
 {
     uint32_t  component_count;
     dm_ecs_id component_mask;
@@ -779,35 +779,37 @@ typedef struct dm_ecs_system_manager_t
     
     bool (*run_func)(void*,void*);
     void (*shutdown_func)(void*,void*);
+    void (*insert_func)(const uint32_t,void*,void*);
     
     void* system_data;
-} dm_ecs_system_manager;
+} dm_ecs_system;
 
-typedef struct dm_ecs_component_manager_t
+typedef struct dm_ecs_component_t
 {
     size_t   size;
     uint32_t entity_count;
     void*    data;
-} dm_ecs_component_manager;
+} dm_ecs_component;
 
 typedef struct dm_ecs_manager_t
 {
-    // entities; indexed via hashing
-    dm_entity entities_ordered[DM_ECS_MAX_ENTITIES];
+    // entities: indexed via hashing
     dm_entity entities[DM_ECS_MAX_ENTITIES];
+    uint32_t  entity_component_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
+    dm_ecs_id entity_component_masks[DM_ECS_MAX_ENTITIES];
+    
+    // entities: indexed via insertion order
+    dm_entity entities_ordered[DM_ECS_MAX_ENTITIES];
+    
     uint32_t  entity_count;
     
-    // precomputed entity hash data
-    uint32_t   entity_component_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
-    dm_ecs_id  entity_component_masks[DM_ECS_MAX_ENTITIES];
-    
     // components
-    dm_ecs_component_manager components[DM_ECS_MAX];
-    uint32_t                 num_registered_components;
+    dm_ecs_component components[DM_ECS_MAX];
+    uint32_t         num_registered_components;
     
     // systems
-    dm_ecs_system_manager systems[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
-    uint32_t              num_registered_systems[DM_ECS_SYSTEM_TIMING_UNKNOWN];
+    dm_ecs_system systems[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
+    uint32_t      num_registered_systems[DM_ECS_SYSTEM_TIMING_UNKNOWN];
 } dm_ecs_manager;
 
 /*******
@@ -1065,7 +1067,7 @@ void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 
 // ecs
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
-dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), dm_context* context);
+dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), void (*insert_func)(uint32_t,void*,void*), dm_context* context);
 
 dm_entity dm_ecs_create_entity(dm_context* context);
 
@@ -1216,12 +1218,31 @@ uint32_t dm_ecs_entity_get_component_index(dm_entity entity, dm_ecs_id component
 }
 
 DM_INLINE
+bool dm_ecs_entity_has_component_via_index(uint32_t index, dm_ecs_id component_id, dm_context* context)
+{
+    return context->ecs_manager.entity_component_masks[index] & component_id;
+}
+
+DM_INLINE
 bool dm_ecs_entity_has_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
 {
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     if(entity_index==DM_ECS_INVALID_ENTITY) return false;
     
-    return context->ecs_manager.entity_component_masks[entity_index] & component_id;
+    return dm_ecs_entity_has_component_via_index(entity_index, component_id, context);
+}
+
+DM_INLINE
+bool dm_ecs_entity_has_component_multiple_via_index(uint32_t index, dm_ecs_id component_mask, dm_context* context)
+{
+    dm_ecs_id entity_mask = context->ecs_manager.entity_component_masks[index];
+    
+    // NAND entity mask with opposite of component mask
+    dm_ecs_id result = ~(entity_mask & ~component_mask);
+    // XOR with opposite of entity mask
+    result ^= ~entity_mask;
+    // success only if this equals the component mask
+    return (result == component_mask);
 }
 
 DM_INLINE
@@ -1230,14 +1251,7 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     if(entity_index==DM_ECS_INVALID_ENTITY) return false;
     
-    dm_ecs_id entity_mask = context->ecs_manager.entity_component_masks[entity_index];
-    
-    // NAND entity mask with opposite of component mask
-    dm_ecs_id result = ~(entity_mask & ~component_mask);
-    // XOR with opposite of entity mask
-    result ^= ~entity_mask;
-    // success only if this equals the component mask
-    return (result == component_mask);
+    dm_ecs_entity_has_component_multiple_via_index(entity_index, component_mask, context);
 }
 
 /**********
@@ -2558,7 +2572,7 @@ void dm_ecs_shutdown(dm_context* context)
         dm_free(ecs_manager->components[i].data);
     }
     
-    dm_ecs_system_manager* system = NULL;
+    dm_ecs_system* system = NULL;
     for(i=0; i<DM_ECS_SYSTEM_TIMING_UNKNOWN; i++)
     {
         for(uint32_t j=0; j<ecs_manager->num_registered_systems[i]; j++)
@@ -2567,7 +2581,7 @@ void dm_ecs_shutdown(dm_context* context)
             
             system->shutdown_func((void*)system,(void*)context);
             
-            dm_free(system->system_data);
+            if(system->system_data) dm_free(system->system_data);
         }
     }
 }
@@ -2584,12 +2598,12 @@ dm_ecs_id dm_ecs_register_component(size_t size, dm_context* context)
     return id;
 }
 
-dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing,  bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), dm_context* context)
+dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing,  bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), void (*insert_func)(uint32_t,void*,void*), dm_context* context)
 {
     if(context->ecs_manager.num_registered_systems[timing] >= DM_ECS_MAX) return DM_ECS_INVALID_ID;
     
     dm_ecs_id id = context->ecs_manager.num_registered_systems[timing]++;
-    dm_ecs_system_manager* system = &context->ecs_manager.systems[timing][id];
+    dm_ecs_system* system = &context->ecs_manager.systems[timing][id];
     
     for(uint32_t i=0; i<component_count; i++)
     {
@@ -2601,6 +2615,7 @@ dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_co
     
     system->run_func      = run_func;
     system->shutdown_func = shutdown_func;
+    system->insert_func   = insert_func;
     
     system->entity_count = 0;
     
@@ -2639,42 +2654,46 @@ void dm_ecs_entity_insert(dm_entity entity, dm_context* context)
     DM_LOG_FATAL("Could not insert entity, should not be here...");
 }
 
-void dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
+void dm_ecs_insert_entities_into_systems(dm_context* context)
 {
-    uint32_t  entity_index = dm_ecs_entity_get_index(entity, context);
-    uint32_t  component_index;
-    dm_ecs_id comp_id;
-    
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
-    dm_ecs_system_manager* system = NULL;
+    dm_ecs_system*  system = NULL;
+    uint32_t        comp_id, comp_index;
     
-    // for all system timings
-    for(uint32_t t=0; t<DM_ECS_SYSTEM_TIMING_UNKNOWN; t++)
+    // for all entities
+    for(uint32_t e=0; e<ecs_manager->entity_count; e++)
     {
-        // for all systems in timing
-        for(uint32_t s=0; s<ecs_manager->num_registered_systems[t]; s++)
+        // for all system timings
+        for(uint32_t t=0; t<DM_ECS_SYSTEM_TIMING_UNKNOWN; t++)
         {
-            system = &ecs_manager->systems[t][s];
-            
-            // early out if we don't have what this system needs
-            if(!dm_ecs_entity_has_component_multiple(entity, system->component_mask, context)) continue;
-            
-            for(uint32_t c=0; c<system->component_count; c++)
+            // for all systems in timing
+            for(uint32_t s=0; s<ecs_manager->num_registered_systems[t]; s++)
             {
-                comp_id = system->component_ids[c];
+                system = &ecs_manager->systems[t][s];
                 
-                component_index = ecs_manager->entity_component_indices[entity_index][comp_id];
-                system->entity_indices[system->entity_count][comp_id] = component_index;
+                // early out if we don't have what this system needs
+                if(!dm_ecs_entity_has_component_multiple_via_index(e, system->component_mask, context)) continue;
+                
+                // get all component indices
+                for(uint32_t c=0; c<system->component_count; c++)
+                {
+                    comp_id    = system->component_ids[c];
+                    comp_index = ecs_manager->entity_component_indices[e][comp_id];
+                    
+                    system->entity_indices[system->entity_count][comp_id] = comp_index;
+                }
+                
+                system->insert_func(e, (void*)system, (void*)context);
+                
+                system->entity_count++;
             }
-            
-            system->entity_count++;
         }
     }
 }
 
 bool dm_ecs_run_systems(dm_ecs_system_timing timing, dm_context* context)
 {
-    dm_ecs_system_manager* system = NULL;
+    dm_ecs_system* system = NULL;
     for(uint32_t i=0; i<context->ecs_manager.num_registered_systems[timing]; i++)
     {
         system = &context->ecs_manager.systems[timing][i];
@@ -2884,10 +2903,7 @@ bool dm_update_begin(dm_context* context)
     dm_poll_events(context);
     
     // reinsert entities
-    for(uint32_t i=0; i<context->ecs_manager.entity_count; i++)
-    {
-        dm_ecs_entity_insert_into_systems(context->ecs_manager.entities_ordered[i], context);
-    }
+    dm_ecs_insert_entities_into_systems(context);
     
     // systems
     if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN, context)) return false;

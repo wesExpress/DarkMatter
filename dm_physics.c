@@ -792,24 +792,9 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     
     dm_vec3_sub_vec3(v_b, v_a, rel_v);
     float rel_vn = dm_vec3_dot(rel_v, manifold->normal);
+    
     dm_vec3_scale(manifold->normal, rel_vn, dum1);
     dm_vec3_sub_vec3(rel_v, dum1, manifold->tangent_a);
-    
-    if(dm_vec3_dot(manifold->tangent_a, manifold->tangent_a) < 0.001f)
-    {
-        float x[3] = { 1,0,0 };
-        dm_vec3_cross(manifold->normal, x, manifold->tangent_a);
-        if(dm_vec3_dot(manifold->tangent_a, manifold->tangent_a) < 0.001f)
-        {
-            float z[3] = { 0,0,1 };
-            dm_vec3_cross(manifold->normal, z, manifold->tangent_a);
-            if(dm_vec3_dot(manifold->tangent_a, manifold->tangent_a) < 0.001f)
-            {
-                float y[3] = { 0,1,0 };
-                dm_vec3_cross(manifold->normal, y, manifold->tangent_a);
-            }
-        }
-    }
     
     dm_vec3_norm(manifold->tangent_a, manifold->tangent_a);
     dm_vec3_cross(manifold->normal, manifold->tangent_a, manifold->tangent_b);
