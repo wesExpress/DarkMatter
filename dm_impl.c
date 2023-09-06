@@ -530,6 +530,8 @@ extern void   dm_platform_shutdown(dm_platform_data* platform_data);
 extern double dm_platform_get_time(dm_platform_data* platform_data);
 extern void   dm_platform_write(const char* message, uint8_t color);
 extern bool   dm_platform_pump_events(dm_platform_data* platform_data);
+extern uint32_t dm_platform_get_available_processor_count(dm_platform_data* platform_data);
+extern bool   dm_platform_threads_create(void* (*thread_func)(void*), void* args, size_t args_size, uint32_t num_threads, dm_platform_data* platform_data);
 
 /*******
 LOGGING
@@ -1533,6 +1535,19 @@ void dm_ecs_entity_remove_component_via_index(uint32_t index, dm_ecs_id componen
     
     dm_ecs_component* component = &context->ecs_manager.components[component_id];
     component->tombstones[component->tombstone_count++] = index;
+}
+
+/*********
+THREADING
+***********/
+uint32_t dm_get_available_processor_count(dm_context* context)
+{
+    return dm_platform_get_available_processor_count(&context->platform_data);
+}
+
+bool dm_threads_create(void* (*thread_func)(void*), void* args, size_t args_size, uint32_t num_threads, dm_context* context)
+{
+    return dm_platform_threads_create(thread_func, args, args_size, num_threads, &context->platform_data);
 }
 
 /*********

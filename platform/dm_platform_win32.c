@@ -314,6 +314,50 @@ LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
+uint32_t dm_platform_get_available_processor_count(dm_platform_data* platform_data)
+{
+    DM_WIN32_GET_DATA;
+    
+    SYSTEM_INFO sys_info;
+    GetSystemInfo(&sys_info);
+    
+    return sys_info.dwNumberOfProcessors;
+}
+
+bool dm_win32_create_thread(void* (*thread_func)(void*), void* args, HANDLE* thread)
+{
+    DWORD t;
+    *thread = CreateThread(0,0,(LPTHREAD_START_ROUTINE)thread_func, args, 0, &t);
+    
+    if(thread) return true;
+    
+    DM_LOG_FATAL("Creating thread failed");
+    return false;
+}
+
+bool dm_platform_threads_create(void* (*thread_func)(void*), void* args, size_t args_size, uint32_t num_threads, dm_platform_data* platform_data)
+{
+    DM_WIN32_GET_DATA;
+    
+    HANDLE threads[16];
+    
+    for(uint32_t i=0; i<num_threads; i++)
+    {
+        void* thread_args = (char*)args + args_size * i;
+        
+        if(dm_win32_create_thread(thread_func, thread_args, &threads[i])) continue;
+        
+        return false;
+    }
+    
+    for(uint32_t i=0; i<num_threads; i++)
+    {
+        WaitForSingleObject(threads[i], INFINITE);
+    }
+    
+    return true;
+}
+
 const char* dm_get_win32_error_msg(HRESULT hr)
 {
 	char* message = NULL;

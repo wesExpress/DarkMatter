@@ -381,19 +381,6 @@ typedef struct dm_platform_data_t
 /**********
 STRUCTURES
 ************/
-// slot array
-typedef uint32_t dm_slot_index;
-
-typedef struct dm_slot_array_t
-{
-    size_t    capacity, count, elem_size;
-    void*     data;
-    uint16_t* status;
-} dm_slot_array;
-
-// map
-typedef struct dm_map dm_map;
-
 // byte pool
 // basically a growing void ptr. useful for cacheing func params
 typedef struct dm_byte_pool_t
@@ -554,7 +541,7 @@ typedef enum dm_uniform_stage_t
     DM_UNIFORM_STAGE_UNKNOWN
 } dm_uniform_stage;
 
-typedef dm_slot_index dm_render_handle;
+typedef uint32_t dm_render_handle;
 
 typedef struct dm_buffer_desc_t
 {
@@ -1011,6 +998,10 @@ void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* 
 void dm_add_mouse_scroll_event(uint32_t delta, dm_event_list* event_list);
 void dm_add_key_down_event(dm_key_code key, dm_event_list* event_list);
 void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
+
+// threads
+uint32_t dm_get_available_processor_count(dm_context* context);
+bool     dm_threads_create(void* (*thread_func)(void*), void* args, size_t args_size, uint32_t num_threads, dm_context* context);
 
 // random
 int dm_random_int(dm_context* context);
