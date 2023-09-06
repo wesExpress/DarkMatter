@@ -784,7 +784,8 @@ typedef struct dm_ecs_system_t
 typedef struct dm_ecs_component_t
 {
     size_t   size;
-    uint32_t entity_count;
+    uint32_t entity_count, tombstone_count;
+    uint32_t tombstones[DM_ECS_MAX_ENTITIES];
     void*    data;
 } dm_ecs_component;
 
@@ -794,9 +795,6 @@ typedef struct dm_ecs_manager_t
     dm_entity entities[DM_ECS_MAX_ENTITIES];
     uint32_t  entity_component_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
     dm_ecs_id entity_component_masks[DM_ECS_MAX_ENTITIES];
-    
-    // entities: indexed via insertion order
-    dm_entity entities_ordered[DM_ECS_MAX_ENTITIES];
     
     uint32_t  entity_count;
     
@@ -1066,11 +1064,14 @@ void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
 dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), void (*insert_func)(uint32_t,void*,void*), dm_context* context);
 
-dm_entity dm_ecs_create_entity(dm_context* context);
+dm_entity dm_ecs_entity_create(dm_context* context);
+void      dm_ecs_entity_destroy(dm_entity entity, dm_context* context);
 
 void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context);
-void  dm_ecs_get_component_count(dm_ecs_id component_id, uint32_t* index, dm_context* context);
+void  dm_ecs_get_component_insert_index(dm_ecs_id component_id, uint32_t* index, dm_context* context);
 void  dm_ecs_entity_add_component(dm_entity entity, dm_ecs_id component_id, dm_context* context);
+void  dm_ecs_entity_remove_component(dm_entity entity, dm_ecs_id component_id, dm_context* context);
+void  dm_ecs_entity_remove_component_via_index(uint32_t entity_index, dm_ecs_id component_id, dm_context* context);
 
 // physics
 bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);
@@ -1217,7 +1218,7 @@ uint32_t dm_ecs_entity_get_component_index(dm_entity entity, dm_ecs_id component
 DM_INLINE
 bool dm_ecs_entity_has_component_via_index(uint32_t index, dm_ecs_id component_id, dm_context* context)
 {
-    return context->ecs_manager.entity_component_masks[index] & component_id;
+    return context->ecs_manager.entity_component_masks[index] & DM_BIT_SHIFT(component_id);
 }
 
 DM_INLINE
@@ -1255,12 +1256,5 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
 INTRINSICS
 ************/
 #include "dm_intrinsics.h"
-
-/**************
-IMPLEMENTATION
-****************/
-#ifdef DM_IMPLEMENTATION
-
-#endif
 
 #endif //DM_H

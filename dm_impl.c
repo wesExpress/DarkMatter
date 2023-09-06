@@ -1285,7 +1285,6 @@ bool dm_ecs_init(dm_context* context)
 {
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
     
-    dm_memset(ecs_manager->entities_ordered, DM_ECS_INVALID_ENTITY, sizeof(dm_entity) * DM_ECS_MAX_ENTITIES);
     dm_memset(ecs_manager->entities, DM_ECS_INVALID_ENTITY, sizeof(dm_entity) * DM_ECS_MAX_ENTITIES);
     
     size_t size = sizeof(uint32_t) * DM_ECS_MAX_ENTITIES * DM_ECS_MAX;
@@ -1367,6 +1366,7 @@ void dm_ecs_entity_insert(dm_entity entity, dm_context* context)
     if(entities[index]==DM_ECS_INVALID_ENTITY) 
     {
         entities[index] = entity;
+        context->ecs_manager.entity_count++;
         return;
     }
     
@@ -1378,6 +1378,7 @@ void dm_ecs_entity_insert(dm_entity entity, dm_context* context)
         if(entities[runner]==DM_ECS_INVALID_ENTITY) 
         {
             entities[runner] = entity;
+            context->ecs_manager.entity_count++;
             return;
         }
         
@@ -1394,9 +1395,17 @@ void dm_ecs_insert_entities_into_systems(dm_context* context)
     dm_ecs_system*  system = NULL;
     uint32_t        comp_id, comp_index;
     
+    dm_entity entity = DM_ECS_INVALID_ENTITY;
+    uint32_t  entity_index = DM_ECS_INVALID_ID;
+    
     // for all entities
     for(uint32_t e=0; e<ecs_manager->entity_count; e++)
     {
+        entity = ecs_manager->entities[e];
+        if(entity == DM_ECS_INVALID_ENTITY) continue;
+        
+        entity_index = dm_ecs_entity_get_index(entity, context);
+        
         // for all system timings
         for(uint32_t t=0; t<DM_ECS_SYSTEM_TIMING_UNKNOWN; t++)
         {
@@ -1406,18 +1415,18 @@ void dm_ecs_insert_entities_into_systems(dm_context* context)
                 system = &ecs_manager->systems[t][s];
                 
                 // early out if we don't have what this system needs
-                if(!dm_ecs_entity_has_component_multiple_via_index(e, system->component_mask, context)) continue;
+                if(!dm_ecs_entity_has_component_multiple_via_index(entity_index, system->component_mask, context)) continue;
                 
                 // get all component indices
                 for(uint32_t c=0; c<system->component_count; c++)
                 {
                     comp_id    = system->component_ids[c];
-                    comp_index = ecs_manager->entity_component_indices[e][comp_id];
+                    comp_index = ecs_manager->entity_component_indices[entity_index][comp_id];
                     
                     system->entity_indices[system->entity_count][comp_id] = comp_index;
                 }
                 
-                system->insert_func(e, (void*)system, (void*)context);
+                system->insert_func(entity_index, (void*)system, (void*)context);
                 
                 system->entity_count++;
             }
@@ -1440,7 +1449,7 @@ bool dm_ecs_run_systems(dm_ecs_system_timing timing, dm_context* context)
     return true;
 }
 
-dm_entity dm_ecs_create_entity(dm_context* context)
+dm_entity dm_ecs_entity_create(dm_context* context)
 {
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
     
@@ -1452,10 +1461,31 @@ dm_entity dm_ecs_create_entity(dm_context* context)
         if(entity!=DM_ECS_INVALID_ENTITY) break;
     }
     
-    ecs_manager->entities_ordered[ecs_manager->entity_count++] = entity;
     dm_ecs_entity_insert(entity, context);
     
     return entity;
+}
+
+void dm_ecs_entity_destroy(dm_entity entity, dm_context* context)
+{
+    dm_ecs_manager* ecs_manager = &context->ecs_manager;
+    
+    uint32_t index = dm_ecs_entity_get_index(entity, context);
+    
+    // remove components
+    for(uint32_t c=0; c<ecs_manager->num_registered_components; c++)
+    {
+        dm_ecs_entity_remove_component_via_index(index, c, context);
+    }
+    
+    // entity array position set to invalid
+    ecs_manager->entities[index] = DM_ECS_INVALID_ENTITY;
+    // component indices set to invalid
+    dm_memset(ecs_manager->entity_component_indices[index], DM_ECS_INVALID_ID, sizeof(uint32_t) * DM_ECS_MAX);
+    // component mask reset to 0
+    ecs_manager->entity_component_masks[index] = 0;
+    
+    ecs_manager->entity_count--;
 }
 
 void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context)
@@ -1465,23 +1495,44 @@ void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context)
     return context->ecs_manager.components[component_id].data;
 }
 
-void dm_ecs_get_component_count(dm_ecs_id component_id, uint32_t* index, dm_context* context)
+void dm_ecs_get_component_insert_index(dm_ecs_id component_id, uint32_t* index, dm_context* context)
 {
     if(component_id==DM_ECS_INVALID_ID) return;
     
-    *index = context->ecs_manager.components[component_id].entity_count;
+    dm_ecs_component* component = &context->ecs_manager.components[component_id];
+    
+    // if we have dead entities, use their indices.
+    // otherwise iterate
+    if(component->tombstone_count==0) *index = component->entity_count;
+    else                              *index = component->tombstones[component->tombstone_count--];
 }
 
 void dm_ecs_entity_add_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
 {
-    if(component_id==DM_ECS_INVALID_ID) return;
-    
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    if(component_id==DM_ECS_INVALID_ID) return;
+    if(dm_ecs_entity_has_component_via_index(entity_index, component_id, context)) return;
+    
     uint32_t c_index = context->ecs_manager.components[component_id].entity_count;
     
     context->ecs_manager.entity_component_indices[entity_index][component_id] = c_index;
     context->ecs_manager.entity_component_masks[entity_index] |= DM_BIT_SHIFT(component_id);
     context->ecs_manager.components[component_id].entity_count++;
+}
+
+void dm_ecs_entity_remove_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
+{
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    
+    dm_ecs_entity_remove_component_via_index(entity_index, component_id, context);
+}
+
+void dm_ecs_entity_remove_component_via_index(uint32_t index, dm_ecs_id component_id, dm_context* context)
+{
+    if(!dm_ecs_entity_has_component_via_index(index, component_id, context)) return;
+    
+    dm_ecs_component* component = &context->ecs_manager.components[component_id];
+    component->tombstones[component->tombstone_count++] = index;
 }
 
 /*********
@@ -1599,6 +1650,10 @@ void dm_poll_events(dm_context* context)
             {
                 context->platform_data.window_data.width  = e.new_rect[0];
                 context->platform_data.window_data.height = e.new_rect[1];
+                
+                context->renderer.width = e.new_rect[0];
+                context->renderer.height = e.new_rect[1];
+                
                 dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer);
             } break;
             
