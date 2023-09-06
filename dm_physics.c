@@ -12,12 +12,18 @@
 #define DM_PHYSICS_W_LIM             50.0f
 #define DM_PHYSICS_MAX_MANIFOLDS     20
 
+#ifndef DM_PHYSICS_BAUMGARTE_COEF
 #define DM_PHYSICS_BAUMGARTE_COEF 0.01f
+#endif
+#ifndef DM_PHYSICS_BAUMGARTE_SLOP
 #define DM_PHYSICS_BAUMGARTE_SLOP 0.001f
-
+#endif
+#ifndef DM_PHYSICS_REST_COEF
 #define DM_PHYSICS_REST_COEF 0.01f
+#endif
+#ifndef DM_PHYSICS_REST_SLOP
 #define DM_PHYSICS_REST_SLOP 0.5f
-
+#endif
 
 // 3d support funcs
 void dm_physics_support_func_sphere(const float pos[3], const float cen[3], const float internals[6], const float dir[3], float support[3])
@@ -793,24 +799,9 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     
     dm_vec3_sub_vec3(v_b, v_a, rel_v);
     float rel_vn = dm_vec3_dot(rel_v, manifold->normal);
+    
     dm_vec3_scale(manifold->normal, rel_vn, dum1);
     dm_vec3_sub_vec3(rel_v, dum1, manifold->tangent_a);
-    
-    if(dm_vec3_dot(manifold->tangent_a, manifold->tangent_a) < 0.001f)
-    {
-        float x[3] = { 1,0,0 };
-        dm_vec3_cross(manifold->normal, x, manifold->tangent_a);
-        if(dm_vec3_dot(manifold->tangent_a, manifold->tangent_a) < 0.001f)
-        {
-            float z[3] = { 0,0,1 };
-            dm_vec3_cross(manifold->normal, z, manifold->tangent_a);
-            if(dm_vec3_dot(manifold->tangent_a, manifold->tangent_a) < 0.001f)
-            {
-                float y[3] = { 0,1,0 };
-                dm_vec3_cross(manifold->normal, y, manifold->tangent_a);
-            }
-        }
-    }
     
     dm_vec3_norm(manifold->tangent_a, manifold->tangent_a);
     dm_vec3_cross(manifold->normal, manifold->tangent_a, manifold->tangent_b);
@@ -826,12 +817,20 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
         dm_vec3_sub_vec3(on_b, on_a, ba);
         float d = dm_vec3_dot(ba, neg_norm);
         
+#if 0
         b -= (DM_PHYSICS_BAUMGARTE_COEF * DM_PHYSICS_FIXED_DT_INV) * d;
+#else
+        b -= (DM_PHYSICS_BAUMGARTE_COEF * DM_PHYSICS_FIXED_DT_INV) * DM_MAX(d - DM_PHYSICS_BAUMGARTE_SLOP, 0.0f);
+#endif
     }
     
     // restitution
     {
+#if 0
         b += (DM_PHYSICS_REST_COEF * rel_vn); 
+#else
+        b += DM_PHYSICS_REST_COEF * DM_MAX(rel_vn - DM_PHYSICS_REST_SLOP, 0.0f);
+#endif
     }
     
     // point position data

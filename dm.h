@@ -1,6 +1,11 @@
 #ifndef DM_H
 #define DM_H
 
+/***********
+APP DEFINES
+*************/
+#include "dm_app_defines.h"
+
 /********************************************
 DETERMINE PLATFORM AND RENDERING BACKEND
 
@@ -728,8 +733,9 @@ typedef struct dm_renderer_t
 /***
 ECS
 *****/
-#define DM_ECS_COMPONENT_BLOCK_SIZE     512
-#define DM_ECS_INV_COMPONENT_BLOCK_SIZE 0.001953125f   // TODO: this is inverse 512, so if above changes, this should too
+#ifndef DM_ECS_MAX_ENTITIES
+#define DM_ECS_MAX_ENTITIES 1024
+#endif
 
 #ifdef DM_ECS_MORE_COMPONENTS
 typedef uint64_t dm_ecs_id;
@@ -747,13 +753,8 @@ typedef uint32_t dm_ecs_id;
 #define DM_ECS_MAX_COMPONENT_MEMBER_NUM 32
 #endif
 
-#ifdef DM_ECS_MORE_ENTITIES
-typedef uint64_t dm_entity
-#define DM_ECS_INVALID_ENTITY ULONG_MAX
-#else
 typedef uint32_t dm_entity;
 #define DM_ECS_INVALID_ENTITY UINT_MAX
-#endif
 
 typedef enum dm_ecs_system_timing_t
 {
@@ -764,53 +765,46 @@ typedef enum dm_ecs_system_timing_t
     DM_ECS_SYSTEM_TIMING_UNKNOWN
 } dm_ecs_system_timing;
 
-typedef struct dm_ecs_system_entity_container_t
+typedef struct dm_ecs_system_t
 {
-    dm_entity entity;
-    uint32_t  entity_index;
-    
-    uint32_t component_indices[DM_ECS_MAX];
-    uint32_t block_indices[DM_ECS_MAX];
-} dm_ecs_system_entity_container;
-
-typedef struct dm_ecs_system_manager_t
-{
-    uint32_t  entity_count, entity_capacity, component_count;
-    
+    uint32_t  component_count;
     dm_ecs_id component_mask;
     dm_ecs_id component_ids[DM_ECS_MAX];
     
+    uint32_t entity_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
+    uint32_t entity_count;
+    
     bool (*run_func)(void*,void*);
     void (*shutdown_func)(void*,void*);
-    void (*insert_entity)(uint32_t*,uint32_t*,void*,void*)
-        void* system_data;
+    void (*insert_func)(const uint32_t,void*,void*);
     
-    dm_ecs_system_entity_container* entity_containers;
-} dm_ecs_system_manager;
+    void* system_data;
+} dm_ecs_system;
 
-typedef struct dm_ecs_component_manager_t
+typedef struct dm_ecs_component_t
 {
-    size_t   block_size;
-    uint32_t block_count;
-    uint32_t entity_count;
+    size_t   size;
+    uint32_t entity_count, tombstone_count;
+    uint32_t tombstones[DM_ECS_MAX_ENTITIES];
     void*    data;
-} dm_ecs_component_manager;
+} dm_ecs_component;
 
 typedef struct dm_ecs_manager_t
 {
-    uint32_t num_registered_components;
-    uint32_t entity_count, entity_capacity;
-    uint32_t num_registered_systems[DM_ECS_SYSTEM_TIMING_UNKNOWN];
+    // entities: indexed via hashing
+    dm_entity entities[DM_ECS_MAX_ENTITIES];
+    uint32_t  entity_component_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
+    dm_ecs_id entity_component_masks[DM_ECS_MAX_ENTITIES];
     
-    // entities; indexed via hashing
-    dm_entity* entities;
-    uint32_t  (*entity_component_indices)[DM_ECS_MAX];
-    uint32_t  (*entity_block_indices)[DM_ECS_MAX];
-    dm_ecs_id* entity_component_masks;
+    uint32_t  entity_count;
     
-    // components and systems
-    dm_ecs_component_manager components[DM_ECS_MAX];
-    dm_ecs_system_manager    systems[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
+    // components
+    dm_ecs_component components[DM_ECS_MAX];
+    uint32_t         num_registered_components;
+    
+    // systems
+    dm_ecs_system systems[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
+    uint32_t      num_registered_systems[DM_ECS_SYSTEM_TIMING_UNKNOWN];
 } dm_ecs_manager;
 
 /*******
@@ -881,6 +875,8 @@ typedef struct dm_contact_manifold
     
     dm_contact_point points[DM_PHYSICS_CLIP_MAX_PTS];
     uint32_t         point_count;
+    
+    uint32_t  entity_a, entity_b;
 } dm_contact_manifold;
 
 // supported collision shapes
@@ -1066,16 +1062,16 @@ void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 
 // ecs
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
-dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), dm_context* context);
+dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), void (*insert_func)(uint32_t,void*,void*), dm_context* context);
 
-void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm_context* context);
-
-dm_entity dm_ecs_create_entity(dm_context* context);
-dm_entity dm_ecs_entity_get_component_entity(dm_entity entity, dm_ecs_id component_id, dm_context* context);
+dm_entity dm_ecs_entity_create(dm_context* context);
+void      dm_ecs_entity_destroy(dm_entity entity, dm_context* context);
 
 void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context);
-void* dm_ecs_get_current_component_block(dm_ecs_id component_id, uint32_t* insert_index, dm_context* context);
-void* dm_ecs_entity_get_component_block(dm_entity entity, dm_ecs_id component_id, uint32_t* index, dm_context* context);
+void  dm_ecs_get_component_insert_index(dm_ecs_id component_id, uint32_t* index, dm_context* context);
+void  dm_ecs_entity_add_component(dm_entity entity, dm_ecs_id component_id, dm_context* context);
+void  dm_ecs_entity_remove_component(dm_entity entity, dm_ecs_id component_id, dm_context* context);
+void  dm_ecs_entity_remove_component_via_index(uint32_t entity_index, dm_ecs_id component_id, dm_context* context);
 
 // physics
 bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);
@@ -1190,37 +1186,39 @@ DM_INLINE
 uint32_t dm_ecs_entity_get_index(dm_entity entity, dm_context* context)
 {
     //const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
-    const uint32_t index = entity % context->ecs_manager.entity_capacity;
+    const uint32_t index = entity % DM_ECS_MAX_ENTITIES;
     dm_entity* entities = context->ecs_manager.entities;
     
     if(entities[index]==entity) return index;
     
     uint32_t runner = index + 1;
-    if(runner >= context->ecs_manager.entity_capacity) runner = 0;
+    if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
     
     while(runner != index)
     {
         if(entities[runner]==entity) return runner;
         
         runner++;
-        if(runner >= context->ecs_manager.entity_capacity) runner = 0;
-    }
-    
-    uint32_t duplicated_count = 0;
-    for(uint32_t i=0; i<context->ecs_manager.entity_capacity; i++)
-    {
-        for(uint32_t j=i+1; j<context->ecs_manager.entity_capacity; j++)
-        {
-            if(entities[i]!=entities[j]) continue;
-            if(entities[i]==DM_ECS_INVALID_ENTITY) continue;
-            
-            duplicated_count++;
-            DM_LOG_ERROR("Duplicated entities: %u:%u %u:%u", i,entities[i],j,entities[j]);
-        }
+        if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
     }
     
     DM_LOG_FATAL("Could not find entity index, should not be here...");
-    return DM_ECS_INVALID_ID;
+    return DM_ECS_INVALID_ENTITY;
+}
+
+DM_INLINE
+uint32_t dm_ecs_entity_get_component_index(dm_entity entity, dm_ecs_id component_id, dm_context* context)
+{
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    if(entity_index==DM_ECS_INVALID_ENTITY) return DM_ECS_INVALID_ENTITY;
+    
+    return context->ecs_manager.entity_component_indices[entity_index][component_id];
+}
+
+DM_INLINE
+bool dm_ecs_entity_has_component_via_index(uint32_t index, dm_ecs_id component_id, dm_context* context)
+{
+    return context->ecs_manager.entity_component_masks[index] & DM_BIT_SHIFT(component_id);
 }
 
 DM_INLINE
@@ -1229,16 +1227,13 @@ bool dm_ecs_entity_has_component(dm_entity entity, dm_ecs_id component_id, dm_co
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     if(entity_index==DM_ECS_INVALID_ENTITY) return false;
     
-    return context->ecs_manager.entity_component_masks[entity_index] & component_id;
+    return dm_ecs_entity_has_component_via_index(entity_index, component_id, context);
 }
 
 DM_INLINE
-bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_mask, dm_context* context)
+bool dm_ecs_entity_has_component_multiple_via_index(uint32_t index, dm_ecs_id component_mask, dm_context* context)
 {
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==DM_ECS_INVALID_ENTITY) return false;
-    
-    dm_ecs_id entity_mask = context->ecs_manager.entity_component_masks[entity_index];
+    dm_ecs_id entity_mask = context->ecs_manager.entity_component_masks[index];
     
     // NAND entity mask with opposite of component mask
     dm_ecs_id result = ~(entity_mask & ~component_mask);
@@ -1249,276 +1244,17 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
 }
 
 DM_INLINE
-dm_mm_int dm_mm_cast_float_to_int(dm_mm_float mm)
+bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_mask, dm_context* context)
 {
-#ifdef DM_SIMD_256
-    return _mm256_castps_si256(mm);
-#else
-    return _mm_castps_si128(mm);
-#endif
-}
-
-DM_INLINE
-dm_mm_float dm_mm_cast_int_to_float(dm_mm_int mm)
-{
-#ifdef DM_SIMD_256
-    return _mm256_castsi256_ps(mm);
-#else
-    return _mm_castsi128_ps(mm);
-#endif
-}
-
-/*
-float
-*/
-DM_INLINE
-dm_mm_float dm_mm_load_ps(float* d)
-{
-#ifdef DM_SIMD_256
-#ifdef DM_PLATFORM_LINUX
-    return _mm256_loadu_ps(d);
-#else
-    return _mm256_load_ps(d);
-#endif
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
+    if(entity_index==DM_ECS_INVALID_ENTITY) return false;
     
-#else
-#ifdef DM_PLATFORM_LINUX
-    return _mm_loadu_ps(d);
-#else
-    return _mm_load_ps(d);
-#endif
-#endif
+    dm_ecs_entity_has_component_multiple_via_index(entity_index, component_mask, context);
 }
 
-DM_INLINE
-dm_mm_float dm_mm_set1_ps(float d)
-{
-#ifdef DM_SIMD_256
-    return _mm256_set1_ps(d);
-#else
-    return _mm_set1_ps(d);
-#endif
-}
-
-DM_INLINE
-void dm_mm_store_ps(float* d, dm_mm_float mm)
-{
-#ifdef DM_SIMD_256
-    
-#ifdef DM_PLATFORM_LINUX
-    _mm256_storeu_ps(d, mm);
-#else
-    _mm256_store_ps(d, mm);
-#endif
-    
-#else
-#ifdef DM_PLATFORM_LINUX
-    _mm_storeu_ps(d, mm);
-#else
-    _mm_store_ps(d, mm);
-#endif
-    
-#endif // DM_SIMD_256
-}
-
-DM_INLINE
-dm_mm_float dm_mm_add_ps(dm_mm_float left, dm_mm_float right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_add_ps(left, right);
-#else
-    return _mm_add_ps(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_float dm_mm_sub_ps(dm_mm_float left, dm_mm_float right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_sub_ps(left, right);
-#else
-    return _mm_sub_ps(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_float dm_mm_mul_ps(dm_mm_float left, dm_mm_float right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_mul_ps(left, right);
-#else
-    return _mm_mul_ps(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_float dm_mm_div_ps(dm_mm_float left, dm_mm_float right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_div_ps(left, right);
-#else
-    return _mm_div_ps(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_float dm_mm_sqrt_ps(dm_mm_float mm)
-{
-#ifdef DM_SIMD_256
-    return _mm256_sqrt_ps(mm);
-#else
-    return _mm_sqrt_ps(mm);
-#endif
-}
-
-DM_INLINE
-dm_mm_float dm_mm_hadd_ps(dm_mm_float left, dm_mm_float right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_hadd_ps(left, right);
-#else
-    return _mm_hadd_ps(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_float dm_mm_fmadd_ps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
-{
-#ifdef DM_SIMD_256
-    return _mm256_fmadd_ps(a, b, c);
-#else
-    return _mm_fmadd_ps(a, b, c);
-#endif
-}
-
-DM_INLINE
-float dm_mm_extract_float(dm_mm_float mm)
-{
-#ifdef DM_SIMD_256
-    return _mm256_cvtss_f32(mm);
-#else
-    return _mm_cvtss_f32(mm);
-#endif
-}
-
-// https://stackoverflow.com/questions/13219146/how-to-sum-m256-horizontally
-DM_INLINE
-float dm_mm_sum_elements(dm_mm_float mm)
-{
-#ifdef DM_SIMD_256
-    // hiQuad = ( x7, x6, x5, x4 )
-    const __m128 hiQuad = _mm256_extractf128_ps(mm, 1);
-    // loQuad = ( x3, x2, x1, x0 )
-    const __m128 loQuad = _mm256_castps256_ps128(mm);
-    // sumQuad = ( x3 + x7, x2 + x6, x1 + x5, x0 + x4 )
-    const __m128 sumQuad = _mm_add_ps(loQuad, hiQuad);
-    // loDual = ( -, -, x1 + x5, x0 + x4 )
-    const __m128 loDual = sumQuad;
-    // hiDual = ( -, -, x3 + x7, x2 + x6 )
-    const __m128 hiDual = _mm_movehl_ps(sumQuad, sumQuad);
-    // sumDual = ( -, -, x1 + x3 + x5 + x7, x0 + x2 + x4 + x6 )
-    const __m128 sumDual = _mm_add_ps(loDual, hiDual);
-    // lo = ( -, -, -, x0 + x2 + x4 + x6 )
-    const __m128 lo = sumDual;
-    // hi = ( -, -, -, x1 + x3 + x5 + x7 )
-    const __m128 hi = _mm_shuffle_ps(sumDual, sumDual, 0x1);
-    // sum = ( -, -, -, x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7 )
-    const __m128 sum = _mm_add_ss(lo, hi);
-    return _mm_cvtss_f32(sum);
-#endif
-}
-
-/*
- int
-*/
-DM_INLINE
-dm_mm_int dm_mm_load_i(int* d)
-{
-#ifdef DM_SIMD_256
-    return _mm256_load_si256((dm_mm_int*)d);
-#else
-    return _mm_load_si128((dm_mm_int*)d);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_set1_i(int d)
-{
-#ifdef DM_SIMD_256
-    return _mm256_set1_epi32(d);
-#else
-    return _mm_set1_epi32(d);
-#endif
-}
-
-DM_INLINE
-void dm_mm_store_i(int* i, dm_mm_int mm)
-{
-#ifdef DM_SIMD_256
-    _mm256_store_si256((dm_mm_int*)i, mm);
-#else
-    _mm_store_si128((dm_mm_int*)i, mm);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_add_i(dm_mm_int left, dm_mm_int right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_add_epi32(left, right);
-#else
-    return _mm_add_epi32(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_sub_i(dm_mm_int left, dm_mm_int right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_sub_epi32(left, right);
-#else
-    return _mm_sub_epi32(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_mul_i(dm_mm_int left, dm_mm_int right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_mul_epi32(left, right);
-#else
-    return _mm_mul_epi32(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_hadd_i(dm_mm_int left, dm_mm_int right)
-{
-#ifdef DM_SIMD_256
-    return _mm256_hadd_epi32(left, right);
-#else
-    return _mm_hadd_epi32(left, right);
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_shiftl_1(dm_mm_int mm)
-{
-#ifdef DM_SIMD_256
-    return _mm256_slli_si256(mm, sizeof(int));
-#else
-    return _mm_bslli_si128(mm, sizeof(int));
-#endif
-}
-
-DM_INLINE
-dm_mm_int dm_mm_shiftr_1(dm_mm_int mm)
-{
-#ifdef DM_SIMD_256
-    return _mm256_bsrli_epi128(mm, sizeof(int));
-#else
-    return _mm_bsrli_si128(mm, sizeof(int));
-#endif
-}
+/**********
+INTRINSICS
+************/
+#include "dm_intrinsics.h"
 
 #endif //DM_H

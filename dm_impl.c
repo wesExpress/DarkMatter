@@ -13,9 +13,6 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype/stb_truetype.h"
 
-// TODO: REMOVE
-#include "rendering/imgui_render_pass.h"
-
 /*********
 BYTE POOL
 ***********/
@@ -1133,25 +1130,6 @@ bool dm_renderer_submit_commands(dm_context* context)
                 if(!dm_render_command_backend_set_primitive_topology(topology, &context->renderer)) { DM_LOG_FATAL("Set topology failed"); return false; }
             } break;
             
-#if 0
-            case DM_RENDER_COMMAND_BEGIN_RENDER_PASS:
-            {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, pass_index);
-                
-                dm_renderpass* renderpass = DM_RENDERER_GET_RESOURCE(DM_RENDER_RESOURCE_RENDERPASS, pass_index); 
-                if(!renderpass) { DM_LOG_FATAL("Trying to begin invalid renderpass"); return false; }
-                if(!dm_render_command_begin_renderpass_impl(renderpass->internal_index)) { DM_LOG_FATAL("Begin renderpass failed"); return false; }
-            } break;
-            case DM_RENDER_COMMAND_END_RENDER_PASS:
-            {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, pass_index);
-                
-                dm_renderpass* renderpass = DM_RENDERER_GET_RESOURCE(DM_RENDER_RESOURCE_RENDERPASS, pass_index); 
-                if(!renderpass) { DM_LOG_FATAL("Trying to end invalid renderpass"); return false; }
-                if(!dm_render_command_end_renderpass_impl(renderpass->internal_index)) { DM_LOG_FATAL("End renderpass failed"); return false; }
-            } break;
-#endif
-            
             case DM_RENDER_COMMAND_BIND_SHADER:
             {
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
@@ -1303,30 +1281,15 @@ dm_pipeline_desc dm_renderer_default_pipeline()
 /***
 ECS
 *****/
-#define DM_ECS_MANAGER_ENTITY_CAPACITY DM_ECS_COMPONENT_BLOCK_SIZE
-#define DM_ECS_MANAGER_RESIZE_FACTOR   2
-#define DM_ECS_MANAGER_LOAD_FACTOR     0.75f
-
 bool dm_ecs_init(dm_context* context)
 {
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
     
-    ecs_manager->entity_capacity          = DM_ECS_MANAGER_ENTITY_CAPACITY;
+    dm_memset(ecs_manager->entities, DM_ECS_INVALID_ENTITY, sizeof(dm_entity) * DM_ECS_MAX_ENTITIES);
     
-    size_t block_size     = sizeof(dm_entity) * ecs_manager->entity_capacity;
-    ecs_manager->entities = dm_alloc(block_size);
-    dm_memset(ecs_manager->entities, DM_ECS_INVALID_ENTITY, block_size);
-    
-    block_size                            = sizeof(uint32_t) * DM_ECS_MAX * ecs_manager->entity_capacity;
-    ecs_manager->entity_component_indices = dm_alloc(block_size);
-    dm_memset(ecs_manager->entity_component_indices, DM_ECS_INVALID_ID, block_size);
-    
-    ecs_manager->entity_block_indices    = dm_alloc(block_size);
-    dm_memset(ecs_manager->entity_block_indices, DM_ECS_INVALID_ID, block_size);
-    
-    block_size                            = sizeof(dm_ecs_id) * ecs_manager->entity_capacity;
-    ecs_manager->entity_component_masks   = dm_alloc(block_size);
-    dm_memzero(ecs_manager->entity_component_masks, block_size);
+    size_t size = sizeof(uint32_t) * DM_ECS_MAX_ENTITIES * DM_ECS_MAX;
+    dm_memset(ecs_manager->entity_component_indices, DM_ECS_INVALID_ID, size);
+    dm_memzero(ecs_manager->entity_component_masks, sizeof(dm_ecs_id) * DM_ECS_MAX_ENTITIES);
     
     return true;
 }
@@ -1342,61 +1305,54 @@ void dm_ecs_shutdown(dm_context* context)
         dm_free(ecs_manager->components[i].data);
     }
     
-    dm_ecs_system_manager* system = NULL;
+    dm_ecs_system* system = NULL;
     for(i=0; i<DM_ECS_SYSTEM_TIMING_UNKNOWN; i++)
     {
         for(uint32_t j=0; j<ecs_manager->num_registered_systems[i]; j++)
         {
             system = &ecs_manager->systems[i][j];
+            
             system->shutdown_func((void*)system,(void*)context);
-            dm_free(ecs_manager->systems[i][j].entity_containers);
-            dm_free(ecs_manager->systems[i][j].system_data);
+            
+            if(system->system_data) dm_free(system->system_data);
         }
     }
-    
-    dm_free(ecs_manager->entity_component_masks);
-    dm_free(ecs_manager->entity_component_indices);
-    dm_free(ecs_manager->entity_block_indices);
-    dm_free(ecs_manager->entities);
 }
 
-dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context)
+dm_ecs_id dm_ecs_register_component(size_t size, dm_context* context)
 {
     if(context->ecs_manager.num_registered_components >= DM_ECS_MAX) return DM_ECS_INVALID_ID;
     
     dm_ecs_id id = context->ecs_manager.num_registered_components++;
     
-    context->ecs_manager.components[id].block_size   = component_block_size;
-    context->ecs_manager.components[id].block_count  = 1;
-    context->ecs_manager.components[id].entity_count = 0;
-    
-    context->ecs_manager.components[id].data = dm_alloc(component_block_size);
+    context->ecs_manager.components[id].size = size;
+    context->ecs_manager.components[id].data = dm_alloc(size);
     
     return id;
 }
 
-dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing,  bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), dm_context* context)
+dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing,  bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), void (*insert_func)(uint32_t,void*,void*), dm_context* context)
 {
     if(context->ecs_manager.num_registered_systems[timing] >= DM_ECS_MAX) return DM_ECS_INVALID_ID;
     
-    
     dm_ecs_id id = context->ecs_manager.num_registered_systems[timing]++;
-    dm_ecs_system_manager* manager = &context->ecs_manager.systems[timing][id];
+    dm_ecs_system* system = &context->ecs_manager.systems[timing][id];
     
     for(uint32_t i=0; i<component_count; i++)
     {
-        manager->component_mask |= DM_BIT_SHIFT(component_ids[i]);
-        manager->component_ids[i] = component_ids[i];
+        system->component_mask   |= DM_BIT_SHIFT(component_ids[i]);
+        system->component_ids[i]  = component_ids[i];
     }
     
-    manager->component_count = component_count;
+    system->component_count = component_count;
     
-    manager->run_func      = run_func;
-    manager->shutdown_func = shutdown_func;
+    system->run_func      = run_func;
+    system->shutdown_func = shutdown_func;
+    system->insert_func   = insert_func;
     
-    manager->entity_capacity   = DM_ECS_COMPONENT_BLOCK_SIZE;
-    manager->entity_containers = dm_alloc(sizeof(dm_ecs_system_entity_container) * manager->entity_capacity);
-    manager->entity_count      = 0;
+    system->entity_count = 0;
+    
+    dm_memset(system->entity_indices, DM_ECS_INVALID_ID, sizeof(uint32_t) * DM_ECS_MAX_ENTITIES * DM_ECS_MAX);
     
     return id;
 }
@@ -1404,274 +1360,179 @@ dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_co
 void dm_ecs_entity_insert(dm_entity entity, dm_context* context)
 {
     //const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
-    const uint32_t index = entity % context->ecs_manager.entity_capacity;
+    const uint32_t index = entity % DM_ECS_MAX_ENTITIES;
     dm_entity* entities = context->ecs_manager.entities;
     
     if(entities[index]==DM_ECS_INVALID_ENTITY) 
     {
         entities[index] = entity;
+        context->ecs_manager.entity_count++;
         return;
     }
     
     uint32_t runner = index + 1;
-    if(runner >= context->ecs_manager.entity_capacity) runner = 0;
+    if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
     
     while(runner != index)
     {
         if(entities[runner]==DM_ECS_INVALID_ENTITY) 
         {
             entities[runner] = entity;
+            context->ecs_manager.entity_count++;
             return;
         }
         
         runner++;
-        if(runner >= context->ecs_manager.entity_capacity) runner = 0;
+        if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
     }
     
     DM_LOG_FATAL("Could not insert entity, should not be here...");
 }
 
-void dm_ecs_reinsert_entities(uint32_t old_capacity, dm_context* context)
+void dm_ecs_insert_entities_into_systems(dm_context* context)
 {
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
+    dm_ecs_system*  system = NULL;
+    uint32_t        comp_id, comp_index;
     
-    uint32_t cap = ecs_manager->entity_capacity;
+    dm_entity entity = DM_ECS_INVALID_ENTITY;
+    uint32_t  entity_index = DM_ECS_INVALID_ID;
     
-    size_t e_size = sizeof(dm_entity) * cap;
-    size_t c_size = sizeof(uint32_t) * DM_ECS_MAX * cap;
-    size_t s_size = sizeof(uint32_t) * DM_ECS_MAX * cap;
-    size_t m_size = sizeof(dm_ecs_id) * cap;
-    
-    dm_entity* new_entities;
-    uint32_t (*new_comp_inds)[DM_ECS_MAX];
-    uint32_t (*new_blk_inds)[DM_ECS_MAX];
-    dm_ecs_id* new_masks;
-    
-    new_entities  = dm_alloc(e_size);
-    new_comp_inds = dm_alloc(c_size);
-    new_blk_inds  = dm_alloc(s_size);
-    new_masks     = dm_alloc(m_size);
-    
-    dm_memset(new_entities, DM_ECS_INVALID_ENTITY, e_size);
-    dm_memset(new_comp_inds, DM_ECS_INVALID_ID, c_size);
-    dm_memset(new_blk_inds, DM_ECS_INVALID_ID, s_size);
-    dm_memzero(new_masks, m_size);
-    
-    static const size_t index_block_size = sizeof(uint32_t) * DM_ECS_MAX;
-    dm_entity entity;
-    uint32_t index, runner;
-    
-    for(uint32_t i=0; i<old_capacity; i++)
+    // for all entities
+    for(uint32_t e=0; e<ecs_manager->entity_count; e++)
     {
-        entity = ecs_manager->entities[i];
-        if(entity==DM_ECS_INVALID_ENTITY) continue;
+        entity = ecs_manager->entities[e];
+        if(entity == DM_ECS_INVALID_ENTITY) continue;
         
-        //index = dm_hash_32bit(entity); 
-        index = entity % ecs_manager->entity_capacity;
+        entity_index = dm_ecs_entity_get_index(entity, context);
         
-        if(new_entities[index]==DM_ECS_INVALID_ENTITY)
+        // for all system timings
+        for(uint32_t t=0; t<DM_ECS_SYSTEM_TIMING_UNKNOWN; t++)
         {
-            new_entities[index] = entity;
-            dm_memcpy(new_comp_inds[index], ecs_manager->entity_component_indices[i], index_block_size);
-            dm_memcpy(new_blk_inds[index], ecs_manager->entity_block_indices[i], index_block_size);
-            new_masks[index] = ecs_manager->entity_component_masks[i];
-        }
-        // hash conflict, so iterate
-        else
-        {
-            runner = index + 1;
-            if(runner >= ecs_manager->entity_capacity) runner = 0;
-            
-            while(runner != index)
+            // for all systems in timing
+            for(uint32_t s=0; s<ecs_manager->num_registered_systems[t]; s++)
             {
-                if(new_entities[runner]==DM_ECS_INVALID_ENTITY)
+                system = &ecs_manager->systems[t][s];
+                
+                // early out if we don't have what this system needs
+                if(!dm_ecs_entity_has_component_multiple_via_index(entity_index, system->component_mask, context)) continue;
+                
+                // get all component indices
+                for(uint32_t c=0; c<system->component_count; c++)
                 {
-                    new_entities[runner] = entity;
-                    dm_memcpy(new_comp_inds[runner], ecs_manager->entity_component_indices[i], index_block_size);
-                    dm_memcpy(new_blk_inds[runner], ecs_manager->entity_block_indices[i], index_block_size);
-                    new_masks[runner] = ecs_manager->entity_component_masks[i];
+                    comp_id    = system->component_ids[c];
+                    comp_index = ecs_manager->entity_component_indices[entity_index][comp_id];
                     
-                    break;
+                    system->entity_indices[system->entity_count][comp_id] = comp_index;
                 }
-                else
-                {
-                    runner++;
-                    if(runner >= ecs_manager->entity_capacity) runner = 0;
-                }
+                
+                system->insert_func(entity_index, (void*)system, (void*)context);
+                
+                system->entity_count++;
             }
         }
     }
-    
-    dm_memcpy(ecs_manager->entities, new_entities, e_size);
-    dm_memcpy(ecs_manager->entity_component_indices, new_comp_inds, c_size);
-    dm_memcpy(ecs_manager->entity_block_indices, new_blk_inds, s_size);
-    dm_memcpy(ecs_manager->entity_component_masks, new_masks, m_size);
-    
-    dm_free(new_entities);
-    dm_free(new_comp_inds);
-    dm_free(new_blk_inds);
-    dm_free(new_masks);
-}
-
-bool dm_ecs_entity_insert_into_systems(dm_entity entity, dm_context* context)
-{
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    uint32_t component_count, component_index, block_index, entity_count;
-    
-    dm_ecs_manager* ecs_manager = &context->ecs_manager;
-    
-    // for all system timings
-    for(uint32_t t=0; t<DM_ECS_SYSTEM_TIMING_UNKNOWN; t++)
-    {
-        // for all systems in timing
-        for(uint32_t s=0; s<ecs_manager->num_registered_systems[t]; s++)
-        {
-            dm_ecs_system_manager* manager = &ecs_manager->systems[t][s];
-            
-            // early out if we don't have what this system needs
-            if(!dm_ecs_entity_has_component_multiple(entity, manager->component_mask, context)) continue;
-            
-            //if(manager->entity_count
-            
-            entity_count    = manager->entity_count;
-            component_count = manager->component_count;
-            
-            dm_ecs_system_entity_container* entity_container = &manager->entity_containers[entity_count];
-            
-            entity_container->entity       = entity;
-            entity_container->entity_index = entity_index;
-            
-            for(uint32_t c=0; c<component_count; c++)
-            {
-                uint32_t c_id = manager->component_ids[c];
-                
-                component_index = ecs_manager->entity_component_indices[entity_index][c_id];
-                block_index     = ecs_manager->entity_block_indices[entity_index][c_id];
-                
-                entity_container->component_indices[c_id] = component_index;
-                entity_container->block_indices[c_id]     = block_index;
-            }
-            
-            manager->entity_count++;
-            dm_grow_dyn_array((void**)&manager->entity_containers, manager->entity_count, &manager->entity_capacity, sizeof(dm_ecs_system_entity_container), 0.75f, 2);
-        }
-    }
-    
-    return true;
 }
 
 bool dm_ecs_run_systems(dm_ecs_system_timing timing, dm_context* context)
 {
-    dm_ecs_system_manager* manager = NULL;
+    dm_ecs_system* system = NULL;
     for(uint32_t i=0; i<context->ecs_manager.num_registered_systems[timing]; i++)
     {
-        manager = &context->ecs_manager.systems[timing][i];
-        if(!manager->run_func(manager, context)) return false;
+        system = &context->ecs_manager.systems[timing][i];
+        if(!system->run_func(system, context)) return false;
+        
+        // reset entity_count
+        system->entity_count = 0;
     }
     
     return true;
 }
 
-dm_entity dm_ecs_create_entity(dm_context* context)
+dm_entity dm_ecs_entity_create(dm_context* context)
 {
     dm_ecs_manager* ecs_manager = &context->ecs_manager;
     
-    dm_entity entity = dm_random_uint32(context);
-    ecs_manager->entity_count++;
+    dm_entity entity;
+    
+    while(true)
+    {
+        entity = dm_random_uint32(context);
+        if(entity!=DM_ECS_INVALID_ENTITY) break;
+    }
     
     dm_ecs_entity_insert(entity, context);
-    
-    if((float)ecs_manager->entity_count / (float)ecs_manager->entity_capacity < DM_ECS_MANAGER_LOAD_FACTOR) return entity;
-    
-    // we need to resize all entity arrays, and reinsert. This is costly!!!!
-    uint32_t old_capacity         = ecs_manager->entity_capacity;
-    ecs_manager->entity_capacity *= DM_ECS_MANAGER_RESIZE_FACTOR;
-    uint32_t cap_dif              = ecs_manager->entity_capacity - old_capacity;
-    
-    // resize entities
-    size_t index_size     = sizeof(dm_entity);
-    size_t new_size       = index_size * ecs_manager->entity_capacity;
-    size_t offset         = old_capacity;
-    ecs_manager->entities = dm_realloc(ecs_manager->entities, new_size);
-    void* block           = ecs_manager->entities + offset;
-    dm_memset(block, DM_ECS_INVALID_ENTITY, index_size * cap_dif);
-    
-    // resize indices
-    index_size                            = sizeof(uint32_t) * DM_ECS_MAX;
-    new_size                              = index_size * ecs_manager->entity_capacity;
-    ecs_manager->entity_component_indices = dm_realloc(ecs_manager->entity_component_indices, new_size);
-    block                                 = ecs_manager->entity_component_indices + offset;
-    dm_memset(block, DM_ECS_INVALID_ID, index_size * cap_dif);
-    
-    ecs_manager->entity_block_indices = dm_realloc(ecs_manager->entity_block_indices, new_size);
-    block                             = ecs_manager->entity_block_indices + offset;
-    dm_memset(block, DM_ECS_INVALID_ID, index_size * cap_dif);
-    
-    // resize component masks
-    index_size                          = sizeof(dm_ecs_id);
-    new_size                            = index_size * ecs_manager->entity_capacity;
-    ecs_manager->entity_component_masks = dm_realloc(ecs_manager->entity_component_masks, new_size);
-    block                               = context->ecs_manager.entity_component_masks + offset;
-    dm_memset(block, 0, index_size * cap_dif);
-    
-    // reinsertion
-    dm_ecs_reinsert_entities(old_capacity, context);
     
     return entity;
 }
 
+void dm_ecs_entity_destroy(dm_entity entity, dm_context* context)
+{
+    dm_ecs_manager* ecs_manager = &context->ecs_manager;
+    
+    uint32_t index = dm_ecs_entity_get_index(entity, context);
+    
+    // remove components
+    for(uint32_t c=0; c<ecs_manager->num_registered_components; c++)
+    {
+        dm_ecs_entity_remove_component_via_index(index, c, context);
+    }
+    
+    // entity array position set to invalid
+    ecs_manager->entities[index] = DM_ECS_INVALID_ENTITY;
+    // component indices set to invalid
+    dm_memset(ecs_manager->entity_component_indices[index], DM_ECS_INVALID_ID, sizeof(uint32_t) * DM_ECS_MAX);
+    // component mask reset to 0
+    ecs_manager->entity_component_masks[index] = 0;
+    
+    ecs_manager->entity_count--;
+}
+
 void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context)
 {
-    if(component_id==DM_ECS_INVALID_ID) { DM_LOG_ERROR("Trying to get invalid component block"); return NULL; }
+    if(component_id==DM_ECS_INVALID_ID) return NULL;
     
     return context->ecs_manager.components[component_id].data;
 }
 
-void* dm_ecs_get_current_component_block(dm_ecs_id component_id, uint32_t* insert_index, dm_context* context)
+void dm_ecs_get_component_insert_index(dm_ecs_id component_id, uint32_t* index, dm_context* context)
 {
-    dm_ecs_component_manager* manager = &context->ecs_manager.components[component_id];
-    *insert_index = context->ecs_manager.components[component_id].entity_count % DM_ECS_COMPONENT_BLOCK_SIZE;
+    if(component_id==DM_ECS_INVALID_ID) return;
     
-    return (char*)manager->data + manager->block_size * (manager->block_count-1);
+    dm_ecs_component* component = &context->ecs_manager.components[component_id];
+    
+    // if we have dead entities, use their indices.
+    // otherwise iterate
+    if(component->tombstone_count==0) *index = component->entity_count;
+    else                              *index = component->tombstones[component->tombstone_count--];
 }
 
-void* dm_ecs_entity_get_component_block(dm_entity entity, dm_ecs_id component_id, uint32_t* index, dm_context* context)
+void dm_ecs_entity_add_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
 {
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==UINT_MAX) return NULL;
+    if(component_id==DM_ECS_INVALID_ID) return;
+    if(dm_ecs_entity_has_component_via_index(entity_index, component_id, context)) return;
     
-    *index               = context->ecs_manager.entity_component_indices[entity_index][component_id];
-    uint32_t block_index = context->ecs_manager.entity_block_indices[entity_index][component_id];
+    uint32_t c_index = context->ecs_manager.components[component_id].entity_count;
     
-    dm_ecs_component_manager* manager = &context->ecs_manager.components[component_id];
-    
-    return (char*)manager->data + manager->block_size * block_index;
-}
-
-void dm_ecs_iterate_component_block(dm_entity entity, dm_ecs_id component_id, dm_context* context)
-{
-    dm_ecs_component_manager* manager = &context->ecs_manager.components[component_id];
-    
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==UINT_MAX) return;
-    
-    context->ecs_manager.entity_block_indices[entity_index][component_id] = (uint32_t)(manager->entity_count * DM_ECS_INV_COMPONENT_BLOCK_SIZE);
-    context->ecs_manager.entity_component_indices[entity_index][component_id] = manager->entity_count % DM_ECS_COMPONENT_BLOCK_SIZE;
-    
+    context->ecs_manager.entity_component_indices[entity_index][component_id] = c_index;
     context->ecs_manager.entity_component_masks[entity_index] |= DM_BIT_SHIFT(component_id);
+    context->ecs_manager.components[component_id].entity_count++;
+}
+
+void dm_ecs_entity_remove_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
+{
+    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     
-    if(!dm_ecs_entity_insert_into_systems(entity, context)) { DM_LOG_ERROR("Inserting entity failed"); return; }
+    dm_ecs_entity_remove_component_via_index(entity_index, component_id, context);
+}
+
+void dm_ecs_entity_remove_component_via_index(uint32_t index, dm_ecs_id component_id, dm_context* context)
+{
+    if(!dm_ecs_entity_has_component_via_index(index, component_id, context)) return;
     
-    manager->entity_count++;
-    
-    if(manager->entity_count==0) return;
-    bool resize = manager->entity_count % DM_ECS_COMPONENT_BLOCK_SIZE == 0;
-    if(!resize) return;
-    
-    manager->block_count++;
-    manager->data = dm_realloc(manager->data, manager->block_count * manager->block_size);
-    void* data = (char*)manager->data + (manager->block_count-1) * manager->block_size;
-    dm_memzero(data, manager->block_size);
+    dm_ecs_component* component = &context->ecs_manager.components[component_id];
+    component->tombstones[component->tombstone_count++] = index;
 }
 
 /*********
@@ -1709,17 +1570,6 @@ dm_context* dm_init(dm_context_init_packet init_packet)
     context->renderer.height = init_packet.window_height;
     
     dm_ecs_init(context);
-    
-#if 0
-    if(!dm_physics_system_init(&context->ecs_manager.default_components.physics, &context->ecs_manager.default_components.collision, context))
-    {
-        dm_renderer_shutdown(context);
-        dm_platform_shutdown(&context->platform_data);
-        dm_ecs_shutdown(context);
-        dm_free(context);
-        return NULL;
-    }
-#endif
     
     // random init
     init_genrand(&context->random, (uint32_t)dm_platform_get_time(&context->platform_data));
@@ -1800,6 +1650,10 @@ void dm_poll_events(dm_context* context)
             {
                 context->platform_data.window_data.width  = e.new_rect[0];
                 context->platform_data.window_data.height = e.new_rect[1];
+                
+                context->renderer.width = e.new_rect[0];
+                context->renderer.height = e.new_rect[1];
+                
                 dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer);
             } break;
             
@@ -1836,6 +1690,9 @@ bool dm_update_begin(dm_context* context)
     }
     
     dm_poll_events(context);
+    
+    // reinsert entities
+    dm_ecs_insert_entities_into_systems(context);
     
     // systems
     if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN, context)) return false;
