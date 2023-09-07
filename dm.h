@@ -399,7 +399,7 @@ typedef struct dm_threadpool_t
     char tag[512];
     
     dm_thread_task tasks[DM_MAX_TASK_COUNT];
-    uint32_t       task_count, thread_count;
+    uint32_t       task_count, thread_count, total_task_count;
     
     void* internal_pool;
 } dm_threadpool;

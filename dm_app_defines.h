@@ -1,7 +1,7 @@
 #ifndef DM_APP_DEFINES_H
 #define DM_APP_DEFINES_H
 
-#define DM_MAX_THREAD_COUNT 24
+#define DM_MAX_THREAD_COUNT 32
 
 #define DM_ECS_MAX_ENTITIES 4096
 

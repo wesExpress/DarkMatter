@@ -376,14 +376,12 @@ void dm_platform_threadpool_execute_task(dm_thread_task* task, dm_threadpool* th
 {
     dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
     
-    EnterCriticalSection(&w32_threadpool->queue_mutex);
-    InterlockedIncrement(&w32_threadpool->queue_increment);
-    LeaveCriticalSection(&w32_threadpool->queue_mutex);
-    
+    // run func and decrement queue counter
     task->func(task->args);
     
     EnterCriticalSection(&w32_threadpool->queue_mutex);
-    InterlockedDecrement(&w32_threadpool->queue_increment);
+    threadpool->total_task_count--;
+    if(threadpool->total_task_count==0) WakeConditionVariable(&w32_threadpool->queue_empty);
     LeaveCriticalSection(&w32_threadpool->queue_mutex);
 }
 
@@ -391,10 +389,11 @@ void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool)
 {
     dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
     
-    while(1)
-    {
-        if(w32_threadpool->queue_increment==0) break;
-    }
+    if(threadpool->total_task_count==0) return;
+    
+    EnterCriticalSection(&w32_threadpool->queue_mutex);
+    SleepConditionVariableCS(&w32_threadpool->queue_empty, &w32_threadpool->queue_mutex, INFINITE);
+    LeaveCriticalSection(&w32_threadpool->queue_mutex);
 }
 
 void* dm_win32_thread_start_func(void* args)
@@ -408,16 +407,22 @@ void* dm_win32_thread_start_func(void* args)
     {
         EnterCriticalSection(&w32_threadpool->queue_mutex);
         
+        // wait until a task is available
         while(threadpool->task_count==0)
         {
             SleepConditionVariableCS(&w32_threadpool->queue_condition, &w32_threadpool->queue_mutex, INFINITE);
         }
         
+        // copy over task
         task = threadpool->tasks[0];
         dm_memmove(threadpool->tasks, threadpool->tasks + 1, sizeof(dm_thread_task) * threadpool->task_count-1);
+        // decrement task count
         threadpool->task_count--;
         
         LeaveCriticalSection(&w32_threadpool->queue_mutex);
+        
+        // increment queue counter
+        InterlockedIncrement(&w32_threadpool->queue_increment);
         
         dm_platform_threadpool_execute_task(&task, threadpool);
     }
