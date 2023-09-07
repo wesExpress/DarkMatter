@@ -525,13 +525,11 @@ void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list)
 /********
 PLATFORM
 **********/
-extern bool   dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_platform_data* platform_data);
+extern bool   dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* context);
 extern void   dm_platform_shutdown(dm_platform_data* platform_data);
 extern double dm_platform_get_time(dm_platform_data* platform_data);
 extern void   dm_platform_write(const char* message, uint8_t color);
 extern bool   dm_platform_pump_events(dm_platform_data* platform_data);
-extern uint32_t dm_platform_get_available_processor_count(dm_platform_data* platform_data);
-extern bool   dm_platform_threads_create(void* (*thread_func)(void*), void* args, size_t args_size, uint32_t num_threads, dm_platform_data* platform_data);
 
 /*******
 LOGGING
@@ -1540,14 +1538,36 @@ void dm_ecs_entity_remove_component_via_index(uint32_t index, dm_ecs_id componen
 /*********
 THREADING
 ***********/
-uint32_t dm_get_available_processor_count(dm_context* context)
+extern bool dm_platform_threadpool_create(dm_threadpool* threadpool);
+extern void dm_platform_threadpool_destroy(dm_threadpool* threadpool);
+extern void dm_platform_threadpool_submit_task(dm_thread_task* task, dm_threadpool* threadpool);
+extern void dm_platform_threadpool_execute_task(dm_thread_task* task, dm_threadpool* threadpool);
+extern void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool);
+
+bool dm_threadpool_create(const char* tag, uint32_t num_threads, dm_threadpool* threadpool)
 {
-    return dm_platform_get_available_processor_count(&context->platform_data);
+    strcpy(threadpool->tag, tag);
+    
+    // want at least one thread
+    num_threads = DM_CLAMP(num_threads, 1, DM_MAX_THREAD_COUNT);
+    threadpool->thread_count = num_threads;
+    
+    return dm_platform_threadpool_create(threadpool);
 }
 
-bool dm_threads_create(void* (*thread_func)(void*), void* args, size_t args_size, uint32_t num_threads, dm_context* context)
+void dm_threadpool_destroy(dm_threadpool* threadpool)
 {
-    return dm_platform_threads_create(thread_func, args, args_size, num_threads, &context->platform_data);
+    dm_platform_threadpool_destroy(threadpool);
+}
+
+void dm_threadpool_submit_task(dm_thread_task* task, dm_threadpool* threadpool)
+{
+    dm_platform_threadpool_submit_task(task, threadpool);
+}
+
+void dm_threadpool_wait_for_completion(dm_threadpool* threadpool)
+{
+    dm_platform_threadpool_wait_for_completion(threadpool);
 }
 
 /*********
@@ -1568,7 +1588,7 @@ dm_context* dm_init(dm_context_init_packet init_packet)
     strcpy(context->platform_data.window_data.title, init_packet.window_title);
     strcpy(context->platform_data.asset_path, init_packet.asset_folder);
     
-    if(!dm_platform_init(init_packet.window_x, init_packet.window_y, &context->platform_data))
+    if(!dm_platform_init(init_packet.window_x, init_packet.window_y, context))
     {
         dm_free(context);
         return NULL;

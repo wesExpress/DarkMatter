@@ -379,6 +379,32 @@ typedef struct dm_platform_data_t
 } dm_platform_data;
 
 /**********
+THREADPOOL
+************/
+typedef struct dm_thread_task_t
+{
+    void* (*func)(void*);
+    void* args;
+} dm_thread_task;
+
+#ifndef DM_MAX_THREAD_COUNT
+#define DM_MAX_THREAD_COUNT 32
+#endif
+#ifndef DM_MAX_TASK_COUNT
+#define DM_MAX_TASK_COUNT   256
+#endif
+
+typedef struct dm_threadpool_t
+{
+    char tag[512];
+    
+    dm_thread_task tasks[DM_MAX_TASK_COUNT];
+    uint32_t       task_count, thread_count;
+    
+    void* internal_pool;
+} dm_threadpool;
+
+/**********
 STRUCTURES
 ************/
 // byte pool
@@ -1002,6 +1028,11 @@ void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 // threads
 uint32_t dm_get_available_processor_count(dm_context* context);
 bool     dm_threads_create(void* (*thread_func)(void*), void* args, size_t args_size, uint32_t num_threads, dm_context* context);
+
+bool dm_threadpool_create(const char* tag, uint32_t num_threads, dm_threadpool* threadpool);
+void dm_threadpool_destroy(dm_threadpool* threadpool);
+void dm_threadpool_submit_task(dm_thread_task* task, dm_threadpool* threadpool);
+void dm_threadpool_wait_for_completion(dm_threadpool* threadpool);
 
 // random
 int dm_random_int(dm_context* context);

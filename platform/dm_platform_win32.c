@@ -16,8 +16,12 @@ typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareC
 LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
 LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_platform_data* platform_data)
+void* dm_win32_thread_start_func(void* args);
+void  dm_win32_thread_execute_task(dm_thread_task* task);
+
+bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* context)
 {
+    dm_platform_data* platform_data = &context->platform_data;
     platform_data->internal_data = dm_alloc(sizeof(dm_internal_w32_data));
     dm_internal_w32_data* w32_data = platform_data->internal_data;
     
@@ -314,50 +318,114 @@ LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	return DefWindowProc(hWnd, message, wParam, lParam);
 }
 
-uint32_t dm_platform_get_available_processor_count(dm_platform_data* platform_data)
+/**********
+THREADPOOL
+************/
+bool dm_platform_threadpool_create(dm_threadpool* threadpool)
 {
-    DM_WIN32_GET_DATA;
+    threadpool->internal_pool = dm_alloc(sizeof(dm_w32_threadpool));
+    dm_w32_threadpool* internal_pool = threadpool->internal_pool;
     
-    SYSTEM_INFO sys_info;
-    GetSystemInfo(&sys_info);
+    InitializeConditionVariable(&internal_pool->queue_condition);
+    InitializeConditionVariable(&internal_pool->queue_empty);
+    InitializeCriticalSection(&internal_pool->queue_mutex);
     
-    return sys_info.dwNumberOfProcessors;
-}
-
-bool dm_win32_create_thread(void* (*thread_func)(void*), void* args, HANDLE* thread)
-{
-    DWORD t;
-    *thread = CreateThread(0,0,(LPTHREAD_START_ROUTINE)thread_func, args, 0, &t);
-    
-    if(thread) return true;
-    
-    DM_LOG_FATAL("Creating thread failed");
-    return false;
-}
-
-bool dm_platform_threads_create(void* (*thread_func)(void*), void* args, size_t args_size, uint32_t num_threads, dm_platform_data* platform_data)
-{
-    DM_WIN32_GET_DATA;
-    
-    HANDLE threads[16];
-    
-    for(uint32_t i=0; i<num_threads; i++)
+    for(uint32_t i=0; i<threadpool->thread_count; i++)
     {
-        void* thread_args = (char*)args + args_size * i;
+        DWORD t;
+        internal_pool->threads[i] = CreateThread(0,0, (LPTHREAD_START_ROUTINE)dm_win32_thread_start_func, threadpool, 0, &t);
+        if(internal_pool->threads[i]) continue;
         
-        if(dm_win32_create_thread(thread_func, thread_args, &threads[i])) continue;
-        
+        DM_LOG_FATAL("Could not create Win32 thread");
         return false;
-    }
-    
-    for(uint32_t i=0; i<num_threads; i++)
-    {
-        WaitForSingleObject(threads[i], INFINITE);
     }
     
     return true;
 }
 
+void dm_platform_threadpool_destroy(dm_threadpool* threadpool)
+{
+    dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
+    
+    for(uint32_t i=0; i<threadpool->thread_count; i++)
+    {
+        DWORD exit_code;
+        GetExitCodeThread(w32_threadpool->threads[i], &exit_code);
+        CloseHandle(w32_threadpool->threads[i]);
+    }
+    
+    dm_free(threadpool->internal_pool);
+}
+
+void dm_platform_threadpool_submit_task(dm_thread_task* task, dm_threadpool* threadpool)
+{
+    dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
+    
+    EnterCriticalSection(&w32_threadpool->queue_mutex);
+    
+    dm_memcpy(threadpool->tasks + threadpool->task_count, task, sizeof(dm_thread_task));
+    threadpool->task_count++;
+    
+    LeaveCriticalSection(&w32_threadpool->queue_mutex);
+    
+    // wake up at least one thread
+    WakeConditionVariable(&w32_threadpool->queue_condition);
+}
+
+void dm_platform_threadpool_execute_task(dm_thread_task* task, dm_threadpool* threadpool)
+{
+    dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
+    
+    EnterCriticalSection(&w32_threadpool->queue_mutex);
+    InterlockedIncrement(&w32_threadpool->queue_increment);
+    LeaveCriticalSection(&w32_threadpool->queue_mutex);
+    
+    task->func(task->args);
+    
+    EnterCriticalSection(&w32_threadpool->queue_mutex);
+    InterlockedDecrement(&w32_threadpool->queue_increment);
+    LeaveCriticalSection(&w32_threadpool->queue_mutex);
+}
+
+void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool)
+{
+    dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
+    
+    while(1)
+    {
+        if(w32_threadpool->queue_increment==0) break;
+    }
+}
+
+void* dm_win32_thread_start_func(void* args)
+{
+    dm_threadpool* threadpool = args;
+    dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
+    
+    dm_thread_task task;
+    
+    while(1)
+    {
+        EnterCriticalSection(&w32_threadpool->queue_mutex);
+        
+        while(threadpool->task_count==0)
+        {
+            SleepConditionVariableCS(&w32_threadpool->queue_condition, &w32_threadpool->queue_mutex, INFINITE);
+        }
+        
+        task = threadpool->tasks[0];
+        dm_memmove(threadpool->tasks, threadpool->tasks + 1, sizeof(dm_thread_task) * threadpool->task_count-1);
+        threadpool->task_count--;
+        
+        LeaveCriticalSection(&w32_threadpool->queue_mutex);
+        
+        dm_platform_threadpool_execute_task(&task, threadpool);
+    }
+}
+
+/***************
+ERROR MESSAGING
+*****************/
 const char* dm_get_win32_error_msg(HRESULT hr)
 {
 	char* message = NULL;
