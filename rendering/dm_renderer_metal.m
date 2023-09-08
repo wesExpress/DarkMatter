@@ -1,5 +1,5 @@
 #include "dm.h"
-#include "dm_platform_mac.h"
+#include "platform/dm_platform_mac.h"
 
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>

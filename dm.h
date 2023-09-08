@@ -68,7 +68,7 @@ INCLUDES
 #include <emmintrin.h>
 #include <xmmintrin.h>
 #else
-//#include "arm_neon.h"
+#include <arm_neon.h>
 #endif
 
 /*****
@@ -115,16 +115,22 @@ MATH
 /****
 SIMD
 ******/
-// TODO: not apple supported yet
 #ifndef DM_PLATFORM_APPLE
 typedef __m256  dm_mm256_float;
 typedef __m256i dm_mm256_int;
-#define DM_SIMD256_FLOAT_N 8
 
 typedef __m128  dm_mm_float;
 typedef __m128i dm_mm_int;
-#define DM_SIMD_FLOAT_N 4
+
+#define DM_SIMD256_FLOAT_N 8
+#else
+// neon does not support 256bit registers
+typedef float32x4_t dm_mm_float;
+
+typedef int32x4_t dm_mm_int;
 #endif
+
+#define DM_SIMD_FLOAT_N    4
 
 /*******
 HASHING
@@ -1269,12 +1275,15 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
     uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
     if(entity_index==DM_ECS_INVALID_ENTITY) return false;
     
-    dm_ecs_entity_has_component_multiple_via_index(entity_index, component_mask, context);
+    return dm_ecs_entity_has_component_multiple_via_index(entity_index, component_mask, context);
 }
 
 /**********
 INTRINSICS
 ************/
 #include "dm_intrinsics.h"
+#ifndef DM_PLATFORM_APPLE
+#include "dm_intrinsics256.h"
+#endif
 
 #endif //DM_H

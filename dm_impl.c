@@ -1256,7 +1256,6 @@ bool dm_renderer_submit_commands(dm_context* context)
         }
     }
     
-    imgui_draw_text_fmt(10,150, 0,1,1,1, context, "Rendering took %0.3lf ms", dm_timer_elapsed_ms(&t, context));
     return true;
 }
 
@@ -1451,8 +1450,6 @@ bool dm_ecs_run_systems(dm_ecs_system_timing timing, dm_context* context)
 
 dm_entity dm_ecs_entity_create(dm_context* context)
 {
-    dm_ecs_manager* ecs_manager = &context->ecs_manager;
-    
     dm_entity entity;
     
     while(true)

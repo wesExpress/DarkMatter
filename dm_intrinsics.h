@@ -4,84 +4,48 @@
 /*******
 casting
 *********/
-DM_INLINE
-dm_mm256_int dm_mm256_cast_float_to_int(dm_mm256_float mm)
-{
-    return _mm256_castps_si256(mm);
-}
-
+#ifndef DM_PLATFORM_APPLE
 DM_INLINE
 dm_mm_int dm_mm_cast_float_to_int(dm_mm_float mm)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_castps_si128(mm);
-}
+#else
 
-DM_INLINE
-dm_mm256_float dm_mm256_cast_int_to_float(dm_mm256_int mm)
-{
-    return _mm256_castsi256_ps(mm);
+#endif
 }
 
 DM_INLINE
 dm_mm_float dm_mm_cast_int_to_float(dm_mm_int mm)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_castsi128_ps(mm);
+#else
+#endif
 }
-
+#endif
 /*****
 float
 *******/
-DM_INLINE
-dm_mm256_float dm_mm256_load_ps(float* d)
-{
-#ifdef DM_PLATFORM_LINUX
-    return _mm256_loadu_ps(d);
-#else
-    return _mm256_load_ps(d);
-#endif
-}
-
 DM_INLINE
 dm_mm_float dm_mm_load_ps(float* d)
 {
 #ifdef DM_PLATFORM_LINUX
     return _mm_loadu_ps(d);
-#else
+#elif defined(DM_PLATFORM_WINDOWS)
     return _mm_load_ps(d);
+#else
+    return vld1q_f32(d);
 #endif
-}
-
-DM_INLINE
-dm_mm256_float dm_mm256_set1_ps(float d)
-{
-    return _mm256_set1_ps(d);
 }
 
 DM_INLINE
 dm_mm_float dm_mm_set1_ps(float d)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_set1_ps(d);
-}
-
-DM_INLINE
-dm_mm256_float dm_mm256_set_ps(float h, float g, float f, float e, float d, float c, float b, float a)
-{
-    return _mm256_set_ps(h,g,f,e,d,c,b,a);
-}
-
-DM_INLINE
-dm_mm_float dm_mm_set_ps(float d, float c, float b, float a)
-{
-    return _mm_set_ps(d,c,b,a);
-}
-
-DM_INLINE
-void dm_mm256_store_ps(float* d, dm_mm256_float mm)
-{
-#ifdef DM_PLATFORM_LINUX
-    _mm256_storeu_ps(d, mm);
 #else
-    _mm256_store_ps(d, mm);
+    return vdupq_n_f32(d);
 #endif
 }
 
@@ -90,384 +54,230 @@ void dm_mm_store_ps(float* d, dm_mm_float mm)
 {
 #ifdef DM_PLATFORM_LINUX
     _mm_storeu_ps(d, mm);
-#else
+#elif defined(DM_PLATFORM_WINDOWS)
     _mm_store_ps(d, mm);
+#else
+    vst1q_f32(d, mm);
 #endif
-}
-
-DM_INLINE
-dm_mm256_float dm_mm256_add_ps(dm_mm256_float left, dm_mm256_float right)
-{
-    return _mm256_add_ps(left, right);
 }
 
 DM_INLINE
 dm_mm_float dm_mm_add_ps(dm_mm_float left, dm_mm_float right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_add_ps(left, right);
-}
-
-DM_INLINE
-dm_mm256_float dm_mm256_sub_ps(dm_mm256_float left, dm_mm256_float right)
-{
-    return _mm256_sub_ps(left, right);
+#else
+    return vaddq_f32(left, right);
+#endif
 }
 
 DM_INLINE
 dm_mm_float dm_mm_sub_ps(dm_mm_float left, dm_mm_float right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_sub_ps(left, right);
-}
-
-DM_INLINE
-dm_mm256_float dm_mm256_mul_ps(dm_mm256_float left, dm_mm256_float right)
-{
-    return _mm256_mul_ps(left, right);
+#else
+    return vsubq_f32(left, right);
+#endif
 }
 
 DM_INLINE
 dm_mm_float dm_mm_mul_ps(dm_mm_float left, dm_mm_float right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_mul_ps(left, right);
-}
-
-DM_INLINE
-dm_mm256_float dm_mm256_div_ps(dm_mm256_float left, dm_mm256_float right)
-{
-    return _mm256_div_ps(left, right);
+#else
+    return vmulq_f32(left, right);
+#endif
 }
 
 DM_INLINE
 dm_mm_float dm_mm_div_ps(dm_mm_float left, dm_mm_float right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_div_ps(left, right);
-}
-
-DM_INLINE
-dm_mm256_float dm_mm256_sqrt_ps(dm_mm256_float mm)
-{
-    return _mm256_sqrt_ps(mm);
+#else
+    return vdivq_f32(left, right);
+#endif
 }
 
 DM_INLINE
 dm_mm_float dm_mm_sqrt_ps(dm_mm_float mm)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_sqrt_ps(mm);
-}
-
-DM_INLINE
-dm_mm256_float dm_mm256_hadd_ps(dm_mm256_float left, dm_mm256_float right)
-{
-    return _mm256_hadd_ps(left, right);
-}
-
-DM_INLINE
-dm_mm_float dm_mm_hadd_ps(dm_mm_float left, dm_mm_float right)
-{
-    return _mm_hadd_ps(left, right);
-}
-
-DM_INLINE
-dm_mm256_float dm_mm256_fmadd_ps(dm_mm256_float a, dm_mm256_float b, dm_mm256_float c)
-{
-    return _mm256_fmadd_ps(a, b, c);
+#else
+    return vsqrtq_f32(mm);
+#endif
 }
 
 DM_INLINE
 dm_mm_float dm_mm_fmadd_ps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_fmadd_ps(a, b, c);
-}
-
-DM_INLINE
-dm_mm256_float dm_mm256_max_ps(dm_mm256_float a, dm_mm256_float b)
-{
-    return _mm256_max_ps(a, b);
+#else
+    return vfmaq_f32(a,b,c);
+#endif
 }
 
 DM_INLINE
 dm_mm_float dm_mm_max_ps(dm_mm_float a, dm_mm_float b)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_max_ps(a, b);
-}
-
-DM_INLINE
-dm_mm256_float dm_mm256_min_ps(dm_mm256_float a, dm_mm256_float b)
-{
-    return _mm256_min_ps(a, b);
+#else
+    return vmaxq_f32(a, b);
+#endif
 }
 
 DM_INLINE
 dm_mm_float dm_mm_min_ps(dm_mm_float a, dm_mm_float b)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_min_ps(a, b);
+#else
+    return vminq_f32(a, b);
+#endif
 }
 
-DM_INLINE
-float dm_mm256_extract_float(dm_mm256_float mm)
-{
-    return _mm256_cvtss_f32(mm);
-}
-
+#ifndef DM_PLATFORM_APPLE
 DM_INLINE
 float dm_mm_extract_float(dm_mm_float mm)
 {
     return _mm_cvtss_f32(mm);
 }
+#endif
 
-// https://stackoverflow.com/questions/13219146/how-to-sum-m256-horizontally
+#ifdef DM_PLATFORM_APPLE
 DM_INLINE
-float dm_mm256_sum_elements(dm_mm256_float mm)
+float dm_mm_sum_elements(dm_mm_float mm)
 {
-    // hiQuad = ( x7, x6, x5, x4 )
-    const __m128 hiQuad = _mm256_extractf128_ps(mm, 1);
-    // loQuad = ( x3, x2, x1, x0 )
-    const __m128 loQuad = _mm256_castps256_ps128(mm);
-    // sumQuad = ( x3 + x7, x2 + x6, x1 + x5, x0 + x4 )
-    const __m128 sumQuad = _mm_add_ps(loQuad, hiQuad);
-    // loDual = ( -, -, x1 + x5, x0 + x4 )
-    const __m128 loDual = sumQuad;
-    // hiDual = ( -, -, x3 + x7, x2 + x6 )
-    const __m128 hiDual = _mm_movehl_ps(sumQuad, sumQuad);
-    // sumDual = ( -, -, x1 + x3 + x5 + x7, x0 + x2 + x4 + x6 )
-    const __m128 sumDual = _mm_add_ps(loDual, hiDual);
-    // lo = ( -, -, -, x0 + x2 + x4 + x6 )
-    const __m128 lo = sumDual;
-    // hi = ( -, -, -, x1 + x3 + x5 + x7 )
-    const __m128 hi = _mm_shuffle_ps(sumDual, sumDual, 0x1);
-    // sum = ( -, -, -, x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7 )
-    const __m128 sum = _mm_add_ss(lo, hi);
-    return _mm_cvtss_f32(sum);
+    return vaddvq_f32(mm);
 }
-
-DM_INLINE
-float dm_mm256_mul_elements(dm_mm256_float mm)
-{
-    // hiQuad = ( x7, x6, x5, x4 )
-    const __m128 hiQuad = _mm256_extractf128_ps(mm, 1);
-    // loQuad = ( x3, x2, x1, x0 )
-    const __m128 loQuad = _mm256_castps256_ps128(mm);
-    // sumQuad = ( x3 + x7, x2 + x6, x1 + x5, x0 + x4 )
-    const __m128 sumQuad = _mm_mul_ps(loQuad, hiQuad);
-    // loDual = ( -, -, x1 + x5, x0 + x4 )
-    const __m128 loDual = sumQuad;
-    // hiDual = ( -, -, x3 + x7, x2 + x6 )
-    const __m128 hiDual = _mm_movehl_ps(sumQuad, sumQuad);
-    // sumDual = ( -, -, x1 + x3 + x5 + x7, x0 + x2 + x4 + x6 )
-    const __m128 sumDual = _mm_mul_ps(loDual, hiDual);
-    // lo = ( -, -, -, x0 + x2 + x4 + x6 )
-    const __m128 lo = sumDual;
-    // hi = ( -, -, -, x1 + x3 + x5 + x7 )
-    const __m128 hi = _mm_shuffle_ps(sumDual, sumDual, 0x1);
-    // sum = ( -, -, -, x0 + x1 + x2 + x3 + x4 + x5 + x6 + x7 )
-    const __m128 sum = _mm_mul_ss(lo, hi);
-    return _mm_cvtss_f32(sum);
-}
+#endif
 
 /************
 COMPARISSONS
 **************/
 // gt
 DM_INLINE
-dm_mm256_float dm_mm256_gt_ps(dm_mm256_float left, dm_mm256_float right)
-{
-    return _mm256_cmp_ps(left, right, _CMP_GT_OQ);
-}
-
-DM_INLINE
 dm_mm_float dm_mm_gt_ps(dm_mm_float left, dm_mm_float right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_cmp_ps(left, right, _CMP_GT_OQ);
+#else
+    return vcgtq_f32(left, right);
+#endif
 }
 
 // geq
 DM_INLINE
-dm_mm256_float dm_mm256_geq_ps(dm_mm256_float left, dm_mm256_float right)
-{
-    return _mm256_cmp_ps(left, right, _CMP_GE_OQ);
-}
-
-DM_INLINE
 dm_mm_float dm_mm_geq_ps(dm_mm_float left, dm_mm_float right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_cmp_ps(left, right, _CMP_GE_OQ);
+#else
+    return vcgeq_f32(left, right);
+#endif
 }
 
 // lt
 DM_INLINE
-dm_mm256_float dm_mm256_lt_ps(dm_mm256_float left, dm_mm256_float right)
-{
-    return _mm256_cmp_ps(left, right, _CMP_LT_OQ);
-}
-
-DM_INLINE
 dm_mm_float dm_mm_lt_ps(dm_mm_float left, dm_mm_float right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_cmp_ps(left, right, _CMP_LT_OQ);
+#else
+    return vcltq_f32(left, right);
+#endif
 }
 
 // leq
 DM_INLINE
-dm_mm256_float dm_mm256_leq_ps(dm_mm256_float left, dm_mm256_float right)
-{
-    return _mm256_cmp_ps(left, right, _CMP_LE_OQ);
-}
-
-DM_INLINE
 dm_mm_float dm_mm_leq_ps(dm_mm_float left, dm_mm_float right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_cmp_ps(left, right, _CMP_LE_OQ);
-}
-
-// any non-zero
-// https://stackoverflow.com/questions/28923766/intel-simd-how-can-i-check-if-an-m256-contains-any-non-zero-values
-DM_INLINE
-int dm_mm256_any_non_zero(dm_mm256_float mm)
-{
-    dm_mm256_float vcmp = _mm256_cmp_ps(mm, _mm256_set1_ps(0), _CMP_EQ_OQ);
-    int mask = _mm256_movemask_ps(vcmp);
-    return (mask != 0xff);
-}
-
-DM_INLINE
-int dm_mm256_any_zero(dm_mm256_float mm)
-{
-    dm_mm256_float vcmp = _mm256_cmp_ps(mm, _mm256_set1_ps(0), _CMP_EQ_OQ);
-    int mask = _mm256_movemask_ps(vcmp);
-    return (mask == 0xff);
-}
-
-// testz
-DM_INLINE
-int dm_mm256_testz_ps(dm_mm256_float left, dm_mm256_float right)
-{
-    return _mm256_testz_ps(left, right);
+#else
+    return vcleq_f32(left, right);
+#endif
 }
 
 /*******
 BITWISE
 *********/
 DM_INLINE
-dm_mm256_float dm_mm256_and_ps(dm_mm256_float left, dm_mm256_float right)
-{
-    return _mm256_and_ps(left, right);
-}
-
-DM_INLINE
 dm_mm_float dm_mm_and_ps(dm_mm_float left, dm_mm_float right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_and_ps(left, right);
+#else
+    return vandq_s32(left, right);
+#endif
 }
 
 /*
  int
 */
 DM_INLINE
-dm_mm256_int dm_mm256_load_i(int* d)
-{
-    return _mm256_load_si256((dm_mm256_int*)d);
-}
-
-DM_INLINE
 dm_mm_int dm_mm_load_i(int* d)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_load_si128((dm_mm_int*)d);
-}
-
-DM_INLINE
-dm_mm256_int dm_mm256_set1_i(int d)
-{
-    return _mm256_set1_epi32(d);
+#else
+    return vld1q_s32(d);
+#endif
 }
 
 DM_INLINE
 dm_mm_int dm_mm_set1_i(int d)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_set1_epi32(d);
-}
-
-DM_INLINE
-void dm_mm256_store_i(int* i, dm_mm256_int mm)
-{
-    _mm256_store_si256((dm_mm256_int*)i, mm);
+#else
+    return vdupq_n_s32(d);
+#endif
 }
 
 DM_INLINE
 void dm_mm_store_i(int* i, dm_mm_int mm)
 {
+#ifndef DM_PLATFORM_APPLE
     _mm_store_si128((dm_mm_int*)i, mm);
-}
-
-DM_INLINE
-dm_mm256_int dm_mm256_add_i(dm_mm256_int left, dm_mm256_int right)
-{
-    return _mm256_add_epi32(left, right);
+#else
+     vst1q_s32(i, mm);
+#endif
 }
 
 DM_INLINE
 dm_mm_int dm_mm_add_i(dm_mm_int left, dm_mm_int right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_add_epi32(left, right);
-}
-
-DM_INLINE
-dm_mm256_int dm_mm256_sub_i(dm_mm256_int left, dm_mm256_int right)
-{
-    return _mm256_sub_epi32(left, right);
+#else
+    return vaddq_s32(left, right);
+#endif
 }
 
 DM_INLINE
 dm_mm_int dm_mm_sub_i(dm_mm_int left, dm_mm_int right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_sub_epi32(left, right);
-}
-
-DM_INLINE
-dm_mm256_int dm_mm256_mul_i(dm_mm256_int left, dm_mm256_int right)
-{
-    return _mm256_mul_epi32(left, right);
+#else
+    return vsubq_s32(left, right);
+#endif
 }
 
 DM_INLINE
 dm_mm_int dm_mm_mul_i(dm_mm_int left, dm_mm_int right)
 {
+#ifndef DM_PLATFORM_APPLE
     return _mm_mul_epi32(left, right);
-}
-
-DM_INLINE
-dm_mm256_int dm_mm256_hadd_i(dm_mm256_int left, dm_mm256_int right)
-{
-    return _mm256_hadd_epi32(left, right);
-}
-
-DM_INLINE
-dm_mm_int dm_mm_hadd_i(dm_mm_int left, dm_mm_int right)
-{
-    return _mm_hadd_epi32(left, right);
-}
-
-DM_INLINE
-dm_mm256_int dm_mm256_shiftl_1(dm_mm256_int mm)
-{
-    return _mm256_slli_si256(mm, sizeof(int));
-}
-
-DM_INLINE
-dm_mm_int dm_mm_shiftl_1(dm_mm_int mm)
-{
-    return _mm_bslli_si128(mm, sizeof(int));
-}
-
-DM_INLINE
-dm_mm256_int dm_mm256_shiftr_1(dm_mm256_int mm)
-{
-    return _mm256_bsrli_epi128(mm, sizeof(int));
-}
-
-DM_INLINE
-dm_mm_int dm_mm_shiftr_1(dm_mm_int mm)
-{
-    return _mm_bsrli_si128(mm, sizeof(int));
+#else
+    return vmulq_s32(left, right);
+#endif
 }
 
 #endif //DM_INTRINSICS_H
