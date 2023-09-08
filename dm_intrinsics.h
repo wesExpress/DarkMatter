@@ -204,6 +204,32 @@ dm_mm_float dm_mm_leq_ps(dm_mm_float left, dm_mm_float right)
 #endif
 }
 
+DM_INLINE
+int dm_mm_any_non_zero(dm_mm_float mm)
+{
+#ifndef DM_PLATFORM_APPLE
+    dm_mm_float vcmp = _mm_cmp_ps(mm, _mm_set1_ps(0), _CMP_EQ_OQ);
+    int mask = _mm_movemask_ps(vcmp);
+    return (mask != 0xff);
+#else
+    uint32x2_t tmp = vorr_u32(vget_low_u32(mm), vget_high_u32(mm));
+    return vget_lane_u32(vpmax_u32(tmp, tmp), 0);
+#endif
+}
+
+DM_INLINE
+int dm_mm_any_zero(dm_mm_float mm)
+{
+#ifndef DM_PLATFORM_APPLE
+    dm_mm_float vcmp = _mm_cmp_ps(mm, _mm_set1_ps(0), _CMP_EQ_OQ);
+    int mask = _mm_movemask_ps(vcmp);
+    return (mask == 0xff);
+#else
+    uint32x2_t tmp = vorr_u32(vget_low_u32(mm), vget_high_u32(mm));
+    return vget_lane_u32(vpmin_u32(tmp, tmp), 0);
+#endif
+}
+
 /*******
 BITWISE
 *********/

@@ -7,6 +7,21 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <pthread.h>
+
+typedef struct dm_mac_threadpool_t
+{
+    pthread_mutex_t queue_mutex;
+    pthread_cond_t  queue_condition;
+    pthread_cond_t  queue_empty;
+
+    uint32_t queue_increment;
+
+    pthread_t threads[DM_MAX_THREAD_COUNT];
+} dm_mac_threadpool;
+
+void* dm_mac_thread_start_func(void* args);
+void  dm_mac_thread_execute_task(dm_thread_task* task);
 
 dm_key_code dm_translate_key_code(uint32_t cocoa_key);
 
@@ -247,6 +262,108 @@ double dm_platform_get_time(dm_platform_data* platform_data)
     return mili / 1000.0;
 }
 
+/**********
+THREADPOOL
+************/
+bool dm_platform_threadpool_create(dm_threadpool* threadpool)
+{
+    threadpool->internal_pool = dm_alloc(sizeof(dm_mac_threadpool));
+    dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
+
+    pthread_mutex_init(&mac_threadpool->queue_mutex, NULL);
+    pthread_cond_init(&mac_threadpool->queue_condition, NULL);
+    pthread_cond_init(&mac_threadpool->queue_empty, NULL);
+
+    for(uint32_t i=0; i<threadpool->thread_count; i++)
+    {
+        if(pthread_create(&mac_threadpool->threads[i], NULL, &dm_mac_thread_start_func, NULL) == 0) continue;
+
+        DM_LOG_FATAL("Could not create pthread");
+        return false;
+    }
+
+    return true;
+}
+
+void dm_platform_threadpool_destroy(dm_threadpool* threadpool)
+{
+    dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
+
+    pthread_mutex_destroy(&mac_threadpool->queue_mutex);
+    pthread_cond_destroy(&mac_threadpool->queue_condition);
+    pthread_cond_destroy(&mac_threadpool->queue_empty);
+
+    dm_free(threadpool->internal_pool);
+}
+
+void dm_platform_threadpool_submit_task(dm_thread_task* task, dm_threadpool* threadpool)
+{
+    dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
+
+    pthread_mutex_lock(&mac_threadpool->queue_mutex);
+    dm_memcpy(threadpool->tasks + threadpool->task_count, task, sizeof(dm_thread_task));
+    threadpool->task_count++;
+    pthread_mutex_unlock(&mac_threadpool->queue_mutex);
+
+    pthread_cond_signal(&mac_threadpool->queue_condition);
+}
+
+void dm_platform_threadpool_execute_task(dm_thread_task* task, dm_threadpool* threadpool)
+{
+    dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
+
+    pthread_mutex_lock(&mac_threadpool->queue_mutex);
+    threadpool->total_task_count--;
+    if(threadpool->total_task_count==0) pthread_cond_signal(&mac_threadpool->queue_empty);
+    pthread_mutex_unlock(&mac_threadpool->queue_mutex);
+}
+
+void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool)
+{
+    dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
+
+    if(threadpool->total_task_count==0) return;
+
+    pthread_mutex_lock(&mac_threadpool->queue_mutex);
+    pthread_cond_wait(&mac_threadpool->queue_empty, &mac_threadpool->queue_mutex);
+    pthread_mutex_unlock(&mac_threadpool->queue_mutex);
+}
+
+void* dm_mac_thread_start_func(void* args)
+{
+    dm_threadpool* threadpool = args;
+    dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
+
+    dm_thread_task task;
+
+    while(1)
+    {
+        pthread_mutex_lock(&mac_threadpool->queue_mutex);
+
+        while(threadpool->task_count==0)
+        {
+            pthread_cond_wait(&mac_threadpool->queue_condition, &mac_threadpool->queue_mutex);
+        }
+
+         // copy over task
+        task = threadpool->tasks[0];
+        dm_memmove(threadpool->tasks, threadpool->tasks + 1, sizeof(dm_thread_task) * threadpool->task_count-1);
+        // decrement task count
+        threadpool->task_count--;
+
+        threadpool->total_task_count++;
+
+        pthread_mutex_unlock(&mac_threadpool->queue_mutex);
+
+        dm_platform_threadpool_execute_task(&task, threadpool);
+    }
+
+    return NULL;
+}
+
+/*********
+MESSAGING
+***********/
 void dm_platform_write(const char* message, uint8_t color)
 {
 	static char* levels[6] = {

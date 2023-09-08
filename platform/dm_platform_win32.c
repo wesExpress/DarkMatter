@@ -376,7 +376,6 @@ void dm_platform_threadpool_execute_task(dm_thread_task* task, dm_threadpool* th
 {
     dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
     
-    // run func and decrement queue counter
     task->func(task->args);
     
     EnterCriticalSection(&w32_threadpool->queue_mutex);
