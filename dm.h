@@ -117,15 +117,13 @@ SIMD
 ******/
 // TODO: not apple supported yet
 #ifndef DM_PLATFORM_APPLE
-#ifdef DM_SIMD_256
-typedef __m256  dm_mm_float;
-typedef __m256i dm_mm_int;
-#define DM_SIMD_N 8
-#else
+typedef __m256  dm_mm256_float;
+typedef __m256i dm_mm256_int;
+#define DM_SIMD256_FLOAT_N 8
+
 typedef __m128  dm_mm_float;
 typedef __m128i dm_mm_int;
-#define DM_SIMD_N 4
-#endif
+#define DM_SIMD_FLOAT_N 4
 #endif
 
 /*******
