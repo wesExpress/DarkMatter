@@ -175,8 +175,9 @@ extern void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 
 @end
 
-bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t window_w, uint32_t window_h, const char* window_title, dm_platform_data* platform_data)
+bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* context)
 {
+    dm_platform_data* platform_data = &context->platform_data;
 	platform_data->internal_data = dm_alloc(sizeof(dm_internal_apple_data));
 	dm_internal_apple_data* apple_data = platform_data->internal_data;
 
@@ -190,7 +191,7 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t win
 
 	// window creation
 	apple_data->window = [[NSWindow alloc] 
-		initWithContentRect: NSMakeRect(window_x_pos, window_y_pos, window_w, window_h) 
+		initWithContentRect: NSMakeRect(window_x_pos, window_y_pos, platform_data->window_data.width, platform_data->window_data.height) 
 		styleMask: NSWindowStyleMaskTitled | NSWindowStyleMaskMiniaturizable | NSWindowStyleMaskClosable | NSWindowStyleMaskResizable
 		backing: NSBackingStoreBuffered
 		defer: NO
@@ -206,7 +207,7 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, uint32_t win
 	[apple_data->window makeFirstResponder: apple_data->content_view];
 	[apple_data->window setAcceptsMouseMovedEvents:YES];
 	[apple_data->window setLevel:NSNormalWindowLevel];
-	[apple_data->window setTitle: @(window_title)];
+	[apple_data->window setTitle: @(platform_data->window_data.title)];
 
 	if (![[NSRunningApplication currentApplication] isFinishedLaunching]) [NSApp run];
 
@@ -276,7 +277,7 @@ bool dm_platform_threadpool_create(dm_threadpool* threadpool)
 
     for(uint32_t i=0; i<threadpool->thread_count; i++)
     {
-        if(pthread_create(&mac_threadpool->threads[i], NULL, &dm_mac_thread_start_func, NULL) == 0) continue;
+        if(pthread_create(&mac_threadpool->threads[i], NULL, &dm_mac_thread_start_func, threadpool) == 0) continue;
 
         DM_LOG_FATAL("Could not create pthread");
         return false;
