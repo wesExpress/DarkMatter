@@ -76,7 +76,7 @@ typedef struct dm_metal_renderer_t
 
 	MTLViewport          active_viewport;
 	
-	dm_metal_view* 	  metal_view;
+	dm_metal_view* 	     metal_view;
 	dm_render_handle     active_shader;
 	dm_render_handle     active_pipeline;
 	MTLPrimitiveType     active_primitive;
@@ -178,7 +178,7 @@ MTLWinding dm_winding_to_metal_winding(dm_winding_order winding)
 {
 	switch(winding)
 	{
-		case DM_WINDING_CLOCK: return MTLWindingClockwise;
+		case DM_WINDING_CLOCK:         return MTLWindingClockwise;
 		case DM_WINDING_COUNTER_CLOCK: return MTLWindingCounterClockwise;
 		default:
 			DM_LOG_WARN("Unknown winding order. Returning \"MTLWindingCounterClockwise\"");
@@ -192,7 +192,7 @@ MTLCullMode dm_cull_to_metal_cull(dm_cull_mode cull)
 	{
 		case DM_CULL_FRONT_BACK:
 		case DM_CULL_FRONT: return MTLCullModeFront;
-		case DM_CULL_BACK: return MTLCullModeBack;
+		case DM_CULL_BACK:  return MTLCullModeBack;
 		default:
 			DM_LOG_ERROR("Unknown cull mode. Returning \"MTLCullModeBack\"");
 			return MTLCullModeBack;
@@ -203,14 +203,14 @@ MTLCompareFunction dm_compare_to_metal_compare(dm_comparison comp)
 {
 	switch(comp)
 	{
-		case DM_COMPARISON_ALWAYS: return MTLCompareFunctionAlways;
-		case DM_COMPARISON_NEVER: return MTLCompareFunctionNever;
-		case DM_COMPARISON_EQUAL: return MTLCompareFunctionEqual;
+		case DM_COMPARISON_ALWAYS:   return MTLCompareFunctionAlways;
+		case DM_COMPARISON_NEVER:    return MTLCompareFunctionNever;
+		case DM_COMPARISON_EQUAL:    return MTLCompareFunctionEqual;
 		case DM_COMPARISON_NOTEQUAL: return MTLCompareFunctionNotEqual;
-		case DM_COMPARISON_LESS: return MTLCompareFunctionLess;
-		case DM_COMPARISON_LEQUAL: return MTLCompareFunctionLessEqual;
-		case DM_COMPARISON_GREATER: return MTLCompareFunctionGreater;
-		case DM_COMPARISON_GEQUAL: return MTLCompareFunctionGreaterEqual;
+		case DM_COMPARISON_LESS:     return MTLCompareFunctionLess;
+		case DM_COMPARISON_LEQUAL:   return MTLCompareFunctionLessEqual;
+		case DM_COMPARISON_GREATER:  return MTLCompareFunctionGreater;
+		case DM_COMPARISON_GEQUAL:   return MTLCompareFunctionGreaterEqual;
 		default:
 			DM_LOG_ERROR("Unknown comparison function. Returning \"MTLCompareFunctionLess\"");
 			return MTLCompareFunctionLess;
@@ -221,11 +221,11 @@ MTLSamplerAddressMode dm_tex_mode_to_metal_sampler_mode(dm_texture_mode mode)
 {
 	switch(mode)
 	{
-		case DM_TEXTURE_MODE_WRAP: return MTLSamplerAddressModeRepeat;
-		case DM_TEXTURE_MODE_EDGE: return MTLSamplerAddressModeClampToEdge;
-		case DM_TEXTURE_MODE_BORDER: return MTLSamplerAddressModeClampToBorderColor;
+		case DM_TEXTURE_MODE_WRAP:          return MTLSamplerAddressModeRepeat;
+		case DM_TEXTURE_MODE_EDGE:          return MTLSamplerAddressModeClampToEdge;
+		case DM_TEXTURE_MODE_BORDER:        return MTLSamplerAddressModeClampToBorderColor;
 		case DM_TEXTURE_MODE_MIRROR_REPEAT: return MTLSamplerAddressModeMirrorRepeat;
-		case DM_TEXTURE_MODE_MIRROR_EDGE: return MTLSamplerAddressModeMirrorClampToEdge;
+		case DM_TEXTURE_MODE_MIRROR_EDGE:   return MTLSamplerAddressModeMirrorClampToEdge;
 		default:
 			DM_LOG_ERROR("Unknown sampler mode. Returning \"MTLSamplerAddressModeRepeat\"");
 			return MTLSamplerAddressModeRepeat;
@@ -237,7 +237,7 @@ MTLSamplerMinMagFilter dm_minmagfilter_to_metal_minmagfilter(dm_filter filter)
 	switch(filter)
 	{
 		case DM_FILTER_NEAREST: return MTLSamplerMinMagFilterNearest;
-		case DM_FILTER_LINEAR: return MTLSamplerMinMagFilterLinear;
+		case DM_FILTER_LINEAR:  return MTLSamplerMinMagFilterLinear;
 		default:
 			DM_LOG_ERROR("Unknown min mag filter. Returning \"MTLSamplerMinMagFilterNearest\"");
 			return MTLSamplerMinMagFilterNearest;
@@ -248,11 +248,11 @@ MTLBlendOperation dm_blend_eq_to_metal_blend_op(dm_blend_equation eq)
 {
 	switch(eq)
 	{
-		case DM_BLEND_EQUATION_ADD: return MTLBlendOperationAdd;
-		case DM_BLEND_EQUATION_SUBTRACT: return MTLBlendOperationSubtract;
+		case DM_BLEND_EQUATION_ADD:              return MTLBlendOperationAdd;
+		case DM_BLEND_EQUATION_SUBTRACT:         return MTLBlendOperationSubtract;
 		case DM_BLEND_EQUATION_REVERSE_SUBTRACT: return MTLBlendOperationReverseSubtract;
-		case DM_BLEND_EQUATION_MIN: return MTLBlendOperationMin;
-		case DM_BLEND_EQUATION_MAX: return MTLBlendOperationMax;
+		case DM_BLEND_EQUATION_MIN:              return MTLBlendOperationMin;
+		case DM_BLEND_EQUATION_MAX:              return MTLBlendOperationMax;
 		default:
 		DM_LOG_ERROR("Unknown blend equation, returning MTLBlendOperationAdd");
 		return MTLBlendOperationAdd;
@@ -263,19 +263,19 @@ MTLBlendFactor dm_blend_func_to_metal_blend_factor(dm_blend_func func)
 {
 	switch(func)
 	{
-		case DM_BLEND_FUNC_ZERO: return MTLBlendFactorZero;
-		case DM_BLEND_FUNC_ONE: return MTLBlendFactorOne;
-		case DM_BLEND_FUNC_SRC_COLOR: return MTLBlendFactorSourceColor;
-		case DM_BLEND_FUNC_ONE_MINUS_SRC_COLOR: return MTLBlendFactorOneMinusSourceColor;
-		case DM_BLEND_FUNC_DST_COLOR: return MTLBlendFactorDestinationColor;
-		case DM_BLEND_FUNC_ONE_MINUS_DST_COLOR: return MTLBlendFactorOneMinusDestinationColor;
-		case DM_BLEND_FUNC_SRC_ALPHA: return MTLBlendFactorSourceAlpha;
-		case DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA: return MTLBlendFactorOneMinusSourceAlpha;
-		case DM_BLEND_FUNC_DST_ALPHA: return MTLBlendFactorDestinationAlpha;
-		case DM_BLEND_FUNC_ONE_MINUS_DST_ALPHA: return MTLBlendFactorOneMinusDestinationAlpha;
-		case DM_BLEND_FUNC_CONST_COLOR: return MTLBlendFactorBlendColor;
+		case DM_BLEND_FUNC_ZERO:                  return MTLBlendFactorZero;
+		case DM_BLEND_FUNC_ONE:                   return MTLBlendFactorOne;
+		case DM_BLEND_FUNC_SRC_COLOR:             return MTLBlendFactorSourceColor;
+		case DM_BLEND_FUNC_ONE_MINUS_SRC_COLOR:   return MTLBlendFactorOneMinusSourceColor;
+		case DM_BLEND_FUNC_DST_COLOR:             return MTLBlendFactorDestinationColor;
+		case DM_BLEND_FUNC_ONE_MINUS_DST_COLOR:   return MTLBlendFactorOneMinusDestinationColor;
+		case DM_BLEND_FUNC_SRC_ALPHA:             return MTLBlendFactorSourceAlpha;
+		case DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA:   return MTLBlendFactorOneMinusSourceAlpha;
+		case DM_BLEND_FUNC_DST_ALPHA:             return MTLBlendFactorDestinationAlpha;
+		case DM_BLEND_FUNC_ONE_MINUS_DST_ALPHA:   return MTLBlendFactorOneMinusDestinationAlpha;
+		case DM_BLEND_FUNC_CONST_COLOR:           return MTLBlendFactorBlendColor;
 		case DM_BLEND_FUNC_ONE_MINUS_CONST_COLOR: return MTLBlendFactorOneMinusBlendColor;
-		case DM_BLEND_FUNC_CONST_ALPHA: return MTLBlendFactorBlendAlpha;
+		case DM_BLEND_FUNC_CONST_ALPHA:           return MTLBlendFactorBlendAlpha;
 		case DM_BLEND_FUNC_ONE_MINUS_CONST_ALPHA: return MTLBlendFactorOneMinusBlendAlpha;
 		default:
 		DM_LOG_ERROR("Unknown blend func, returning MTLBlendFactorSourceAlpha");
@@ -708,7 +708,6 @@ void dm_renderer_backend_shutdown(dm_context* context)
     
     [metal_renderer->metal_view.depth_texture release];
 	[metal_renderer->metal_view release];
-    if(metal_renderer->command_buffer) [metal_renderer->command_buffer release];
     [metal_renderer->command_queue release];
 	[metal_renderer->device release];
 }
@@ -717,10 +716,11 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 {
 	DM_METAL_GET_RENDERER;
 
+	[metal_renderer->metal_view nextDrawable];
+
 	MTLCommandBufferDescriptor* desc = [MTLCommandBufferDescriptor new];
 	desc.errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
 	metal_renderer->command_buffer = [metal_renderer->command_queue commandBufferWithDescriptor:desc];
-	[metal_renderer->metal_view nextDrawable];
 
 	metal_renderer->new_frame = true;
 
@@ -734,7 +734,8 @@ bool dm_renderer_backend_end_frame(dm_context* context)
 	dm_metal_renderer* metal_renderer = context->renderer.internal_renderer;
 
 	metal_renderer->metal_view.metal_layer.displaySyncEnabled = context->renderer.vsync;
-
+    //metal_renderer->metal_view.metal_layer.displaySyncEnabled = NO;
+    
 	if([metal_renderer->metal_view hasDrawable]) [metal_renderer->metal_view presentDrawable:metal_renderer->command_buffer];
 
 	[metal_renderer->command_buffer commit];
@@ -749,29 +750,6 @@ bool dm_renderer_backend_end_frame(dm_context* context)
 bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
 {
 	return true;
-}
-
-void dm_metal_renew_encoder(dm_metal_renderer* metal_renderer)
-{
-	dm_metal_shader* active_shader = &metal_renderer->shaders[metal_renderer->active_shader];
-
-	// renew the command encoder
-	MTLRenderPassDescriptor* passDescriptor = [metal_renderer->metal_view currentRenderPassDescriptor:&metal_renderer->new_frame];
-
-	active_shader->command_encoder = [metal_renderer->command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
-	
-	[active_shader->command_encoder setViewport:metal_renderer->metal_view.viewport];
-
-	// rebind the pipeline
-	dm_metal_pipeline pipeline = metal_renderer->pipelines[metal_renderer->active_pipeline];
-
-	[active_shader->command_encoder setRenderPipelineState:pipeline.pipeline_state];
-	[active_shader->command_encoder setDepthStencilState:pipeline.depth_stencil_state];
-	[active_shader->command_encoder setFrontFacingWinding:pipeline.winding];
-	[active_shader->command_encoder setCullMode:pipeline.cull_mode];
-	[active_shader->command_encoder setFragmentSamplerState:pipeline.sampler_state atIndex:0];
-
-	[passDescriptor release];
 }
 
 /********
@@ -997,7 +975,7 @@ void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num
 
 	dm_metal_shader* active_shader = &metal_renderer->shaders[metal_renderer->active_shader];
 
-	[active_shader->command_encoder drawIndexedPrimitives:metal_renderer->active_primitive indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:metal_renderer->buffers[active_shader->index_buffer].buffer indexBufferOffset:index_offset*sizeof(uint32_t) instanceCount:num_insts];
+	[active_shader->command_encoder drawIndexedPrimitives:metal_renderer->pipelines[metal_renderer->active_pipeline].primitive_type indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:metal_renderer->buffers[active_shader->index_buffer].buffer indexBufferOffset:index_offset*sizeof(uint32_t) instanceCount:num_insts];
 }
 
 void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer)
