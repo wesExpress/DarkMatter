@@ -698,7 +698,6 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_SET_VIEWPORT,
     DM_RENDER_COMMAND_CLEAR,
     DM_RENDER_COMMAND_BIND_SHADER,
-    DM_RENDER_COMMAND_END_SHADER_ENCODING,
     DM_RENDER_COMMAND_BIND_PIPELINE,
     DM_RENDER_COMMAND_BIND_BUFFER,
     DM_RENDER_COMMAND_BIND_UNIFORM,
@@ -1072,9 +1071,6 @@ void dm_render_command_set_viewport(uint32_t width, uint32_t height, dm_context*
 void dm_render_command_set_default_viewport(dm_context* context);
 void dm_render_command_set_primitive_topology(dm_primitive_topology topology, dm_context* context);
 void dm_render_command_bind_shader(dm_render_handle handle, dm_context* context);
-#ifdef DM_METAL
-void dm_render_command_end_shader_encoding(dm_render_handle handle, dm_context* context);
-#endif
 void dm_render_command_bind_pipeline(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_buffer(dm_render_handle handle, uint32_t slot, dm_context* context);
 void dm_render_command_bind_uniform(dm_render_handle uniform_handle, uint32_t slot, dm_uniform_stage stage, uint32_t offset, dm_context* context);

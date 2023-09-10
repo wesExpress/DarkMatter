@@ -588,7 +588,6 @@ extern bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_
 extern bool dm_render_command_backend_set_primitive_topology(dm_primitive_topology topology, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_shader(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
-extern bool dm_render_command_backend_end_shader_encoding(dm_render_handle handle,dm_renderer* renderer);
 extern bool dm_render_command_backend_update_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_uniform(dm_render_handle handle, dm_uniform_stage stage, uint32_t slot, uint32_t offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_uniform(dm_render_handle handle, void* data, size_t data_size, dm_renderer* renderer);
@@ -907,20 +906,6 @@ void dm_render_command_bind_shader(dm_render_handle handle, dm_context* context)
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
-#ifdef DM_METAL
-void dm_render_command_end_shader_encoding(dm_render_handle handle, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_END_SHADER_ENCODING;
-
-    DM_BYTE_POOL_INSERT(command.params, handle);
-
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-#endif
-
 void dm_render_command_bind_pipeline(dm_render_handle handle, dm_context* context)
 {
     if(DM_TOO_MANY_COMMANDS) return;
@@ -1150,12 +1135,6 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
                 
                 if(!dm_render_command_backend_bind_shader(handle, &context->renderer)) { DM_LOG_FATAL("Bind shader failed"); return false; }
-            } break;
-            case DM_RENDER_COMMAND_END_SHADER_ENCODING:
-            {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
-
-                if(!dm_render_command_backend_end_shader_encoding(handle, &context->renderer)) { DM_LOG_FATAL("End shader encoding failed"); return false; }
             } break;
 
             case DM_RENDER_COMMAND_BIND_PIPELINE:

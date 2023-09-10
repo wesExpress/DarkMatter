@@ -40,7 +40,6 @@ typedef struct dm_metal_pipeline_t
 
 typedef struct dm_metal_shader_t
 {
-	id<MTLRenderCommandEncoder> command_encoder;
 	id<MTLLibrary>              library;
 	id<MTLFunction>             vertex_func;
 	id<MTLFunction>             fragment_func;
@@ -61,27 +60,26 @@ typedef struct dm_metal_shader_t
 @property (nonatomic, strong) id<MTLTexture>      depth_texture;
 
 - (id) init;
-- (MTLRenderPassDescriptor*)currentRenderPassDescriptor: (bool*)new_frame;
+- (MTLRenderPassDescriptor*)currentRenderPassDescriptor;
 - (void) nextDrawable;
 - (bool) hasDrawable;
 - (void) presentDrawable : (id<MTLCommandBuffer>)command_buffer;
-- (void) setViewport: (MTLViewport)viewport_in;
 @end
 
 typedef struct dm_metal_renderer_t
 {
 	id<MTLDevice>        device;
-	id<MTLCommandQueue>  command_queue;
-	id<MTLCommandBuffer> command_buffer;
-
+    
+	id<MTLCommandQueue>         command_queue;
+	id<MTLCommandBuffer>        command_buffer;
+    id<MTLRenderCommandEncoder> command_encoder;
+    
 	MTLViewport          active_viewport;
 	
 	dm_metal_view* 	     metal_view;
 	dm_render_handle     active_shader;
 	dm_render_handle     active_pipeline;
 	MTLPrimitiveType     active_primitive;
-
-	bool                 new_frame, renew_encoder;
 	
 	dm_metal_buffer      buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
 	dm_metal_shader      shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
@@ -114,28 +112,20 @@ typedef struct dm_metal_renderer_t
 	return self;
 }
 
-- (MTLRenderPassDescriptor*)currentRenderPassDescriptor: (bool*)new_frame
+- (MTLRenderPassDescriptor*)currentRenderPassDescriptor
 {
 	MTLRenderPassDescriptor* desc = [MTLRenderPassDescriptor renderPassDescriptor];
 	
 	desc.colorAttachments[0].texture = [_drawable texture];
 	desc.colorAttachments[0].storeAction = MTLStoreActionStore;
-	
-	if(*new_frame)
-	{
-		desc.colorAttachments[0].loadAction = MTLLoadActionClear;
-		desc.colorAttachments[0].clearColor = MTLClearColorMake(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
-	}
-	else desc.colorAttachments[0].loadAction = MTLLoadActionLoad;
+    desc.colorAttachments[0].clearColor = MTLClearColorMake(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
+    desc.colorAttachments[0].loadAction = MTLLoadActionClear;
 
 	MTLRenderPassDepthAttachmentDescriptor* depth_attachment = desc.depthAttachment;
 	depth_attachment.texture = _depth_texture;
 	depth_attachment.clearDepth = 1.0;
 	depth_attachment.storeAction = MTLStoreActionDontCare;
-    if(*new_frame) depth_attachment.loadAction = MTLLoadActionClear;
-    else depth_attachment.loadAction = MTLLoadActionLoad;
-
-    if(*new_frame) *new_frame = false;
+    depth_attachment.loadAction = MTLLoadActionClear;
     
 	return desc;
 }
@@ -153,11 +143,6 @@ typedef struct dm_metal_renderer_t
 - (void) presentDrawable: (id<MTLCommandBuffer>)command_buffer
 {
 	[command_buffer presentDrawable:_drawable];
-}
-
-- (void) setViewport: (MTLViewport)viewport_in
-{
-	_viewport = viewport_in;
 }
 
 @end
@@ -387,25 +372,25 @@ bool dm_metal_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_han
 	dm_metal_pipeline internal_pipe = { 0 };
 
 	// pipeline state
-	MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
-	pipe_desc.vertexFunction = shader->vertex_func;
-	pipe_desc.fragmentFunction = shader->fragment_func;
+	MTLRenderPipelineDescriptor* pipe_desc    = [MTLRenderPipelineDescriptor new];
+	pipe_desc.vertexFunction                  = shader->vertex_func;
+	pipe_desc.fragmentFunction                = shader->fragment_func;
 	pipe_desc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
-	pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
+	pipe_desc.depthAttachmentPixelFormat      = MTLPixelFormatDepth32Float_Stencil8;
 
 	// blending
 	if(desc.blend)
 	{
 		MTLBlendOperation blend_op = dm_blend_eq_to_metal_blend_op(desc.blend_eq);
 		MTLBlendFactor dest_factor = dm_blend_func_to_metal_blend_factor(desc.blend_dest_f);
-		MTLBlendFactor src_factor = dm_blend_func_to_metal_blend_factor(desc.blend_src_f);
+		MTLBlendFactor src_factor  = dm_blend_func_to_metal_blend_factor(desc.blend_src_f);
 
-		pipe_desc.colorAttachments[0].blendingEnabled = YES;
-		pipe_desc.colorAttachments[0].rgbBlendOperation = blend_op;
-		pipe_desc.colorAttachments[0].alphaBlendOperation = blend_op;
-		pipe_desc.colorAttachments[0].sourceRGBBlendFactor = src_factor;
-		pipe_desc.colorAttachments[0].sourceAlphaBlendFactor = src_factor;
-		pipe_desc.colorAttachments[0].destinationRGBBlendFactor = dest_factor;
+		pipe_desc.colorAttachments[0].blendingEnabled             = YES;
+		pipe_desc.colorAttachments[0].rgbBlendOperation           = blend_op;
+		pipe_desc.colorAttachments[0].alphaBlendOperation         = blend_op;
+		pipe_desc.colorAttachments[0].sourceRGBBlendFactor        = src_factor;
+		pipe_desc.colorAttachments[0].sourceAlphaBlendFactor      = src_factor;
+		pipe_desc.colorAttachments[0].destinationRGBBlendFactor   = dest_factor;
 		pipe_desc.colorAttachments[0].destinationAlphaBlendFactor = dest_factor;
 	}
 
@@ -416,6 +401,8 @@ bool dm_metal_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_han
 		NSString* str_error = [NSString stringWithFormat:@"%@", error];
 		const char* c = [str_error cStringUsingEncoding:NSUTF8StringEncoding];
 		DM_LOG_FATAL("Could not create metal pipeline state: %s", c);
+        [str_error release];
+        
 		return false;
 	}
 
@@ -424,7 +411,7 @@ bool dm_metal_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_han
 	if(desc.depth)
 	{
 		depth_stencil_desc.depthCompareFunction = dm_compare_to_metal_compare(desc.depth_comp);
-		depth_stencil_desc.depthWriteEnabled = YES;
+		depth_stencil_desc.depthWriteEnabled    = YES;
 	}
 	else
 	{
@@ -440,9 +427,9 @@ bool dm_metal_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_han
 
 	// sampler
 	MTLSamplerDescriptor* sampler_desc = [MTLSamplerDescriptor new];
-	sampler_desc.minFilter = dm_minmagfilter_to_metal_minmagfilter(desc.sampler_filter);
-	sampler_desc.magFilter = dm_minmagfilter_to_metal_minmagfilter(desc.sampler_filter);
-	sampler_desc.mipFilter = MTLSamplerMipFilterLinear;
+	sampler_desc.minFilter    = dm_minmagfilter_to_metal_minmagfilter(desc.sampler_filter);
+	sampler_desc.magFilter    = dm_minmagfilter_to_metal_minmagfilter(desc.sampler_filter);
+	sampler_desc.mipFilter    = MTLSamplerMipFilterLinear;
 	sampler_desc.sAddressMode = dm_tex_mode_to_metal_sampler_mode(desc.u_mode);
 	sampler_desc.tAddressMode = dm_tex_mode_to_metal_sampler_mode(desc.v_mode);
 
@@ -454,7 +441,7 @@ bool dm_metal_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_han
 	}
 
 	// raster stuff
-	internal_pipe.winding = dm_winding_to_metal_winding(desc.winding_order);
+	internal_pipe.winding   = dm_winding_to_metal_winding(desc.winding_order);
 	internal_pipe.cull_mode = dm_cull_to_metal_cull(desc.cull_mode);
 
 	internal_pipe.primitive_type = dm_topology_to_metal_primitive(desc.primitive_topology);
@@ -514,6 +501,7 @@ bool dm_metal_create_shader(dm_shader_desc shader_desc, dm_vertex_attrib_desc* l
 	}
 
 	// fragment
+    [func_name release];
 	func_name = [[NSString alloc] initWithUTF8String:shader_desc.pixel];
 	internal_shader.fragment_func = [internal_shader.library newFunctionWithName:func_name];
 
@@ -543,7 +531,6 @@ void dm_renderer_backend_destroy_shader(dm_render_handle handle, dm_renderer* re
 	[internal_shader->library release];
 	[internal_shader->vertex_func release];
 	[internal_shader->fragment_func release];
-	[internal_shader->command_encoder release];
 }
 
 bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t num_attribs, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer)
@@ -659,7 +646,7 @@ bool dm_renderer_backend_init(dm_context* context)
         
 	// create the depth texture
     CGSize drawableSize = metal_renderer->metal_view.metal_layer.drawableSize;
-    MTLTextureDescriptor *descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:drawableSize.width height:drawableSize.height mipmapped:NO];
+    MTLTextureDescriptor *descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float_Stencil8 width:drawableSize.width height:drawableSize.height mipmapped:NO];
     descriptor.storageMode = MTLStorageModePrivate;
     descriptor.usage = MTLTextureUsageRenderTarget;
     metal_renderer->metal_view.depth_texture = [metal_renderer->device newTextureWithDescriptor:descriptor];
@@ -708,6 +695,7 @@ void dm_renderer_backend_shutdown(dm_context* context)
     
     [metal_renderer->metal_view.depth_texture release];
 	[metal_renderer->metal_view release];
+    [metal_renderer->command_encoder release];
     [metal_renderer->command_queue release];
 	[metal_renderer->device release];
 }
@@ -722,9 +710,12 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 	desc.errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
 	metal_renderer->command_buffer = [metal_renderer->command_queue commandBufferWithDescriptor:desc];
 
-	metal_renderer->new_frame = true;
+    MTLRenderPassDescriptor* passDescriptor = [metal_renderer->metal_view currentRenderPassDescriptor];
+
+    metal_renderer->command_encoder = [metal_renderer->command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
 
 	[desc release];
+    [passDescriptor release];
 
 	return true;
 }
@@ -734,10 +725,10 @@ bool dm_renderer_backend_end_frame(dm_context* context)
 	dm_metal_renderer* metal_renderer = context->renderer.internal_renderer;
 
 	metal_renderer->metal_view.metal_layer.displaySyncEnabled = context->renderer.vsync;
-    //metal_renderer->metal_view.metal_layer.displaySyncEnabled = NO;
     
 	if([metal_renderer->metal_view hasDrawable]) [metal_renderer->metal_view presentDrawable:metal_renderer->command_buffer];
 
+    [metal_renderer->command_encoder endEncoding];
 	[metal_renderer->command_buffer commit];
 	[metal_renderer->command_buffer release];
 
@@ -774,10 +765,8 @@ void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_
 	new_viewport.originY = 0.0f;
 	new_viewport.width = width;
 	new_viewport.height = height;
-	new_viewport.znear = 0.01f;
-	new_viewport.zfar = 1000.0f;
 
-	[metal_renderer->metal_view setViewport : new_viewport];
+    [metal_renderer->command_encoder setViewport:new_viewport];
 }
 
 bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_renderer* renderer)
@@ -786,15 +775,14 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
 	
 	if(handle > metal_renderer->pipeline_count) { DM_LOG_FATAL("Trying to bind invalid Metal pipeline"); return false; }
 
-	dm_metal_shader active_shader = metal_renderer->shaders[metal_renderer->active_shader];
 	dm_metal_pipeline pipeline = metal_renderer->pipelines[handle];
 	if(!pipeline.pipeline_state) { DM_LOG_FATAL("Invalid Metal pipeline state"); return false; }
 
-	[active_shader.command_encoder setRenderPipelineState:pipeline.pipeline_state];
-	[active_shader.command_encoder setDepthStencilState:pipeline.depth_stencil_state];
-	[active_shader.command_encoder setFrontFacingWinding:pipeline.winding];
-	[active_shader.command_encoder setCullMode:pipeline.cull_mode];
-	[active_shader.command_encoder setFragmentSamplerState:pipeline.sampler_state atIndex:0];
+	[metal_renderer->command_encoder setRenderPipelineState:pipeline.pipeline_state];
+	[metal_renderer->command_encoder setDepthStencilState:pipeline.depth_stencil_state];
+	[metal_renderer->command_encoder setFrontFacingWinding:pipeline.winding];
+	[metal_renderer->command_encoder setCullMode:pipeline.cull_mode];
+	[metal_renderer->command_encoder setFragmentSamplerState:pipeline.sampler_state atIndex:0];
 
 	metal_renderer->active_pipeline = handle;
 
@@ -820,32 +808,9 @@ bool dm_render_command_backend_bind_shader(dm_render_handle handle, dm_renderer*
 
 	dm_metal_shader* internal_shader = &metal_renderer->shaders[handle];
 
-	MTLRenderPassDescriptor* passDescriptor = [metal_renderer->metal_view currentRenderPassDescriptor:&metal_renderer->new_frame];
-
-	internal_shader->command_encoder = [metal_renderer->command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
-	
-	[internal_shader->command_encoder setViewport:metal_renderer->metal_view.viewport];
-
     internal_shader->uniform_offset = 0;
     
 	metal_renderer->active_shader = handle;
-
-	[passDescriptor release];
-
-	return true;
-}
-
-bool dm_render_command_backend_end_shader_encoding(dm_render_handle handle,dm_renderer* renderer)
-{
-	DM_METAL_GET_RENDERER;
-
-	if(![metal_renderer->metal_view hasDrawable]) return false;
-
-	if(handle > metal_renderer->shader_count) { DM_LOG_FATAL("Trying to end invalid Metal shader"); return false; }
-
-	dm_metal_shader* internal_shader = &metal_renderer->shaders[handle];
-
-	[internal_shader->command_encoder endEncoding];
 
 	return true;
 }
@@ -866,7 +831,7 @@ bool dm_render_command_backend_bind_buffer(dm_render_handle handle, uint32_t slo
 	else if(internal_buffer->type == DM_METAL_BUFFER_TYPE_VERTEX) 
 	{
 		dm_metal_shader* active_shader = &metal_renderer->shaders[metal_renderer->active_shader];
-		[active_shader->command_encoder setVertexBuffer:internal_buffer->buffer offset:0 atIndex:slot];
+		[metal_renderer->command_encoder setVertexBuffer:internal_buffer->buffer offset:0 atIndex:slot];
 		active_shader->uniform_offset++;
 	}
 
@@ -897,8 +862,8 @@ bool dm_render_command_backend_bind_uniform(dm_render_handle handle, dm_uniform_
 	dm_metal_shader* active_shader = &metal_renderer->shaders[metal_renderer->active_shader];
 	dm_metal_buffer* internal_uniform = &metal_renderer->buffers[handle];
 
-	if(stage!=DM_UNIFORM_STAGE_PIXEL) [active_shader->command_encoder setVertexBuffer:internal_uniform->buffer offset:0 atIndex:slot+active_shader->uniform_offset];
-	if(stage!=DM_UNIFORM_STAGE_VERTEX) [active_shader->command_encoder setFragmentBuffer:internal_uniform->buffer offset:0 atIndex:slot];
+	if(stage!=DM_UNIFORM_STAGE_PIXEL) [metal_renderer->command_encoder setVertexBuffer:internal_uniform->buffer offset:0 atIndex:slot+active_shader->uniform_offset];
+	if(stage!=DM_UNIFORM_STAGE_VERTEX) [metal_renderer->command_encoder setFragmentBuffer:internal_uniform->buffer offset:0 atIndex:slot];
 
 	return true;
 }
@@ -916,7 +881,7 @@ bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t sl
 
 	if(handle > metal_renderer->texture_count) { DM_LOG_FATAL("Trying to bind invalid Metal texture"); return false; }
 
-	[metal_renderer->shaders[metal_renderer->active_shader].command_encoder setFragmentTexture:metal_renderer->textures[handle].texture atIndex:slot];
+	[metal_renderer->command_encoder setFragmentTexture:metal_renderer->textures[handle].texture atIndex:slot];
 
 	return true;
 }
@@ -950,10 +915,7 @@ void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count, dm_re
 	DM_METAL_GET_RENDERER;
 
 	if(![metal_renderer->metal_view hasDrawable]) return;
-
-	dm_metal_shader* active_shader = &metal_renderer->shaders[metal_renderer->active_shader];
-	
-	[active_shader->command_encoder drawPrimitives:metal_renderer->pipelines[metal_renderer->active_pipeline].primitive_type vertexStart:start vertexCount:count];
+	[metal_renderer->command_encoder drawPrimitives:metal_renderer->pipelines[metal_renderer->active_pipeline].primitive_type vertexStart:start vertexCount:count];
 }
 
 void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer)
@@ -964,7 +926,7 @@ void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index
 
 	dm_metal_shader* active_shader = &metal_renderer->shaders[metal_renderer->active_shader];
 
-	[active_shader->command_encoder drawIndexedPrimitives:metal_renderer->active_primitive indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:metal_renderer->buffers[active_shader->index_buffer].buffer indexBufferOffset:index_offset*sizeof(uint32_t)];
+	[metal_renderer->command_encoder drawIndexedPrimitives:metal_renderer->active_primitive indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:metal_renderer->buffers[active_shader->index_buffer].buffer indexBufferOffset:index_offset*sizeof(uint32_t)];
 }
 
 void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer)
@@ -975,7 +937,7 @@ void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num
 
 	dm_metal_shader* active_shader = &metal_renderer->shaders[metal_renderer->active_shader];
 
-	[active_shader->command_encoder drawIndexedPrimitives:metal_renderer->pipelines[metal_renderer->active_pipeline].primitive_type indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:metal_renderer->buffers[active_shader->index_buffer].buffer indexBufferOffset:index_offset*sizeof(uint32_t) instanceCount:num_insts];
+	[metal_renderer->command_encoder drawIndexedPrimitives:metal_renderer->pipelines[metal_renderer->active_pipeline].primitive_type indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:metal_renderer->buffers[active_shader->index_buffer].buffer indexBufferOffset:index_offset*sizeof(uint32_t) instanceCount:num_insts];
 }
 
 void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer)

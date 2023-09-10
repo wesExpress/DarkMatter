@@ -1145,9 +1145,15 @@ void dm_mat_perspective(float fov, float aspect_ratio, float n, float f, float o
     
     out[0]  = t / aspect_ratio;
 	out[5]  = t;
+#ifndef DM_METAL
 	out[10] = (f + n) * fn;
-	out[11] = -1.0f;
 	out[14] = 2.0f * n * f * fn;
+#else
+    // metal has z clip space [0,1], so needs special treatment
+    out[10] = f * fn;
+    out[14] = n * f * fn;
+#endif
+    out[11] = -1.0f;
 }
 
 DM_INLINE
