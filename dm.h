@@ -843,13 +843,8 @@ PHYSICS
 #define DM_PHYSICS_EPA_MAX_FACES     64
 #define DM_PHYSICS_EPA_MAX_ITER      64
 
-#ifndef DM_DEBUG
-#define DM_PHYSICS_FIXED_DT          0.00416f // 1 / 240
-#define DM_PHYSICS_FIXED_DT_INV      240
-#else
 #define DM_PHYSICS_FIXED_DT          0.00833f // 1 / 120
 #define DM_PHYSICS_FIXED_DT_INV      120
-#endif
 
 typedef struct dm_plane
 {
