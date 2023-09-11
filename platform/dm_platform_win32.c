@@ -388,10 +388,11 @@ void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool)
 {
     dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
     
-    if(threadpool->total_task_count==0) return;
-    
     EnterCriticalSection(&w32_threadpool->queue_mutex);
-    SleepConditionVariableCS(&w32_threadpool->queue_empty, &w32_threadpool->queue_mutex, INFINITE);
+    while(threadpool->total_task_count>0)
+    {
+        SleepConditionVariableCS(&w32_threadpool->queue_empty, &w32_threadpool->queue_mutex, INFINITE);
+    }
     LeaveCriticalSection(&w32_threadpool->queue_mutex);
 }
 

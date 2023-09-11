@@ -50,6 +50,18 @@ depreciated
 #endif
 #endif
 
+/*****************************
+SIMD INTRINSICS DETERMINATION
+*******************************/
+#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
+#define DM_SIMD_x86
+#elif defined(__arm__)
+#define DM_SIMD_ARM
+#else
+#include <assert.h>
+assert(false);
+#endif
+
 /********
 INCLUDES
 **********/
@@ -1282,7 +1294,7 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
 INTRINSICS
 ************/
 #include "dm_intrinsics.h"
-#ifndef DM_PLATFORM_APPLE
+#ifndef DM_SIMD_ARM
 #include "dm_intrinsics256.h"
 #endif
 
