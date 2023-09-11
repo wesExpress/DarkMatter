@@ -60,6 +60,7 @@ typedef struct dm_metal_shader_t
 @property (nonatomic, strong) id<MTLTexture>      depth_texture;
 
 - (id) init;
+- (void) dealloc;
 - (MTLRenderPassDescriptor*)currentRenderPassDescriptor;
 - (void) nextDrawable;
 - (bool) hasDrawable;
@@ -110,6 +111,15 @@ typedef struct dm_metal_renderer_t
 	}
 
 	return self;
+}
+
+- (void) dealloc
+{
+    [_depth_texture release];
+    [_drawable release];
+    [_metal_layer release];
+    
+    [super dealloc];
 }
 
 - (MTLRenderPassDescriptor*)currentRenderPassDescriptor
@@ -401,7 +411,7 @@ bool dm_metal_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_han
 		NSString* str_error = [NSString stringWithFormat:@"%@", error];
 		const char* c = [str_error cStringUsingEncoding:NSUTF8StringEncoding];
 		DM_LOG_FATAL("Could not create metal pipeline state: %s", c);
-        [str_error release];
+        [pipe_desc release];
         
 		return false;
 	}
@@ -422,6 +432,9 @@ bool dm_metal_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_han
 	if(!internal_pipe.depth_stencil_state)
 	{
 		DM_LOG_FATAL("Could not create metal depth stencil state!");
+        [depth_stencil_desc release];
+        [pipe_desc release];
+        
 		return false;
 	}
 
@@ -437,6 +450,10 @@ bool dm_metal_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_han
 	if(!internal_pipe.sampler_state)
 	{
 		DM_LOG_FATAL("Could not create metal sampler state!");
+        [sampler_desc release];
+        [depth_stencil_desc release];
+        [pipe_desc release];
+        
 		return false;
 	}
 
@@ -497,6 +514,7 @@ bool dm_metal_create_shader(dm_shader_desc shader_desc, dm_vertex_attrib_desc* l
 	if(!internal_shader.vertex_func)
 	{
 		DM_LOG_FATAL("Could not create vertex function \'%s\' from shader \'%s\'", shader_desc.vertex, shader_desc.master);
+        [func_name release];
 		return false;
 	}
 
@@ -508,10 +526,10 @@ bool dm_metal_create_shader(dm_shader_desc shader_desc, dm_vertex_attrib_desc* l
 	if(!internal_shader.fragment_func)
 	{
 		DM_LOG_FATAL("Could not create fragment function \'%s\' from shader \'%s\'", shader_desc.pixel, shader_desc.master);
+        [func_name release];
 		return false;
 	}
 	
-	[shader_file release];
 	[func_name release];
 	
 	dm_memcpy(metal_renderer->shaders + metal_renderer->shader_count, &internal_shader, sizeof(dm_metal_shader));
@@ -562,6 +580,8 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
 	if(!internal_texture.texture)
 	{
 		DM_LOG_FATAL("Could not create metal texture from image: %s", name);
+        [texture_desc release];
+        
 		return false;
 	}
 
@@ -578,9 +598,7 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
 	[command_buffer commit];
 	[command_buffer waitUntilCompleted];
 
-	[command_buffer release];
 	[texture_desc release];
-	[blit_encoder release];
 
 	dm_memcpy(metal_renderer->textures + metal_renderer->texture_count, &internal_texture, sizeof(dm_metal_texture));
 	*handle = metal_renderer->texture_count++;
@@ -651,8 +669,6 @@ bool dm_renderer_backend_init(dm_context* context)
     descriptor.usage = MTLTextureUsageRenderTarget;
     metal_renderer->metal_view.depth_texture = [metal_renderer->device newTextureWithDescriptor:descriptor];
     metal_renderer->metal_view.depth_texture.label = @"DepthStencil";
-
-    [descriptor release];
     
 	return true;
 }
@@ -693,7 +709,6 @@ void dm_renderer_backend_shutdown(dm_context* context)
         dm_renderer_backend_destroy_pipeline(i, &context->renderer);
     }
     
-    [metal_renderer->metal_view.depth_texture release];
 	[metal_renderer->metal_view release];
     [metal_renderer->command_encoder release];
     [metal_renderer->command_queue release];
@@ -715,7 +730,6 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     metal_renderer->command_encoder = [metal_renderer->command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
 
 	[desc release];
-    [passDescriptor release];
 
 	return true;
 }

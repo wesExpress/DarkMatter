@@ -325,8 +325,6 @@ void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool)
 {
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
 
-    //if(threadpool->total_task_count==0) return;
-
     pthread_mutex_lock(&mac_threadpool->queue_mutex);
     while(threadpool->total_task_count>0) 
     {

@@ -529,8 +529,8 @@ void dm_support_face_box_planes(dm_plane planes[5], float points[10][3], float f
     float neg_normal[3];
     dm_vec3_negate(face_normal, neg_normal);
     
-    float ref_pt[3], normal[3];
-    float dum1[3], dum2[3];
+    float ref_pt[3] = { 0 }, normal[3] = { 0 };
+    float dum1[3] = { 0 }, dum2[3] = { 0 };
     float distance;
     
     for(uint32_t i=0; i<4; i++)
@@ -561,7 +561,7 @@ void dm_support_face_box(const float pos[3], const float rot[4], const float cen
         internals[5],
     };
     
-    float inv_rot[4], dir[3];
+    float inv_rot[4] = { 0 }, dir[3] = { 0 };
     dm_quat_inverse(rot, inv_rot);
     dm_vec3_rotate(direction, inv_rot, dir);
     
@@ -1006,8 +1006,8 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
     dm_plane planes_b[5];
     uint32_t num_planes_b;
     
-    float norm_pen[3];
-    float neg_pen[3];
+    float norm_pen[3] = { 0 };
+    float neg_pen[3] = { 0 };
     
     dm_vec3_norm(penetration, norm_pen);
     dm_vec3_negate(norm_pen, neg_pen);
