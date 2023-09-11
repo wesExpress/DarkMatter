@@ -313,6 +313,8 @@ void dm_platform_threadpool_execute_task(dm_thread_task* task, dm_threadpool* th
 {
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
 
+    task->func(task->args);
+    
     pthread_mutex_lock(&mac_threadpool->queue_mutex);
     threadpool->total_task_count--;
     if(threadpool->total_task_count==0) pthread_cond_signal(&mac_threadpool->queue_empty);
@@ -323,10 +325,13 @@ void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool)
 {
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
 
-    if(threadpool->total_task_count==0) return;
+    //if(threadpool->total_task_count==0) return;
 
     pthread_mutex_lock(&mac_threadpool->queue_mutex);
-    pthread_cond_wait(&mac_threadpool->queue_empty, &mac_threadpool->queue_mutex);
+    while(threadpool->total_task_count>0) 
+    {
+        pthread_cond_wait(&mac_threadpool->queue_empty, &mac_threadpool->queue_mutex);
+    }
     pthread_mutex_unlock(&mac_threadpool->queue_mutex);
 }
 
@@ -352,10 +357,8 @@ void* dm_mac_thread_start_func(void* args)
         // decrement task count
         threadpool->task_count--;
 
-        threadpool->total_task_count++;
-
         pthread_mutex_unlock(&mac_threadpool->queue_mutex);
-
+        
         dm_platform_threadpool_execute_task(&task, threadpool);
     }
 
