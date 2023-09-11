@@ -225,8 +225,7 @@ int dm_mm_any_zero(dm_mm_float mm)
     int mask = _mm_movemask_ps(vcmp);
     return (mask == 0xff);
 #else
-    uint32x2_t tmp = vorr_u32(vget_low_u32(mm), vget_high_u32(mm));
-    return vget_lane_u32(vpmin_u32(tmp, tmp), 0);
+    return vminvq_f32(mm)==0;
 #endif
 }
 

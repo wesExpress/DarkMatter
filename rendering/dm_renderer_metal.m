@@ -765,6 +765,8 @@ void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_
 	new_viewport.originY = 0.0f;
 	new_viewport.width = width;
 	new_viewport.height = height;
+	new_viewport.znear = 0;
+	new_viewport.zfar = 1.0f;
 
     [metal_renderer->command_encoder setViewport:new_viewport];
 }
