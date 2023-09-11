@@ -462,7 +462,8 @@ bool dm_metal_create_pipeline(dm_pipeline_desc desc, dm_render_handle shader_han
 	internal_pipe.cull_mode = dm_cull_to_metal_cull(desc.cull_mode);
 
 	internal_pipe.primitive_type = dm_topology_to_metal_primitive(desc.primitive_topology);
-
+    internal_pipe.wireframe = desc.wireframe;
+    
 	[depth_stencil_desc release];
 	[sampler_desc release];
 	[pipe_desc release];
@@ -799,6 +800,9 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
 	[metal_renderer->command_encoder setFrontFacingWinding:pipeline.winding];
 	[metal_renderer->command_encoder setCullMode:pipeline.cull_mode];
 	[metal_renderer->command_encoder setFragmentSamplerState:pipeline.sampler_state atIndex:0];
+    
+    if(pipeline.wireframe) [metal_renderer->command_encoder setTriangleFillMode:MTLTriangleFillModeLines];
+    else                   [metal_renderer->command_encoder setTriangleFillMode:MTLTriangleFillModeFill];
 
 	metal_renderer->active_pipeline = handle;
 
@@ -958,5 +962,8 @@ void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num
 
 void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer)
 {
-	DM_LOG_ERROR("Toggle Wireframe not supported yet");
+    DM_METAL_GET_RENDERER;
+    
+    if(wireframe) [metal_renderer->command_encoder setTriangleFillMode:MTLTriangleFillModeLines];
+    else          [metal_renderer->command_encoder setTriangleFillMode:MTLTriangleFillModeFill];
 }
