@@ -1,6 +1,8 @@
 #ifndef DM_INTRINSICS256_H
 #define DM_INTRINSICS256_H
 
+#ifndef DM_SIMD_ARM
+
 DM_INLINE
 dm_mm256_int dm_mm256_cast_float_to_int(dm_mm256_float mm)
 {
@@ -255,5 +257,7 @@ dm_mm256_int dm_mm256_shiftr_1(dm_mm256_int mm)
 {
     return _mm256_bsrli_epi128(mm, sizeof(int));
 }
+
+#endif
 
 #endif

@@ -55,11 +55,9 @@ SIMD INTRINSICS DETERMINATION
 *******************************/
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
 #define DM_SIMD_x86
-#elif defined(__arm__)
+#elif defined(__aarch64__)
 #define DM_SIMD_ARM
-#else
-#include <assert.h>
-assert(false);
+#define T
 #endif
 
 /********

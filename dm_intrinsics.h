@@ -119,9 +119,17 @@ dm_mm_float dm_mm_fmadd_ps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
 #ifdef DM_SIMD_x86
     return _mm_fmadd_ps(a, b, c);
 #elif defined(DM_SIMD_ARM)
-    return vfmaq_f32(a,b,c);
+    return vfmaq_f32(c,a,b);
 #endif
 }
+
+#ifdef DM_SIMD_ARM
+DM_INLINE
+dm_mm_float dm_mm_fsubps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
+{
+    return vfmsq_f32(c,a,b);
+}
+#endif
 
 DM_INLINE
 dm_mm_float dm_mm_max_ps(dm_mm_float a, dm_mm_float b)
