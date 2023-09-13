@@ -1136,7 +1136,7 @@ bool dm_renderer_submit_commands(dm_context* context)
                 
                 if(!dm_render_command_backend_bind_shader(handle, &context->renderer)) { DM_LOG_FATAL("Bind shader failed"); return false; }
             } break;
-
+            
             case DM_RENDER_COMMAND_BIND_PIPELINE:
             {
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
@@ -1395,7 +1395,6 @@ void dm_ecs_insert_entities_into_systems(dm_context* context)
     uint32_t        comp_id, comp_index;
     
     dm_entity entity = DM_ECS_INVALID_ENTITY;
-    uint32_t  entity_index = DM_ECS_INVALID_ID;
     
     // for all entities
     for(uint32_t e=0; e<ecs_manager->entity_count; e++)
@@ -1403,7 +1402,7 @@ void dm_ecs_insert_entities_into_systems(dm_context* context)
         entity = ecs_manager->entities[e];
         if(entity == DM_ECS_INVALID_ENTITY) continue;
         
-        entity_index = dm_ecs_entity_get_index(entity, context);
+        //entity_index = dm_ecs_entity_get_index(entity, context);
         
         // for all system timings
         for(uint32_t t=0; t<DM_ECS_SYSTEM_TIMING_UNKNOWN; t++)
@@ -1414,23 +1413,25 @@ void dm_ecs_insert_entities_into_systems(dm_context* context)
                 system = &ecs_manager->systems[t][s];
                 
                 // early out if we don't have what this system needs
-                if(!dm_ecs_entity_has_component_multiple_via_index(entity_index, system->component_mask, context)) continue;
+                if(!dm_ecs_entity_has_component_multiple_via_index(e, system->component_mask, context)) continue;
                 
                 // get all component indices
                 for(uint32_t c=0; c<system->component_count; c++)
                 {
                     comp_id    = system->component_ids[c];
-                    comp_index = ecs_manager->entity_component_indices[entity_index][comp_id];
+                    comp_index = ecs_manager->entity_component_indices[e][comp_id];
                     
                     system->entity_indices[system->entity_count][comp_id] = comp_index;
                 }
                 
-                system->insert_func(entity_index, (void*)system, (void*)context);
+                system->insert_func(e, (void*)system, (void*)context);
                 
                 system->entity_count++;
             }
         }
     }
+    
+    ecs_manager->flags &= ~DM_ECS_FLAG_REINSERT_ENTITIES;
 }
 
 bool dm_ecs_run_systems(dm_ecs_system_timing timing, dm_context* context)
@@ -1515,6 +1516,8 @@ void dm_ecs_entity_add_component(dm_entity entity, dm_ecs_id component_id, dm_co
     context->ecs_manager.entity_component_indices[entity_index][component_id] = c_index;
     context->ecs_manager.entity_component_masks[entity_index] |= DM_BIT_SHIFT(component_id);
     context->ecs_manager.components[component_id].entity_count++;
+    
+    context->ecs_manager.flags |= DM_ECS_FLAG_REINSERT_ENTITIES;
 }
 
 void dm_ecs_entity_remove_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
@@ -1530,6 +1533,8 @@ void dm_ecs_entity_remove_component_via_index(uint32_t index, dm_ecs_id componen
     
     dm_ecs_component* component = &context->ecs_manager.components[component_id];
     component->tombstones[component->tombstone_count++] = index;
+    
+    context->ecs_manager.flags |= DM_ECS_FLAG_REINSERT_ENTITIES;
 }
 
 /*********

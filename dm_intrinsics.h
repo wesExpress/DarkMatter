@@ -22,7 +22,7 @@ dm_mm_float dm_mm_cast_int_to_float(dm_mm_int mm)
 float
 *******/
 DM_INLINE
-dm_mm_float dm_mm_load_ps(float* d)
+dm_mm_float dm_mm_load_ps(const float* d)
 {
 #ifdef DM_SIMD_x86
     
@@ -38,7 +38,7 @@ dm_mm_float dm_mm_load_ps(float* d)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_set1_ps(float d)
+dm_mm_float dm_mm_set1_ps(const float d)
 {
 #ifdef DM_SIMD_x86
     return _mm_set1_ps(d);

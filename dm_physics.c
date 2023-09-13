@@ -1195,10 +1195,10 @@ void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_m
     dm_vec3_scale(constraint->jacobian[2], manifold->contact_data[1].inv_mass * constraint->lambda, delta_v[2]);
     dm_vec3_scale(dum2, constraint->lambda, delta_v[3]);
     
-    float v_damping_a = 1.0f / (1.0f + manifold->contact_data[0].v_damp * DM_PHYSICS_FIXED_DT);
-    float w_damping_a = 1.0f / (1.0f + manifold->contact_data[0].w_damp * DM_PHYSICS_FIXED_DT);
-    float v_damping_b = 1.0f / (1.0f + manifold->contact_data[1].v_damp * DM_PHYSICS_FIXED_DT);
-    float w_damping_b = 1.0f / (1.0f + manifold->contact_data[1].w_damp * DM_PHYSICS_FIXED_DT);
+    const float v_damping_a = 1.0f / (1.0f + manifold->contact_data[0].v_damp * DM_PHYSICS_FIXED_DT);
+    const float w_damping_a = 1.0f / (1.0f + manifold->contact_data[0].w_damp * DM_PHYSICS_FIXED_DT);
+    const float v_damping_b = 1.0f / (1.0f + manifold->contact_data[1].v_damp * DM_PHYSICS_FIXED_DT);
+    const float w_damping_b = 1.0f / (1.0f + manifold->contact_data[1].w_damp * DM_PHYSICS_FIXED_DT);
     
     *manifold->contact_data[0].vel_x += delta_v[0][0] * v_damping_a;
     *manifold->contact_data[0].vel_y += delta_v[0][1] * v_damping_a;

@@ -125,7 +125,7 @@ MATH
 /****
 SIMD
 ******/
-#ifndef DM_PLATFORM_APPLE
+#ifdef DM_SIMD_x86
 typedef __m256  dm_mm256_float;
 typedef __m256i dm_mm256_int;
 
@@ -133,7 +133,7 @@ typedef __m128  dm_mm_float;
 typedef __m128i dm_mm_int;
 
 #define DM_SIMD256_FLOAT_N 8
-#else
+#elif defined(DM_SIMD_ARM)
 // neon does not support 256bit registers
 typedef float32x4_t dm_mm_float;
 
@@ -141,6 +141,14 @@ typedef int32x4_t dm_mm_int;
 #endif
 
 #define DM_SIMD_FLOAT_N    4
+
+/**********
+INTRINSICS
+************/
+#include "dm_intrinsics.h"
+#ifndef DM_SIMD_ARM
+#include "dm_intrinsics256.h"
+#endif
 
 /*******
 HASHING
@@ -816,6 +824,11 @@ typedef struct dm_ecs_component_t
     void*    data;
 } dm_ecs_component;
 
+typedef enum dm_ecs_flags_t
+{
+    DM_ECS_FLAG_REINSERT_ENTITIES = 1 << 0
+} dm_ecs_flag;
+
 typedef struct dm_ecs_manager_t
 {
     // entities: indexed via hashing
@@ -824,6 +837,8 @@ typedef struct dm_ecs_manager_t
     dm_ecs_id entity_component_masks[DM_ECS_MAX_ENTITIES];
     
     uint32_t  entity_count;
+    
+    dm_ecs_flag flags;
     
     // components
     dm_ecs_component components[DM_ECS_MAX];
@@ -1282,13 +1297,5 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
     
     return dm_ecs_entity_has_component_multiple_via_index(entity_index, component_mask, context);
 }
-
-/**********
-INTRINSICS
-************/
-#include "dm_intrinsics.h"
-#ifndef DM_SIMD_ARM
-#include "dm_intrinsics256.h"
-#endif
 
 #endif //DM_H
