@@ -326,14 +326,22 @@ bool dm_platform_threadpool_create(dm_threadpool* threadpool)
     threadpool->internal_pool = dm_alloc(sizeof(dm_w32_threadpool));
     dm_w32_threadpool* internal_pool = threadpool->internal_pool;
     
-    InitializeConditionVariable(&internal_pool->queue_condition);
-    InitializeConditionVariable(&internal_pool->queue_empty);
-    InitializeCriticalSection(&internal_pool->queue_mutex);
+    InitializeCriticalSection(&internal_pool->thread_count_mutex);
+    InitializeCriticalSection(&internal_pool->task_queue.mutex);
+    InitializeCriticalSection(&internal_pool->task_queue.has_tasks.mutex);
+    InitializeConditionVariable(&internal_pool->task_queue.has_tasks.cond);
+    InitializeConditionVariable(&internal_pool->all_threads_idle);
+    InitializeConditionVariable(&internal_pool->at_least_one_idle);
     
     for(uint32_t i=0; i<threadpool->thread_count; i++)
     {
         DWORD t;
         internal_pool->threads[i] = CreateThread(0,0, (LPTHREAD_START_ROUTINE)dm_win32_thread_start_func, threadpool, 0, &t);
+        
+#ifdef DM_DEBUG
+        DM_LOG_INFO("Created thread: %lu", t);
+#endif
+        
         if(internal_pool->threads[i]) continue;
         
         DM_LOG_FATAL("Could not create Win32 thread");
@@ -351,6 +359,9 @@ void dm_platform_threadpool_destroy(dm_threadpool* threadpool)
     {
         DWORD exit_code;
         GetExitCodeThread(w32_threadpool->threads[i], &exit_code);
+#ifdef DM_DEBUG
+        DM_LOG_WARN("Thread exit code: %lu", exit_code);
+#endif
         CloseHandle(w32_threadpool->threads[i]);
     }
     
@@ -361,39 +372,31 @@ void dm_platform_threadpool_submit_task(dm_thread_task* task, dm_threadpool* thr
 {
     dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
     
-    EnterCriticalSection(&w32_threadpool->queue_mutex);
-    
-    dm_memcpy(threadpool->tasks + threadpool->task_count, task, sizeof(dm_thread_task));
-    threadpool->task_count++;
-    
-    LeaveCriticalSection(&w32_threadpool->queue_mutex);
+    // insert task
+    EnterCriticalSection(&w32_threadpool->task_queue.mutex);
+    dm_memcpy(w32_threadpool->task_queue.tasks + w32_threadpool->task_queue.count, task, sizeof(dm_thread_task));
+    w32_threadpool->task_queue.count++;
     
     // wake up at least one thread
-    WakeConditionVariable(&w32_threadpool->queue_condition);
-}
-
-void dm_platform_threadpool_execute_task(dm_thread_task* task, dm_threadpool* threadpool)
-{
-    dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
+    EnterCriticalSection(&w32_threadpool->task_queue.has_tasks.mutex);
+    w32_threadpool->task_queue.has_tasks.v = 1;
+    WakeConditionVariable(&w32_threadpool->task_queue.has_tasks.cond);
+    LeaveCriticalSection(&w32_threadpool->task_queue.has_tasks.mutex);
     
-    task->func(task->args);
-    
-    EnterCriticalSection(&w32_threadpool->queue_mutex);
-    threadpool->total_task_count--;
-    if(threadpool->total_task_count==0) WakeConditionVariable(&w32_threadpool->queue_empty);
-    LeaveCriticalSection(&w32_threadpool->queue_mutex);
+    LeaveCriticalSection(&w32_threadpool->task_queue.mutex);
 }
 
 void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool)
 {
     dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
     
-    EnterCriticalSection(&w32_threadpool->queue_mutex);
-    while(threadpool->total_task_count>0)
+    // sleep until there are NO working threads AND the task queue is empty
+    EnterCriticalSection(&w32_threadpool->thread_count_mutex);
+    while(w32_threadpool->num_working_threads || w32_threadpool->task_queue.count)
     {
-        SleepConditionVariableCS(&w32_threadpool->queue_empty, &w32_threadpool->queue_mutex, INFINITE);
+        SleepConditionVariableCS(&w32_threadpool->all_threads_idle, &w32_threadpool->thread_count_mutex, INFINITE);
     }
-    LeaveCriticalSection(&w32_threadpool->queue_mutex);
+    LeaveCriticalSection(&w32_threadpool->thread_count_mutex);
 }
 
 void* dm_win32_thread_start_func(void* args)
@@ -401,30 +404,56 @@ void* dm_win32_thread_start_func(void* args)
     dm_threadpool* threadpool = args;
     dm_w32_threadpool* w32_threadpool = threadpool->internal_pool;
     
-    dm_thread_task task;
-    
     while(1)
     {
-        EnterCriticalSection(&w32_threadpool->queue_mutex);
-        
-        // wait until a task is available
-        while(threadpool->task_count==0)
+        // sleep until a new task is available
+        EnterCriticalSection(&w32_threadpool->task_queue.has_tasks.mutex);
+        while(w32_threadpool->task_queue.has_tasks.v==0)
         {
-            SleepConditionVariableCS(&w32_threadpool->queue_condition, &w32_threadpool->queue_mutex, INFINITE);
+            SleepConditionVariableCS(&w32_threadpool->task_queue.has_tasks.cond, &w32_threadpool->task_queue.has_tasks.mutex, INFINITE);
+        }
+        w32_threadpool->task_queue.has_tasks.v = 0;
+        LeaveCriticalSection(&w32_threadpool->task_queue.has_tasks.mutex);
+        
+        // iterate thread working counter
+        EnterCriticalSection(&w32_threadpool->thread_count_mutex);
+        w32_threadpool->num_working_threads++;
+        LeaveCriticalSection(&w32_threadpool->thread_count_mutex);
+        
+        // grab task
+        EnterCriticalSection(&w32_threadpool->task_queue.mutex);
+        dm_thread_task* task = NULL;
+        
+        if(w32_threadpool->task_queue.count)
+        {
+            task = dm_alloc(sizeof(dm_thread_task));
+            dm_memcpy(task, &w32_threadpool->task_queue.tasks[0], sizeof(dm_thread_task));
+            dm_memmove(w32_threadpool->task_queue.tasks, w32_threadpool->task_queue.tasks + 1, sizeof(dm_thread_task) * w32_threadpool->task_queue.count-1);
+            w32_threadpool->task_queue.count--;
         }
         
-        // copy over task
-        task = threadpool->tasks[0];
-        dm_memmove(threadpool->tasks, threadpool->tasks + 1, sizeof(dm_thread_task) * threadpool->task_count-1);
-        // decrement task count
-        threadpool->task_count--;
+        // if the task queue is still populated, need to resend signal
+        if(w32_threadpool->task_queue.count) 
+        {
+            EnterCriticalSection(&w32_threadpool->task_queue.has_tasks.mutex);
+            w32_threadpool->task_queue.has_tasks.v = 1;
+            WakeConditionVariable(&w32_threadpool->task_queue.has_tasks.cond);
+            LeaveCriticalSection(&w32_threadpool->task_queue.has_tasks.mutex);
+        }
+        LeaveCriticalSection(&w32_threadpool->task_queue.mutex);
         
-        LeaveCriticalSection(&w32_threadpool->queue_mutex);
+        // run task
+        if(task) 
+        {
+            task->func(task->args);
+            dm_free(task);
+        }
         
-        // increment queue counter
-        InterlockedIncrement(&w32_threadpool->queue_increment);
-        
-        dm_platform_threadpool_execute_task(&task, threadpool);
+        // decrement thread working counter
+        EnterCriticalSection(&w32_threadpool->thread_count_mutex);
+        w32_threadpool->num_working_threads--;
+        if(w32_threadpool->num_working_threads==0) WakeConditionVariable(&w32_threadpool->all_threads_idle);
+        LeaveCriticalSection(&w32_threadpool->thread_count_mutex);
     }
 }
 

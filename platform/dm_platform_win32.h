@@ -9,13 +9,31 @@
 #include <windows.h>
 #include <windowsx.h>
 
+typedef struct dm_w32_semaphore_t
+{
+    CONDITION_VARIABLE cond;
+    CRITICAL_SECTION   mutex;
+    uint32_t v;
+} dm_w32_semaphore;
+
+typedef struct dm_w32_task_queue_t
+{
+    dm_thread_task tasks[DM_MAX_TASK_COUNT];
+    uint32_t       count;
+    
+    CRITICAL_SECTION mutex;
+    dm_w32_semaphore has_tasks;
+} dm_w32_task_queue;
+
 typedef struct dm_w32_threadpool_t
 {
-    CONDITION_VARIABLE queue_condition;
-    CONDITION_VARIABLE queue_empty;
-    CRITICAL_SECTION   queue_mutex;
+    CRITICAL_SECTION thread_count_mutex;
+    CONDITION_VARIABLE all_threads_idle;
+    CONDITION_VARIABLE at_least_one_idle;
     
-    LONG queue_increment;
+    uint32_t num_working_threads;
+    
+    dm_w32_task_queue task_queue;
     
     HANDLE   threads[DM_MAX_THREAD_COUNT];
 } dm_w32_threadpool;

@@ -16,7 +16,7 @@ dm_mm256_float dm_mm256_cast_int_to_float(dm_mm256_int mm)
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_load_ps(float* d)
+dm_mm256_float dm_mm256_load_ps(const float* d)
 {
 #ifdef DM_PLATFORM_LINUX
     return _mm256_loadu_ps(d);
@@ -26,7 +26,7 @@ dm_mm256_float dm_mm256_load_ps(float* d)
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_set1_ps(float d)
+dm_mm256_float dm_mm256_set1_ps(const float d)
 {
     return _mm256_set1_ps(d);
 }

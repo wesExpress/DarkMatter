@@ -1543,7 +1543,6 @@ THREADING
 extern bool dm_platform_threadpool_create(dm_threadpool* threadpool);
 extern void dm_platform_threadpool_destroy(dm_threadpool* threadpool);
 extern void dm_platform_threadpool_submit_task(dm_thread_task* task, dm_threadpool* threadpool);
-extern void dm_platform_threadpool_execute_task(dm_thread_task* task, dm_threadpool* threadpool);
 extern void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool);
 
 bool dm_threadpool_create(const char* tag, uint32_t num_threads, dm_threadpool* threadpool)

@@ -412,17 +412,12 @@ typedef struct dm_thread_task_t
 #ifndef DM_MAX_THREAD_COUNT
 #define DM_MAX_THREAD_COUNT 32
 #endif
-#ifndef DM_MAX_TASK_COUNT
-#define DM_MAX_TASK_COUNT   256
-#endif
+#define DM_MAX_TASK_COUNT   100
 
 typedef struct dm_threadpool_t
 {
     char tag[512];
-    
-    dm_thread_task tasks[DM_MAX_TASK_COUNT];
-    uint32_t       task_count, thread_count, total_task_count;
-    
+    uint32_t thread_count;
     void* internal_pool;
 } dm_threadpool;
 
