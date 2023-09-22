@@ -195,7 +195,7 @@ int dm_mm256_any_zero(dm_mm256_float mm)
 {
     dm_mm256_float vcmp = _mm256_cmp_ps(mm, _mm256_set1_ps(0), _CMP_EQ_OQ);
     int mask = _mm256_movemask_ps(vcmp);
-    return (mask == 0xff);
+    return (mask != 0);
 }
 
 DM_INLINE

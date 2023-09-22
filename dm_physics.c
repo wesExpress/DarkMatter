@@ -523,31 +523,7 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
 }
 
 // support face funcs
-void dm_support_face_box_planes(dm_plane planes[5], float points[10][3], float face_normal[3])
-{
-    uint32_t ids[] = { 1,2,3,0 };
-    float neg_normal[3];
-    dm_vec3_negate(face_normal, neg_normal);
-    
-    float ref_pt[3] = { 0 }, normal[3] = { 0 };
-    float dum1[3] = { 0 }, dum2[3] = { 0 };
-    float distance;
-    
-    for(uint32_t i=0; i<4; i++)
-    {
-        DM_VEC3_COPY(ref_pt, points[i]);
-        
-        dm_vec3_sub_vec3(points[ids[i]], ref_pt, dum1);
-        dm_vec3_cross(dum1, neg_normal, dum2);
-        dm_vec3_norm(dum2, normal);
-        distance = -dm_vec3_dot(normal, ref_pt);
-        
-        DM_VEC3_COPY(planes[i+1].normal, normal);
-        planes[i+1].distance=distance;
-    }
-}
-
-void dm_support_face_box(const float pos[3], const float rot[4], const float cen[3], const float internals[6], float direction[3], float points[10][3], uint32_t* num_pts, dm_plane planes[5], uint32_t* num_planes, float normal[3])
+void dm_support_face_box(const float pos[3], const float rot[4], const float cen[3], const float internals[6], const float direction[3], float points[10][3], uint32_t* num_pts, dm_plane planes[5], uint32_t* num_planes, float normal[3])
 {
     const float box_min[3] = {
         internals[0],
@@ -565,82 +541,113 @@ void dm_support_face_box(const float pos[3], const float rot[4], const float cen
     dm_quat_inverse(rot, inv_rot);
     dm_vec3_rotate(direction, inv_rot, dir);
     
-    static const float axes[][3] = {
-        {1,0,0},
-        {0,1,0},
-        {0,0,1}
+#define DM_SUPPORT_AXES_COUNT 6
+    static const float dm_box_support_axes[][DM_SUPPORT_AXES_COUNT] = {
+        {-1, 0, 0},
+        { 0,-1, 0},
+        { 0, 0,-1},
+        { 1, 0, 0},
+        { 0, 1, 0},
+        { 0, 0, 1}
     };
     
     float best_proximity = -FLT_MAX;
-    float best_sgn = 0.0f;
+    float proximity;
     int   best_axis = -1;
     
-    for(uint32_t i=0; i<3; i++)
+    for(uint32_t i=0; i<DM_SUPPORT_AXES_COUNT; i++)
     {
-        float proximity = dm_vec3_dot(dir, axes[i]);
-        float s = DM_SIGNF(proximity);
-        proximity *= s;
+        proximity = dm_vec3_dot(dir, dm_box_support_axes[i]);
         if(proximity <= best_proximity) continue;
         
         best_proximity = proximity;
-        best_sgn = s;
         best_axis = i;
     }
     
     switch(best_axis)
     {
+        // negative x
         case 0:
         {
-            if(best_sgn > 0)
-            {
-                points[0][0] = box_max[0]; points[0][1] = box_min[1]; points[0][2] = box_min[2];
-                points[1][0] = box_max[0]; points[1][1] = box_min[1]; points[1][2] = box_max[2];
-                points[2][0] = box_max[0]; points[2][1] = box_max[1]; points[2][2] = box_max[2];
-                points[3][0] = box_max[0]; points[3][1] = box_max[1]; points[3][2] = box_min[2];
-            }
-            else
-            {
-                points[0][0] = box_min[0]; points[0][1] = box_min[1]; points[0][2] = box_max[2];
-                points[1][0] = box_min[0]; points[1][1] = box_min[1]; points[1][2] = box_min[2];
-                points[2][0] = box_min[0]; points[2][1] = box_max[1]; points[2][2] = box_min[2];
-                points[3][0] = box_min[0]; points[3][1] = box_max[1]; points[3][2] = box_max[2];
-            }
+            points[0][0] = box_min[0]; points[0][1] = box_min[1]; points[0][2] = box_max[2];
+            points[1][0] = box_min[0]; points[1][1] = box_min[1]; points[1][2] = box_min[2];
+            points[2][0] = box_min[0]; points[2][1] = box_max[1]; points[2][2] = box_min[2];
+            points[3][0] = box_min[0]; points[3][1] = box_max[1]; points[3][2] = box_max[2];
+            
+            planes[1].normal[1] = -1;
+            planes[2].normal[2] = -1;
+            planes[3].normal[1] =  1;
+            planes[4].normal[2] =  1;
         } break;
         
+        // negative y
         case 1:
         {
-            if(best_sgn > 0)
-            {
-                points[0][0] = box_min[0]; points[0][1] = box_max[1]; points[0][2] = box_min[2];
-                points[1][0] = box_max[0]; points[1][1] = box_max[1]; points[1][2] = box_min[2];
-                points[2][0] = box_max[0]; points[2][1] = box_max[1]; points[2][2] = box_max[2];
-                points[3][0] = box_min[0]; points[3][1] = box_max[1]; points[3][2] = box_max[2];
-            }
-            else
-            {
-                points[0][0] = box_max[0]; points[0][1] = box_min[1]; points[0][2] = box_min[2];
-                points[1][0] = box_min[0]; points[1][1] = box_min[1]; points[1][2] = box_min[2];
-                points[2][0] = box_min[0]; points[2][1] = box_min[1]; points[2][2] = box_max[2];
-                points[3][0] = box_max[0]; points[3][1] = box_min[1]; points[3][2] = box_max[2];
-            }
+            points[0][0] = box_min[0]; points[0][1] = box_min[1]; points[0][2] = box_min[2];
+            points[1][0] = box_min[0]; points[1][1] = box_min[1]; points[1][2] = box_max[2];
+            points[2][0] = box_max[0]; points[2][1] = box_min[1]; points[2][2] = box_max[2];
+            points[3][0] = box_max[0]; points[3][1] = box_min[1]; points[3][2] = box_min[2];
+            
+            planes[1].normal[0] = -1;
+            planes[2].normal[2] =  1;
+            planes[3].normal[0] =  1;
+            planes[4].normal[2] = -1;
         } break;
         
+        // negative z
         case 2:
         {
-            if(best_sgn > 0)
-            {
-                points[0][0] = box_max[0]; points[0][1] = box_min[1]; points[0][2] = box_max[2];
-                points[1][0] = box_min[0]; points[1][1] = box_min[1]; points[1][2] = box_max[2];
-                points[2][0] = box_min[0]; points[2][1] = box_max[1]; points[2][2] = box_max[2];
-                points[3][0] = box_max[0]; points[3][1] = box_max[1]; points[3][2] = box_max[2];
-            }
-            else
-            {
-                points[0][0] = box_min[0]; points[0][1] = box_min[1]; points[0][2] = box_min[2];
-                points[1][0] = box_max[0]; points[1][1] = box_min[1]; points[1][2] = box_min[2];
-                points[2][0] = box_max[0]; points[2][1] = box_max[1]; points[2][2] = box_min[2];
-                points[3][0] = box_min[0]; points[3][1] = box_max[1]; points[3][2] = box_min[2];
-            }
+            points[0][0] = box_max[0]; points[0][1] = box_min[1]; points[0][2] = box_min[2];
+            points[1][0] = box_max[0]; points[1][1] = box_max[1]; points[1][2] = box_min[2];
+            points[2][0] = box_min[0]; points[2][1] = box_max[1]; points[2][2] = box_min[2];
+            points[3][0] = box_min[0]; points[3][1] = box_min[1]; points[3][2] = box_min[2];
+            
+            planes[1].normal[0] =  1;
+            planes[2].normal[1] =  1;
+            planes[3].normal[0] = -1;
+            planes[4].normal[1] = -1;
+        } break;
+        
+        // positive x
+        case 3:
+        {
+            points[0][0] = box_max[0]; points[0][1] = box_min[1]; points[0][2] = box_min[2];
+            points[1][0] = box_max[0]; points[1][1] = box_min[1]; points[1][2] = box_max[2];
+            points[2][0] = box_max[0]; points[2][1] = box_max[1]; points[2][2] = box_max[2];
+            points[3][0] = box_max[0]; points[3][1] = box_max[1]; points[3][2] = box_min[2];
+            
+            planes[1].normal[1] = -1;
+            planes[2].normal[2] =  1;
+            planes[3].normal[1] =  1;
+            planes[4].normal[2] = -1;
+        } break;
+        
+        // positive y
+        case 4:
+        {
+            points[0][0] = box_min[0]; points[0][1] = box_max[1]; points[0][2] = box_min[2];
+            points[1][0] = box_max[0]; points[1][1] = box_max[1]; points[1][2] = box_min[2];
+            points[2][0] = box_max[0]; points[2][1] = box_max[1]; points[2][2] = box_max[2];
+            points[3][0] = box_min[0]; points[3][1] = box_max[1]; points[3][2] = box_max[2];
+            
+            planes[1].normal[0] = -1;
+            planes[2].normal[2] = -1;
+            planes[3].normal[0] =  1;
+            planes[4].normal[2] =  1;
+        } break;
+        
+        // positive z
+        case 5:
+        {
+            points[0][0] = box_max[0]; points[0][1] = box_min[1]; points[0][2] = box_max[2];
+            points[1][0] = box_min[0]; points[1][1] = box_min[1]; points[1][2] = box_max[2];
+            points[2][0] = box_min[0]; points[2][1] = box_max[1]; points[2][2] = box_min[2];
+            points[3][0] = box_max[0]; points[3][1] = box_max[1]; points[3][2] = box_max[2];
+            
+            planes[1].normal[0] =  1;
+            planes[2].normal[1] = -1;
+            planes[3].normal[0] = -1;
+            planes[4].normal[1] =  1;
         } break;
     }
     
@@ -651,22 +658,32 @@ void dm_support_face_box(const float pos[3], const float rot[4], const float cen
         dm_vec3_add_vec3(points[i], pos, points[i]);
     }
     
-    dm_vec3_scale(axes[best_axis], best_sgn, normal);
+    DM_VEC3_COPY(normal, dm_box_support_axes[best_axis]);
     dm_vec3_rotate(normal, rot, normal);
     dm_vec3_norm(normal, normal);
     
     DM_VEC3_COPY(planes[0].normal, normal);
     planes[0].distance = -dm_vec3_dot(planes[0].normal, points[0]);
     
-    dm_support_face_box_planes(planes, points, normal);
+    dm_vec3_rotate(planes[1].normal, rot, planes[1].normal);
+    dm_vec3_rotate(planes[2].normal, rot, planes[2].normal);
+    dm_vec3_rotate(planes[3].normal, rot, planes[3].normal);
+    dm_vec3_rotate(planes[4].normal, rot, planes[4].normal);
+    
+    planes[1].distance = -dm_vec3_dot(planes[1].normal, points[0]);
+    planes[2].distance = -dm_vec3_dot(planes[2].normal, points[1]);
+    planes[3].distance = -dm_vec3_dot(planes[3].normal, points[2]);
+    planes[4].distance = -dm_vec3_dot(planes[4].normal, points[3]);
     
     *num_pts    = 4;
     *num_planes = 5;
 }
 
+DM_INLINE
 bool dm_physics_point_in_plane(float point[3], dm_plane plane)
 {
-    float t = plane.distance + dm_vec3_dot(point, plane.normal);
+    float t = dm_vec3_dot(point, plane.normal);
+    t += plane.distance;
     
     return t < -DM_PHYSICS_TEST_EPSILON;
 }
@@ -800,8 +817,21 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     dm_vec3_sub_vec3(v_b, v_a, rel_v);
     float rel_vn = dm_vec3_dot(rel_v, manifold->normal);
     
+#if 0
+    if(manifold->normal[0] >= 0.57735f)
+    {
+        manifold->tangent_a[0] =  manifold->normal[1];
+        manifold->tangent_a[1] = -manifold->normal[2];
+    }
+    else
+    {
+        manifold->tangent_a[1] =  manifold->normal[2];
+        manifold->tangent_a[2] = -manifold->normal[1];
+    }
+#else
     dm_vec3_scale(manifold->normal, rel_vn, dum1);
     dm_vec3_sub_vec3(rel_v, dum1, manifold->tangent_a);
+#endif
     
     dm_vec3_norm(manifold->tangent_a, manifold->tangent_a);
     dm_vec3_cross(manifold->normal, manifold->tangent_a, manifold->tangent_b);
@@ -817,7 +847,7 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
         dm_vec3_sub_vec3(on_b, on_a, ba);
         float d = dm_vec3_dot(ba, neg_norm);
         
-#if 1
+#if 0
         b -= (DM_PHYSICS_BAUMGARTE_COEF * DM_PHYSICS_FIXED_DT_INV) * d;
 #else
         b -= (DM_PHYSICS_BAUMGARTE_COEF * DM_PHYSICS_FIXED_DT_INV) * DM_MAX(d - DM_PHYSICS_BAUMGARTE_SLOP, 0.0f);
@@ -826,7 +856,7 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     
     // restitution
     {
-#if 1
+#if 0
         b += (DM_PHYSICS_REST_COEF * rel_vn); 
 #else
         b += DM_PHYSICS_REST_COEF * DM_MAX(rel_vn - DM_PHYSICS_REST_SLOP, 0.0f);
@@ -845,7 +875,7 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     p.penetration = depth;
     
     // normal constraint
-    dm_physics_init_constraint(manifold->normal,    r_a, r_b, b, 0, FLT_MAX, &p.normal);
+    dm_physics_init_constraint(manifold->normal,    r_a, r_b, b, 0, FLT_MAX,        &p.normal);
     
     // friction a constraint
     dm_physics_init_constraint(manifold->tangent_a, r_a, r_b, 0, -FLT_MAX, FLT_MAX, &p.friction_a);
@@ -994,16 +1024,16 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
     
     if(dm_vec3_mag(penetration)==0) return;
     
-    float    points_a[10][3];
+    float    points_a[10][3] = { 0 };
     uint32_t num_pts_a;
-    float    normal_a[3];
-    dm_plane planes_a[5];
+    float    normal_a[3] = { 0 };
+    dm_plane planes_a[5] = { 0 };
     uint32_t num_planes_a;
     
-    float    points_b[10][3];
+    float    points_b[10][3] = { 0 };
     uint32_t num_pts_b;
-    float    normal_b[3];
-    dm_plane planes_b[5];
+    float    normal_b[3] = { 0 };
+    dm_plane planes_b[5] = { 0 };
     uint32_t num_planes_b;
     
     float norm_pen[3] = { 0 };
@@ -1011,31 +1041,38 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
     
     dm_vec3_norm(penetration, norm_pen);
     dm_vec3_negate(norm_pen, neg_pen);
-    float pen_depth = dm_vec3_mag(penetration);
+    const float pen_depth = dm_vec3_mag(penetration);
     
     dm_support_face_box(pos[0], rots[0], cens[0], internals[0], norm_pen, points_a, &num_pts_a, planes_a, &num_planes_a, normal_a);
     dm_support_face_box(pos[1], rots[1], cens[1], internals[1], neg_pen,  points_b, &num_pts_b, planes_b, &num_planes_b, normal_b);
     
-    bool flipped = dm_fabs(dm_vec3_dot(norm_pen, normal_a)) > dm_fabs(dm_vec3_dot(norm_pen, normal_b));
+#ifdef DM_PHYSICS_DEBUG
+    dm_memcpy(manifold->face_a, points_a, sizeof(float) * num_pts_a * 3);
+    manifold->face_count_a = num_pts_a;
     
-    dm_plane ref_plane;
-    float    clipped_face[10][3];
+    dm_memcpy(manifold->planes_a, planes_a, sizeof(dm_plane) * num_planes_a);
+    manifold->plane_count_a = num_planes_a;
+    
+    dm_memcpy(manifold->planes_b, planes_b, sizeof(dm_plane) * num_planes_b);
+    manifold->plane_count_b = num_planes_b;
+    
+    dm_memcpy(manifold->face_b, points_b, sizeof(float) * num_pts_b * 3);
+    manifold->face_count_b = num_pts_b;
+#endif
+    
+    dm_plane ref_plane = { 0 };
+    float    clipped_face[10][3] = { 0 };
     uint32_t num_clipped = 0;
     
-    if(flipped) 
-    {
-        DM_VEC3_COPY(ref_plane.normal, normal_b);
-        ref_plane.distance = -dm_vec3_dot(normal_b, points_b[0]);
-        
-        dm_physics_sutherland_hodgman(points_a, num_pts_a, planes_b, num_planes_b, clipped_face, &num_clipped);
-    }
-    else
-    {
-        DM_VEC3_COPY(ref_plane.normal, normal_a);
-        ref_plane.distance = -dm_vec3_dot(normal_a, points_a[0]);
-        
-        dm_physics_sutherland_hodgman(points_b, num_pts_b, planes_a, num_planes_a, clipped_face, &num_clipped);
-    }
+    DM_VEC3_COPY(ref_plane.normal, normal_a);
+    ref_plane.distance = -dm_vec3_dot(normal_a, points_a[0]);
+    
+    dm_physics_sutherland_hodgman(points_b, num_pts_b, planes_a, num_planes_a, clipped_face, &num_clipped);
+    
+#ifdef DM_PHYSICS_DEBUG
+    dm_memcpy(manifold->clipped_face, clipped_face, sizeof(float) * num_clipped * 3);
+    manifold->clipped_point_count = num_clipped;
+#endif
     
     float point[3];
     float on_a[3], on_b[3], dum[3];
@@ -1049,16 +1086,9 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
         contact_pen = DM_MIN(contact_pen, pen_depth);
         
         dm_vec3_scale(norm_pen, contact_pen, dum);
-        if(flipped)
-        {
-            dm_vec3_sub_vec3(point, dum, on_a);
-            DM_VEC3_COPY(on_b, point);
-        }
-        else
-        {
-            DM_VEC3_COPY(on_a, point);
-            dm_vec3_add_vec3(point, dum, on_b);
-        }
+        
+        dm_vec3_sub_vec3(point, dum, on_a);
+        DM_VEC3_COPY(on_b, point);
         
         contact_pen = -(dm_fabs(contact_pen) + dm_fabs(pen_depth)) * 0.5f;
         
@@ -1117,27 +1147,27 @@ void dm_physics_constraint_lambda(dm_contact_constraint* constraint, dm_contact_
     float dum1[N3], dum2[N3];
     
     float vel_a[3] = {
-        *manifold->contact_data[0].vel_x,
-        *manifold->contact_data[0].vel_y,
-        *manifold->contact_data[0].vel_z,
+        manifold->contact_data[0].vel_x,
+        manifold->contact_data[0].vel_y,
+        manifold->contact_data[0].vel_z,
     };
     
     float w_a[3] = {
-        *manifold->contact_data[0].w_x,
-        *manifold->contact_data[0].w_y,
-        *manifold->contact_data[0].w_z,
+        manifold->contact_data[0].w_x,
+        manifold->contact_data[0].w_y,
+        manifold->contact_data[0].w_z,
     };
     
     float vel_b[3] = {
-        *manifold->contact_data[1].vel_x,
-        *manifold->contact_data[1].vel_y,
-        *manifold->contact_data[1].vel_z,
+        manifold->contact_data[1].vel_x,
+        manifold->contact_data[1].vel_y,
+        manifold->contact_data[1].vel_z,
     };
     
     float w_b[3] = {
-        *manifold->contact_data[1].w_x,
-        *manifold->contact_data[1].w_y,
-        *manifold->contact_data[1].w_z,
+        manifold->contact_data[1].w_x,
+        manifold->contact_data[1].w_y,
+        manifold->contact_data[1].w_z,
     };
     
     i_body_inv_a[0] = manifold->contact_data[0].i_body_inv_00;
@@ -1152,11 +1182,11 @@ void dm_physics_constraint_lambda(dm_contact_constraint* constraint, dm_contact_
     dm_mat3_mul_vec3(i_body_inv_b, constraint->jacobian[3], dum2);
     
     // effective mass
-    effective_mass += manifold->contact_data[0].inv_mass * dm_vec3_dot(constraint->jacobian[0], constraint->jacobian[0]);
+    effective_mass += manifold->contact_data[0].inv_mass;
     effective_mass += dm_vec3_dot(constraint->jacobian[1], dum1);
-    effective_mass += manifold->contact_data[1].inv_mass * dm_vec3_dot(constraint->jacobian[2], constraint->jacobian[2]);
+    effective_mass += manifold->contact_data[1].inv_mass;
     effective_mass += dm_vec3_dot(constraint->jacobian[3], dum2);
-    effective_mass  = 1.0f / effective_mass;
+    effective_mass = 1.0f / effective_mass;
     
     // compute lambda
     constraint->lambda  = dm_vec3_dot(constraint->jacobian[0], vel_a);
@@ -1174,45 +1204,59 @@ void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_m
     constraint->impulse_sum = DM_CLAMP(constraint->impulse_sum, constraint->impulse_min, constraint->impulse_max);
     constraint->lambda = constraint->impulse_sum - old_sum;
     
-    float delta_v[4][3]    = { 0 };
+    float delta_v_a[3]     = { 0 };
+    float delta_w_a[3]     = { 0 };
     float i_body_inv_a[M3] = { 0 };
+    
+    float delta_v_b[3]     = { 0 };
+    float delta_w_b[3]     = { 0 };
     float i_body_inv_b[M3] = { 0 };
-    float dum1[N3], dum2[N3];
     
-    i_body_inv_a[0] = manifold->contact_data[0].i_body_inv_00;
-    i_body_inv_a[4] = manifold->contact_data[0].i_body_inv_11;
-    i_body_inv_a[8] = manifold->contact_data[0].i_body_inv_22;
+    float dum[N3];
+    float v_damp, w_damp;
     
-    i_body_inv_b[0] = manifold->contact_data[1].i_body_inv_00;
-    i_body_inv_b[4] = manifold->contact_data[1].i_body_inv_11;
-    i_body_inv_b[8] = manifold->contact_data[1].i_body_inv_22;
+    // feels hacky to do it this way
+    if(manifold->contact_data[0].movement_type==DM_PHYSICS_MOVEMENT_TYPE_KINEMATIC)
+    {
+        i_body_inv_a[0] = manifold->contact_data[0].i_body_inv_00;
+        i_body_inv_a[4] = manifold->contact_data[0].i_body_inv_11;
+        i_body_inv_a[8] = manifold->contact_data[0].i_body_inv_22;
+        
+        dm_vec3_scale(constraint->jacobian[0], manifold->contact_data[0].inv_mass * constraint->lambda, delta_v_a);
+        dm_mat3_mul_vec3(i_body_inv_a, constraint->jacobian[1], dum);
+        dm_vec3_scale(dum, constraint->lambda, delta_w_a);
+        
+        v_damp = 1.0f / (1.0f + manifold->contact_data[0].v_damp * DM_PHYSICS_FIXED_DT);
+        w_damp = 1.0f / (1.0f + manifold->contact_data[0].w_damp * DM_PHYSICS_FIXED_DT);
+        
+        manifold->contact_data[0].vel_x += delta_v_a[0] * v_damp;
+        manifold->contact_data[0].vel_y += delta_v_a[1] * v_damp;
+        manifold->contact_data[0].vel_z += delta_v_a[2] * v_damp;
+        manifold->contact_data[0].w_x   += delta_w_a[0] * w_damp;
+        manifold->contact_data[0].w_y   += delta_w_a[1] * w_damp;
+        manifold->contact_data[0].w_z   += delta_w_a[2] * w_damp;
+    }
     
-    dm_mat3_mul_vec3(i_body_inv_a, constraint->jacobian[1], dum1);
-    dm_mat3_mul_vec3(i_body_inv_b, constraint->jacobian[3], dum2);
-    
-    dm_vec3_scale(constraint->jacobian[0], manifold->contact_data[0].inv_mass * constraint->lambda, delta_v[0]);
-    dm_vec3_scale(dum1, constraint->lambda, delta_v[1]);
-    dm_vec3_scale(constraint->jacobian[2], manifold->contact_data[1].inv_mass * constraint->lambda, delta_v[2]);
-    dm_vec3_scale(dum2, constraint->lambda, delta_v[3]);
-    
-    const float v_damping_a = 1.0f / (1.0f + manifold->contact_data[0].v_damp * DM_PHYSICS_FIXED_DT);
-    const float w_damping_a = 1.0f / (1.0f + manifold->contact_data[0].w_damp * DM_PHYSICS_FIXED_DT);
-    const float v_damping_b = 1.0f / (1.0f + manifold->contact_data[1].v_damp * DM_PHYSICS_FIXED_DT);
-    const float w_damping_b = 1.0f / (1.0f + manifold->contact_data[1].w_damp * DM_PHYSICS_FIXED_DT);
-    
-    *manifold->contact_data[0].vel_x += delta_v[0][0] * v_damping_a;
-    *manifold->contact_data[0].vel_y += delta_v[0][1] * v_damping_a;
-    *manifold->contact_data[0].vel_z += delta_v[0][2] * v_damping_a;
-    *manifold->contact_data[0].w_x   += delta_v[1][0] * w_damping_a;
-    *manifold->contact_data[0].w_y   += delta_v[1][1] * w_damping_a;
-    *manifold->contact_data[0].w_z   += delta_v[1][2] * w_damping_a;
-    
-    *manifold->contact_data[1].vel_x += delta_v[2][0] * v_damping_b;
-    *manifold->contact_data[1].vel_y += delta_v[2][1] * v_damping_b;
-    *manifold->contact_data[1].vel_z += delta_v[2][2] * v_damping_b;
-    *manifold->contact_data[1].w_x   += delta_v[3][0] * w_damping_b;
-    *manifold->contact_data[1].w_y   += delta_v[3][1] * w_damping_b;
-    *manifold->contact_data[1].w_z   += delta_v[3][2] * w_damping_b;
+    if(manifold->contact_data[1].movement_type==DM_PHYSICS_MOVEMENT_TYPE_KINEMATIC)
+    {
+        i_body_inv_b[0] = manifold->contact_data[1].i_body_inv_00;
+        i_body_inv_b[4] = manifold->contact_data[1].i_body_inv_11;
+        i_body_inv_b[8] = manifold->contact_data[1].i_body_inv_22;
+        
+        dm_vec3_scale(constraint->jacobian[2], manifold->contact_data[1].inv_mass * constraint->lambda, delta_v_b);
+        dm_mat3_mul_vec3(i_body_inv_b, constraint->jacobian[3], dum);
+        dm_vec3_scale(dum, constraint->lambda, delta_w_b);
+        
+        v_damp = 1.0f / (1.0f + manifold->contact_data[1].v_damp * DM_PHYSICS_FIXED_DT);
+        w_damp = 1.0f / (1.0f + manifold->contact_data[1].w_damp * DM_PHYSICS_FIXED_DT);
+        
+        manifold->contact_data[1].vel_x += delta_v_b[0] * v_damp;
+        manifold->contact_data[1].vel_y += delta_v_b[1] * v_damp;
+        manifold->contact_data[1].vel_z += delta_v_b[2] * v_damp;
+        manifold->contact_data[1].w_x   += delta_w_b[0] * w_damp;
+        manifold->contact_data[1].w_y   += delta_w_b[1] * w_damp;
+        manifold->contact_data[1].w_z   += delta_w_b[2] * w_damp;
+    }
 }
 
 void dm_physics_apply_constraints(dm_contact_manifold* manifold)

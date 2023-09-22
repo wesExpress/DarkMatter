@@ -1397,7 +1397,7 @@ void dm_ecs_insert_entities_into_systems(dm_context* context)
     dm_entity entity = DM_ECS_INVALID_ENTITY;
     
     // for all entities
-    for(uint32_t e=0; e<ecs_manager->entity_count; e++)
+    for(uint32_t e=0; e<DM_ECS_MAX_ENTITIES; e++)
     {
         entity = ecs_manager->entities[e];
         if(entity == DM_ECS_INVALID_ENTITY) continue;

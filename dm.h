@@ -854,6 +854,14 @@ PHYSICS
 #define DM_PHYSICS_FIXED_DT          0.00833f // 1 / 120
 #define DM_PHYSICS_FIXED_DT_INV      120
 
+// movement types
+typedef enum dm_physics_movement_type_t
+{
+    DM_PHYSICS_MOVEMENT_TYPE_KINEMATIC,
+    DM_PHYSICS_MOVEMENT_TYPE_STATIC,
+    DM_PHYSICS_MOVEMENT_TYPE_UNKNOWN
+} dm_physics_movement_type;
+
 typedef struct dm_plane
 {
     float normal[3];
@@ -890,8 +898,10 @@ typedef struct dm_contact_data_t
     float i_body_inv_00, i_body_inv_11, i_body_inv_22;
     float v_damp, w_damp;
     
-    float *vel_x, *vel_y, *vel_z;
-    float *w_x, *w_y, *w_z;
+    float vel_x, vel_y, vel_z;
+    float w_x, w_y, w_z;
+    
+    dm_physics_movement_type movement_type;
 } dm_contact_data;
 
 #define DM_PHYSICS_CLIP_MAX_PTS 15
@@ -907,6 +917,19 @@ typedef struct dm_contact_manifold
     
     dm_contact_point points[DM_PHYSICS_CLIP_MAX_PTS];
     uint32_t         point_count;
+    
+#ifdef DM_PHYSICS_DEBUG
+    float    clipped_face[DM_PHYSICS_CLIP_MAX_PTS][3];
+    uint32_t clipped_point_count;
+    
+    uint32_t face_count_a, face_count_b;
+    float face_a[DM_PHYSICS_CLIP_MAX_PTS][3];
+    float face_b[DM_PHYSICS_CLIP_MAX_PTS][3];
+    
+    uint32_t plane_count_a, plane_count_b;
+    dm_plane planes_a[DM_PHYSICS_CLIP_MAX_PTS];
+    dm_plane planes_b[DM_PHYSICS_CLIP_MAX_PTS];
+#endif
     
     uint32_t  entity_a, entity_b;
 } dm_contact_manifold;
