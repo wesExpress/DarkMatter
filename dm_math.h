@@ -618,9 +618,9 @@ void dm_mat3_mul_mat3(float left[M3], float right[M3], float out[M3])
     d[4] = left[3] * right[1] + left[4] * right[4] + left[5] * right[7];
     d[5] = left[3] * right[2] + left[4] * right[5] + left[5] * right[8];
     
-    d[6] = left[6] * right[0] + left[7] * right[3] + left[7] * right[6];
-    d[7] = left[6] * right[1] + left[7] * right[4] + left[7] * right[7];
-    d[8] = left[6] * right[2] + left[7] * right[5] + left[7] * right[8];
+    d[6] = left[6] * right[0] + left[7] * right[3] + left[8] * right[6];
+    d[7] = left[6] * right[1] + left[7] * right[4] + left[8] * right[7];
+    d[8] = left[6] * right[2] + left[7] * right[5] + left[8] * right[8];
     
     dm_memcpy(out, d, sizeof(d));
 }
@@ -628,7 +628,7 @@ void dm_mat3_mul_mat3(float left[M3], float right[M3], float out[M3])
 DM_INLINE
 void dm_mat3_mul_vec3(float mat[M3], float vec[N3], float out[N3])
 {
-    out[0] = mat[0] * vec[0] + mat[2] * vec[1] + mat[3] * vec[2];
+    out[0] = mat[0] * vec[0] + mat[1] * vec[1] + mat[2] * vec[2];
     out[1] = mat[3] * vec[0] + mat[4] * vec[1] + mat[5] * vec[2];
     out[2] = mat[6] * vec[0] + mat[7] * vec[1] + mat[8] * vec[2];
 }

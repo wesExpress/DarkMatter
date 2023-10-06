@@ -117,14 +117,14 @@ float dm_atan(float x, float y)
 float dm_smoothstep(float edge0, float edge1, float x)
 {
     float h = (x - edge0) / (edge1 - edge0);
-    h = DM_CLAMP(h, 0, 1);
+    h = dm_clamp(h, 0, 1);
     return h * h * (3 - 2 * h);
 }
 
 float dm_smootherstep(float edge0, float edge1, float x)
 {
     float h = (x - edge0) / (edge1 - edge0);
-    h = DM_CLAMP(h, 0, 1);
+    h = dm_clamp(h, 0, 1);
     return h * h * h * (h * (h * 6 - 15) + 10);
 }
 
@@ -171,6 +171,12 @@ float dm_log2f(float x)
 bool dm_isnan(float x)
 {
     return isnan(x);
+}
+
+float dm_clamp(float x, float min, float max)
+{
+    const float t = DM_MIN(x, max);
+    return DM_MAX(t, min);
 }
 
 /******

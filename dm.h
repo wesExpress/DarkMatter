@@ -619,8 +619,12 @@ typedef struct dm_pipeline_desc_t
 {
     dm_cull_mode          cull_mode;
     dm_winding_order      winding_order;
+    
     dm_blend_equation     blend_eq;
     dm_blend_func         blend_src_f, blend_dest_f;
+    dm_blend_equation     blend_alpha_eq;
+    dm_blend_func         blend_src_alpha_f, blend_dest_alpha_f;
+    
     dm_filter             sampler_filter;
     dm_texture_mode       u_mode, v_mode, w_mode;
     dm_comparison         blend_comp, depth_comp, stencil_comp, sampler_comp;
@@ -1013,6 +1017,7 @@ int   dm_floor(float x);
 float dm_logf(float x);
 float dm_log2f(float x);
 bool  dm_isnan(float x);
+float dm_clamp(float x, float min, float max);
 
 #include "dm_math.h"
 

@@ -641,7 +641,7 @@ void dm_support_face_box(const float pos[3], const float rot[4], const float cen
         {
             points[0][0] = box_max[0]; points[0][1] = box_min[1]; points[0][2] = box_max[2];
             points[1][0] = box_min[0]; points[1][1] = box_min[1]; points[1][2] = box_max[2];
-            points[2][0] = box_min[0]; points[2][1] = box_max[1]; points[2][2] = box_min[2];
+            points[2][0] = box_min[0]; points[2][1] = box_max[1]; points[2][2] = box_max[2];
             points[3][0] = box_max[0]; points[3][1] = box_max[1]; points[3][2] = box_max[2];
             
             planes[1].normal[0] =  1;
@@ -1141,9 +1141,6 @@ void dm_physics_constraint_lambda(dm_contact_constraint* constraint, dm_contact_
 {
     float effective_mass = 0;
     
-    float i_body_inv_a[M3] = { 0 };
-    float i_body_inv_b[M3] = { 0 };
-    
     float dum1[N3], dum2[N3];
     
     float vel_a[3] = {
@@ -1170,16 +1167,18 @@ void dm_physics_constraint_lambda(dm_contact_constraint* constraint, dm_contact_
         manifold->contact_data[1].w_z,
     };
     
-    i_body_inv_a[0] = manifold->contact_data[0].i_body_inv_00;
-    i_body_inv_a[4] = manifold->contact_data[0].i_body_inv_11;
-    i_body_inv_a[8] = manifold->contact_data[0].i_body_inv_22;
-    
-    i_body_inv_b[0] = manifold->contact_data[1].i_body_inv_00;
-    i_body_inv_b[4] = manifold->contact_data[1].i_body_inv_11;
-    i_body_inv_b[8] = manifold->contact_data[1].i_body_inv_22;
-    
-    dm_mat3_mul_vec3(i_body_inv_a, constraint->jacobian[1], dum1);
-    dm_mat3_mul_vec3(i_body_inv_b, constraint->jacobian[3], dum2);
+    float i_body_a[3] = { 
+        manifold->contact_data[0].i_body_inv_00, 
+        manifold->contact_data[0].i_body_inv_11, 
+        manifold->contact_data[0].i_body_inv_22 
+    };
+    float i_body_b[3] = { 
+        manifold->contact_data[1].i_body_inv_00, 
+        manifold->contact_data[1].i_body_inv_11, 
+        manifold->contact_data[1].i_body_inv_22 
+    };
+    dm_vec3_mul_vec3(i_body_a, constraint->jacobian[1], dum1);
+    dm_vec3_mul_vec3(i_body_b, constraint->jacobian[3], dum2);
     
     // effective mass
     effective_mass += manifold->contact_data[0].inv_mass;
@@ -1201,61 +1200,63 @@ void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_m
 {
     float old_sum = constraint->impulse_sum;
     constraint->impulse_sum += constraint->lambda;
-    constraint->impulse_sum = DM_CLAMP(constraint->impulse_sum, constraint->impulse_min, constraint->impulse_max);
+    //constraint->impulse_sum = DM_CLAMP(constraint->impulse_sum, constraint->impulse_min, constraint->impulse_max);
+    constraint->impulse_sum = dm_clamp(constraint->impulse_sum, constraint->impulse_min, constraint->impulse_max);
     constraint->lambda = constraint->impulse_sum - old_sum;
     
     float delta_v_a[3]     = { 0 };
     float delta_w_a[3]     = { 0 };
-    float i_body_inv_a[M3] = { 0 };
     
     float delta_v_b[3]     = { 0 };
     float delta_w_b[3]     = { 0 };
-    float i_body_inv_b[M3] = { 0 };
     
     float dum[N3];
     float v_damp, w_damp;
     
+    float i_body_a[3] = { 
+        manifold->contact_data[0].i_body_inv_00, 
+        manifold->contact_data[0].i_body_inv_11, 
+        manifold->contact_data[0].i_body_inv_22 
+    };
+    float i_body_b[3] = { 
+        manifold->contact_data[1].i_body_inv_00, 
+        manifold->contact_data[1].i_body_inv_11, 
+        manifold->contact_data[1].i_body_inv_22 
+    };
+    
     // feels hacky to do it this way
     if(manifold->contact_data[0].movement_type==DM_PHYSICS_MOVEMENT_TYPE_KINEMATIC)
     {
-        i_body_inv_a[0] = manifold->contact_data[0].i_body_inv_00;
-        i_body_inv_a[4] = manifold->contact_data[0].i_body_inv_11;
-        i_body_inv_a[8] = manifold->contact_data[0].i_body_inv_22;
-        
         dm_vec3_scale(constraint->jacobian[0], manifold->contact_data[0].inv_mass * constraint->lambda, delta_v_a);
-        dm_mat3_mul_vec3(i_body_inv_a, constraint->jacobian[1], dum);
+        dm_vec3_mul_vec3(i_body_a, constraint->jacobian[1], dum);
         dm_vec3_scale(dum, constraint->lambda, delta_w_a);
         
-        v_damp = 1.0f / (1.0f + manifold->contact_data[0].v_damp * DM_PHYSICS_FIXED_DT);
-        w_damp = 1.0f / (1.0f + manifold->contact_data[0].w_damp * DM_PHYSICS_FIXED_DT);
+        //v_damp = 1.0f / (1.0f + manifold->contact_data[0].v_damp * DM_PHYSICS_FIXED_DT);
+        //w_damp = 1.0f / (1.0f + manifold->contact_data[0].w_damp * DM_PHYSICS_FIXED_DT);
         
-        manifold->contact_data[0].vel_x += delta_v_a[0] * v_damp;
-        manifold->contact_data[0].vel_y += delta_v_a[1] * v_damp;
-        manifold->contact_data[0].vel_z += delta_v_a[2] * v_damp;
-        manifold->contact_data[0].w_x   += delta_w_a[0] * w_damp;
-        manifold->contact_data[0].w_y   += delta_w_a[1] * w_damp;
-        manifold->contact_data[0].w_z   += delta_w_a[2] * w_damp;
+        manifold->contact_data[0].vel_x += delta_v_a[0] * manifold->contact_data[0].v_damp;
+        manifold->contact_data[0].vel_y += delta_v_a[1] * manifold->contact_data[0].v_damp;
+        manifold->contact_data[0].vel_z += delta_v_a[2] * manifold->contact_data[0].v_damp;
+        manifold->contact_data[0].w_x   += delta_w_a[0] * manifold->contact_data[0].w_damp;
+        manifold->contact_data[0].w_y   += delta_w_a[1] * manifold->contact_data[0].w_damp;
+        manifold->contact_data[0].w_z   += delta_w_a[2] * manifold->contact_data[0].w_damp;
     }
     
     if(manifold->contact_data[1].movement_type==DM_PHYSICS_MOVEMENT_TYPE_KINEMATIC)
     {
-        i_body_inv_b[0] = manifold->contact_data[1].i_body_inv_00;
-        i_body_inv_b[4] = manifold->contact_data[1].i_body_inv_11;
-        i_body_inv_b[8] = manifold->contact_data[1].i_body_inv_22;
-        
         dm_vec3_scale(constraint->jacobian[2], manifold->contact_data[1].inv_mass * constraint->lambda, delta_v_b);
-        dm_mat3_mul_vec3(i_body_inv_b, constraint->jacobian[3], dum);
+        dm_vec3_mul_vec3(i_body_b, constraint->jacobian[3], dum);
         dm_vec3_scale(dum, constraint->lambda, delta_w_b);
         
-        v_damp = 1.0f / (1.0f + manifold->contact_data[1].v_damp * DM_PHYSICS_FIXED_DT);
-        w_damp = 1.0f / (1.0f + manifold->contact_data[1].w_damp * DM_PHYSICS_FIXED_DT);
+        //v_damp = 1.0f / (1.0f + manifold->contact_data[1].v_damp * DM_PHYSICS_FIXED_DT);
+        //w_damp = 1.0f / (1.0f + manifold->contact_data[1].w_damp * DM_PHYSICS_FIXED_DT);
         
-        manifold->contact_data[1].vel_x += delta_v_b[0] * v_damp;
-        manifold->contact_data[1].vel_y += delta_v_b[1] * v_damp;
-        manifold->contact_data[1].vel_z += delta_v_b[2] * v_damp;
-        manifold->contact_data[1].w_x   += delta_w_b[0] * w_damp;
-        manifold->contact_data[1].w_y   += delta_w_b[1] * w_damp;
-        manifold->contact_data[1].w_z   += delta_w_b[2] * w_damp;
+        manifold->contact_data[1].vel_x += delta_v_b[0] * manifold->contact_data[1].v_damp;
+        manifold->contact_data[1].vel_y += delta_v_b[1] * manifold->contact_data[1].v_damp;
+        manifold->contact_data[1].vel_z += delta_v_b[2] * manifold->contact_data[1].v_damp;
+        manifold->contact_data[1].w_x   += delta_w_b[0] * manifold->contact_data[1].w_damp;
+        manifold->contact_data[1].w_y   += delta_w_b[1] * manifold->contact_data[1].w_damp;
+        manifold->contact_data[1].w_z   += delta_w_b[2] * manifold->contact_data[1].w_damp;
     }
 }
 
