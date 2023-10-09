@@ -10,6 +10,7 @@
 
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image/stb_image.h"
+
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype/stb_truetype.h"
 
@@ -360,7 +361,7 @@ void dm_input_set_mouse_y(int y, dm_context* context)
 	context->input_states[0].mouse.y = y;
 }
 
-void dm_input_set_mouse_scroll(int delta, dm_context* context)
+void dm_input_set_mouse_scroll(float delta, dm_context* context)
 {
 	context->input_states[0].mouse.scroll += delta;
 }
@@ -458,12 +459,12 @@ void dm_input_get_prev_mouse_pos(uint32_t* x, uint32_t* y, dm_context* context)
 	*y = context->input_states[1].mouse.y;
 }
 
-int dm_input_get_mouse_scroll(dm_context* context)
+float dm_input_get_mouse_scroll(dm_context* context)
 {
 	return context->input_states[0].mouse.scroll;
 }
 
-int dm_input_get_prev_mouse_scroll(dm_context* context)
+float dm_input_get_prev_mouse_scroll(dm_context* context)
 {
 	return context->input_states[1].mouse.scroll;
 }
@@ -507,7 +508,7 @@ void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* 
     e->coords[1] = mouse_y;
 }
 
-void dm_add_mouse_scroll_event(uint32_t delta, dm_event_list* event_list)
+void dm_add_mouse_scroll_event(float delta, dm_event_list* event_list)
 {
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSE_SCROLL;
@@ -586,7 +587,7 @@ extern void dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_rende
 extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
 
 extern void dm_render_command_backend_clear(float r, float g, float b, float a, dm_renderer* renderer);
 extern void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer);
@@ -606,6 +607,7 @@ extern void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count
 extern void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
 extern void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer);
 extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer);
+extern void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_renderer* renderer);
 
 // renderer
 bool dm_renderer_init(dm_context* context)
@@ -730,7 +732,7 @@ bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels,
     return true;
 }
 
-bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, void* data, const char* name, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context)
 {
     if(!dm_renderer_backend_create_texture(width, height, n_channels, data, name, handle, &context->renderer))
     {
@@ -1100,6 +1102,21 @@ void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context)
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
+void dm_render_command_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_SET_SCISSOR_RECTS;
+    
+    DM_BYTE_POOL_INSERT(command.params, left);
+    DM_BYTE_POOL_INSERT(command.params, right);
+    DM_BYTE_POOL_INSERT(command.params, top);
+    DM_BYTE_POOL_INSERT(command.params, bottom);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
 bool dm_renderer_submit_commands(dm_context* context)
 {
     dm_timer t = { 0 };
@@ -1252,6 +1269,16 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_BYTE_POOL_POP(command.params, bool, wireframe);
                 
                 dm_render_command_backend_toggle_wireframe(wireframe, &context->renderer);
+            } break;
+            
+            case DM_RENDER_COMMAND_SET_SCISSOR_RECTS:
+            {
+                DM_BYTE_POOL_POP(command.params, uint32_t, bottom);
+                DM_BYTE_POOL_POP(command.params, uint32_t, top);
+                DM_BYTE_POOL_POP(command.params, uint32_t, right);
+                DM_BYTE_POOL_POP(command.params, uint32_t, left);
+                
+                dm_render_command_backend_set_scissor_rects(left, right, top, bottom, &context->renderer);
             } break;
             
             default:
@@ -1577,6 +1604,13 @@ void dm_threadpool_wait_for_completion(dm_threadpool* threadpool)
     dm_platform_threadpool_wait_for_completion(threadpool);
 }
 
+/*****
+IMGUI
+*******/
+extern bool dm_imgui_init(dm_context* context);
+extern void dm_imgui_shutdown(dm_context* context);
+extern void dm_imgui_render(dm_context* context);
+
 /*********
 FRAMEWORK
 ***********/
@@ -1611,16 +1645,21 @@ dm_context* dm_init(dm_context_init_packet init_packet)
     context->renderer.width = init_packet.window_width;
     context->renderer.height = init_packet.window_height;
     
+    context->renderer.vsync = true;
+    
+    // ecs
     dm_ecs_init(context);
     
     // random init
     init_genrand(&context->random, (uint32_t)dm_platform_get_time(&context->platform_data));
     init_genrand64(&context->random_64, (uint64_t)dm_platform_get_time(&context->platform_data));
     
+    // misc
     context->delta = 1.0f / DM_DEFAULT_MAX_FPS;
     context->flags |= DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
     
-    context->renderer.vsync = true;
+    // nuklear
+    if(!dm_imgui_init(context)) return false;
     
     return context;
 }
@@ -1639,6 +1678,7 @@ void dm_shutdown(dm_context* context)
     dm_free(context);
 }
 
+// also pass through nuklear inputs
 void dm_poll_events(dm_context* context)
 {
     for(uint32_t i=0; i<context->platform_data.event_list.num; i++)
@@ -1771,6 +1811,9 @@ bool dm_renderer_end_frame(dm_context* context)
 {
     // systems
     if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_RENDER_END, context)) return false;
+    
+    // imgui
+    dm_imgui_render(context);
     
     // command submission
     if(!dm_renderer_submit_commands(context)) 

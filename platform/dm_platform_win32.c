@@ -261,38 +261,37 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
         } break;
         
         case WM_MOUSEWHEEL:
-        {
-            int32_t delta = GET_WHEEL_DELTA_WPARAM(wparam);
-            if (delta != 0) delta = (delta < 0) ? -1 : 1;
-            
-            dm_add_mouse_scroll_event(delta, &platform_data->event_list);
-        } break;
+        dm_add_mouse_scroll_event((float)(short)HIWORD(wparam) / (float)WHEEL_DELTA, &platform_data->event_list);
+        break;
         
         case WM_LBUTTONDOWN:
-        {
-            dm_add_mousebutton_down_event(DM_MOUSEBUTTON_L, &platform_data->event_list);
-        } break;
+        dm_add_mousebutton_down_event(DM_MOUSEBUTTON_L, &platform_data->event_list);
+        SetCapture(hwnd);
+        break;
         case WM_RBUTTONDOWN:
-        {
-            dm_add_mousebutton_down_event(DM_MOUSEBUTTON_R, &platform_data->event_list);
-        } break;
+        dm_add_mousebutton_down_event(DM_MOUSEBUTTON_R, &platform_data->event_list);
+        SetCapture(hwnd);
+        break;
         case WM_MBUTTONDOWN:
-        {
-            dm_add_mousebutton_down_event(DM_MOUSEBUTTON_M, &platform_data->event_list);
-        } break;
+        dm_add_mousebutton_down_event(DM_MOUSEBUTTON_M, &platform_data->event_list);
+        SetCapture(hwnd);
+        break;
         
         case WM_LBUTTONUP:
-        {
-            dm_add_mousebutton_up_event(DM_MOUSEBUTTON_L, &platform_data->event_list);
-        } break;
+        dm_add_mousebutton_up_event(DM_MOUSEBUTTON_L, &platform_data->event_list);
+        ReleaseCapture();
+        break;
         case WM_RBUTTONUP:
-        {
-            dm_add_mousebutton_up_event(DM_MOUSEBUTTON_R, &platform_data->event_list);
-        } break;
+        dm_add_mousebutton_up_event(DM_MOUSEBUTTON_R, &platform_data->event_list);
+        ReleaseCapture();
+        break;
         case WM_MBUTTONUP:
-        {
-            dm_add_mousebutton_up_event(DM_MOUSEBUTTON_M, &platform_data->event_list);
-        } break;
+        dm_add_mousebutton_up_event(DM_MOUSEBUTTON_M, &platform_data->event_list);
+        ReleaseCapture();
+        break;
+        case WM_LBUTTONDBLCLK:
+        dm_add_mousebutton_up_event(DM_MOUSEBUTTON_DOUBLE, &platform_data->event_list);
+        break;
         
         // unhandled Windows event
         default:

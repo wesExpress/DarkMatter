@@ -1,98 +1,5 @@
+#include "dm_renderer_dx11.h"
 #include "platform/dm_platform_win32.h"
-
-#define COBJMACROS
-#include <d3d11_1.h>
-#include <dxgi.h>
-
-typedef struct dm_dx11_buffer_t
-{
-	ID3D11Buffer* buffer;
-    D3D11_BIND_FLAG type;
-    size_t stride;
-} dm_dx11_buffer;
-
-typedef struct dm_dx11_shader_t
-{
-    ID3D11VertexShader* vertex_shader;
-	ID3D11PixelShader*  pixel_shader;
-	ID3D11InputLayout*  input_layout;
-} dm_dx11_shader;
-
-typedef struct dm_dx11_texture_t
-{
-	ID3D11Texture2D* texture;
-    ID3D11ShaderResourceView* view;
-    
-    // staging texture
-    ID3D11Texture2D* staging;
-} dm_dx11_texture;
-
-typedef struct dm_dx11_framebuffer_t
-{
-    ID3D11Texture2D*          render_target;
-    ID3D11ShaderResourceView* shader_view;
-    ID3D11RenderTargetView*   view;
-    ID3D11DepthStencilState*  depth_stencil_buffer;
-} dm_dx11_framebuffer;
-
-typedef enum dm_dx11_pipeline_flag_t
-{
-    DM_DX11_PIPELINE_FLAG_WIREFRAME = 1 << 0,
-    DM_DX11_PIPELINE_FLAG_BLEND     = 1 << 1,
-    DM_DX11_PIPELINE_FLAG_DEPTH     = 1 << 2,
-    DM_DX11_PIPELINE_FLAG_STENCIL   = 1 << 3,
-    DM_DX11_PIPELINE_FLAG_UNKNOWN   = 1 << 4
-} dm_dx11_pipeline_flag;
-
-typedef struct dm_dx11_pipeline_t
-{
-	ID3D11DepthStencilState* depth_stencil_state;
-    ID3D11RasterizerState*   rasterizer_state;
-    ID3D11RasterizerState*   wireframe_state;
-    ID3D11BlendState*        blend_state;
-    ID3D11SamplerState*      sample_state;
-    D3D11_PRIMITIVE_TOPOLOGY default_topology;
-    bool wireframe, blend, depth, stencil;
-} dm_dx11_pipeline;
-
-// directx renderer
-typedef enum dm_dx11_resource_t
-{
-    DM_DX11_RESOURCE_BUFFER,
-    DM_DX11_RESOURCE_SHADER,
-    DM_DX11_RESOURCE_TEXTURE,
-    DM_DX11_RESOURCE_FRAMEBUFFER,
-    DM_DX11_RESOURCE_PIPELINE,
-    DM_DX11_RESOURCE_UNKNOWN
-} dm_dx11_resource;
-
-typedef struct dm_dx11_renderer
-{
-    ID3D11Device*           device;
-    ID3D11DeviceContext*    context;
-    IDXGISwapChain*         swap_chain;
-    ID3D11RenderTargetView* render_view;
-    ID3D11Texture2D*        render_back_buffer;
-    ID3D11DepthStencilView* depth_stencil_view;
-    ID3D11Texture2D*        depth_stencil_back_buffer;
-    
-    HWND hwnd;
-	HINSTANCE h_instance;
-    
-    dm_dx11_buffer      buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_shader      shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_texture     textures[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_framebuffer framebuffers[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_pipeline    pipelines[DM_RENDERER_MAX_RESOURCE_COUNT];
-    
-    uint32_t buffer_count, shader_count, texture_count, framebuffer_count, pipeline_count;
-    
-    uint32_t active_pipeline, active_shader;
-    
-#ifdef DM_DEBUG
-    ID3D11Debug* debugger;
-#endif
-} dm_dx11_renderer;
 
 #ifdef DM_DEBUG
 bool dm_dx11_print_errors(dm_dx11_renderer* dx11_renderer);
@@ -155,93 +62,92 @@ DXGI_FORMAT dm_vertex_t_to_dx11_format(dm_vertex_attrib_desc desc)
 	switch (desc.data_t)
 	{
         case DM_VERTEX_DATA_T_BYTE:
+        switch (desc.count)
         {
-            switch (desc.count)
-            {
-                case 1: return DXGI_FORMAT_R8_SINT;
-                case 2: return DXGI_FORMAT_R8G8_SINT;
-                case 4: return DXGI_FORMAT_R8G8B8A8_SINT;
-                default:
-                break;
-            }
-        } break;
+            case 1:  return DXGI_FORMAT_R8_SINT;
+            case 2:  return DXGI_FORMAT_R8G8_SINT;
+            case 4:  return DXGI_FORMAT_R8G8B8A8_SINT;
+            default: return DXGI_FORMAT_R8G8B8A8_SINT;
+        }
+        break;
+        
         case DM_VERTEX_DATA_T_UBYTE:
+        switch (desc.count)
         {
-            switch (desc.count)
-            {
-                case 1: return DXGI_FORMAT_R8_UINT;
-                case 2: return DXGI_FORMAT_R8G8_UINT;
-                case 4: return DXGI_FORMAT_R8G8B8A8_UINT;
-                default:
-                break;
-            }
-        } break;
-        case DM_VERTEX_DATA_T_SHORT:
-        {
-            switch (desc.count)
-            {
-                case 1: return DXGI_FORMAT_R16_SINT;
-                case 2: return DXGI_FORMAT_R16G16_SINT;
-                case 4: return DXGI_FORMAT_R16G16B16A16_SINT;
-                default:
-                break;
-            }
-        } break;
-        case DM_VERTEX_DATA_T_USHORT:
-        {
-            switch (desc.count)
-            {
-                case 1: return DXGI_FORMAT_R16_UINT;
-                case 2: return DXGI_FORMAT_R16G16_UINT;
-                case 4: return DXGI_FORMAT_R16G16B16A16_UINT;
-                default:
-                break;
-            }
-        } break;
-        case DM_VERTEX_DATA_T_INT:
-        {
-            switch (desc.count)
-            {
-                case 1: return DXGI_FORMAT_R32_SINT;
-                case 2: return DXGI_FORMAT_R32G32_SINT;
-                case 3: return DXGI_FORMAT_R32G32B32_SINT;
-                case 4: return DXGI_FORMAT_R32G32B32A32_SINT;
-                default:
-                break;
-            }
-        } break;
-        case DM_VERTEX_DATA_T_UINT:
-        {
-            switch (desc.count)
-            {
-                case 1: return DXGI_FORMAT_R32_UINT;
-                case 2: return DXGI_FORMAT_R32G32_UINT;
-                case 3: return DXGI_FORMAT_R32G32B32_UINT;
-                case 4: return DXGI_FORMAT_R32G32B32A32_UINT;
-                default:
-                break;
-            }
-        } break;
-        case DM_VERTEX_DATA_T_DOUBLE:
-        case DM_VERTEX_DATA_T_FLOAT:
-        {
-            switch (desc.count)
-            {
-                case 1: return DXGI_FORMAT_R32_FLOAT;
-                case 2: return DXGI_FORMAT_R32G32_FLOAT;
-                case 3: return DXGI_FORMAT_R32G32B32_FLOAT;
-                case 4: return DXGI_FORMAT_R32G32B32A32_FLOAT;
-                default:
-                break;
-            }
+            case 1:  return DXGI_FORMAT_R8_UINT;
+            case 2:  return DXGI_FORMAT_R8G8_UINT;
+            case 4:  return DXGI_FORMAT_R8G8B8A8_UINT;
+            default: return DXGI_FORMAT_R8G8B8A8_UINT;
         }
         
+        case DM_VERTEX_DATA_T_UBYTE_NORM:
+        switch (desc.count)
+        {
+            case 1:  return DXGI_FORMAT_R8_UNORM;
+            case 2:  return DXGI_FORMAT_R8G8_UNORM;
+            case 4:  return DXGI_FORMAT_R8G8B8A8_UNORM;
+            default: return DXGI_FORMAT_R8G8B8A8_UNORM;
+        }
+        
+        break;
+        case DM_VERTEX_DATA_T_SHORT:
+        switch (desc.count)
+        {
+            case 1:  return DXGI_FORMAT_R16_SINT;
+            case 2:  return DXGI_FORMAT_R16G16_SINT;
+            case 4:  return DXGI_FORMAT_R16G16B16A16_SINT;
+            default: return DXGI_FORMAT_R16G16B16A16_SINT;
+        }
+        break;
+        
+        case DM_VERTEX_DATA_T_USHORT:
+        switch (desc.count)
+        {
+            case 1:  return DXGI_FORMAT_R16_UINT;
+            case 2:  return DXGI_FORMAT_R16G16_UINT;
+            case 4:  return DXGI_FORMAT_R16G16B16A16_UINT;
+            default: return DXGI_FORMAT_R16G16B16A16_UINT;
+        }
+        break;
+        
+        case DM_VERTEX_DATA_T_INT:
+        switch (desc.count)
+        {
+            case 1:  return DXGI_FORMAT_R32_SINT;
+            case 2:  return DXGI_FORMAT_R32G32_SINT;
+            case 3:  return DXGI_FORMAT_R32G32B32_SINT;
+            case 4:  return DXGI_FORMAT_R32G32B32A32_SINT;
+            default: return DXGI_FORMAT_R32G32B32A32_SINT;
+        }
+        break;
+        
+        case DM_VERTEX_DATA_T_UINT:
+        switch (desc.count)
+        {
+            case 1:  return DXGI_FORMAT_R32_UINT;
+            case 2:  return DXGI_FORMAT_R32G32_UINT;
+            case 3:  return DXGI_FORMAT_R32G32B32_UINT;
+            case 4:  return DXGI_FORMAT_R32G32B32A32_UINT;
+            default: return DXGI_FORMAT_R32G32B32A32_UINT;
+        }
+        break;
+        
+        case DM_VERTEX_DATA_T_DOUBLE:
+        case DM_VERTEX_DATA_T_FLOAT:
+        switch (desc.count)
+        {
+            case 1:  return DXGI_FORMAT_R32_FLOAT;
+            case 2:  return DXGI_FORMAT_R32G32_FLOAT;
+            case 3:  return DXGI_FORMAT_R32G32B32_FLOAT;
+            case 4:  return DXGI_FORMAT_R32G32B32A32_FLOAT;
+            default: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+        }
+        break;
+        
         default:
-		break;
+        DM_LOG_FATAL("Unknown vertex format type!");
+        return DXGI_FORMAT_UNKNOWN;
 	}
-    
-	DM_LOG_FATAL("Unknown vertex format type!");
-	return DXGI_FORMAT_UNKNOWN;
 }
 
 D3D11_INPUT_CLASSIFICATION dm_vertex_class_to_dx11_class(dm_vertex_attrib_class dm_class)
@@ -483,7 +389,7 @@ void dm_renderer_backend_destroy_uniform(dm_render_handle handle, dm_renderer* r
 /*****************
 DIRECTX11_TEXTURE
 *******************/
-bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer)
+bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer)
 {
 	DM_DX11_GET_RENDERER;
     
@@ -1428,6 +1334,22 @@ void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* ren
     
     if(wireframe) ID3D11DeviceContext_RSSetState(context, active_pipeline.wireframe_state);
     else ID3D11DeviceContext_RSSetState(context, active_pipeline.rasterizer_state);
+}
+
+void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    ID3D11DeviceContext* context = dx11_renderer->context;
+    
+    D3D11_RECT scissor;
+    
+    scissor.left = left;
+    scissor.right = right;
+    scissor.top = top;
+    scissor.bottom = bottom;
+    
+    ID3D11DeviceContext_RSSetScissorRects(context, 1, &scissor);
 }
 
 /*****************
