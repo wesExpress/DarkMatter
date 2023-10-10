@@ -1166,7 +1166,7 @@ void dm_mat_ortho(float left, float right, float bottom, float top, float n, flo
 	out[10] = 2.0f / (n - f);
 	out[12] = -(right + left) / (right - left);
 	out[13] = -(top + bottom) / (top - bottom);
-	out[14] = -(f + n) / (f - n);
+	//out[14] = -(f + n) / (f - n);
 	out[15] = 1.0f;
 }
 

@@ -36,7 +36,6 @@ D3D11_BIND_FLAG dm_buffer_type_to_dx11(dm_buffer_type type)
 	{
         case DM_BUFFER_TYPE_VERTEX: return D3D11_BIND_VERTEX_BUFFER;
         case DM_BUFFER_TYPE_INDEX:  return D3D11_BIND_INDEX_BUFFER;
-        //case DM_BUFFER_TYPE_CONSTANT: return D3D11_BIND_CONSTANT_BUFFER;
         
         default:
 		DM_LOG_FATAL("Unknown buffer type!");
@@ -170,6 +169,7 @@ D3D11_CULL_MODE dm_cull_to_dx11_cull(dm_cull_mode dm_mode)
         case DM_CULL_FRONT_BACK:
         case DM_CULL_FRONT:      return D3D11_CULL_FRONT;
         case DM_CULL_BACK:       return D3D11_CULL_BACK;
+        case DM_CULL_NONE:       return D3D11_CULL_NONE;
         
         default:
 		DM_LOG_FATAL("Unknown cull mode!");
@@ -464,6 +464,15 @@ void dm_renderer_backend_destroy_texture(dm_render_handle handle, dm_renderer* r
     DM_DX11_RELEASE(dx11_renderer->textures[handle].staging);
 }
 
+void* dm_renderer_backend_get_internal_texture_ptr(dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    if(handle > dx11_renderer->texture_count) { DM_LOG_FATAL("Trying to retrieve invalid DX11 texture"); return NULL; }
+    
+    return dx11_renderer->textures[handle].view;
+}
+
 /******************
 DIRECTX11_PIPELINE
 ********************/
@@ -508,7 +517,7 @@ bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle
         depth_stencil_desc.StencilEnable = desc.stencil;
         
         depth_stencil_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
-		depth_stencil_desc.DepthFunc = D3D11_COMPARISON_LESS;
+        depth_stencil_desc.DepthFunc      = dm_comp_to_directx_comp(desc.depth_comp);
 	}
     
     // stencil testing
@@ -536,6 +545,9 @@ bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle
     
     rd.DepthClipEnable = true;
     wireframe_rd.DepthClipEnable = true;
+    
+    rd.ScissorEnable = true;
+    wireframe_rd.ScissorEnable = true;
     
     internal_pipeline.wireframe = desc.wireframe;
     
@@ -1104,7 +1116,7 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
     // blend state
     if(internal_pipeline.blend)
     {
-        static FLOAT blends[] = {0,0,0,0};
+        static const FLOAT blends[] = {0,0,0,0};
         ID3D11DeviceContext_OMSetBlendState(context, internal_pipeline.blend_state, blends, 0xffffffff);
     }
     
@@ -1170,7 +1182,22 @@ bool dm_render_command_backend_bind_buffer(dm_render_handle handle, uint32_t slo
         } break;
         case D3D11_BIND_INDEX_BUFFER:
         {
-            ID3D11DeviceContext_IASetIndexBuffer(context, internal_buffer.buffer, DXGI_FORMAT_R32_UINT, 0);
+            DXGI_FORMAT stride;
+            switch(new_stride)
+            {
+                case 2:
+                stride = DXGI_FORMAT_R16_UINT;
+                break;
+                
+                case 4:
+                stride = DXGI_FORMAT_R32_UINT;
+                break;
+                
+                default:
+                DM_LOG_FATAL("Invalid index buffer stride for DirectX11");
+                return false;
+            }
+            ID3D11DeviceContext_IASetIndexBuffer(context, internal_buffer.buffer, stride, 0);
         } break;
         default:
         DM_LOG_FATAL("Unknown DirectX11 buffer! Shouldn't be here...");

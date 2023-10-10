@@ -10,7 +10,7 @@ Texture2D font_texture : register(t0);
 
 float4 p_main(PS_INPUT input) : SV_Target
 {
-	//float4 tex_color = font_texture.Sample(sample_state, input.tex_coords);
-	//return input.color * tex_color;
-	return input.color;
+	float4 tex_color = font_texture.Sample(sample_state, input.tex_coords);
+	return input.color * tex_color;
+	//return input.color;
 }

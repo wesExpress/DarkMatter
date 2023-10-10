@@ -508,6 +508,7 @@ typedef enum dm_cull_mode_t
     DM_CULL_FRONT,
     DM_CULL_BACK,
     DM_CULL_FRONT_BACK,
+    DM_CULL_NONE,
     DM_CULL_UNKNOWN
 } dm_cull_mode;
 
@@ -952,101 +953,6 @@ typedef enum dm_collision_shape_t
 /*****
 IMGUI 
 *******/
-typedef enum dm_imgui_window_flag_t
-{
-    DM_IMGUI_WINDOW_FLAG_BORDER      = DM_BIT_SHIFT(0),
-    DM_IMGUI_WINDOW_FLAG_MOVABLE     = DM_BIT_SHIFT(1),
-    DM_IMGUI_WINDOW_FLAG_CLOSABLE    = DM_BIT_SHIFT(2),
-    DM_IMGUI_WINDOW_FLAG_MINIMIZABLE = DM_BIT_SHIFT(3),
-    DM_IMGUI_WINDOW_FLAG_NO_TITLE    = DM_BIT_SHIFT(4),
-    DM_IMGUI_WINDOW_FLAG_NO_SCROLL   = DM_BIT_SHIFT(5)
-} dm_imgui_window_flag;
-
-typedef enum dm_imgui_context_state_t
-{
-    DM_IMGUI_CONTEXT_STATE_BEGUN,
-    DM_IMGUI_CONTEXT_STATE_ENDED,
-    DM_IMGUI_CONTEXT_STATE_UNKNOWN
-} dm_imgui_context_state;
-
-typedef enum dm_imgui_widget_type_t
-{
-    DM_IMGUI_WIDGET_TYPE_BUTTON,
-    DM_IMGUI_WIDGET_TYPE_SLIDER,
-    DM_IMGUI_WIDGET_TYPE_TEXT_FIELD,
-    DM_IMGUI_WIDGET_TYPE_UNKNOWN
-} dm_imgui_widget_type;
-
-typedef struct dm_imgui_widget_t
-{
-    dm_imgui_widget_type type;
-    float x,y;
-    
-    char label[512];
-    
-    uint32_t                children_count;
-    struct dm_imgui_widget* children;
-} dm_imgui_widget;
-
-typedef enum dm_imgui_window_state_t
-{
-    DM_IMGUI_WINDOW_STATE_INVALID,
-    DM_IMGUI_WINDOW_STATE_CREATED,
-    DM_IMGUI_WINDOW_STATE_ACTIVE,
-    DM_IMGUI_WINDOW_STATE_HOT,
-    DM_IMGUI_WINDOW_STATE_INACTIVE,
-    DM_IMGUI_WINDOW_STATE_UNKNOWN
-} dm_imgui_window_state;
-
-#define DM_IMGUI_MAX_WINDOW_CHILDREN 16
-typedef struct dm_imgui_window_t
-{
-    float x,y;
-    float w,h;
-    
-    float x_offset, y_offset;
-    
-    char title[512];
-    
-    dm_imgui_window_state state;
-    
-    uint32_t children_count;
-    dm_imgui_widget children[DM_IMGUI_MAX_WINDOW_CHILDREN];
-} dm_imgui_window;
-
-typedef struct dm_imgui_style_t
-{
-    float default_window_r,default_window_g,default_window_b,default_window_a;
-    float active_window_r,active_window_g,active_window_b,active_window_a;
-    float hot_window_r,hot_window_g,hot_window_b,hot_window_a;
-    
-    float default_title_bar_r,default_title_bar_g,default_title_bar_b,default_title_bar_a;
-    float active_title_bar_r,active_title_bar_g,active_title_bar_b,active_title_bar_a;
-    float hot_title_bar_r,hot_title_bar_g,hot_title_bar_b,hot_title_bar_a;
-    
-    float title_bar_height;
-    float button_height;
-    
-    float horizontal_padding, vertical_padding;
-} dm_imgui_style;
-
-#define DM_IMGUI_MAX_VERTICES 8192
-#define DM_IMGUI_MAX_INDICES  8192
-
-typedef struct dm_imgui_vertex_t
-{
-    float pos[3];
-    float tex_coords[2];
-    float color[4];
-} dm_imgui_vertex;
-
-typedef struct dm_imgui_uni_t
-{
-    float proj[4 * 4];
-} dm_imgui_uni;
-
-#define DM_IMGUI_MAX_WINDOWS 16
-
 typedef struct dm_imgui_context_t
 {
     dm_render_handle vb, ib, uni;
@@ -1054,21 +960,8 @@ typedef struct dm_imgui_context_t
     dm_render_handle font_texture;
     dm_render_handle font;
     
-    dm_imgui_context_state state;
-    
-    uint32_t window_count;
-    dm_imgui_window windows[DM_IMGUI_MAX_WINDOWS];
-    
-    dm_imgui_window* active_window, *hot_window;
-    
-    dm_imgui_style style;
-    
-    float vertex_z_step;
-    
-    // buffers
-    uint32_t vertex_count, index_count;
-    dm_imgui_vertex vertices[DM_IMGUI_MAX_VERTICES];
-    int             indices[DM_IMGUI_MAX_INDICES];
+    // nuklear context
+    void* internal_context;
 } dm_imgui_context;
 
 /******************
@@ -1224,8 +1117,8 @@ double dm_random_double_range(double start, double end, dm_context* context);
 // rendering
 bool dm_renderer_create_static_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_dynamic_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context);
 bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context);
@@ -1235,6 +1128,8 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
 #define DM_MAKE_VERTEX_ATTRIB(NAME, STRUCT, MEMBER, CLASS, DATA_T, COUNT, INDEX, NORMALIZED) { .name=NAME, .data_t=DATA_T, .attrib_class=CLASS, .stride=sizeof(STRUCT), .offset=offsetof(STRUCT, MEMBER), .count=COUNT, .index=INDEX, .normalized=NORMALIZED}
 
 dm_pipeline_desc dm_renderer_default_pipeline();
+
+void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context);
 
 // render commands
 void dm_render_command_clear(float r, float g, float b, float a, dm_context* context);
@@ -1260,11 +1155,10 @@ void dm_render_command_set_scissor_rects(uint32_t left, uint32_t right, uint32_t
 void dm_render_command_map_callback(dm_render_handle handle, void (*callback)(dm_context*), dm_context* context);
 
 // imgui
-void dm_imgui_set_style(dm_imgui_style style, dm_context* context);
-bool dm_imgui_begin(const char* title, float x, float y, float width, float height, dm_imgui_window_flag flags, dm_context* context);
+bool dm_imgui_begin(const char* title, float x, float y, float width, float height, dm_context* context);
 void dm_imgui_end(dm_context* context);
 
-bool dm_imgui_button(const char* title, dm_context* context);
+void dm_imgui_test(dm_context* context);
 
 // ecs
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);

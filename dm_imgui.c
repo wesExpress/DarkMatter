@@ -1,28 +1,83 @@
 #include "dm.h"
-#include <float.h>
-#include <assert.h>
 
+#define NK_INCLUDE_FIXED_TYPES
+#define NK_INCLUDE_STANDARD_IO
+#define NK_INCLUDE_STANDARD_VARARGS
+#define NK_INCLUDE_DEFAULT_ALLOCATOR
+#define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
+#define NK_INCLUDE_FONT_BAKING
+#define NK_INCLUDE_DEFAULT_FONT
+#define NK_IMPLEMENTATION
+#include "Nuklear/nuklear.h"
+
+#include <float.h>
+
+typedef struct dm_imgui_vertex_t
+{
+    float   pos[2];
+    float   tex_coords[2];
+    uint8_t color[4];
+} dm_imgui_vertex;
+
+typedef struct dm_imgui_uni_t
+{
+    float proj[4 * 4];
+} dm_imgui_uni;
+
+typedef uint16_t dm_nk_element_t;
+
+#define DM_IMGUI_MAX_VERTICES 512 * 1024
+#define DM_IMGUI_MAX_INDICES  128 * 1024
+
+#define DM_IMGUI_VERTEX_LEN DM_IMGUI_MAX_VERTICES / sizeof(dm_imgui_vertex)
+#define DM_IMGUI_INDEX_LEN  DM_IMGUI_MAX_INDICES / sizeof(dm_nk_element_t)
+
+typedef struct dm_imgui_nuklear_context_t
+{
+    struct nk_context ctx;
+    struct nk_font_atlas atlas;
+    struct nk_buffer cmds;
+    
+    dm_imgui_vertex vertices[DM_IMGUI_VERTEX_LEN];
+    dm_nk_element_t indices[DM_IMGUI_INDEX_LEN];
+    
+    struct nk_draw_null_texture tex_null;
+    uint32_t max_vertex_buffer;
+    uint32_t max_index_buffer;
+} dm_imgui_nuklear_context;
+
+extern void dm_platform_clipboard_copy(const char* text, int len);
+extern void dm_platform_clipboard_paste(void (*callback)(char*,int,void*), void* edit);
+
+void dm_imgui_nuklear_copy(nk_handle usr, const char* text, int len);
+void dm_imgui_nuklear_paste(nk_handle usr, struct nk_text_edit* edit);
+void dm_imgui_nuklear_paste_callback(char* text, int len, void* edit);
+
+//
 bool dm_imgui_init(dm_context* context)
 {
     dm_imgui_context* imgui_ctx = &context->imgui_context;
+    imgui_ctx->internal_context = dm_alloc(sizeof(dm_imgui_nuklear_context));
+    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
     
-    if(!dm_renderer_create_dynamic_vertex_buffer(NULL, sizeof(imgui_ctx->vertices), sizeof(dm_imgui_vertex), &imgui_ctx->vb, context)) return false;
-    if(!dm_renderer_create_dynamic_index_buffer(NULL, sizeof(imgui_ctx->vertices), &imgui_ctx->ib, context)) return false;
+    if(!dm_renderer_create_dynamic_vertex_buffer(NULL, DM_IMGUI_MAX_VERTICES, sizeof(dm_imgui_vertex), &imgui_ctx->vb, context)) return false;
+    if(!dm_renderer_create_dynamic_index_buffer(NULL, DM_IMGUI_MAX_INDICES, sizeof(dm_nk_element_t), &imgui_ctx->ib, context)) return false;
     if(!dm_renderer_create_uniform(sizeof(dm_imgui_uni), DM_UNIFORM_STAGE_VERTEX, &imgui_ctx->uni, context)) return false;
     
-    if(!dm_renderer_load_font("assets/fonts/Chicago.ttf", &imgui_ctx->font, context)) return false;
-    
     dm_vertex_attrib_desc attrib_descs[] = {
-        { .name="POSITION", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, pos), .count=3, .index=0, .normalized=false },
+        { .name="POSITION", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, pos), .count=4, .index=0, .normalized=false },
         { .name="TEXCOORD", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, tex_coords), .count=2, .index=0, .normalized=false },
-        { .name="COLOR", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, color), .count=4, .index=0, .normalized=false }
+        { .name="COLOR", .data_t=DM_VERTEX_DATA_T_UBYTE_NORM, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, color), .count=4, .index=0, .normalized=false }
     };
     
     // pipeline desc
     dm_pipeline_desc pipeline_desc = { 0 };
-    pipeline_desc.cull_mode          = DM_CULL_BACK;
-    pipeline_desc.winding_order      = DM_WINDING_COUNTER_CLOCK;
+    pipeline_desc.cull_mode          = DM_CULL_NONE;
+    pipeline_desc.winding_order      = DM_WINDING_CLOCK;
     pipeline_desc.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
+    
+    pipeline_desc.depth = true;
+    pipeline_desc.depth_comp = DM_COMPARISON_ALWAYS;
     
     pipeline_desc.blend = true;
     pipeline_desc.blend_eq           = DM_BLEND_EQUATION_ADD;
@@ -58,68 +113,251 @@ bool dm_imgui_init(dm_context* context)
     
     if(!dm_renderer_create_shader_and_pipeline(shader_desc, pipeline_desc, attrib_descs, DM_ARRAY_LEN(attrib_descs), &imgui_ctx->shader, &imgui_ctx->pipe, context)) return false;
     
-    // set context state
-    imgui_ctx->state = DM_IMGUI_CONTEXT_STATE_ENDED;
+    // nuklear stuff
+    nk_init_default(&imgui_nk_ctx->ctx, 0);
+    imgui_nk_ctx->ctx.clip.copy = dm_imgui_nuklear_copy;
+    imgui_nk_ctx->ctx.clip.paste = dm_imgui_nuklear_paste;
     
-    // z step
-    imgui_ctx->vertex_z_step = 1.0f / DM_IMGUI_MAX_VERTICES;
+    imgui_nk_ctx->max_vertex_buffer = DM_IMGUI_MAX_VERTICES;
+    imgui_nk_ctx->max_index_buffer = DM_IMGUI_MAX_INDICES;
     
-    // set style
-    dm_imgui_style style = { 0 };
+    nk_buffer_init_default(&imgui_nk_ctx->cmds);
     
-    style.default_window_r = 0.1f;
-    style.default_window_g = 0.1f;
-    style.default_window_b = 0.15f;
-    style.default_window_a = 1;
+    nk_font_atlas_init_default(&imgui_nk_ctx->atlas);
+    nk_font_atlas_begin(&imgui_nk_ctx->atlas);
     
-    style.active_window_r = 0.2f;
-    style.active_window_g = 0.2f;
-    style.active_window_b = 0.25f;
-    style.active_window_a = 1;
+    struct nk_font* chicago = nk_font_atlas_add_from_file(&imgui_nk_ctx->atlas, "assets/Chicago.ttf", 13, 0);
     
-    style.hot_window_r = 0.3f;
-    style.hot_window_g = 0.3f;
-    style.hot_window_b = 0.35f;
-    style.hot_window_a = 1;
+    uint32_t w, h;
+    const void* image = nk_font_atlas_bake(&imgui_nk_ctx->atlas, &w, &h, NK_FONT_ATLAS_RGBA32);
     
-    style.default_title_bar_r = 0.05f;
-    style.default_title_bar_g = 0.05f;
-    style.default_title_bar_b = 0.1f;
-    style.default_title_bar_a = 1;
+    if(!dm_renderer_create_texture_from_data(w,h, 4, image, "imgui_font", &imgui_ctx->font_texture, context)) return false;
     
-    style.active_title_bar_r = 0.1f;
-    style.active_title_bar_g = 0.1f;
-    style.active_title_bar_b = 0.15f;
-    style.active_title_bar_a = 1;
+    nk_font_atlas_end(&imgui_nk_ctx->atlas, nk_handle_ptr(dm_renderer_get_internal_texture_ptr(imgui_ctx->font_texture, context)), &imgui_nk_ctx->tex_null);
+    if(imgui_nk_ctx->atlas.default_font) nk_style_set_font(&imgui_nk_ctx->ctx, &imgui_nk_ctx->atlas.default_font->handle);
+    else nk_style_set_font(&imgui_nk_ctx->ctx, &chicago->handle);
     
-    style.hot_title_bar_r = 0.2f;
-    style.hot_title_bar_g = 0.2f;
-    style.hot_title_bar_b = 0.25f;
-    style.hot_title_bar_a = 1;
-    
-    style.title_bar_height = 36;
-    
-    style.vertical_padding = 5.0f;
-    style.horizontal_padding = 5.0f;
-    
-    style.button_height = 36;
-    
-    dm_imgui_set_style(style, context);
+    // style
+    struct nk_color table[NK_COLOR_COUNT];
+    table[NK_COLOR_TEXT] = nk_rgba(210, 210, 210, 255);
+    table[NK_COLOR_WINDOW] = nk_rgba(57, 67, 71, 215);
+    table[NK_COLOR_HEADER] = nk_rgba(51, 51, 56, 220);
+    table[NK_COLOR_BORDER] = nk_rgba(46, 46, 46, 255);
+    table[NK_COLOR_BUTTON] = nk_rgba(48, 83, 111, 255);
+    table[NK_COLOR_BUTTON_HOVER] = nk_rgba(58, 93, 121, 255);
+    table[NK_COLOR_BUTTON_ACTIVE] = nk_rgba(63, 98, 126, 255);
+    table[NK_COLOR_TOGGLE] = nk_rgba(50, 58, 61, 255);
+    table[NK_COLOR_TOGGLE_HOVER] = nk_rgba(45, 53, 56, 255);
+    table[NK_COLOR_TOGGLE_CURSOR] = nk_rgba(48, 83, 111, 255);
+    table[NK_COLOR_SELECT] = nk_rgba(57, 67, 61, 255);
+    table[NK_COLOR_SELECT_ACTIVE] = nk_rgba(48, 83, 111, 255);
+    table[NK_COLOR_SLIDER] = nk_rgba(50, 58, 61, 255);
+    table[NK_COLOR_SLIDER_CURSOR] = nk_rgba(48, 83, 111, 245);
+    table[NK_COLOR_SLIDER_CURSOR_HOVER] = nk_rgba(53, 88, 116, 255);
+    table[NK_COLOR_SLIDER_CURSOR_ACTIVE] = nk_rgba(58, 93, 121, 255);
+    table[NK_COLOR_PROPERTY] = nk_rgba(50, 58, 61, 255);
+    table[NK_COLOR_EDIT] = nk_rgba(50, 58, 61, 225);
+    table[NK_COLOR_EDIT_CURSOR] = nk_rgba(210, 210, 210, 255);
+    table[NK_COLOR_COMBO] = nk_rgba(50, 58, 61, 255);
+    table[NK_COLOR_CHART] = nk_rgba(50, 58, 61, 255);
+    table[NK_COLOR_CHART_COLOR] = nk_rgba(48, 83, 111, 255);
+    table[NK_COLOR_CHART_COLOR_HIGHLIGHT] = nk_rgba(255, 0, 0, 255);
+    table[NK_COLOR_SCROLLBAR] = nk_rgba(50, 58, 61, 255);
+    table[NK_COLOR_SCROLLBAR_CURSOR] = nk_rgba(48, 83, 111, 255);
+    table[NK_COLOR_SCROLLBAR_CURSOR_HOVER] = nk_rgba(53, 88, 116, 255);
+    table[NK_COLOR_SCROLLBAR_CURSOR_ACTIVE] = nk_rgba(58, 93, 121, 255);
+    table[NK_COLOR_TAB_HEADER] = nk_rgba(48, 83, 111, 255);
+    nk_style_from_table(&imgui_nk_ctx->ctx, table);
     
     return true;
+}
+
+void dm_imgui_shutdown(dm_context* context)
+{
+    dm_imgui_context* imgui_ctx = &context->imgui_context;
+    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
+    
+    nk_font_atlas_clear(&imgui_nk_ctx->atlas);
+    nk_buffer_free(&imgui_nk_ctx->cmds);
+    nk_free(&imgui_nk_ctx->ctx);
+    
+    dm_free(imgui_ctx->internal_context);
+}
+
+// clipboard
+void dm_imgui_nuklear_copy(nk_handle usr, const char* text, int len)
+{
+    dm_platform_clipboard_copy(text, len);
+}
+
+void dm_imgui_nuklear_paste(nk_handle usr, struct nk_text_edit* edit)
+{
+    dm_platform_clipboard_paste(dm_imgui_nuklear_paste_callback, edit);
+}
+
+void dm_imgui_nuklear_paste_callback(char* text, int len, void* edit)
+{
+    nk_textedit_paste(0, text, len);
+}
+
+// input
+void dm_imgui_input_begin(dm_context* context)
+{
+    dm_imgui_context* imgui_ctx = &context->imgui_context;
+    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
+    
+    nk_input_begin(&imgui_nk_ctx->ctx);
+}
+
+void dm_imgui_input_end(dm_context* context)
+{
+    dm_imgui_context* imgui_ctx = &context->imgui_context;
+    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
+    
+    nk_input_end(&imgui_nk_ctx->ctx);
+}
+
+void dm_imgui_input_event(dm_event e, dm_context* context)
+{
+    dm_imgui_nuklear_context* imgui_nk_ctx = context->imgui_context.internal_context;
+    
+    switch(e.type)
+    {
+        case DM_EVENT_KEY_UP:
+        case DM_EVENT_KEY_DOWN:
+        {
+            const int  down = e.type==DM_EVENT_KEY_DOWN ? 1 : 0;
+            const bool ctrl = dm_input_is_key_pressed(DM_KEY_LCTRL, context) || dm_input_is_key_pressed(DM_KEY_RCTRL, context);
+            
+            switch(e.key)
+            {
+                case DM_KEY_LSHIFT:
+                case DM_KEY_RSHIFT:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_SHIFT, down);
+                break;
+                
+                case DM_KEY_DELETE:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_DEL, down);
+                break;
+                
+                case DM_KEY_ENTER:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_ENTER, down);
+                break;
+                
+                case DM_KEY_TAB:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_TAB, down);
+                break;
+                
+                case DM_KEY_LEFT:
+                if(ctrl) nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_TEXT_WORD_LEFT, down);
+                else     nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_LEFT, down);
+                break;
+                
+                case DM_KEY_RIGHT:
+                if(ctrl) nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_TEXT_WORD_RIGHT, down);
+                else     nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_RIGHT, down);
+                break;
+                
+                case DM_KEY_BACKSPACE:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_BACKSPACE, down);
+                break;
+                
+                case DM_KEY_HOME:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_TEXT_START, down);
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_SCROLL_START, down);
+                break;
+                
+                case DM_KEY_END:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_TEXT_END, down);
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_SCROLL_END, down);
+                break;
+                
+                case DM_KEY_PAGEDOWN:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_SCROLL_DOWN, down);
+                break;
+                
+                case DM_KEY_PAGEUP:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_SCROLL_UP, down);
+                break;
+                
+                case DM_KEY_C:
+                if(ctrl) nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_COPY, down);
+                break;
+                
+                case DM_KEY_V:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_PASTE, down);
+                break;
+                
+                case DM_KEY_X:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_CUT, down);
+                break;
+                
+                case DM_KEY_Z:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_TEXT_UNDO, down);
+                break;
+                
+                case DM_KEY_R:
+                nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_TEXT_REDO, down);
+                break;
+            }
+        }break;
+        
+        case DM_EVENT_MOUSEBUTTON_DOWN:
+        {
+            int x,y;
+            dm_input_get_mouse_pos(&x,&y, context);
+            
+            switch(e.button)
+            {
+                case DM_MOUSEBUTTON_L:
+                nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_LEFT, x,y, 1);
+                break;
+                
+                case DM_MOUSEBUTTON_R:
+                nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_RIGHT, x,y, 1);
+                break;
+                
+                case DM_MOUSEBUTTON_M:
+                nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_MIDDLE, x,y, 1);
+                break;
+                
+                case DM_MOUSEBUTTON_DOUBLE:
+                nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_DOUBLE, x,y, 1);
+                break;
+            }
+        } break;
+        
+        case DM_EVENT_MOUSEBUTTON_UP:
+        {
+            int x,y;
+            dm_input_get_mouse_pos(&x,&y, context);
+            
+            switch(e.button)
+            {
+                case DM_MOUSEBUTTON_L:
+                nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_DOUBLE, x,y, 0);
+                nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_LEFT, x,y, 0);
+                break;
+                
+                case DM_MOUSEBUTTON_R:
+                nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_RIGHT, x,y, 0);
+                break;
+                
+                case DM_MOUSEBUTTON_M:
+                nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_MIDDLE, x,y, 0);
+                break;
+            }
+        } break;
+    }
 }
 
 void dm_imgui_render(dm_context* context)
 {
     dm_imgui_context* imgui_ctx = &context->imgui_context;
-    
-    if(imgui_ctx->vertex_count==0) return;
+    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
     
     dm_render_command_bind_shader(imgui_ctx->shader, context);
     dm_render_command_bind_pipeline(imgui_ctx->pipe, context);
-    
-    dm_render_command_bind_buffer(imgui_ctx->vb, 0, context);
-    dm_render_command_update_buffer(imgui_ctx->vb, imgui_ctx->vertices, sizeof(dm_imgui_vertex) * imgui_ctx->vertex_count, 0, context);
     
     dm_imgui_uni uni = { 0 };
     dm_mat_ortho(0,(float)context->renderer.width, (float)context->renderer.height,0, -1,1, uni.proj);
@@ -129,207 +367,155 @@ void dm_imgui_render(dm_context* context)
     dm_render_command_bind_uniform(imgui_ctx->uni, 0, DM_UNIFORM_STAGE_VERTEX, 0, context);
     dm_render_command_update_uniform(imgui_ctx->uni, &uni, sizeof(uni), context);
     
-    dm_render_command_draw_arrays(0, imgui_ctx->vertex_count, context);
+    struct nk_convert_config config = { 0 };
+    NK_STORAGE const struct nk_draw_vertex_layout_element vertex_layout[] = {
+        { NK_VERTEX_POSITION, NK_FORMAT_FLOAT,    NK_OFFSETOF(dm_imgui_vertex, pos) },
+        { NK_VERTEX_TEXCOORD, NK_FORMAT_FLOAT,    NK_OFFSETOF(dm_imgui_vertex, tex_coords) },
+        { NK_VERTEX_COLOR,    NK_FORMAT_R8G8B8A8, NK_OFFSETOF(dm_imgui_vertex, color) },
+        { NK_VERTEX_LAYOUT_END }
+    };
     
-    // reset vertex count
-    imgui_ctx->vertex_count = 0;
-}
-
-void dm_imgui_set_style(dm_imgui_style style, dm_context* context)
-{
-    context->imgui_context.style = style;
-}
-
-/************
-imgui window 
-**************/
-dm_imgui_window* dm_imgui_get_window(const char* title, dm_imgui_context* imgui_ctx)
-{
-    dm_hash hash = dm_hash_fnv1a(title);
-    uint32_t index = hash % DM_IMGUI_MAX_WINDOWS;
+    config.vertex_layout = vertex_layout;
+    config.vertex_size = sizeof(dm_imgui_vertex);
+    config.vertex_alignment = NK_ALIGNOF(dm_imgui_vertex);
+    config.global_alpha = 1.0f;
+    config.shape_AA = NK_ANTI_ALIASING_ON;
+    config.line_AA = NK_ANTI_ALIASING_ON;
+    config.circle_segment_count = 22;
+    config.curve_segment_count = 22;
+    config.arc_segment_count = 22;
+    config.tex_null = imgui_nk_ctx->tex_null;
     
-    // check existing windows
-    dm_imgui_window* window = &imgui_ctx->windows[index];
+    struct nk_buffer vbuf, ibuf;
+    nk_buffer_init_fixed(&vbuf, imgui_nk_ctx->vertices, (size_t)imgui_nk_ctx->max_vertex_buffer);
+    nk_buffer_init_fixed(&ibuf, imgui_nk_ctx->indices, (size_t)imgui_nk_ctx->max_index_buffer);
+    nk_convert(&imgui_nk_ctx->ctx, &imgui_nk_ctx->cmds, &vbuf, &ibuf, &config);
     
-    if(strcmp(window->title, title)==0) return window;
+    dm_nk_element_t test[100];
+    dm_memcpy(test, ibuf.memory.ptr, sizeof(test));
+    dm_memcpy(test, imgui_nk_ctx->indices, sizeof(test));
+    size_t d = sizeof(dm_nk_element_t);
     
-    index++;
-    if(index>DM_IMGUI_MAX_WINDOWS) index=0;
-    window = &imgui_ctx->windows[index];
+    dm_render_command_bind_buffer(imgui_ctx->vb, 0, context);
+    dm_render_command_update_buffer(imgui_ctx->vb, imgui_nk_ctx->vertices, DM_IMGUI_MAX_VERTICES, 0, context);
+    dm_render_command_bind_buffer(imgui_ctx->ib, 0, context);
+    dm_render_command_update_buffer(imgui_ctx->ib, imgui_nk_ctx->indices, DM_IMGUI_MAX_INDICES, 0, context);
     
-    while(window->state != DM_IMGUI_WINDOW_STATE_INVALID)
+    const struct nk_draw_command* cmd;
+    uint32_t offset = 0;
+    nk_draw_foreach(cmd, &imgui_nk_ctx->ctx, &imgui_nk_ctx->cmds)
     {
-        if(strcmp(window->title, title)==0) return window;
-        index++;
-        if(index>DM_IMGUI_MAX_WINDOWS) index=0;
-        window = &imgui_ctx->windows[index];
+        if(!cmd->elem_count) continue;
+        
+        dm_render_command_bind_texture(imgui_ctx->font_texture, 0, context);
+        dm_render_command_set_scissor_rects((uint32_t)cmd->clip_rect.x, (uint32_t)(cmd->clip_rect.x + cmd->clip_rect.w), (uint32_t)cmd->clip_rect.y, (uint32_t)(cmd->clip_rect.y + cmd->clip_rect.h), context);
+        dm_render_command_draw_indexed(cmd->elem_count, offset, 0, context);
+        offset += cmd->elem_count;
     }
     
-    // this window does not exist
-    strcpy(window->title, title);
-    window->state = DM_IMGUI_WINDOW_STATE_CREATED;
-    
-    return window;
+    nk_clear(&imgui_nk_ctx->ctx);
+    nk_buffer_clear(&imgui_nk_ctx->cmds);
 }
 
-bool dm_imgui_region_hit(const float x, const float y, const float width, const float height, dm_context* context)
-{
-    uint32_t mouse_x, mouse_y;
-    dm_input_get_mouse_pos(&mouse_x, &mouse_y, context);
-    
-    const bool in_x = (mouse_x > x) && (mouse_x < x + width);
-    const bool in_y = (mouse_y > y) && (mouse_y < y + height);
-    
-    return in_x && in_y;
-}
-
-bool dm_imgui_window_hit(dm_imgui_window* window, dm_context* context)
-{
-    return dm_imgui_region_hit(window->x, window->y, window->w, window->h, context);
-}
-
-/*********
-rendering
-***********/
-void dm_imgui_draw_rect(float x, float y, float width, float height, float r, float g, float b, float a, dm_imgui_context* imgui_ctx)
-{
-    if(imgui_ctx->vertex_count > DM_IMGUI_MAX_VERTICES - 6) return;
-    
-    const float z = -1.0f + (imgui_ctx->vertex_count+1) * imgui_ctx->vertex_z_step;
-    
-    dm_imgui_vertex v0 = { 0 };
-    v0.pos[0] = x;
-    v0.pos[1] = y;
-    //v0.pos[2] = z;
-    v0.tex_coords[0] = 0;
-    v0.tex_coords[1] = 0;
-    v0.color[0] = r;
-    v0.color[1] = g;
-    v0.color[2] = b;
-    v0.color[3] = a;
-    
-    dm_imgui_vertex v1 = { 0 };
-    v1.pos[0] = x + width;
-    v1.pos[1] = y;
-    //v1.pos[2] = z;
-    v1.tex_coords[0] = 1;
-    v1.tex_coords[1] = 0;
-    v1.color[0] = r;
-    v1.color[1] = g;
-    v1.color[2] = b;
-    v1.color[3] = a;
-    
-    dm_imgui_vertex v2 = { 0 };
-    v2.pos[0] = x + width;
-    v2.pos[1] = y + height;
-    //v2.pos[2] = z;
-    v2.tex_coords[0] = 1;
-    v2.tex_coords[1] = 1;
-    v2.color[0] = r;
-    v2.color[1] = g;
-    v2.color[2] = b;
-    v2.color[3] = a;
-    
-    dm_imgui_vertex v3 = { 0 };
-    v3.pos[0] = x;
-    v3.pos[1] = y + height;
-    //v3.pos[2] = z;
-    v3.tex_coords[0] = 0;
-    v3.tex_coords[1] = 1;
-    v3.color[0] = r;
-    v3.color[1] = g;
-    v3.color[2] = b;
-    v3.color[3] = a;
-    
-    imgui_ctx->vertices[imgui_ctx->vertex_count++] = v0;
-    imgui_ctx->vertices[imgui_ctx->vertex_count++] = v2;
-    imgui_ctx->vertices[imgui_ctx->vertex_count++] = v1;
-    
-    imgui_ctx->vertices[imgui_ctx->vertex_count++] = v2;
-    imgui_ctx->vertices[imgui_ctx->vertex_count++] = v0;
-    imgui_ctx->vertices[imgui_ctx->vertex_count++] = v3;
-}
-
-bool dm_imgui_begin(const char* title, float x, float y, float width, float height, dm_imgui_window_flag flags, dm_context* context)
+void dm_imgui_test(dm_context* context)
 {
     dm_imgui_context* imgui_ctx = &context->imgui_context;
+    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
+    struct nk_context* ctx = &imgui_nk_ctx->ctx;
     
-    if(imgui_ctx->state!=DM_IMGUI_CONTEXT_STATE_ENDED) assert(false);
-    imgui_ctx->state = DM_IMGUI_CONTEXT_STATE_BEGUN;
+    struct nk_colorf bg;
     
-    // get window
-    dm_imgui_window* window = dm_imgui_get_window(title, imgui_ctx);
-    
-    if(window->state==DM_IMGUI_WINDOW_STATE_CREATED)
+    bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
+    if (nk_begin(ctx, "Demo", nk_rect(50, 50, 230, 250),
+                 NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
+                 NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE))
     {
-        window->x = x;
-        window->y = y;
-        window->w = width;
-        window->h = height;
-    }
-    
-    window->state = DM_IMGUI_WINDOW_STATE_ACTIVE;
-    imgui_ctx->active_window = window;
-    
-    if(dm_imgui_window_hit(window, context))
-    {
-        if(flags & DM_IMGUI_WINDOW_FLAG_MOVABLE)
-        {
-            if(dm_imgui_region_hit(window->x,window->y,window->w,imgui_ctx->style.title_bar_height, context) && dm_input_is_mousebutton_pressed(DM_MOUSEBUTTON_L, context))
-            {
-                imgui_ctx->hot_window = window;
-                window->x += dm_input_get_mouse_delta_x(context);
-                window->y += dm_input_get_mouse_delta_y(context);
-            }
+        enum {EASY, HARD};
+        static int op = EASY;
+        static int property = 20;
+        
+        nk_layout_row_static(ctx, 30, 80, 1);
+        if (nk_button_label(ctx, "button"))
+            fprintf(stdout, "button pressed\n");
+        nk_layout_row_dynamic(ctx, 30, 2);
+        if (nk_option_label(ctx, "easy", op == EASY)) op = EASY;
+        if (nk_option_label(ctx, "hard", op == HARD)) op = HARD;
+        nk_layout_row_dynamic(ctx, 22, 1);
+        nk_property_int(ctx, "Compression:", 0, &property, 100, 10, 1);
+        
+        nk_layout_row_dynamic(ctx, 20, 1);
+        nk_label(ctx, "background:", NK_TEXT_LEFT);
+        nk_layout_row_dynamic(ctx, 25, 1);
+        if (nk_combo_begin_color(ctx, nk_rgb_cf(bg), nk_vec2(nk_widget_width(ctx),400))) {
+            nk_layout_row_dynamic(ctx, 120, 1);
+            bg = nk_color_picker(ctx, bg, NK_RGBA);
+            nk_layout_row_dynamic(ctx, 25, 1);
+            bg.r = nk_propertyf(ctx, "#R:", 0, bg.r, 1.0f, 0.01f,0.005f);
+            bg.g = nk_propertyf(ctx, "#G:", 0, bg.g, 1.0f, 0.01f,0.005f);
+            bg.b = nk_propertyf(ctx, "#B:", 0, bg.b, 1.0f, 0.01f,0.005f);
+            bg.a = nk_propertyf(ctx, "#A:", 0, bg.a, 1.0f, 0.01f,0.005f);
+            nk_combo_end(ctx);
         }
     }
+    nk_end(ctx);
     
-    if(imgui_ctx->active_window == window) 
+    // calculator
+    if (nk_begin(ctx, "Calculator", nk_rect(10, 10, 180, 250),
+                 NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_MOVABLE))
     {
-        dm_imgui_draw_rect(window->x,window->y+imgui_ctx->style.title_bar_height,window->w,window->h, imgui_ctx->style.active_window_r, imgui_ctx->style.active_window_g, imgui_ctx->style.active_window_b, imgui_ctx->style.active_window_a, imgui_ctx);
-        dm_imgui_draw_rect(window->x,window->y,window->w,imgui_ctx->style.title_bar_height, imgui_ctx->style.active_title_bar_r, imgui_ctx->style.active_title_bar_g, imgui_ctx->style.active_title_bar_b, imgui_ctx->style.active_title_bar_a, imgui_ctx);
+        static int set = 0, prev = 0, op = 0;
+        static const char numbers[] = "789456123";
+        static const char ops[] = "+-*/";
+        static double a = 0, b = 0;
+        static double *current = &a;
+        
+        size_t i = 0;
+        int solve = 0;
+        {int len; char buffer[256];
+            nk_layout_row_dynamic(ctx, 35, 1);
+            len = snprintf(buffer, 256, "%.2f", *current);
+            nk_edit_string(ctx, NK_EDIT_SIMPLE, buffer, &len, 255, nk_filter_float);
+            buffer[len] = 0;
+            *current = atof(buffer);}
+        
+        nk_layout_row_dynamic(ctx, 35, 4);
+        for (i = 0; i < 16; ++i) {
+            if (i >= 12 && i < 15) {
+                if (i > 12) continue;
+                if (nk_button_label(ctx, "C")) {
+                    a = b = op = 0; current = &a; set = 0;
+                } if (nk_button_label(ctx, "0")) {
+                    *current = *current*10.0f; set = 0;
+                } if (nk_button_label(ctx, "=")) {
+                    solve = 1; prev = op; op = 0;
+                }
+            } else if (((i+1) % 4)) {
+                if (nk_button_text(ctx, &numbers[(i/4)*3+i%4], 1)) {
+                    *current = *current * 10.0f + numbers[(i/4)*3+i%4] - '0';
+                    set = 0;
+                }
+            } else if (nk_button_text(ctx, &ops[i/4], 1)) {
+                if (!set) {
+                    if (current != &b) {
+                        current = &b;
+                    } else {
+                        prev = op;
+                        solve = 1;
+                    }
+                }
+                op = ops[i/4];
+                set = 1;
+            }
+        }
+        if (solve) {
+            if (prev == '+') a = a + b;
+            if (prev == '-') a = a - b;
+            if (prev == '*') a = a * b;
+            if (prev == '/') a = a / b;
+            current = &a;
+            if (set) current = &b;
+            b = 0; set = 0;
+        }
     }
-    else if(imgui_ctx->hot_window == window) 
-    {
-        dm_imgui_draw_rect(window->x,window->y+imgui_ctx->style.title_bar_height,window->w,window->h, imgui_ctx->style.hot_window_r, imgui_ctx->style.hot_window_g, imgui_ctx->style.hot_window_b, imgui_ctx->style.hot_window_a, imgui_ctx);
-        dm_imgui_draw_rect(window->x,window->y,window->w,imgui_ctx->style.title_bar_height, imgui_ctx->style.hot_title_bar_r, imgui_ctx->style.hot_title_bar_g, imgui_ctx->style.hot_title_bar_b, imgui_ctx->style.hot_title_bar_a, imgui_ctx);
-    }
-    else
-    {
-        dm_imgui_draw_rect(window->x,window->y+imgui_ctx->style.title_bar_height,window->w,window->h, imgui_ctx->style.default_window_r, imgui_ctx->style.default_window_g, imgui_ctx->style.default_window_b, imgui_ctx->style.default_window_a, imgui_ctx);
-        dm_imgui_draw_rect(window->x,window->y,window->w,imgui_ctx->style.title_bar_height, imgui_ctx->style.default_title_bar_r, imgui_ctx->style.default_title_bar_g, imgui_ctx->style.default_title_bar_b, imgui_ctx->style.default_title_bar_a, imgui_ctx);
-    }
-    
-    imgui_ctx->active_window->y_offset = imgui_ctx->style.vertical_padding + imgui_ctx->style.title_bar_height;
-    imgui_ctx->active_window->x_offset = imgui_ctx->style.horizontal_padding;
-    
-    return true;
-}
-
-void dm_imgui_end(dm_context* context)
-{
-    assert(context->imgui_context.state==DM_IMGUI_CONTEXT_STATE_BEGUN);
-    context->imgui_context.state = DM_IMGUI_CONTEXT_STATE_ENDED;
-    
-    context->imgui_context.active_window->y_offset = 0;
-    context->imgui_context.active_window->x_offset = 0;
-    
-    context->imgui_context.active_window = NULL;
-    context->imgui_context.hot_window = NULL;
-}
-
-bool dm_imgui_button(const char* title, dm_context* context)
-{
-    dm_imgui_context* imgui_ctx = &context->imgui_context;
-    assert(imgui_ctx->active_window);
-    
-    float width = imgui_ctx->active_window->w - 2.0f * imgui_ctx->style.horizontal_padding;
-    float x = imgui_ctx->active_window->x + imgui_ctx->style.horizontal_padding;
-    float y = imgui_ctx->active_window->y + imgui_ctx->active_window->y_offset;
-    
-    dm_imgui_draw_rect(x,y, width, imgui_ctx->style.button_height, 1,1,1,1, imgui_ctx);
-    
-    imgui_ctx->active_window->y_offset += imgui_ctx->style.button_height + imgui_ctx->style.vertical_padding;
-    
-    return true;
+    nk_end(ctx);
 }

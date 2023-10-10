@@ -11,7 +11,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image/stb_image.h"
 
-#define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype/stb_truetype.h"
 
 /*********
@@ -584,6 +583,8 @@ extern bool dm_renderer_backend_begin_frame(dm_renderer* renderer);
 extern bool dm_renderer_backend_end_frame(dm_context* context);
 extern void dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer);
 
+extern void* dm_renderer_backend_get_internal_texture_ptr(dm_render_handle handle, dm_renderer* renderer);
+
 extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer);
@@ -657,27 +658,27 @@ bool dm_renderer_create_dynamic_vertex_buffer(void* data, size_t data_size, size
     return dm_renderer_create_buffer(desc, data, handle, context);
 }
 
-bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context)
 {
     dm_buffer_desc desc = {
         .type=DM_BUFFER_TYPE_INDEX,
         .usage=DM_BUFFER_USAGE_STATIC,
         .cpu_access=DM_BUFFER_CPU_WRITE,
         .buffer_size=data_size,
-        .elem_size=sizeof(uint32_t)
+        .elem_size=index_size
     };
     
     return dm_renderer_create_buffer(desc, data, handle, context);
 }
 
-bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context)
 {
     dm_buffer_desc desc = {
         .type=DM_BUFFER_TYPE_INDEX,
         .usage=DM_BUFFER_USAGE_DYNAMIC,
         .cpu_access=DM_BUFFER_CPU_READ,
         .buffer_size=data_size,
-        .elem_size=sizeof(uint32_t)
+        .elem_size=index_size
     };
     
     return dm_renderer_create_buffer(desc, data, handle, context);
@@ -741,6 +742,11 @@ bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint3
     }
     
     return true;
+}
+
+void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context)
+{
+    return dm_renderer_backend_get_internal_texture_ptr(handle, &context->renderer);
 }
 
 bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context)
@@ -1577,6 +1583,8 @@ extern bool dm_platform_threadpool_create(dm_threadpool* threadpool);
 extern void dm_platform_threadpool_destroy(dm_threadpool* threadpool);
 extern void dm_platform_threadpool_submit_task(dm_thread_task* task, dm_threadpool* threadpool);
 extern void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool);
+extern void dm_platform_clipboard_copy(const char* text, int len);
+extern void dm_platform_clipboard_paste(void (*callback)(char*,int,void*), void* edit);
 
 bool dm_threadpool_create(const char* tag, uint32_t num_threads, dm_threadpool* threadpool)
 {
@@ -1610,6 +1618,10 @@ IMGUI
 extern bool dm_imgui_init(dm_context* context);
 extern void dm_imgui_shutdown(dm_context* context);
 extern void dm_imgui_render(dm_context* context);
+
+extern void dm_imgui_input_begin(dm_context* context);
+extern void dm_imgui_input_end(dm_context* context);
+extern void dm_imgui_input_event(dm_event e, dm_context* context);
 
 /*********
 FRAMEWORK
@@ -1671,6 +1683,8 @@ void dm_shutdown(dm_context* context)
         if(context->renderer.command_manager.commands[i].params.data) dm_free(context->renderer.command_manager.commands[i].params.data);
     }
     
+    dm_imgui_shutdown(context);
+    
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
     dm_ecs_shutdown(context);
@@ -1681,6 +1695,8 @@ void dm_shutdown(dm_context* context)
 // also pass through nuklear inputs
 void dm_poll_events(dm_context* context)
 {
+    dm_imgui_input_begin(context);
+    
     for(uint32_t i=0; i<context->platform_data.event_list.num; i++)
     {
         dm_event e = context->platform_data.event_list.events[i];
@@ -1744,7 +1760,11 @@ void dm_poll_events(dm_context* context)
                 DM_LOG_ERROR("Unknown event! Shouldn't be here...");
             } break;
         }
+        
+        dm_imgui_input_event(e, context);
     }
+    
+    dm_imgui_input_end(context);
 }
 
 void dm_start(dm_context* context)

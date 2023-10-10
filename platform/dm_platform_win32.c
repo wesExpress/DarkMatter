@@ -481,6 +481,62 @@ const char* dm_get_win32_last_error()
 	return message;
 }
 
+/*********
+CLIPBOARD
+***********/
+void dm_platform_clipboard_copy(const char* text, int len)
+{
+    if(!OpenClipboard(NULL)) return;
+    
+    int wsize = MultiByteToWideChar(CP_UTF8, 0, text, len, NULL, 0);
+    if(!wsize) { CloseClipboard(); return; }
+    
+    HGLOBAL mem = GlobalAlloc(GMEM_MOVEABLE, (wsize  + 1) * sizeof(wchar_t));
+    if(!mem) { CloseClipboard(); return; }
+    
+    wchar_t* wstr = (wchar_t*)GlobalLock(mem);
+    if(!wstr) { CloseClipboard(); return; }
+    
+    MultiByteToWideChar(CP_UTF8, 0, text, len, wstr, wsize);
+    wstr[wsize] = 0;
+    GlobalUnlock(mem);
+    SetClipboardData(CF_UNICODETEXT, mem);
+    
+    CloseClipboard();
+}
+
+void dm_platform_clipboard_paste(void (*callback)(char*,int,void*), void* edit)
+{
+    if(!IsClipboardFormatAvailable(CF_UNICODETEXT) || !OpenClipboard(NULL)) return;
+    
+    HGLOBAL mem = GetClipboardData(CF_UNICODETEXT);
+    if(!mem) { CloseClipboard(); return; }
+    
+    SIZE_T size = GlobalSize(mem) - 1;
+    if(!size) { CloseClipboard(); return; }
+    
+    LPCWSTR wstr = (LPCWSTR)GlobalLock(mem);
+    if(!wstr) { CloseClipboard(); return; }
+    
+    int utf8size = WideCharToMultiByte(CP_UTF8, 0, wstr, size / sizeof(wchar_t), NULL, 0, NULL, NULL);
+    if(!utf8size) { GlobalUnlock(mem); CloseClipboard(); return; }
+    char* utf8 = (char*)malloc(utf8size);
+    
+    if(!utf8) { GlobalUnlock(mem); CloseClipboard(); return; }
+    
+    WideCharToMultiByte(CP_UTF8, 0, wstr, size / sizeof(wchar_t), utf8, utf8size, NULL, NULL);
+    
+    callback(utf8, utf8size, edit);
+    //nk_textedit_paste(edit, utf8, utf8size);
+    dm_free(utf8);
+    
+    GlobalUnlock(mem);
+    CloseClipboard();
+}
+
+/******
+OPENGL
+********/
 #ifdef DM_OPENGL
 bool dm_win32_load_opengl_functions(WNDCLASSEX window_class, dm_platform_data* platform_data)
 {
