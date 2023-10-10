@@ -276,6 +276,9 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
         dm_add_mousebutton_down_event(DM_MOUSEBUTTON_M, &platform_data->event_list);
         SetCapture(hwnd);
         break;
+        case WM_LBUTTONDBLCLK:
+        dm_add_mousebutton_down_event(DM_MOUSEBUTTON_DOUBLE, &platform_data->event_list);
+        break;
         
         case WM_LBUTTONUP:
         dm_add_mousebutton_up_event(DM_MOUSEBUTTON_L, &platform_data->event_list);
@@ -288,9 +291,6 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
         case WM_MBUTTONUP:
         dm_add_mousebutton_up_event(DM_MOUSEBUTTON_M, &platform_data->event_list);
         ReleaseCapture();
-        break;
-        case WM_LBUTTONDBLCLK:
-        dm_add_mousebutton_up_event(DM_MOUSEBUTTON_DOUBLE, &platform_data->event_list);
         break;
         
         // unhandled Windows event

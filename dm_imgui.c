@@ -348,6 +348,17 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
                 break;
             }
         } break;
+        
+        case DM_EVENT_MOUSE_MOVE:
+        {
+            int x,y;
+            dm_input_get_mouse_pos(&x,&y,context);
+            nk_input_motion(&imgui_nk_ctx->ctx, x,y);
+        } break;
+        
+        case DM_EVENT_MOUSE_SCROLL:
+        nk_input_scroll(&imgui_nk_ctx->ctx, nk_vec2(0,e.delta));
+        break;
     }
 }
 

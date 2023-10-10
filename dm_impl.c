@@ -1710,55 +1710,50 @@ void dm_poll_events(dm_context* context)
             } break;
             
             case DM_EVENT_KEY_DOWN:
+            if(e.key == DM_KEY_ESCAPE)
             {
-                if(e.key == DM_KEY_ESCAPE)
-                {
-                    dm_event* e2 = &context->platform_data.event_list.events[context->platform_data.event_list.num++];
-                    e2->type = DM_EVENT_WINDOW_CLOSE;
-                }
-                
-                if(!dm_input_is_key_pressed(e.key, context)) dm_input_set_key_pressed(e.key, context);
-            } break;
+                dm_event* e2 = &context->platform_data.event_list.events[context->platform_data.event_list.num++];
+                e2->type = DM_EVENT_WINDOW_CLOSE;
+            }
+            if(!dm_input_is_key_pressed(e.key, context)) dm_input_set_key_pressed(e.key, context);
+            break;
             case DM_EVENT_KEY_UP:
-            {
-                if(dm_input_is_key_pressed(e.key, context)) dm_input_set_key_released(e.key, context);
-            } break;
+            if(dm_input_is_key_pressed(e.key, context)) dm_input_set_key_released(e.key, context);
+            break;
             
             case DM_EVENT_MOUSEBUTTON_DOWN:
-            {
-                if(!dm_input_is_mousebutton_pressed(e.button, context)) dm_input_set_mousebutton_pressed(e.button, context);
-            } break;
+            if(!dm_input_is_mousebutton_pressed(e.button, context)) dm_input_set_mousebutton_pressed(e.button, context);
+            break;
+            
             case DM_EVENT_MOUSEBUTTON_UP:
+            if(dm_input_is_mousebutton_pressed(e.button, context)) 
             {
-                if(dm_input_is_mousebutton_pressed(e.button, context)) dm_input_set_mousebutton_released(e.button, context);
+                if(e.button==DM_MOUSEBUTTON_L) dm_input_set_mousebutton_released(DM_MOUSEBUTTON_DOUBLE, context);
+                dm_input_set_mousebutton_released(e.button, context);
             } break;
             
             case DM_EVENT_MOUSE_MOVE:
-            {
-                dm_input_set_mouse_x(e.coords[0], context);
-                dm_input_set_mouse_y(e.coords[1], context);
-            } break;
+            dm_input_set_mouse_x(e.coords[0], context);
+            dm_input_set_mouse_y(e.coords[1], context);
+            break;
             
             case DM_EVENT_MOUSE_SCROLL:
-            {
-                dm_input_set_mouse_scroll(e.delta, context);
-            } break;
+            dm_input_set_mouse_scroll(e.delta, context);
+            break;
             
             case DM_EVENT_WINDOW_RESIZE:
-            {
-                context->platform_data.window_data.width  = e.new_rect[0];
-                context->platform_data.window_data.height = e.new_rect[1];
-                
-                context->renderer.width = e.new_rect[0];
-                context->renderer.height = e.new_rect[1];
-                
-                dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer);
-            } break;
+            context->platform_data.window_data.width  = e.new_rect[0];
+            context->platform_data.window_data.height = e.new_rect[1];
+            
+            context->renderer.width = e.new_rect[0];
+            context->renderer.height = e.new_rect[1];
+            
+            dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer);
+            break;
             
             case DM_EVENT_UNKNOWN:
-            {
-                DM_LOG_ERROR("Unknown event! Shouldn't be here...");
-            } break;
+            DM_LOG_ERROR("Unknown event! Shouldn't be here...");
+            break;
         }
         
         dm_imgui_input_event(e, context);
