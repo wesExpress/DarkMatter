@@ -546,8 +546,11 @@ bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle
     rd.DepthClipEnable = true;
     wireframe_rd.DepthClipEnable = true;
     
-    rd.ScissorEnable = true;
-    wireframe_rd.ScissorEnable = true;
+    if(desc.scissor)
+    {
+        rd.ScissorEnable = true;
+        wireframe_rd.ScissorEnable = true;
+    }
     
     internal_pipeline.wireframe = desc.wireframe;
     

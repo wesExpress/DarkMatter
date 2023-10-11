@@ -220,7 +220,7 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
                 } break;
                 case VK_CONTROL:
                 {
-                    vk = extended ? VK_RCONTROL : VK_LCONTROL;
+                    vk = !extended ? VK_RCONTROL : VK_LCONTROL;
                 } break;
             }
             
@@ -242,7 +242,7 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
                 } break;
                 case VK_CONTROL:
                 {
-                    vk = extended ? VK_RCONTROL : VK_LCONTROL;
+                    vk = !extended ? VK_RCONTROL : VK_LCONTROL;
                 } break;
                 default: 
                 break;

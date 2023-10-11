@@ -641,7 +641,7 @@ typedef struct dm_pipeline_desc_t
     dm_texture_mode       u_mode, v_mode, w_mode;
     dm_comparison         blend_comp, depth_comp, stencil_comp, sampler_comp;
     dm_primitive_topology primitive_topology;
-    bool                  blend, depth, stencil, wireframe;
+    bool                  blend, depth, stencil, scissor, wireframe;
     float                 min_lod, max_lod;
 } dm_pipeline_desc;
 

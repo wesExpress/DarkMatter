@@ -321,6 +321,9 @@ void dm_imgui_render(dm_context* context)
     dm_imgui_context* imgui_ctx = &context->imgui_context;
     dm_imgui_nuklear_context* imgui_nk_ctx = &imgui_ctx->internal_context;
     
+    // early out if we don't have any commands
+    //if(imgui_nk_ctx->cmds.calls==0) return;
+    
     dm_render_command_bind_shader(imgui_ctx->shader, context);
     dm_render_command_bind_pipeline(imgui_ctx->pipe, context);
     
