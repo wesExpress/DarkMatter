@@ -1,50 +1,7 @@
+#define NK_IMPLEMENTATION
 #include "dm.h"
 
-#define NK_INCLUDE_FIXED_TYPES
-#define NK_INCLUDE_STANDARD_IO
-#define NK_INCLUDE_STANDARD_VARARGS
-#define NK_INCLUDE_DEFAULT_ALLOCATOR
-#define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
-#define NK_INCLUDE_FONT_BAKING
-#define NK_INCLUDE_DEFAULT_FONT
-#define NK_IMPLEMENTATION
-#include "Nuklear/nuklear.h"
-
 #include <float.h>
-
-typedef struct dm_imgui_vertex_t
-{
-    float   pos[2];
-    float   tex_coords[2];
-    uint8_t color[4];
-} dm_imgui_vertex;
-
-typedef struct dm_imgui_uni_t
-{
-    float proj[4 * 4];
-} dm_imgui_uni;
-
-typedef uint16_t dm_nk_element_t;
-
-#define DM_IMGUI_MAX_VERTICES 512 * 1024
-#define DM_IMGUI_MAX_INDICES  128 * 1024
-
-#define DM_IMGUI_VERTEX_LEN DM_IMGUI_MAX_VERTICES / sizeof(dm_imgui_vertex)
-#define DM_IMGUI_INDEX_LEN  DM_IMGUI_MAX_INDICES / sizeof(dm_nk_element_t)
-
-typedef struct dm_imgui_nuklear_context_t
-{
-    struct nk_context ctx;
-    struct nk_font_atlas atlas;
-    struct nk_buffer cmds;
-    
-    dm_imgui_vertex vertices[DM_IMGUI_VERTEX_LEN];
-    dm_nk_element_t indices[DM_IMGUI_INDEX_LEN];
-    
-    struct nk_draw_null_texture tex_null;
-    uint32_t max_vertex_buffer;
-    uint32_t max_index_buffer;
-} dm_imgui_nuklear_context;
 
 extern void dm_platform_clipboard_copy(const char* text, int len);
 extern void dm_platform_clipboard_paste(void (*callback)(char*,int,void*), void* edit);
@@ -57,8 +14,7 @@ void dm_imgui_nuklear_paste_callback(char* text, int len, void* edit);
 bool dm_imgui_init(dm_context* context)
 {
     dm_imgui_context* imgui_ctx = &context->imgui_context;
-    imgui_ctx->internal_context = dm_alloc(sizeof(dm_imgui_nuklear_context));
-    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
+    dm_imgui_nuklear_context* imgui_nk_ctx = &imgui_ctx->internal_context;
     
     if(!dm_renderer_create_dynamic_vertex_buffer(NULL, DM_IMGUI_MAX_VERTICES, sizeof(dm_imgui_vertex), &imgui_ctx->vb, context)) return false;
     if(!dm_renderer_create_dynamic_index_buffer(NULL, DM_IMGUI_MAX_INDICES, sizeof(dm_nk_element_t), &imgui_ctx->ib, context)) return false;
@@ -126,7 +82,7 @@ bool dm_imgui_init(dm_context* context)
     nk_font_atlas_init_default(&imgui_nk_ctx->atlas);
     nk_font_atlas_begin(&imgui_nk_ctx->atlas);
     
-    struct nk_font* chicago = nk_font_atlas_add_from_file(&imgui_nk_ctx->atlas, "assets/Chicago.ttf", 13, 0);
+    struct nk_font* chicago = nk_font_atlas_add_from_file(&imgui_nk_ctx->atlas, "assets/Chicago.ttf", 17, 0);
     
     uint32_t w, h;
     const void* image = nk_font_atlas_bake(&imgui_nk_ctx->atlas, &w, &h, NK_FONT_ATLAS_RGBA32);
@@ -175,13 +131,11 @@ bool dm_imgui_init(dm_context* context)
 void dm_imgui_shutdown(dm_context* context)
 {
     dm_imgui_context* imgui_ctx = &context->imgui_context;
-    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
+    dm_imgui_nuklear_context* imgui_nk_ctx = &imgui_ctx->internal_context;
     
     nk_font_atlas_clear(&imgui_nk_ctx->atlas);
     nk_buffer_free(&imgui_nk_ctx->cmds);
     nk_free(&imgui_nk_ctx->ctx);
-    
-    dm_free(imgui_ctx->internal_context);
 }
 
 // clipboard
@@ -204,7 +158,7 @@ void dm_imgui_nuklear_paste_callback(char* text, int len, void* edit)
 void dm_imgui_input_begin(dm_context* context)
 {
     dm_imgui_context* imgui_ctx = &context->imgui_context;
-    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
+    dm_imgui_nuklear_context* imgui_nk_ctx = &imgui_ctx->internal_context;
     
     nk_input_begin(&imgui_nk_ctx->ctx);
 }
@@ -212,14 +166,14 @@ void dm_imgui_input_begin(dm_context* context)
 void dm_imgui_input_end(dm_context* context)
 {
     dm_imgui_context* imgui_ctx = &context->imgui_context;
-    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
+    dm_imgui_nuklear_context* imgui_nk_ctx = &imgui_ctx->internal_context;
     
     nk_input_end(&imgui_nk_ctx->ctx);
 }
 
 void dm_imgui_input_event(dm_event e, dm_context* context)
 {
-    dm_imgui_nuklear_context* imgui_nk_ctx = context->imgui_context.internal_context;
+    dm_imgui_nuklear_context* imgui_nk_ctx = &context->imgui_context.internal_context;
     
     switch(e.type)
     {
@@ -351,7 +305,7 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
         
         case DM_EVENT_MOUSE_MOVE:
         {
-            int x,y;
+            uint32_t x,y;
             dm_input_get_mouse_pos(&x,&y,context);
             nk_input_motion(&imgui_nk_ctx->ctx, x,y);
         } break;
@@ -365,7 +319,7 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
 void dm_imgui_render(dm_context* context)
 {
     dm_imgui_context* imgui_ctx = &context->imgui_context;
-    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
+    dm_imgui_nuklear_context* imgui_nk_ctx = &imgui_ctx->internal_context;
     
     dm_render_command_bind_shader(imgui_ctx->shader, context);
     dm_render_command_bind_pipeline(imgui_ctx->pipe, context);
@@ -426,107 +380,4 @@ void dm_imgui_render(dm_context* context)
     
     nk_clear(&imgui_nk_ctx->ctx);
     nk_buffer_clear(&imgui_nk_ctx->cmds);
-}
-
-void dm_imgui_test(dm_context* context)
-{
-    dm_imgui_context* imgui_ctx = &context->imgui_context;
-    dm_imgui_nuklear_context* imgui_nk_ctx = imgui_ctx->internal_context;
-    struct nk_context* ctx = &imgui_nk_ctx->ctx;
-    
-    struct nk_colorf bg;
-    
-    bg.r = 0.10f, bg.g = 0.18f, bg.b = 0.24f, bg.a = 1.0f;
-    if (nk_begin(ctx, "Demo", nk_rect(50, 50, 230, 250),
-                 NK_WINDOW_BORDER|NK_WINDOW_MOVABLE|NK_WINDOW_SCALABLE|
-                 NK_WINDOW_MINIMIZABLE|NK_WINDOW_TITLE))
-    {
-        enum {EASY, HARD};
-        static int op = EASY;
-        static int property = 20;
-        
-        nk_layout_row_static(ctx, 30, 80, 1);
-        if (nk_button_label(ctx, "button"))
-            fprintf(stdout, "button pressed\n");
-        nk_layout_row_dynamic(ctx, 30, 2);
-        if (nk_option_label(ctx, "easy", op == EASY)) op = EASY;
-        if (nk_option_label(ctx, "hard", op == HARD)) op = HARD;
-        nk_layout_row_dynamic(ctx, 22, 1);
-        nk_property_int(ctx, "Compression:", 0, &property, 100, 10, 1);
-        
-        nk_layout_row_dynamic(ctx, 20, 1);
-        nk_label(ctx, "background:", NK_TEXT_LEFT);
-        nk_layout_row_dynamic(ctx, 25, 1);
-        if (nk_combo_begin_color(ctx, nk_rgb_cf(bg), nk_vec2(nk_widget_width(ctx),400))) {
-            nk_layout_row_dynamic(ctx, 120, 1);
-            bg = nk_color_picker(ctx, bg, NK_RGBA);
-            nk_layout_row_dynamic(ctx, 25, 1);
-            bg.r = nk_propertyf(ctx, "#R:", 0, bg.r, 1.0f, 0.01f,0.005f);
-            bg.g = nk_propertyf(ctx, "#G:", 0, bg.g, 1.0f, 0.01f,0.005f);
-            bg.b = nk_propertyf(ctx, "#B:", 0, bg.b, 1.0f, 0.01f,0.005f);
-            bg.a = nk_propertyf(ctx, "#A:", 0, bg.a, 1.0f, 0.01f,0.005f);
-            nk_combo_end(ctx);
-        }
-    }
-    nk_end(ctx);
-    
-    // calculator
-    if (nk_begin(ctx, "Calculator", nk_rect(10, 10, 180, 250),
-                 NK_WINDOW_BORDER|NK_WINDOW_NO_SCROLLBAR|NK_WINDOW_MOVABLE))
-    {
-        static int set = 0, prev = 0, op = 0;
-        static const char numbers[] = "789456123";
-        static const char ops[] = "+-*/";
-        static double a = 0, b = 0;
-        static double *current = &a;
-        
-        size_t i = 0;
-        int solve = 0;
-        {int len; char buffer[256];
-            nk_layout_row_dynamic(ctx, 35, 1);
-            len = snprintf(buffer, 256, "%.2f", *current);
-            nk_edit_string(ctx, NK_EDIT_SIMPLE, buffer, &len, 255, nk_filter_float);
-            buffer[len] = 0;
-            *current = atof(buffer);}
-        
-        nk_layout_row_dynamic(ctx, 35, 4);
-        for (i = 0; i < 16; ++i) {
-            if (i >= 12 && i < 15) {
-                if (i > 12) continue;
-                if (nk_button_label(ctx, "C")) {
-                    a = b = op = 0; current = &a; set = 0;
-                } if (nk_button_label(ctx, "0")) {
-                    *current = *current*10.0f; set = 0;
-                } if (nk_button_label(ctx, "=")) {
-                    solve = 1; prev = op; op = 0;
-                }
-            } else if (((i+1) % 4)) {
-                if (nk_button_text(ctx, &numbers[(i/4)*3+i%4], 1)) {
-                    *current = *current * 10.0f + numbers[(i/4)*3+i%4] - '0';
-                    set = 0;
-                }
-            } else if (nk_button_text(ctx, &ops[i/4], 1)) {
-                if (!set) {
-                    if (current != &b) {
-                        current = &b;
-                    } else {
-                        prev = op;
-                        solve = 1;
-                    }
-                }
-                op = ops[i/4];
-                set = 1;
-            }
-        }
-        if (solve) {
-            if (prev == '+') a = a + b;
-            if (prev == '-') a = a - b;
-            if (prev == '*') a = a * b;
-            if (prev == '/') a = a / b;
-            current = &a;
-            if (set) current = &b;
-            b = 0; set = 0;
-        }
-    }
-    nk_end(ctx);
 }

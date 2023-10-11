@@ -1,6 +1,7 @@
 #include "dm.h"
-#include <glad/glad.h>
+#include "glad/glad.h"
 #include <limits.h>
+#include <assert.h>
 
 #define DM_GLUINT_FAIL UINT_MAX
 
@@ -20,6 +21,7 @@ OPENGL_TYPES
 **************/
 typedef struct dm_opengl_buffer_t
 {
+    size_t stride;
 	GLuint id;
 	GLenum type, usage, data_type;
 } dm_opengl_buffer;
@@ -60,6 +62,8 @@ typedef struct dm_opengl_renderer_t
 {
     uint32_t uniform_bindings;
     
+    size_t index_buffer_stride;
+    
     dm_opengl_buffer buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
     dm_opengl_shader shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
     dm_opengl_texture textures[DM_RENDERER_MAX_RESOURCE_COUNT];
@@ -69,7 +73,7 @@ typedef struct dm_opengl_renderer_t
     GLenum   active_primitive;
     uint32_t buffer_count, shader_count, texture_count, framebuffer_count, pipeline_count;
     uint32_t active_pipeline, active_shader;
-
+    
     uint32_t width, height;
 } dm_opengl_renderer;
 
@@ -120,6 +124,7 @@ GLenum dm_vertex_data_t_to_opengl(dm_vertex_data_t dm_type)
     switch (dm_type)
     {
         case DM_VERTEX_DATA_T_BYTE: return GL_BYTE;
+        case DM_VERTEX_DATA_T_UBYTE_NORM:
         case DM_VERTEX_DATA_T_UBYTE: return GL_UNSIGNED_BYTE;
         case DM_VERTEX_DATA_T_SHORT: return GL_SHORT;
         case DM_VERTEX_DATA_T_USHORT: return GL_UNSIGNED_SHORT;
@@ -141,8 +146,8 @@ GLenum dm_cull_to_opengl_cull(dm_cull_mode cull)
         case DM_CULL_BACK: return GL_BACK;
         case DM_CULL_FRONT_BACK: return GL_FRONT_AND_BACK;
         default:
-        DM_LOG_FATAL("Unknown culling mode!");
-        return DM_CULL_UNKNOWN;
+        DM_LOG_ERROR("Unknown culling mode!");
+        return DM_CULL_FRONT;
     }
 }
 
@@ -284,6 +289,8 @@ bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_rende
     glBufferData(internal_buffer.type, desc.buffer_size, data, internal_buffer.usage);
     if(glCheckError()) return false;
     
+    internal_buffer.stride = desc.elem_size;
+    
     dm_memcpy(opengl_renderer->buffers + opengl_renderer->buffer_count, &internal_buffer, sizeof(dm_opengl_buffer));
     *handle = opengl_renderer->buffer_count++;
     
@@ -408,6 +415,15 @@ void dm_renderer_backend_destroy_texture(dm_render_handle handle, dm_renderer* r
         glDeleteBuffers(1, &opengl_renderer->textures[handle].pbos[i]);
         if(glCheckError()) return;
     }
+}
+
+void* dm_renderer_backend_get_internal_texture_ptr(dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_OPENGL_GET_RENDERER;
+    
+    if(handle > opengl_renderer->texture_count) { DM_LOG_ERROR("Trying to retrieve invalid OpenGL texture"); return NULL; }
+    
+    return &opengl_renderer->textures[handle].id;
 }
 
 /***************
@@ -690,7 +706,9 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
             data_t = dm_vertex_data_t_to_opengl(desc.data_t);
             if(data_t==DM_GLUINT_FAIL) return false;
             
-            glVertexAttribPointer(attrib_count, desc.count, data_t, desc.normalized, desc.stride, (void*)(uintptr_t)desc.offset);
+            int norm = desc.data_t==DM_VERTEX_DATA_T_UBYTE_NORM ? 1 : 0;
+            
+            glVertexAttribPointer(attrib_count, desc.count, data_t, norm, desc.stride, (void*)(uintptr_t)desc.offset);
             if(glCheckError()) return false;
             glEnableVertexAttribArray(attrib_count);
             if(glCheckError()) return false;
@@ -917,7 +935,7 @@ bool dm_renderer_backend_end_frame(dm_context* context)
 void dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
 {
     DM_OPENGL_GET_RENDERER;
-
+    
     opengl_renderer->width = width;
     opengl_renderer->height = height;
 }
@@ -994,7 +1012,7 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
     else glDisable(GL_CULL_FACE);
     
     glFrontFace(internal_pipe.winding);
-
+    
     // SAMPLER
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, internal_pipe.s_wrap);
     if(glCheckError()) return false;
@@ -1041,6 +1059,7 @@ bool dm_render_command_backend_bind_shader(dm_render_handle handle, dm_renderer*
 
 bool dm_opengl_bind_buffer(GLenum type, GLuint id)
 {
+    
     glBindBuffer(type, id);
     if(glCheckError()) return false;
     
@@ -1052,6 +1071,8 @@ bool dm_render_command_backend_bind_buffer(dm_render_handle handle, uint32_t slo
     DM_OPENGL_GET_RENDERER;
     
     if(handle > opengl_renderer->buffer_count) { DM_LOG_FATAL("Trying to bind invalid OpenGL buffer"); return false; }
+    
+    if(opengl_renderer->buffers[handle].type==GL_ELEMENT_ARRAY_BUFFER) opengl_renderer->index_buffer_stride = opengl_renderer->buffers[handle].stride;
     
     return dm_opengl_bind_buffer(opengl_renderer->buffers[handle].type, opengl_renderer->buffers[handle].id);
 }
@@ -1210,7 +1231,13 @@ void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index
 {
     DM_OPENGL_GET_RENDERER;
     
-    glDrawElements(opengl_renderer->active_primitive, num_indices, GL_UNSIGNED_INT, (void*)(index_offset * sizeof(GLuint)));
+    assert(opengl_renderer->index_buffer_stride);
+    
+    GLenum type;
+    if(opengl_renderer->index_buffer_stride==2) type = GL_UNSIGNED_SHORT;
+    else type = GL_UNSIGNED_INT;
+    
+    glDrawElements(opengl_renderer->active_primitive, num_indices, type, (void*)(index_offset * opengl_renderer->index_buffer_stride));
     if(glCheckError()) return;
 }
 
@@ -1218,7 +1245,13 @@ void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num
 {
     DM_OPENGL_GET_RENDERER;
     
-    glDrawElementsInstanced(opengl_renderer->active_primitive, num_indices, GL_UNSIGNED_INT, (void*)(index_offset * sizeof(GLuint)), num_insts);
+    assert(opengl_renderer->index_buffer_stride);
+    
+    GLenum type;
+    if(opengl_renderer->index_buffer_stride==2) type = GL_UNSIGNED_SHORT;
+    else type = GL_UNSIGNED_INT;
+    
+    glDrawElementsInstanced(opengl_renderer->active_primitive, num_indices, type, (void*)(index_offset * opengl_renderer->index_buffer_stride), num_insts);
     if(glCheckError()) return;
 }
 
@@ -1226,6 +1259,11 @@ void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* ren
 {
     if(wireframe) glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
     else glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+}
+
+void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_renderer* renderer)
+{
+    glScissor((GLint)left, (GLint)top, (GLint)right, (GLint)bottom);
 }
 
 /************

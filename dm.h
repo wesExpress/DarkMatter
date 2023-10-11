@@ -81,6 +81,15 @@ INCLUDES
 #include <arm_neon.h>
 #endif
 
+#define NK_INCLUDE_FIXED_TYPES
+#define NK_INCLUDE_STANDARD_IO
+#define NK_INCLUDE_STANDARD_VARARGS
+#define NK_INCLUDE_DEFAULT_ALLOCATOR
+#define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
+#define NK_INCLUDE_FONT_BAKING
+#define NK_INCLUDE_DEFAULT_FONT
+#include "Nuklear/nuklear.h"
+
 /*****
 TYPES
 *******/
@@ -953,6 +962,40 @@ typedef enum dm_collision_shape_t
 /*****
 IMGUI 
 *******/
+typedef struct dm_imgui_vertex_t
+{
+    float   pos[2];
+    float   tex_coords[2];
+    uint8_t color[4];
+} dm_imgui_vertex;
+
+typedef struct dm_imgui_uni_t
+{
+    float proj[4 * 4];
+} dm_imgui_uni;
+
+typedef uint16_t dm_nk_element_t;
+
+#define DM_IMGUI_MAX_VERTICES 512 * 1024
+#define DM_IMGUI_MAX_INDICES  128 * 1024
+
+#define DM_IMGUI_VERTEX_LEN DM_IMGUI_MAX_VERTICES / sizeof(dm_imgui_vertex)
+#define DM_IMGUI_INDEX_LEN  DM_IMGUI_MAX_INDICES / sizeof(dm_nk_element_t)
+
+typedef struct dm_imgui_nuklear_context_t
+{
+    struct nk_context ctx;
+    struct nk_font_atlas atlas;
+    struct nk_buffer cmds;
+    
+    dm_imgui_vertex vertices[DM_IMGUI_VERTEX_LEN];
+    dm_nk_element_t indices[DM_IMGUI_INDEX_LEN];
+    
+    struct nk_draw_null_texture tex_null;
+    uint32_t max_vertex_buffer;
+    uint32_t max_index_buffer;
+} dm_imgui_nuklear_context;
+
 typedef struct dm_imgui_context_t
 {
     dm_render_handle vb, ib, uni;
@@ -961,7 +1004,7 @@ typedef struct dm_imgui_context_t
     dm_render_handle font;
     
     // nuklear context
-    void* internal_context;
+    dm_imgui_nuklear_context internal_context;
 } dm_imgui_context;
 
 /******************
@@ -1153,12 +1196,6 @@ void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, 
 void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 void dm_render_command_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_context* context);
 void dm_render_command_map_callback(dm_render_handle handle, void (*callback)(dm_context*), dm_context* context);
-
-// imgui
-bool dm_imgui_begin(const char* title, float x, float y, float width, float height, dm_context* context);
-void dm_imgui_end(dm_context* context);
-
-void dm_imgui_test(dm_context* context);
 
 // ecs
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);

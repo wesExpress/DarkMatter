@@ -1976,7 +1976,11 @@ int main(int argc, char** argv)
     dm_application_setup(&init_packet);
     
     dm_context* context = dm_init(init_packet);
-    if(!context) return DM_EXIT_CODE_INIT_FAIL;
+    if(!context) 
+    {
+        getchar();
+        return DM_EXIT_CODE_INIT_FAIL;
+    }
     
     if(!dm_application_init(context)) 
     {
