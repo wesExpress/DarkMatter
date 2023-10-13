@@ -82,7 +82,7 @@ bool dm_imgui_init(dm_context* context)
     nk_font_atlas_init_default(&imgui_nk_ctx->atlas);
     nk_font_atlas_begin(&imgui_nk_ctx->atlas);
     
-    struct nk_font* chicago = nk_font_atlas_add_from_file(&imgui_nk_ctx->atlas, "assets/Chicago.ttf", 17, 0);
+    struct nk_font* chicago = nk_font_atlas_add_from_file(&imgui_nk_ctx->atlas, "assets/fonts/Chicago.ttf", 12, 0);
     
     uint32_t w, h;
     const void* image = nk_font_atlas_bake(&imgui_nk_ctx->atlas, &w, &h, NK_FONT_ATLAS_RGBA32);

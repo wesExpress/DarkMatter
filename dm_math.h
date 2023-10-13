@@ -746,15 +746,15 @@ void dm_mat3_rotate_from_quat(const float quat[N4], float out[M3])
     float zw = quat[2] * quat[3];
     
     out[0] = 1 - 2 * (yy + zz);
-    out[3] = 2 * (xy - zw);
-    out[6] = 2 * (xz + yw);
-    
     out[1] = 2 * (xy + zw);
-    out[4] = 1 - 2 * (xx + zz);
-    out[7] = 2 * (yz - xw);
-    
     out[2] = 2 * (xz - yw);
+    
+    out[3] = 2 * (xy - zw);
+    out[4] = 1 - 2 * (xx + zz);
     out[5] = 2 * (yz + xw);
+    
+    out[6] = 2 * (xz + yw);
+    out[7] = 2 * (yz - xw);
     out[8] = 1 - 2 * (xx + yy);
 }
 
@@ -986,7 +986,6 @@ DM_INLINE
 void dm_mat4_from_mat3(float mat[M3], float out[M4])
 {
     dm_memzero(out, sizeof(float) * M4);
-    //dm_memcpy(out, mat, sizeof(float) * M3);
     
     out[0] = mat[0];
     out[1] = mat[1];

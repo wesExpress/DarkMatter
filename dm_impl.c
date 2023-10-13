@@ -13,6 +13,9 @@
 
 #include "stb_truetype/stb_truetype.h"
 
+#define FAST_OBJ_IMPLEMENTATION
+#include "fast_obj/fast_obj.h"
+
 /*********
 BYTE POOL
 ***********/
@@ -814,6 +817,99 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
     return true;
 }
 
+/*************
+MODEL LOADING
+***************/
+bool dm_renderer_load_obj_model(const char* path, dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, float** vertices, uint32_t** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset)
+{
+    fastObjMesh* m = fast_obj_read(path);
+    if(!m) { DM_LOG_ERROR("Could not create mesh from file \'%s\'", path); return false; }
+    
+    assert(m->group_count==1);
+    
+    int indx = 0;
+    
+    int pos_offset, norm_offset, tex_offset;
+    size_t vertex_size = 0;
+    
+    for(uint32_t i=0; i<attrib_count; i++)
+    {
+        switch(attribs[i])
+        {
+            case DM_MESH_VERTEX_ATTRIB_POSITION:
+            pos_offset = vertex_size;
+            vertex_size += 3;
+            break;
+            
+            case DM_MESH_VERTEX_ATTRIB_NORMAL:
+            norm_offset = vertex_size;
+            vertex_size += 3;
+            break;
+            
+            case DM_MESH_VERTEX_ATTRIB_TEXCOORD:
+            tex_offset = vertex_size;
+            vertex_size += 2;
+            break;
+            
+            default:
+            DM_LOG_ERROR("Invalid vertex attribute for obj format");
+            return false;
+        }
+    }
+    
+    *vertices = dm_alloc(vertex_size * m->groups[0].face_count * 3 * sizeof(float));
+    *indices  = dm_alloc(sizeof(uint32_t) * m->index_count);
+    
+    fastObjIndex mi;
+    
+    // over each face
+    for(uint32_t j=0; j<m->groups[0].face_count; j++)
+    {
+        const uint32_t fv = m->face_vertices[m->groups[0].face_offset + j];
+        // over each vertex
+        for(uint32_t k=0; k < fv; k++)
+        {
+            mi = m->indices[m->groups[0].index_offset + indx];
+            
+            if(pos_offset >= 0)
+            {
+                (*vertices)[indx * vertex_size + pos_offset + 0] = m->positions[3 * mi.p + 0];
+                (*vertices)[indx * vertex_size + pos_offset + 1] = m->positions[3 * mi.p + 1];
+                (*vertices)[indx * vertex_size + pos_offset + 2] = m->positions[3 * mi.p + 2];
+            }
+            
+            if(norm_offset >= 0)
+            {
+                (*vertices)[indx * vertex_size + norm_offset + 0] = m->normals[3 * mi.n + 0];
+                (*vertices)[indx * vertex_size + norm_offset + 1] = m->normals[3 * mi.n + 1];
+                (*vertices)[indx * vertex_size + norm_offset + 2] = m->normals[3 * mi.n + 2];
+            }
+            
+            if(tex_offset >= 0)
+            {
+                (*vertices)[indx * vertex_size + tex_offset + 0] = m->texcoords[2 * mi.t + 0];
+                (*vertices)[indx * vertex_size + tex_offset + 1] = m->texcoords[2 * mi.t + 1];
+            }
+            
+            (*indices)[indx] = index_offset + indx;
+            indx++;
+        }
+    }
+    
+    *vertex_count = m->groups[0].face_count * 3;
+    *index_count = m->index_count;
+    
+    return true;
+}
+
+bool dm_renderer_load_model(const char* path, dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, float** vertices, uint32_t** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context)
+{
+    return dm_renderer_load_obj_model(path, attribs, attrib_count, vertices, indices, vertex_count, index_count, index_offset);
+}
+
+/***************
+RENDER COMMANDS
+*****************/
 void __dm_renderer_submit_render_command(dm_render_command* command, dm_render_command_manager* manager)
 {
     dm_render_command* c = &manager->commands[manager->command_count++];

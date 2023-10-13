@@ -695,16 +695,13 @@ typedef struct dm_renderpass_desc_t
     dm_renderpass_flag flags;
 } dm_renderpass_desc;
 
-typedef struct dm_mesh_t
+typedef enum dm_mesh_vertex_attrib_t
 {
-    uint32_t         vertex_count, index_count;
-    uint32_t         vertex_offset, index_offset;
-    dm_render_handle texture_index;
-    float*           positions;
-    float*           normals;
-    float*           tex_coords;
-    uint32_t*        indices;
-} dm_mesh;
+    DM_MESH_VERTEX_ATTRIB_POSITION,
+    DM_MESH_VERTEX_ATTRIB_NORMAL,  
+    DM_MESH_VERTEX_ATTRIB_TEXCOORD,
+    DM_MESH_VERTEX_ATTRIB_UNKNOWN
+} dm_mesh_vertex_attrib;
 
 typedef struct dm_bakedchar
 {
@@ -1173,6 +1170,8 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
 dm_pipeline_desc dm_renderer_default_pipeline();
 
 void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context);
+
+bool dm_renderer_load_model(const char* path, dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, float** vertices, uint32_t** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context);
 
 // render commands
 void dm_render_command_clear(float r, float g, float b, float a, dm_context* context);
