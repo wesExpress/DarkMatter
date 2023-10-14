@@ -43,7 +43,7 @@ depreciated
 // opengl on mac is limited to 4.1
 #ifdef DM_OPENGL
 #define DM_OPENGL_MAJOR 4
-#ifdef __APPLE__
+#ifdef DM_PLATFORM_APPLE
 #define DM_OPENGL_MINOR 1
 #else
 #define DM_OPENGL_MINOR 6
@@ -54,10 +54,9 @@ depreciated
 SIMD INTRINSICS DETERMINATION
 *******************************/
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
-#define DM_SIMD_x86
+#define DM_SIMD_X86
 #elif defined(__aarch64__)
 #define DM_SIMD_ARM
-#define T
 #endif
 
 /********
@@ -134,7 +133,7 @@ MATH
 /****
 SIMD
 ******/
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
 typedef __m256  dm_mm256_float;
 typedef __m256i dm_mm256_int;
 
@@ -155,7 +154,7 @@ typedef int32x4_t dm_mm_int;
 INTRINSICS
 ************/
 #include "dm_intrinsics.h"
-#ifndef DM_SIMD_ARM
+#ifdef DM_SIMD_X86
 #include "dm_intrinsics256.h"
 #endif
 
@@ -177,7 +176,7 @@ typedef struct mt19937
 typedef struct mt19937_64
 {
 	uint64_t mt[312];
-	size_t mti;
+	size_t   mti;
 } mt19937_64;
 
 /*****
@@ -1171,7 +1170,7 @@ dm_pipeline_desc dm_renderer_default_pipeline();
 
 void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context);
 
-bool dm_renderer_load_model(const char* path, dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, float** vertices, uint32_t** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context);
+bool dm_renderer_load_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, float** vertices, uint32_t** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context);
 
 // render commands
 void dm_render_command_clear(float r, float g, float b, float a, dm_context* context);

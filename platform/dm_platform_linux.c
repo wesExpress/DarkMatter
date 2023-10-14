@@ -34,6 +34,37 @@ typedef GLXContext (*glXCreateContextAttribARBProc)(Display*, GLXFBConfig, GLXCo
 #include <vulkan/vulkan.h>
 #endif
 
+#include <pthread.h>
+
+typedef struct dm_linux_semaphore_t
+{
+    pthread_cond_t  cond;
+    pthread_mutex_t mutex;
+    uint32_t v;
+} dm_linux_semaphore;
+
+typedef struct dm_linux_task_queue_t
+{
+    dm_thread_task tasks[DM_MAX_THREAD_COUNT];
+    uint32_t       count;
+
+    pthread_mutex_t    mutex;
+    dm_linux_semaphore has_tasks;
+} dm_linux_task_queue;
+
+typedef struct dm_linux_threadpool_t
+{
+    pthread_mutex_t thread_count_mutex;
+    pthread_cond_t  all_threads_idle;
+    pthread_cond_t  at_least_one_idle;
+
+    uint32_t num_working_threads;
+
+    dm_linux_task_queue task_queue;
+
+    pthread_t threads[DM_MAX_THREAD_COUNT];
+} dm_linux_threadpool;
+
 typedef struct dm_internal_linux_data_t
 {
     Display* display;
@@ -47,6 +78,7 @@ typedef struct dm_internal_linux_data_t
 #define DM_LINUX_GET_DATA dm_internal_linux_data* linux_data = platform_data->internal_data
 
 dm_key_code dm_linux_translate_key_code(uint32_t x_keycode);
+void* dm_linux_thread_start_func(void* args);
 
 bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_platform_data* platform_data)
 {
@@ -480,3 +512,138 @@ bool dm_platform_create_vulkan_surface(dm_platform_data* platform_data, VkInstan
     return false;
 }
 #endif
+
+/**********
+THREADPOOL
+************/
+/**********
+THREADPOOL
+************/
+bool dm_platform_threadpool_create(dm_threadpool* threadpool)
+{
+    threadpool->internal_pool = dm_alloc(sizeof(dm_linux_threadpool));
+    dm_linux_threadpool* linux_threadpool = threadpool->internal_pool;
+
+    pthread_mutex_init(&linux_threadpool->thread_count_mutex, NULL);
+    pthread_mutex_init(&linux_threadpool->task_queue.mutex, NULL);
+    pthread_mutex_init(&linux_threadpool->task_queue.has_tasks.mutex, NULL);
+    pthread_cond_init(&linux_threadpool->task_queue.has_tasks.cond, NULL);
+    pthread_cond_init(&linux_threadpool->all_threads_idle, NULL);
+    pthread_cond_init(&linux_threadpool->at_least_one_idle, NULL);
+
+    for(uint32_t i=0; i<threadpool->thread_count; i++)
+    {
+        if(pthread_create(&linux_threadpool->threads[i], NULL, &dm_linux_thread_start_func, threadpool) == 0) continue;
+
+        DM_LOG_FATAL("Could not create pthread");
+        return false;
+    }
+
+    return true;
+}
+
+void dm_platform_threadpool_destroy(dm_threadpool* threadpool)
+{
+    dm_linux_threadpool* linux_threadpool = threadpool->internal_pool;
+
+    pthread_mutex_destroy(&linux_threadpool->thread_count_mutex);
+    pthread_mutex_destroy(&linux_threadpool->task_queue.mutex);
+    pthread_mutex_destroy(&linux_threadpool->task_queue.has_tasks.mutex);
+    pthread_cond_destroy(&linux_threadpool->task_queue.has_tasks.cond);
+    pthread_cond_destroy(&linux_threadpool->all_threads_idle);
+    pthread_cond_destroy(&linux_threadpool->at_least_one_idle);
+
+    dm_free(threadpool->internal_pool);
+}
+
+void dm_platform_threadpool_submit_task(dm_thread_task* task, dm_threadpool* threadpool)
+{
+    dm_linux_threadpool* linux_threadpool = threadpool->internal_pool;
+
+    // insert task
+    pthread_mutex_lock(&linux_threadpool->task_queue.mutex);
+    dm_memcpy(linux_threadpool->task_queue.tasks + linux_threadpool->task_queue.count, task, sizeof(dm_thread_task));
+    linux_threadpool->task_queue.count++;
+
+    // wake up at least one thread
+    pthread_mutex_lock(&linux_threadpool->task_queue.has_tasks.mutex);
+    linux_threadpool->task_queue.has_tasks.v = 1;
+    pthread_cond_signal(&linux_threadpool->task_queue.has_tasks.cond);
+    pthread_mutex_unlock(&linux_threadpool->task_queue.has_tasks.mutex);
+
+    pthread_mutex_unlock(&linux_threadpool->task_queue.mutex);
+}
+
+void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool)
+{
+    dm_linux_threadpool* linux_threadpool = threadpool->internal_pool;
+
+    // sleep until there are NO working threads AND the task queue is empty
+    pthread_mutex_lock(&linux_threadpool->thread_count_mutex);
+    while(linux_threadpool->num_working_threads || linux_threadpool->task_queue.count) 
+    {
+        pthread_cond_wait(&linux_threadpool->all_threads_idle, &linux_threadpool->thread_count_mutex);
+    }
+    pthread_mutex_unlock(&linux_threadpool->thread_count_mutex);
+}
+
+void* dm_linux_thread_start_func(void* args)
+{
+    dm_threadpool* threadpool = args;
+    dm_linux_threadpool* linux_threadpool = threadpool->internal_pool;
+    
+    while(1)
+    {
+        // sleep until a new task is available
+        pthread_mutex_lock(&linux_threadpool->task_queue.has_tasks.mutex);
+        while(linux_threadpool->task_queue.has_tasks.v==0)
+        {
+            pthread_cond_wait(&linux_threadpool->task_queue.has_tasks.cond, &linux_threadpool->task_queue.has_tasks.mutex);
+        }
+        linux_threadpool->task_queue.has_tasks.v = 0;
+        pthread_mutex_unlock(&linux_threadpool->task_queue.has_tasks.mutex);
+
+        // iterate thread working counter
+        pthread_mutex_lock(&linux_threadpool->thread_count_mutex);
+        linux_threadpool->num_working_threads++;
+        pthread_mutex_unlock(&linux_threadpool->thread_count_mutex);
+
+        // grab task
+        pthread_mutex_lock(&linux_threadpool->task_queue.mutex);
+        dm_thread_task* task = NULL;
+
+        // is there still a task since we've woken up?
+        if(linux_threadpool->task_queue.count)
+        {
+            task = dm_alloc(sizeof(dm_thread_task));
+            dm_memcpy(task, &linux_threadpool->task_queue.tasks[0], sizeof(dm_thread_task));
+            dm_memmove(linux_threadpool->task_queue.tasks, linux_threadpool->task_queue.tasks + 1, sizeof(dm_thread_task) * linux_threadpool->task_queue.count-1);
+            linux_threadpool->task_queue.count--;
+        }
+
+        // if queue is still populated, need to set semaphore back
+        if(linux_threadpool->task_queue.count)
+        {
+            pthread_mutex_lock(&linux_threadpool->task_queue.has_tasks.mutex);
+            linux_threadpool->task_queue.has_tasks.v = 1;
+            pthread_cond_signal(&linux_threadpool->task_queue.has_tasks.cond);
+            pthread_mutex_unlock(&linux_threadpool->task_queue.has_tasks.mutex);
+        }
+        pthread_mutex_unlock(&linux_threadpool->task_queue.mutex);
+
+        if(task)
+        {
+            task->func(task->args);
+            dm_free(task);
+        }
+
+        // decrement thread working counter
+        pthread_mutex_lock(&linux_threadpool->thread_count_mutex);
+        linux_threadpool->num_working_threads--;
+        if(linux_threadpool->num_working_threads==0) pthread_cond_signal(&linux_threadpool->all_threads_idle);
+        //else pthread_cond_signal(&linux_threadpool->at_least_one_idle);
+        pthread_mutex_unlock(&linux_threadpool->thread_count_mutex);
+    }
+
+    return NULL;
+}

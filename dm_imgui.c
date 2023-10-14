@@ -71,8 +71,10 @@ bool dm_imgui_init(dm_context* context)
     
     // nuklear stuff
     nk_init_default(&imgui_nk_ctx->ctx, 0);
+#ifdef DM_PLATFORM_WIN32
     imgui_nk_ctx->ctx.clip.copy = dm_imgui_nuklear_copy;
     imgui_nk_ctx->ctx.clip.paste = dm_imgui_nuklear_paste;
+#endif
     
     imgui_nk_ctx->max_vertex_buffer = DM_IMGUI_MAX_VERTICES;
     imgui_nk_ctx->max_index_buffer = DM_IMGUI_MAX_INDICES;
@@ -84,7 +86,7 @@ bool dm_imgui_init(dm_context* context)
     
     struct nk_font* chicago = nk_font_atlas_add_from_file(&imgui_nk_ctx->atlas, "assets/fonts/Chicago.ttf", 12, 0);
     
-    uint32_t w, h;
+    int w, h;
     const void* image = nk_font_atlas_bake(&imgui_nk_ctx->atlas, &w, &h, NK_FONT_ATLAS_RGBA32);
     
     if(!dm_renderer_create_texture_from_data(w,h, 4, image, "imgui_font", &imgui_ctx->font_texture, context)) return false;
@@ -139,6 +141,7 @@ void dm_imgui_shutdown(dm_context* context)
 }
 
 // clipboard
+#ifdef DM_PLATFORM_WIN32
 void dm_imgui_nuklear_copy(nk_handle usr, const char* text, int len)
 {
     dm_platform_clipboard_copy(text, len);
@@ -153,6 +156,7 @@ void dm_imgui_nuklear_paste_callback(char* text, int len, void* edit)
 {
     nk_textedit_paste(0, text, len);
 }
+#endif
 
 // input
 void dm_imgui_input_begin(dm_context* context)
@@ -253,12 +257,15 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
                 case DM_KEY_R:
                 nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_TEXT_REDO, down);
                 break;
+
+                default:
+                break;
             }
         }break;
         
         case DM_EVENT_MOUSEBUTTON_DOWN:
         {
-            int x,y;
+            uint32_t x,y;
             dm_input_get_mouse_pos(&x,&y, context);
             
             switch(e.button)
@@ -278,12 +285,15 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
                 case DM_MOUSEBUTTON_DOUBLE:
                 nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_DOUBLE, x,y, 1);
                 break;
+
+                default:
+                break;
             }
         } break;
         
         case DM_EVENT_MOUSEBUTTON_UP:
         {
-            int x,y;
+            uint32_t x,y;
             dm_input_get_mouse_pos(&x,&y, context);
             
             switch(e.button)
@@ -300,6 +310,9 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
                 case DM_MOUSEBUTTON_M:
                 nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_MIDDLE, x,y, 0);
                 break;
+
+                default:
+                break;
             }
         } break;
         
@@ -312,6 +325,9 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
         
         case DM_EVENT_MOUSE_SCROLL:
         nk_input_scroll(&imgui_nk_ctx->ctx, nk_vec2(0,e.delta));
+        break;
+
+        default:
         break;
     }
 }
@@ -358,11 +374,6 @@ void dm_imgui_render(dm_context* context)
     nk_buffer_init_fixed(&vbuf, imgui_nk_ctx->vertices, (size_t)imgui_nk_ctx->max_vertex_buffer);
     nk_buffer_init_fixed(&ibuf, imgui_nk_ctx->indices, (size_t)imgui_nk_ctx->max_index_buffer);
     nk_convert(&imgui_nk_ctx->ctx, &imgui_nk_ctx->cmds, &vbuf, &ibuf, &config);
-    
-    dm_nk_element_t test[100];
-    dm_memcpy(test, ibuf.memory.ptr, sizeof(test));
-    dm_memcpy(test, imgui_nk_ctx->indices, sizeof(test));
-    size_t d = sizeof(dm_nk_element_t);
     
     dm_render_command_bind_buffer(imgui_ctx->vb, 0, context);
     dm_render_command_update_buffer(imgui_ctx->vb, imgui_nk_ctx->vertices, DM_IMGUI_MAX_VERTICES, 0, context);

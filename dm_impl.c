@@ -820,7 +820,7 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
 /*************
 MODEL LOADING
 ***************/
-bool dm_renderer_load_obj_model(const char* path, dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, float** vertices, uint32_t** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset)
+bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, float** vertices, uint32_t** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset)
 {
     fastObjMesh* m = fast_obj_read(path);
     if(!m) { DM_LOG_ERROR("Could not create mesh from file \'%s\'", path); return false; }
@@ -857,15 +857,17 @@ bool dm_renderer_load_obj_model(const char* path, dm_mesh_vertex_attrib* attribs
         }
     }
     
-    *vertices = dm_alloc(vertex_size * m->groups[0].face_count * 3 * sizeof(float));
+    *vertices = dm_alloc(sizeof(float) * vertex_size * 3 * m->groups[0].face_count);
     *indices  = dm_alloc(sizeof(uint32_t) * m->index_count);
     
     fastObjIndex mi;
     
+    *vertex_count = 0;
     // over each face
     for(uint32_t j=0; j<m->groups[0].face_count; j++)
     {
         const uint32_t fv = m->face_vertices[m->groups[0].face_offset + j];
+        DM_LOG_DEBUG("%u %u %u", j, m->groups[0].face_count, fv);
         // over each vertex
         for(uint32_t k=0; k < fv; k++)
         {
@@ -893,16 +895,21 @@ bool dm_renderer_load_obj_model(const char* path, dm_mesh_vertex_attrib* attribs
             
             (*indices)[indx] = index_offset + indx;
             indx++;
+            (*vertex_count)++;
         }
     }
     
-    *vertex_count = m->groups[0].face_count * 3;
+    assert(indx == m->index_count);
+    assert(*vertex_count == m->groups[0].face_count * 3);
+
     *index_count = m->index_count;
     
+    fast_obj_destroy(m);
+
     return true;
 }
 
-bool dm_renderer_load_model(const char* path, dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, float** vertices, uint32_t** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context)
+bool dm_renderer_load_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, float** vertices, uint32_t** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context)
 {
     return dm_renderer_load_obj_model(path, attribs, attrib_count, vertices, indices, vertex_count, index_count, index_offset);
 }
