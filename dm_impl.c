@@ -16,6 +16,9 @@
 #define FAST_OBJ_IMPLEMENTATION
 #include "fast_obj/fast_obj.h"
 
+#define CGLTF_IMPLEMENTATION
+#include "cgltf/cgltf.h"
+
 /*********
 BYTE POOL
 ***********/
@@ -28,7 +31,6 @@ void __dm_byte_pool_insert(dm_byte_pool* byte_pool, void* data, size_t data_size
     dm_memcpy(dest, data, data_size);
     byte_pool->size += data_size;
 }
-
 #define DM_BYTE_POOL_INSERT(BYTE_POOL, DATA) __dm_byte_pool_insert(&BYTE_POOL, &DATA, sizeof(DATA))
 
 void* __dm_byte_pool_pop(dm_byte_pool* byte_pool, size_t data_size)
@@ -820,7 +822,7 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
 /*************
 MODEL LOADING
 ***************/
-bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, float** vertices, uint32_t** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset)
+bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, dm_mesh_index_type index_type, float** vertices, void** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset)
 {
     fastObjMesh* m = fast_obj_read(path);
     if(!m) { DM_LOG_ERROR("Could not create mesh from file \'%s\'", path); return false; }
@@ -829,7 +831,7 @@ bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* a
     
     int indx = 0;
     
-    int pos_offset, norm_offset, tex_offset;
+    int pos_offset, norm_offset, tex_offset = -1;
     size_t vertex_size = 0;
     
     for(uint32_t i=0; i<attrib_count; i++)
@@ -858,7 +860,21 @@ bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* a
     }
     
     *vertices = dm_alloc(sizeof(float) * vertex_size * 3 * m->groups[0].face_count);
-    *indices  = dm_alloc(sizeof(uint32_t) * m->index_count);
+    switch(index_type)
+    {
+        case DM_MESH_INDEX_TYPE_UINT16:
+        *indices  = dm_alloc(sizeof(uint16_t) * m->index_count);
+        break;
+        
+        case DM_MESH_INDEX_TYPE_UINT32:
+        *indices  = dm_alloc(sizeof(uint32_t) * m->index_count);
+        break;
+        
+        default:
+        dm_free(*vertices);
+        fast_obj_destroy(m);
+        return false;
+    }
     
     fastObjIndex mi;
     
@@ -867,7 +883,7 @@ bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* a
     for(uint32_t j=0; j<m->groups[0].face_count; j++)
     {
         const uint32_t fv = m->face_vertices[m->groups[0].face_offset + j];
-        DM_LOG_DEBUG("%u %u %u", j, m->groups[0].face_count, fv);
+        
         // over each vertex
         for(uint32_t k=0; k < fv; k++)
         {
@@ -893,7 +909,20 @@ bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* a
                 (*vertices)[indx * vertex_size + tex_offset + 1] = m->texcoords[2 * mi.t + 1];
             }
             
-            (*indices)[indx] = index_offset + indx;
+            switch(index_type)
+            {
+                case DM_MESH_INDEX_TYPE_UINT16:
+                {
+                    uint16_t* inds = *indices;
+                    inds[indx] = index_offset + indx;
+                } break;
+                
+                case DM_MESH_INDEX_TYPE_UINT32:
+                {
+                    uint32_t* inds = *indices;
+                    inds[indx] = index_offset + indx;
+                } break;
+            }
             indx++;
             (*vertex_count)++;
         }
@@ -901,17 +930,169 @@ bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* a
     
     assert(indx == m->index_count);
     assert(*vertex_count == m->groups[0].face_count * 3);
-
+    
     *index_count = m->index_count;
     
     fast_obj_destroy(m);
-
+    
     return true;
 }
 
-bool dm_renderer_load_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, float** vertices, uint32_t** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context)
+bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, dm_mesh_index_type index_type, float** vertices, void** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset)
 {
-    return dm_renderer_load_obj_model(path, attribs, attrib_count, vertices, indices, vertex_count, index_count, index_offset);
+    cgltf_options options = { 0 };
+    cgltf_data* data = NULL;
+    cgltf_result result = cgltf_parse_file(&options, path, &data);
+    if(result != cgltf_result_success)
+    {
+        DM_LOG_FATAL("Could not load file: %s", path);
+        cgltf_free(data);
+        return false;
+    }
+    
+    result = cgltf_validate(data);
+    if(result!=cgltf_result_success) 
+    {
+        DM_LOG_FATAL("Validating gltf data failed: %s", path);
+        cgltf_free(data);
+        return false;
+    }
+    
+    result = cgltf_load_buffers(&options, data, path);
+    if(result!=cgltf_result_success)
+    {
+        DM_LOG_FATAL("Could not load gltf buffers: %s", path);
+        cgltf_free(data);
+        return false;
+    }
+    
+    // only supporting single meshes at this point
+    uint32_t mesh_count = data->meshes_count;
+    assert(mesh_count==1);
+    
+    cgltf_mesh mesh = data->meshes[0];
+    
+    // only supporting triangles (faces) for now
+    uint32_t primitive_count = mesh.primitives_count;
+    assert(primitive_count==1);
+    assert(mesh.primitives[0].type==cgltf_primitive_type_triangles);
+    
+    cgltf_primitive primitive = mesh.primitives[0];
+    
+    // only supporting up to 3 attribute types for now
+    //assert(primitive.attributes_count<=3);
+    
+    // make sure that attributes all have the same number of counts
+    for(uint32_t i=0; i<primitive.attributes_count; i++)
+    {
+        for(uint32_t j=i+1; j<primitive.attributes_count; j++)
+        {
+            assert(primitive.attributes[i].data->count==primitive.attributes[j].data->count);
+        }
+    }
+    
+    // we now know how many vertices we have
+    const uint32_t count = primitive.attributes[0].data->count;
+    
+    // get attribute offsets into our vertices buffer
+    int pos_offset, norm_offset, tex_offset = -1;
+    size_t vertex_stride = 0;
+    
+    for(uint32_t i=0; i<attrib_count; i++)
+    {
+        switch(attribs[i])
+        {
+            case DM_MESH_VERTEX_ATTRIB_POSITION:
+            pos_offset = vertex_stride;
+            vertex_stride += 3;
+            break;
+            
+            case DM_MESH_VERTEX_ATTRIB_NORMAL:
+            norm_offset = vertex_stride;
+            vertex_stride += 3;
+            break;
+            
+            case DM_MESH_VERTEX_ATTRIB_TEXCOORD:
+            tex_offset = vertex_stride;
+            vertex_stride += 2;
+            break;
+            
+            default:
+            DM_LOG_ERROR("Invalid vertex attribute for obj format");
+            return false;
+        }
+    }
+    
+    *vertices = dm_alloc(sizeof(float) * vertex_stride * count);
+    
+    // put data into our vertices buffer
+    uint32_t index = 0;
+    
+    cgltf_accessor*    accessor = NULL;
+    cgltf_attribute    attribute;
+    cgltf_buffer_view* buffer_view = NULL;
+    float test[3];
+    float* buffer = NULL;
+    
+    size_t stride;
+    size_t size = 0;
+    
+    for(uint32_t v=0; v<count; v++)
+    {
+        for(uint32_t i=0; i<primitive.attributes_count; i++)
+        {
+            attribute   = primitive.attributes[i];
+            accessor    = attribute.data;
+            buffer_view = accessor->buffer_view;
+            buffer      = (float*)((char*)buffer_view->buffer->data + buffer_view->offset);
+            stride      = accessor->stride / sizeof(float);
+            
+            switch(primitive.attributes[i].type)
+            {
+                case cgltf_attribute_type_position:
+                if(pos_offset>=0) size = sizeof(float) * 3;
+                break;
+                
+                case cgltf_attribute_type_normal:
+                if(norm_offset>=0) size = sizeof(float) * 3;
+                break;
+                
+                case cgltf_attribute_type_texcoord:
+                if(tex_offset>=0) size = sizeof(float) * 2;
+                break;
+                
+                default:
+                continue;
+            }
+            
+            dm_memcpy(*vertices + v * vertex_stride + pos_offset, buffer + v * stride, size);
+        }
+    }
+    
+    // get indices
+    *indices = dm_alloc(sizeof(uint16_t) * primitive.indices->count);
+    dm_memcpy(*indices, (char*)primitive.indices->buffer_view->buffer->data + primitive.indices->buffer_view->offset, primitive.indices->buffer_view->size);
+    
+    // cleanup
+    cgltf_free(data);
+    
+    *vertex_count = count;
+    
+    return true;
+}
+
+bool dm_renderer_load_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, dm_mesh_index_type index_type, float** vertices, void** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context)
+{
+    const char* ext = strrchr(path, '.');
+    ext++;
+    
+    if(strcmp(ext, "obj")==0) 
+        return dm_renderer_load_obj_model(path, attribs, attrib_count, index_type, vertices, indices, vertex_count, index_count, index_offset);
+    else if(strcmp(ext, "gltf")==0 || strcmp(ext, "glb")==0) 
+        return dm_renderer_load_gltf_model(path, attribs, attrib_count, index_type, vertices, indices, vertex_count, index_count, index_offset);
+    
+    DM_LOG_FATAL("Unknown model extension");
+    return false;
 }
 
 /***************

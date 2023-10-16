@@ -1,6 +1,6 @@
-#ifdef DM_PLATFORM_WIN32
-
 #include "dm_platform_win32.h"
+
+#ifdef DM_PLATFORM_WIN32
 
 #ifdef DM_OPENGL
 #include "glad/glad_wgl.h"
