@@ -922,6 +922,9 @@ bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* a
                     uint32_t* inds = *indices;
                     inds[indx] = index_offset + indx;
                 } break;
+
+                default:
+                return false;
             }
             indx++;
             (*vertex_count)++;
@@ -1025,13 +1028,10 @@ bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* 
     
     *vertices = dm_alloc(sizeof(float) * vertex_stride * count);
     
-    // put data into our vertices buffer
-    uint32_t index = 0;
-    
+    // put data into our vertices buffer    
     cgltf_accessor*    accessor = NULL;
     cgltf_attribute    attribute;
     cgltf_buffer_view* buffer_view = NULL;
-    float test[3];
     float* buffer = NULL;
     
     size_t stride;
@@ -1070,7 +1070,7 @@ bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* 
     }
     
     // get indices
-    *indices = dm_alloc(sizeof(uint16_t) * primitive.indices->count);
+    *indices = dm_alloc(primitive.indices->buffer_view->size);
     dm_memcpy(*indices, (char*)primitive.indices->buffer_view->buffer->data + primitive.indices->buffer_view->offset, primitive.indices->buffer_view->size);
     
     // cleanup
