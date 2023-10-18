@@ -922,7 +922,7 @@ bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* a
                     uint32_t* inds = *indices;
                     inds[indx] = index_offset + indx;
                 } break;
-
+                
                 default:
                 return false;
             }
@@ -1036,6 +1036,7 @@ bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* 
     
     size_t stride;
     size_t size = 0;
+    size_t offset = 0;
     
     for(uint32_t v=0; v<count; v++)
     {
@@ -1050,22 +1051,31 @@ bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* 
             switch(primitive.attributes[i].type)
             {
                 case cgltf_attribute_type_position:
-                if(pos_offset>=0) size = sizeof(float) * 3;
-                break;
+                if(pos_offset>=0) 
+                {
+                    size   = sizeof(float) * 3;
+                    offset = pos_offset;
+                } break;
                 
                 case cgltf_attribute_type_normal:
-                if(norm_offset>=0) size = sizeof(float) * 3;
-                break;
+                if(norm_offset>=0) 
+                {
+                    size   = sizeof(float) * 3;
+                    offset = norm_offset;
+                } break;
                 
                 case cgltf_attribute_type_texcoord:
-                if(tex_offset>=0) size = sizeof(float) * 2;
-                break;
+                if(tex_offset>=0)
+                {
+                    size   = sizeof(float) * 2;
+                    offset = tex_offset;
+                } break;
                 
                 default:
                 continue;
             }
             
-            dm_memcpy(*vertices + v * vertex_stride + pos_offset, buffer + v * stride, size);
+            dm_memcpy(*vertices + v * vertex_stride + offset, buffer + v * stride, size);
         }
     }
     
@@ -1073,10 +1083,11 @@ bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* 
     *indices = dm_alloc(primitive.indices->buffer_view->size);
     dm_memcpy(*indices, (char*)primitive.indices->buffer_view->buffer->data + primitive.indices->buffer_view->offset, primitive.indices->buffer_view->size);
     
+    *vertex_count = count;
+    *index_count = primitive.indices->buffer_view->size / sizeof(uint16_t);
+    
     // cleanup
     cgltf_free(data);
-    
-    *vertex_count = count;
     
     return true;
 }

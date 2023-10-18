@@ -597,6 +597,12 @@ typedef enum dm_uniform_stage_t
 
 typedef uint32_t dm_render_handle;
 
+#define DM_RENDER_HANDLE_INVALID UINT_MAX
+#define DM_BUFFER_INVALID        DM_RENDER_HANDLE_INVALID
+#define DM_TEXTURE_INVALID       DM_RENDER_HANDLE_INVALID
+#define DM_SHADER_INVALID        DM_RENDER_HANDLE_INVALID
+#define DM_PIPELINE_INVALID      DM_RENDER_HANDLE_INVALID
+
 typedef struct dm_buffer_desc_t
 {
     dm_buffer_type type;
