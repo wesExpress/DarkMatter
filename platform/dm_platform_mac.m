@@ -1,4 +1,6 @@
 #include "dm.h"
+
+#ifdef DM_PLATFORM_APPLE
 #include "dm_platform_mac.h"
 
 #import <Metal/Metal.h>
@@ -505,3 +507,5 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key)
         return DM_KEY_A;
     }
 }
+
+#endif

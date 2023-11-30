@@ -43,7 +43,7 @@ depreciated
 // opengl on mac is limited to 4.1
 #ifdef DM_OPENGL
 #define DM_OPENGL_MAJOR 4
-#ifdef __APPLE__
+#ifdef DM_PLATFORM_APPLE
 #define DM_OPENGL_MINOR 1
 #else
 #define DM_OPENGL_MINOR 6
@@ -54,10 +54,9 @@ depreciated
 SIMD INTRINSICS DETERMINATION
 *******************************/
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
-#define DM_SIMD_x86
+#define DM_SIMD_X86
 #elif defined(__aarch64__)
 #define DM_SIMD_ARM
-#define T
 #endif
 
 /********
@@ -134,7 +133,7 @@ MATH
 /****
 SIMD
 ******/
-#ifdef DM_SIMD_x86
+#ifdef DM_SIMD_X86
 typedef __m256  dm_mm256_float;
 typedef __m256i dm_mm256_int;
 
@@ -155,7 +154,7 @@ typedef int32x4_t dm_mm_int;
 INTRINSICS
 ************/
 #include "dm_intrinsics.h"
-#ifndef DM_SIMD_ARM
+#ifdef DM_SIMD_X86
 #include "dm_intrinsics256.h"
 #endif
 
@@ -177,7 +176,7 @@ typedef struct mt19937
 typedef struct mt19937_64
 {
 	uint64_t mt[312];
-	size_t mti;
+	size_t   mti;
 } mt19937_64;
 
 /*****
@@ -598,6 +597,12 @@ typedef enum dm_uniform_stage_t
 
 typedef uint32_t dm_render_handle;
 
+#define DM_RENDER_HANDLE_INVALID UINT_MAX
+#define DM_BUFFER_INVALID        DM_RENDER_HANDLE_INVALID
+#define DM_TEXTURE_INVALID       DM_RENDER_HANDLE_INVALID
+#define DM_SHADER_INVALID        DM_RENDER_HANDLE_INVALID
+#define DM_PIPELINE_INVALID      DM_RENDER_HANDLE_INVALID
+
 typedef struct dm_buffer_desc_t
 {
     dm_buffer_type type;
@@ -695,16 +700,20 @@ typedef struct dm_renderpass_desc_t
     dm_renderpass_flag flags;
 } dm_renderpass_desc;
 
-typedef struct dm_mesh_t
+typedef enum dm_mesh_vertex_attrib_t
 {
-    uint32_t         vertex_count, index_count;
-    uint32_t         vertex_offset, index_offset;
-    dm_render_handle texture_index;
-    float*           positions;
-    float*           normals;
-    float*           tex_coords;
-    uint32_t*        indices;
-} dm_mesh;
+    DM_MESH_VERTEX_ATTRIB_POSITION,
+    DM_MESH_VERTEX_ATTRIB_NORMAL,  
+    DM_MESH_VERTEX_ATTRIB_TEXCOORD,
+    DM_MESH_VERTEX_ATTRIB_UNKNOWN
+} dm_mesh_vertex_attrib;
+
+typedef enum dm_mesh_index_type_t
+{
+    DM_MESH_INDEX_TYPE_UINT16,
+    DM_MESH_INDEX_TYPE_UINT32,
+    DM_MESH_INDEX_TYPE_UNKNOWN
+} dm_mesh_index_type;
 
 typedef struct dm_bakedchar
 {
@@ -1173,6 +1182,8 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
 dm_pipeline_desc dm_renderer_default_pipeline();
 
 void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context);
+
+bool dm_renderer_load_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, dm_mesh_index_type index_type, float** vertices, void** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context);
 
 // render commands
 void dm_render_command_clear(float r, float g, float b, float a, dm_context* context);

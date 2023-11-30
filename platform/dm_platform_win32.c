@@ -1,5 +1,7 @@
 #include "dm_platform_win32.h"
 
+#ifdef DM_PLATFORM_WIN32
+
 #ifdef DM_OPENGL
 #include "glad/glad_wgl.h"
 
@@ -686,4 +688,6 @@ bool dm_platform_create_vulkan_surface(dm_platform_data* platform_data, VkInstan
     DM_LOG_FATAL("Could not create Win32 Vulkan surface");
     return false;
 }
+#endif
+
 #endif

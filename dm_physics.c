@@ -1211,7 +1211,6 @@ void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_m
     float delta_w_b[3]     = { 0 };
     
     float dum[N3];
-    float v_damp, w_damp;
     
     float i_body_a[3] = { 
         manifold->contact_data[0].i_body_inv_00, 
