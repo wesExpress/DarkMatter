@@ -594,7 +594,7 @@ extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, d
 extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
 
 extern void dm_render_command_backend_clear(float r, float g, float b, float a, dm_renderer* renderer);
 extern void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer);
@@ -749,9 +749,9 @@ bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint3
     return false;
 }
 
-bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context)
 {
-    if(dm_renderer_backend_create_dynamic_texture(width, height, n_channels, data, handle, &context->renderer)) return true;
+    if(dm_renderer_backend_create_dynamic_texture(width, height, n_channels, data, name, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Could not create dynamic texture");
     return false;
@@ -847,7 +847,8 @@ bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* a
     
     int indx = 0;
     
-    int pos_offset, norm_offset, tex_offset = -1;
+    int pos_offset, norm_offset, tex_offset; 
+    pos_offset = norm_offset = tex_offset = -1;
     size_t vertex_size = 0;
     
     for(uint32_t i=0; i<attrib_count; i++)
@@ -1014,7 +1015,9 @@ bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* 
     const uint32_t count = primitive.attributes[0].data->count;
     
     // get attribute offsets into our vertices buffer
-    int pos_offset, norm_offset, tex_offset = -1;
+    int pos_offset, norm_offset, tex_offset;
+    pos_offset = norm_offset = tex_offset = -1;
+
     size_t vertex_stride = 0;
     
     for(uint32_t i=0; i<attrib_count; i++)
@@ -1050,7 +1053,7 @@ bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* 
     cgltf_buffer_view* buffer_view = NULL;
     float* buffer = NULL;
     
-    size_t stride;
+    size_t stride = 0;
     size_t size = 0;
     size_t offset = 0;
     

@@ -1183,7 +1183,7 @@ bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipel
 bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context);
 
 bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context);
 

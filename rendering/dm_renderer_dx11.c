@@ -457,7 +457,7 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
 	return true;
 }
 
-bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, dm_render_handle* handle, dm_renderer* renderer)
+bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer)
 {
     DM_DX11_GET_RENDERER;
     HRESULT hr;
