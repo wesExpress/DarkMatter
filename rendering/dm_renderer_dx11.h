@@ -21,6 +21,19 @@ typedef struct dm_dx11_shader_t
 	ID3D11InputLayout*  input_layout;
 } dm_dx11_shader;
 
+typedef struct dm_dx11_compute_shader_t
+{
+    ID3D11ComputeShader* shader;
+    
+    ID3D11Buffer*        input_buffer;
+    size_t               input_buffer_stride;
+    
+    ID3D11Buffer*        output_buffer;
+    
+    ID3D11Buffer*        constant_buffer;
+    size_t               cb_stride;
+} dm_dx11_compute_shader;
+
 typedef struct dm_dx11_texture_t
 {
 	ID3D11Texture2D* texture;
@@ -28,6 +41,9 @@ typedef struct dm_dx11_texture_t
     
     // staging texture
     ID3D11Texture2D* staging;
+    
+    uint32_t width, height;
+    bool is_dynamic;
 } dm_dx11_texture;
 
 typedef struct dm_dx11_framebuffer_t
@@ -82,13 +98,14 @@ typedef struct dm_dx11_renderer
     HWND hwnd;
 	HINSTANCE h_instance;
     
-    dm_dx11_buffer      buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_shader      shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_texture     textures[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_framebuffer framebuffers[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_pipeline    pipelines[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_buffer         buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_shader         shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_compute_shader compute_shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_texture        textures[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_framebuffer    framebuffers[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_pipeline       pipelines[DM_RENDERER_MAX_RESOURCE_COUNT];
     
-    uint32_t buffer_count, shader_count, texture_count, framebuffer_count, pipeline_count;
+    uint32_t buffer_count, shader_count, compute_count, texture_count, framebuffer_count, pipeline_count;
     
     uint32_t active_pipeline, active_shader;
     

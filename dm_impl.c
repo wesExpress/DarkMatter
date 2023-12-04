@@ -594,6 +594,7 @@ extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, d
 extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, dm_render_handle* handle, dm_renderer* renderer);
 
 extern void dm_render_command_backend_clear(float r, float g, float b, float a, dm_renderer* renderer);
 extern void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer);
@@ -614,6 +615,8 @@ extern void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_
 extern void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer);
 extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer);
 extern void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_renderer* renderer);
+
+extern bool dm_renderer_backend_create_compute_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 
 // renderer
 bool dm_renderer_init(dm_context* context)
@@ -740,13 +743,18 @@ bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels,
 
 bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context)
 {
-    if(!dm_renderer_backend_create_texture(width, height, n_channels, data, name, handle, &context->renderer))
-    {
-        DM_LOG_FATAL("Failed to create texture from data");
-        return false;
-    }
+    if(dm_renderer_backend_create_texture(width, height, n_channels, data, name, handle, &context->renderer)) return true;
     
-    return true;
+    DM_LOG_FATAL("Failed to create texture from data");
+    return false;
+}
+
+bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, dm_render_handle* handle, dm_context* context)
+{
+    if(dm_renderer_backend_create_dynamic_texture(width, height, n_channels, data, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create dynamic texture");
+    return false;
 }
 
 void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context)
@@ -817,6 +825,14 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
     *handle = context->renderer.font_count++;
     
     return true;
+}
+
+bool dm_renderer_create_compute_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_context* context)
+{
+    if(dm_renderer_backend_create_compute_shader(desc, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create compute shader from: %s", desc.path);
+    return false;
 }
 
 /*************

@@ -397,6 +397,9 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
     
 	dm_dx11_texture internal_texture = {0};
     
+    internal_texture.width = width;
+    internal_texture.height = height;
+    
     // texture
 	D3D11_TEXTURE2D_DESC tex_desc = { 0 };
 	tex_desc.Width = width;
@@ -407,13 +410,14 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
 	tex_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
 	tex_desc.Usage = D3D11_USAGE_DEFAULT;
 	tex_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    //tex_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 	tex_desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
     
-	hr = ID3D11Device_CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture.texture);
+    D3D11_SUBRESOURCE_DATA init_data = { data, sizeof(uint32_t) * width, 0 };
+    
+	hr = ID3D11Device_CreateTexture2D(dx11_renderer->device, &tex_desc, &init_data, &internal_texture.texture);
     if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
     
-	dx11_renderer->context->lpVtbl->UpdateSubresource(dx11_renderer->context, (ID3D11Resource*)internal_texture.texture, 0, NULL, data, width * 4, 0);
+	//dx11_renderer->context->lpVtbl->UpdateSubresource(dx11_renderer->context, (ID3D11Resource*)internal_texture.texture, 0, NULL, data, width * 4, 0);
     
     // shader resource view
 	D3D11_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
@@ -433,8 +437,8 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
     tex_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
     tex_desc.MiscFlags = 0;
     
-    hr = ID3D11Device_CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture.staging);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
+    //hr = ID3D11Device_CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture.staging);
+    //if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
     
     /*
         D3D11_MAPPED_SUBRESOURCE msr;
@@ -453,6 +457,49 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
 	return true;
 }
 
+bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    HRESULT hr;
+    
+    dm_dx11_texture internal_texture = { 0 };
+    internal_texture.is_dynamic = true;
+    internal_texture.width = width;
+    internal_texture.height = height;
+    
+    D3D11_TEXTURE2D_DESC tex_desc = { 0 };
+	tex_desc.Width = width;
+	tex_desc.Height = height;
+	tex_desc.ArraySize = 1;
+	tex_desc.SampleDesc.Count = 1;
+    tex_desc.MipLevels = 1;
+	tex_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+	tex_desc.Usage = D3D11_USAGE_DEFAULT;
+	tex_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	tex_desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+    
+    D3D11_SUBRESOURCE_DATA init_data = { data, sizeof(uint32_t) * width, 0 };
+    
+	hr = ID3D11Device_CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture.texture);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
+    
+    // shader resource view
+	D3D11_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
+	view_desc.Format = tex_desc.Format;
+	view_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+    view_desc.Texture2D.MipLevels = tex_desc.MipLevels;
+    
+	hr = ID3D11Device_CreateShaderResourceView(dx11_renderer->device, (ID3D11Resource*)internal_texture.texture, &view_desc, &internal_texture.view);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateShaderResourceView failed!"); return false; }
+    
+	ID3D11DeviceContext_GenerateMips(dx11_renderer->context, internal_texture.view);
+    
+    dm_memcpy(dx11_renderer->textures + dx11_renderer->texture_count, &internal_texture, sizeof(dm_dx11_texture));
+    *handle = dx11_renderer->texture_count++;
+    
+    return true;
+}
+
 void dm_renderer_backend_destroy_texture(dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX11_GET_RENDERER;
@@ -461,7 +508,7 @@ void dm_renderer_backend_destroy_texture(dm_render_handle handle, dm_renderer* r
     
 	DM_DX11_RELEASE(dx11_renderer->textures[handle].texture);
 	DM_DX11_RELEASE(dx11_renderer->textures[handle].view);
-    DM_DX11_RELEASE(dx11_renderer->textures[handle].staging);
+    //DM_DX11_RELEASE(dx11_renderer->textures[handle].staging);
 }
 
 void* dm_renderer_backend_get_internal_texture_ptr(dm_render_handle handle, dm_renderer* renderer)
@@ -736,6 +783,63 @@ void dm_renderer_backend_destroy_shader(dm_render_handle handle, dm_renderer* re
     DM_DX11_RELEASE(dx11_renderer->shaders[handle].input_layout);
 }
 
+bool dm_renderer_backend_create_compute_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    HRESULT hr;
+    
+    dm_dx11_compute_shader shader = { 0 };
+    
+    wchar_t ws[100];
+    swprintf(ws, 100, L"%hs", desc.path);
+    
+    ID3DBlob* blob = NULL;
+    
+    hr = D3DReadFileToBlob(ws, &blob);
+    
+    hr = ID3D11Device_CreateComputeShader(dx11_renderer->device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &shader.shader);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateComputeShader failed"); return false; }
+    
+    DM_DX11_RELEASE(blob);
+    
+    // input buffer
+    D3D11_BUFFER_DESC b_desc = { 0 };
+    
+    b_desc.ByteWidth           = desc.input_stride * desc.max_input_count;
+    b_desc.Usage               = D3D11_USAGE_DYNAMIC;
+    b_desc.CPUAccessFlags      = D3D11_CPU_ACCESS_WRITE;
+    b_desc.BindFlags           = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+    b_desc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    b_desc.StructureByteStride = desc.input_stride;
+    
+    //hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &shader.input_buffer);
+    //if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateBuffer failed"); return false; }
+    
+    // output buffer
+    dm_memzero(&b_desc, sizeof(b_desc));
+    
+    
+    
+    // constant buffer
+    
+    // finally copy over
+    dm_memcpy(dx11_renderer->compute_shaders + dx11_renderer->compute_count, &shader, sizeof(dm_dx11_compute_shader));
+    *handle = dx11_renderer->compute_count++;
+    
+    return true;
+}
+
+void dm_renderer_backend_destroy_compute_shader(dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    if(handle > dx11_renderer->compute_count) { DM_LOG_FATAL("Trying to destroy invalid DirectX compute shader"); return; }
+    
+    DM_DX11_RELEASE(dx11_renderer->compute_shaders[handle].input_buffer);
+    DM_DX11_RELEASE(dx11_renderer->compute_shaders[handle].shader);
+}
+
 /******
 DEVICE
 ********/
@@ -959,6 +1063,12 @@ void dm_renderer_backend_shutdown(dm_context* context)
     for(uint32_t i=0; i<dx11_renderer->shader_count; i++)
     {
         dm_renderer_backend_destroy_shader(i, &context->renderer);
+    }
+    
+    // compute shaders
+    for(uint32_t i=0; i<dx11_renderer->compute_count; i++)
+    {
+        dm_renderer_backend_destroy_compute_shader(i, &context->renderer);
     }
     
     // textures
@@ -1257,22 +1367,54 @@ bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t sl
 
 bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_renderer* renderer)
 {
-    /*
-    dm_dx11_texture* internal_texture = DM_DX11_GET_RESOURCE(DM_DX11_RESOURCE_TEXTURE, internal_index);
-    if(!internal_texture) { DM_LOG_FATAL("Trying to update invalid DirectX11 texture"); return false; }
-    
+    DM_DX11_GET_RENDERER;
     HRESULT hr;
     
-    D3D11_MAPPED_SUBRESOURCE msr;
-    ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
+    if(handle>dx11_renderer->texture_count) { DM_LOG_FATAL("Trying to update invalid Directx11 texture"); return false; }
+    dm_dx11_texture* internal_texture = &dx11_renderer->textures[handle];
+    if(!internal_texture->is_dynamic) { DM_LOG_FATAL("Trying to update non-dynamic texture"); return false; }
     
-    DX11_ERROR_CHECK(dx11_renderer.context->lpVtbl->Map(dx11_renderer.context, (ID3D11Resource*)internal_texture->staging, 0, D3D11_MAP_WRITE, 0, &msr), "ID3D11DeviceContext::Map failed!");
-    dm_memcpy(msr.pData, data, data_size);
-    dx11_renderer.context->lpVtbl->Unmap(dx11_renderer.context, (ID3D11Resource*)internal_texture->staging, 0);
+    // check if we have resized
+    if(internal_texture->width!=width || internal_texture->height!=height)
+    {
+        DM_DX11_RELEASE(internal_texture->texture);
+        DM_DX11_RELEASE(internal_texture->view);
+        
+        internal_texture->width = width;
+        internal_texture->height = height;
+        
+        // recreate texture
+        D3D11_TEXTURE2D_DESC tex_desc = { 0 };
+        tex_desc.Width = width;
+        tex_desc.Height = height;
+        tex_desc.ArraySize = 1;
+        tex_desc.SampleDesc.Count = 1;
+        tex_desc.MipLevels = 1;
+        tex_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_RENDER_TARGET;
+        tex_desc.Usage = D3D11_USAGE_DEFAULT;
+        tex_desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        tex_desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+        
+        D3D11_SUBRESOURCE_DATA init_data = { data, sizeof(uint32_t) * width, 0 };
+        
+        hr = ID3D11Device_CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture->texture);
+        if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
+        
+        // shader resource view
+        D3D11_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
+        view_desc.Format = tex_desc.Format;
+        view_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+        view_desc.Texture2D.MipLevels = tex_desc.MipLevels;
+        
+        hr = ID3D11Device_CreateShaderResourceView(dx11_renderer->device, (ID3D11Resource*)internal_texture->texture, &view_desc, &internal_texture->view);
+        if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateShaderResourceView failed!"); return false; }
+        
+        ID3D11DeviceContext_GenerateMips(dx11_renderer->context, internal_texture->view);
+    }
     
-    dx11_renderer.context->lpVtbl->CopyResource(dx11_renderer.context, (ID3D11Resource*)internal_texture->texture, (ID3D11Resource*)internal_texture->staging);
-    */
-    DM_LOG_ERROR("Not supported: DirectX11 Update Texture");
+    // new data
+    ID3D11DeviceContext_UpdateSubresource(dx11_renderer->context, (ID3D11Resource*)internal_texture->texture, 0, NULL, data, width * 4, 0);
+    
     return true;
 }
 
@@ -1280,11 +1422,11 @@ bool dm_render_command_backend_bind_default_framebuffer(dm_renderer* renderer)
 {
     DM_DX11_GET_RENDERER;
     
-    ID3D11DeviceContext* context = dx11_renderer->context;
+    ID3D11DeviceContext*    context = dx11_renderer->context;
     ID3D11RenderTargetView* render_target = dx11_renderer->render_view;
     ID3D11DepthStencilView* depth_stencil = dx11_renderer->depth_stencil_view;
     
-    if(!context) { DM_LOG_FATAL("DX11 context is NULL"); return false; }
+    if(!context)       { DM_LOG_FATAL("DX11 context is NULL"); return false; }
     if(!render_target) { DM_LOG_FATAL("Default render target is NULL"); return false; }
     if(!depth_stencil) { DM_LOG_FATAL("Default depth stencil is NULL"); return false; }
     

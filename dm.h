@@ -65,6 +65,7 @@ INCLUDES
 #ifdef DM_PLATFORM_LINUX
 #define _GNU_SOURCE
 #endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -660,6 +661,13 @@ typedef struct dm_shader_desc_t
     uint32_t         vb_count;
 } dm_shader_desc;
 
+typedef struct dm_compute_shader_desc_t
+{
+    char     path[512];
+    size_t   input_stride;
+    uint32_t max_input_count;
+} dm_compute_shader_desc;
+
 typedef enum dm_load_operation_t
 {
     DM_LOAD_OPERATION_LOAD,
@@ -1175,6 +1183,8 @@ bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipel
 bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, dm_render_handle* handle, dm_context* context);
+
 bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context);
 
 #define DM_MAKE_VERTEX_ATTRIB(NAME, STRUCT, MEMBER, CLASS, DATA_T, COUNT, INDEX, NORMALIZED) { .name=NAME, .data_t=DATA_T, .attrib_class=CLASS, .stride=sizeof(STRUCT), .offset=offsetof(STRUCT, MEMBER), .count=COUNT, .index=INDEX, .normalized=NORMALIZED}
@@ -1184,6 +1194,9 @@ dm_pipeline_desc dm_renderer_default_pipeline();
 void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context);
 
 bool dm_renderer_load_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, dm_mesh_index_type index_type, float** vertices, void** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context);
+
+// compute shader
+bool dm_renderer_create_compute_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_context* context);
 
 // render commands
 void dm_render_command_clear(float r, float g, float b, float a, dm_context* context);

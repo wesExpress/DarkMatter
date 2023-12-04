@@ -104,6 +104,14 @@ void dm_vec2_norm(float vec[N2], float out[N2])
 VEC3
 ******/
 DM_INLINE
+void dm_vec3_from_vec4(const float vec4[N4], float out[N3])
+{
+    out[0] = vec4[0];
+    out[1] = vec4[1];
+    out[2] = vec4[2];
+}
+
+DM_INLINE
 void dm_vec3_add_scalar(const float vec[N3], const float scalar, float out[N3])
 {
     out[0] = vec[0] + scalar;
@@ -246,42 +254,72 @@ void dm_vec3_sign(const float vec[N3], float out[N3])
 VEC4
 ******/
 DM_INLINE
+void dm_vec4_from_vec3(const float vec3[N3], float out[N4])
+{
+    out[0] = vec3[0];
+    out[1] = vec3[1];
+    out[2] = vec3[2];
+    out[3] = 0;
+}
+
+DM_INLINE
 void dm_vec4_add_vec4(const float left[N4], const float right[N4], float out[N4])
 {
-    out[0] = left[0] + right[0];
-    out[1] = left[1] + right[1];
-    out[2] = left[2] + right[2];
-    out[3] = left[3] + right[3];
+    dm_mm_float l, r, o;
+    
+    l = dm_mm_load_ps(left);
+    r = dm_mm_load_ps(right);
+    o = dm_mm_add_ps(l, r);
+    
+    dm_mm_store_ps(out, o);
 }
 
 DM_INLINE
 void dm_vec4_sub_vec4(const float left[N4], const float right[N4], float out[N4])
 {
-    out[0] = left[0] - right[0];
-    out[1] = left[1] - right[1];
-    out[2] = left[2] - right[2];
-    out[3] = left[3] - right[3];
+    dm_mm_float l, r, o;
+    
+    l = dm_mm_load_ps(left);
+    r = dm_mm_load_ps(right);
+    o = dm_mm_sub_ps(l, r);
+    
+    dm_mm_store_ps(out, o);
 }
 
 DM_INLINE
 float dm_vec4_dot(const float left[N4], const float right[N4])
 {
-    return ((left[0] * right[0]) + (left[1] * right[1]) + (left[2] * right[2]) + (left[3] * right[3]));
+    dm_mm_float l, r, o;
+    
+    l = dm_mm_load_ps(left);
+    r = dm_mm_load_ps(right);
+    o = dm_mm_mul_ps(l, r);
+    
+    return dm_mm_sum_elements(o);
 }
 
 DM_INLINE
 void dm_vec4_scale(const float vec[N4], float s, float out[N4])
 {
-    out[0] = vec[0] * s;
-    out[1] = vec[1] * s;
-    out[2] = vec[2] * s;
-    out[3] = vec[3] * s;
+    dm_mm_float v, scalar;
+    
+    scalar = dm_mm_set1_ps(s);
+    v      = dm_mm_load_ps(vec);
+    v = dm_mm_mul_ps(v, scalar);
+    
+    dm_mm_store_ps(out, v);
 }
 
 DM_INLINE
 float dm_vec4_mag(const float vec[N4])
 {
-    return dm_sqrtf((vec[0] * vec[0]) + (vec[1] * vec[2]) + (vec[2] * vec[2]) + (vec[3] * vec[3]));
+    dm_mm_float v;
+    
+    v = dm_mm_load_ps(vec);
+    v = dm_mm_mul_ps(v, v);
+    
+    float sum = dm_mm_sum_elements(v);
+    return dm_sqrtf(sum);
 }
 
 DM_INLINE
@@ -304,19 +342,25 @@ QUATERNION
 DM_INLINE
 void dm_quat_add_quat(const float left[N4], const float right[N4], float out[N4])
 {
-    out[0] = left[0] + right[0];
-    out[1] = left[1] + right[1];
-    out[2] = left[2] + right[3];
-    out[3] = left[3] + right[3];
+    dm_mm_float l, r, o;
+    
+    l = dm_mm_load_ps(left);
+    r = dm_mm_load_ps(right);
+    o = dm_mm_add_ps(l, r);
+    
+    dm_mm_store_ps(out, o);
 }
 
 DM_INLINE
 void dm_quat_sub_quat(const float left[N4], const float right[N4], float out[N4])
 {
-    out[0] = left[0] - right[0];
-    out[1] = left[1] - right[1];
-    out[2] = left[2] - right[3];
-    out[3] = left[3] - right[3];
+    dm_mm_float l, r, o;
+    
+    l = dm_mm_load_ps(left);
+    r = dm_mm_load_ps(right);
+    o = dm_mm_sub_ps(l, r);
+    
+    dm_mm_store_ps(out, o);
 }
 
 DM_INLINE
@@ -348,35 +392,40 @@ void dm_vec3_mul_quat(const float v[N3], const float q[N4], float out[N4])
 DM_INLINE
 float dm_quat_mag(const float quat[N4])
 {
-	return dm_sqrtf((quat[0] * quat[0]) + (quat[1] * quat[1]) + (quat[2] * quat[2]) + (quat[3] * quat[3]));
+    dm_mm_float q;
+    
+    q = dm_mm_load_ps(quat);
+    q = dm_mm_mul_ps(q, q);
+    
+    float sum = dm_mm_sum_elements(q);
+    return dm_sqrtf(sum);
 }
 
 DM_INLINE
 void dm_quat_scale(const float quat[N4], float s, float out[N4])
 {
-    out[0] = quat[0] * s;
-    out[1] = quat[1] * s;
-    out[2] = quat[2] * s;
-    out[3] = quat[3] * s;
+    dm_mm_float q, scalar;
+    
+    scalar = dm_mm_set1_ps(s);
+    q = dm_mm_load_ps(quat);
+    q = dm_mm_mul_ps(q, scalar);
+    
+    dm_mm_store_ps(out, q);
 }
 
 DM_INLINE
 void dm_quat_norm(const float quat[N4], float out[N4])
 {
-	float mag = dm_quat_mag(quat);
+	dm_memcpy(out, quat, sizeof(float) * N4);
+	
+    float mag = dm_vec4_mag(out);
+	
+    // early out
+    if (mag == 0) return; 
     
-	if (mag > 0) 
-    {
-        float s = 1.0f/mag;
-        
-        dm_quat_scale(quat, s, out);
-    }
-    else
-    {
-        dm_memcpy(out, quat, sizeof(float) * N4);
-    }
+    float s = 1.0f / mag;
+    dm_vec4_scale(quat, s, out);
 }
-
 
 DM_INLINE
 void dm_quat_conjugate(const float quat[N4], float out[N4])
@@ -403,7 +452,13 @@ void dm_quat_inverse(const float quat[N4], float out[N4])
 DM_INLINE
 float dm_quat_dot(const float left[N4], const float right[N4])
 {
-	return (left[0] * right[0]) + (left[1] * right[1]) + (left[2] * right[2]) + (left[3] * right[3]);
+	dm_mm_float l, r, o;
+    
+    l = dm_mm_load_ps(left);
+    r = dm_mm_load_ps(right);
+    o = dm_mm_mul_ps(l, r);
+    
+    return dm_mm_sum_elements(o);
 }
 
 DM_INLINE
@@ -471,7 +526,6 @@ void dm_quat_nlerp(const float quat_a[N4], const float quat_b[N4], float t, floa
     dm_quat_add_quat(quat_a, s, lerp);
     dm_quat_norm(lerp, lerp);
 }
-
 
 /****
 MAT2
@@ -834,14 +888,37 @@ void dm_mat4_mul_mat4(float left[M4], float right[M4], float out[M4])
 }
 
 DM_INLINE
-void dm_mat4_mul_vec4(float mat[M4], float vec[N4], float out[M4])
+void dm_mat4_mul_vec4(const float mat[M4], const float vec[N4], float out[N4])
 {
-    float d[M4];
+    float d[N4] = { 0 };
     
+#if 0
     d[0] = mat[0]  * vec[0] + mat[1]  * vec[1] + mat[2]  * vec[2] + mat[3]  * vec[3];
     d[1] = mat[4]  * vec[0] + mat[5]  * vec[1] + mat[6]  * vec[2] + mat[7]  * vec[3];
     d[2] = mat[8]  * vec[0] + mat[9]  * vec[1] + mat[10] * vec[2] + mat[11] * vec[3];
     d[3] = mat[12] * vec[0] + mat[13] * vec[1] + mat[14] * vec[2] + mat[15] * vec[3];
+#else
+    dm_mm_float m, v;
+    
+    v = dm_mm_load_ps(vec);
+    m = dm_mm_load_ps(mat + 0);
+    m = dm_mm_mul_ps(m, v);
+    d[0] = dm_mm_sum_elements(m);
+    
+    /*
+    m = dm_mm_load_ps(mat + 4);
+    m = dm_mm_mul_ps(m, v);
+    d[1] = dm_mm_sum_elements(m);
+    
+    m = dm_mm_load_ps(mat + 8);
+    m = dm_mm_mul_ps(m, v);
+    d[2] = dm_mm_sum_elements(m);
+    
+    m = dm_mm_load_ps(mat + 12);
+    m = dm_mm_mul_ps(m, v);
+    d[3] = dm_mm_sum_elements(m);
+*/
+#endif
     
     dm_memcpy(out, d, sizeof(d));
 }
@@ -939,29 +1016,29 @@ void dm_mat4_inverse(float mat[M4], float dest[M4])
     t[0] = k * p - o * l; t[1] = j * p - n * l; t[2] = j * o - n * k;
     t[3] = i * p - m * l; t[4] = i * o - m * k; t[5] = i * n - m * j;
     
-    dest[0] =  f * t[0] - g * t[1] + h * t[2];
-    dest[4] =-(e * t[0] - g * t[3] + h * t[4]);
-    dest[8] =  e * t[1] - f * t[3] + h * t[5];
+    dest[0]  =  f * t[0] - g * t[1] + h * t[2];
+    dest[4]  =-(e * t[0] - g * t[3] + h * t[4]);
+    dest[8]  =  e * t[1] - f * t[3] + h * t[5];
     dest[12] =-(e * t[2] - f * t[4] + g * t[5]);
     
-    dest[1] =-(b * t[0] - c * t[1] + d * t[2]);
-    dest[5] =  a * t[0] - c * t[3] + d * t[4];
-    dest[9] =-(a * t[1] - b * t[3] + d * t[5]);
+    dest[1]  =-(b * t[0] - c * t[1] + d * t[2]);
+    dest[5]  =  a * t[0] - c * t[3] + d * t[4];
+    dest[9]  =-(a * t[1] - b * t[3] + d * t[5]);
     dest[13] =  a * t[2] - b * t[4] + c * t[5];
     
     t[0] = g * p - o * h; t[1] = f * p - n * h; t[2] = f * o - n * g;
     t[3] = e * p - m * h; t[4] = e * o - m * g; t[5] = e * n - m * f;
     
-    dest[2] =  b * t[0] - c * t[1] + d * t[2];
-    dest[6] =-(a * t[0] - c * t[3] + d * t[4]);
+    dest[2]  =  b * t[0] - c * t[1] + d * t[2];
+    dest[6]  =-(a * t[0] - c * t[3] + d * t[4]);
     dest[10] =  a * t[1] - b * t[3] + d * t[5];
     dest[14] =-(a * t[2] - b * t[4] + c * t[5]);
     
     t[0] = g * l - k * h; t[1] = f * l - j * h; t[2] = f * k - j * g;
     t[3] = e * l - i * h; t[4] = e * k - i * g; t[5] = e * j - i * f;
     
-    dest[3] =-(b * t[0] - c * t[1] + d * t[2]);
-    dest[7] =  a * t[0] - c * t[3] + d * t[4];
+    dest[3]  =-(b * t[0] - c * t[1] + d * t[2]);
+    dest[7]  =  a * t[0] - c * t[3] + d * t[4];
     dest[11] =-(a * t[1] - b * t[3] + d * t[5]);
     dest[15] =  a * t[2] - b * t[4] + c * t[5];
     
