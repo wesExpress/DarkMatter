@@ -25,15 +25,17 @@ DM_INLINE
 dm_mm_float dm_mm_load_ps(const float* d)
 {
 #ifdef DM_SIMD_X86
-    
-#ifdef DM_PLATFORM_LINUX
     return _mm_loadu_ps(d);
-#elif defined(DM_PLATFORM_WIN32)
-    return _mm_load_ps(d);
-#endif
-    
 #elif defined(DM_SIMD_ARM)
     return vld1q_f32(d);
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_set_ps(const float x, const float y, const float z, const float w)
+{
+#ifdef DM_SIMD_X86
+    return _mm_set_ps(x,y,z,w);
 #endif
 }
 
@@ -51,13 +53,7 @@ DM_INLINE
 void dm_mm_store_ps(float* d, dm_mm_float mm)
 {
 #ifdef DM_SIMD_X86
-    
-#ifdef DM_PLATFORM_LINUX
     _mm_storeu_ps(d, mm);
-#elif defined(DM_PLATFORM_WIN32)
-    _mm_store_ps(d, mm);
-#endif
-    
 #elif defined(DM_SIMD_ARM)
     vst1q_f32(d, mm);
 #endif
@@ -114,6 +110,22 @@ dm_mm_float dm_mm_sqrt_ps(dm_mm_float mm)
 }
 
 DM_INLINE
+dm_mm_float dm_mm_rsqrt_ps(dm_mm_float mm)
+{
+#ifdef DM_SIMD_X86
+    return _mm_rsqrt_ps(mm);
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_hadd_ps(dm_mm_float left, dm_mm_float right)
+{
+#ifdef DM_SIMD_X86
+    return _mm_hadd_ps(left, right);
+#endif
+}
+
+DM_INLINE
 dm_mm_float dm_mm_fmadd_ps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
 {
 #ifdef DM_SIMD_X86
@@ -159,19 +171,33 @@ float dm_mm_extract_float(dm_mm_float mm)
 }
 #endif
 
+// https://stackoverflow.com/a/35270026/195787
 DM_INLINE
 float dm_mm_sum_elements(dm_mm_float mm)
 {
 #ifdef DM_SIMD_ARM
     return vaddvq_f32(mm);
 #elif defined(DM_SIMD_X86)
-    dm_mm_float result = { 0 };
-    result = _mm_hadd_ps(mm, mm);
-    result = _mm_hadd_ps(result, result);
+    dm_mm_float shuf_reg, sums_reg;
     
-    return dm_mm_extract_float(result);
+    shuf_reg = _mm_movehdup_ps(mm);
+    sums_reg = _mm_add_ps(mm, shuf_reg);
+    shuf_reg = _mm_movehl_ps(shuf_reg, sums_reg);
+    sums_reg = _mm_add_ss(sums_reg, shuf_reg);
+    
+    return _mm_cvtss_f32(sums_reg);
 }
 #endif
+
+DM_INLINE
+float dm_mm_dot(dm_mm_float left, dm_mm_float right)
+{
+#ifdef DM_SIMD_X86
+    const dm_mm_float mul_reg = dm_mm_mul_ps(left, right);
+    
+    return dm_mm_sum_elements(mul_reg);
+#endif
+}
 
 /************
 COMPARISSONS
@@ -318,6 +344,17 @@ dm_mm_int dm_mm_mul_i(dm_mm_int left, dm_mm_int right)
     return _mm_mul_epi32(left, right);
 #elif defined(DM_SIMD_ARM)
     return vmulq_s32(left, right);
+#endif
+}
+
+/*
+MATRIX
+*/
+DM_INLINE
+void dm_mm_transpose_mat4(dm_mm_float* row1, dm_mm_float* row2, dm_mm_float* row3, dm_mm_float* row4)
+{
+#ifdef DM_SIMD_X86
+    _MM_TRANSPOSE4_PS(*row1, *row2, *row3, *row4);
 #endif
 }
 
