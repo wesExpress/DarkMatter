@@ -304,7 +304,23 @@ void dm_vec3_div_vec3(const float left[N3], const float right[N3], float out[N3]
 
 float dm_vec3_dot(const float left[N3], const float right[N3])
 {
+#if 1
     return (left[0] * right[0]) + (left[1] * right[1]) + (left[2] * right[2]);
+#else
+    dm_mm_float l_x = dm_mm_set1_ps(left[0]);
+    dm_mm_float l_y = dm_mm_set1_ps(left[1]);
+    dm_mm_float l_z = dm_mm_set1_ps(left[2]);
+    
+    dm_mm_float r_x = dm_mm_set1_ps(right[0]);
+    dm_mm_float r_y = dm_mm_set1_ps(right[1]);
+    dm_mm_float r_z = dm_mm_set1_ps(right[2]);
+    
+    dm_mm_float result = dm_mm_mul_ps(l_x, r_x);
+    result = dm_mm_fmadd_ps(l_y,r_y, result);
+    result = dm_mm_fmadd_ps(l_z,r_z, result);
+    
+    return dm_mm_extract_float(result);
+#endif
 }
 
 void dm_vec3_cross(const float left[N3], const float right[N3], float out[N3])
@@ -1214,16 +1230,17 @@ void dm_mat_view(const float view_origin[N3], const float target[N3], const floa
     out[0] =  u[0];
     out[1] =  v[0];
     out[2] = -w[0];
-    out[3] =  0;
     
     out[4] =  u[1];
     out[5] =  v[1];
     out[6] = -w[1];
-    out[7] =  0;
     
     out[8]  =  u[2];
     out[9]  =  v[2];
     out[10] = -w[2];
+    
+    out[3] =  0;
+    out[7] =  0;
     out[11] =  0;
     
     out[12] = -dm_vec3_dot(view_origin, u);
@@ -1247,7 +1264,7 @@ void dm_mat_perspective(float fov, float aspect_ratio, float n, float f, float o
 #else
     // metal has z clip space [0,1], so needs special treatment
     out[10] = f * fn;
-    out[14] = n * f * fn;
+    out[13] = n * f * fn;
 #endif
     out[11] = -1.0f;
 }
