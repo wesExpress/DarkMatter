@@ -89,7 +89,7 @@ bool dm_imgui_init(dm_context* context)
     int w, h;
     const void* image = nk_font_atlas_bake(&imgui_nk_ctx->atlas, &w, &h, NK_FONT_ATLAS_RGBA32);
     
-    if(!dm_renderer_create_texture_from_data(w,h, 4, image, "imgui_font", &imgui_ctx->font_texture, context)) return false;
+    if(!dm_renderer_create_texture_from_data(w,h, 4, image, "font_texture", &imgui_ctx->font_texture, context)) return false;
     
     nk_font_atlas_end(&imgui_nk_ctx->atlas, nk_handle_ptr(dm_renderer_get_internal_texture_ptr(imgui_ctx->font_texture, context)), &imgui_nk_ctx->tex_null);
     if(imgui_nk_ctx->atlas.default_font) nk_style_set_font(&imgui_nk_ctx->ctx, &imgui_nk_ctx->atlas.default_font->handle);
@@ -257,7 +257,7 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
                 case DM_KEY_R:
                 nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_TEXT_REDO, down);
                 break;
-
+                
                 default:
                 break;
             }
@@ -285,7 +285,7 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
                 case DM_MOUSEBUTTON_DOUBLE:
                 nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_DOUBLE, x,y, 1);
                 break;
-
+                
                 default:
                 break;
             }
@@ -310,7 +310,7 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
                 case DM_MOUSEBUTTON_M:
                 nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_MIDDLE, x,y, 0);
                 break;
-
+                
                 default:
                 break;
             }
@@ -326,7 +326,7 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
         case DM_EVENT_MOUSE_SCROLL:
         nk_input_scroll(&imgui_nk_ctx->ctx, nk_vec2(0,e.delta));
         break;
-
+        
         default:
         break;
     }

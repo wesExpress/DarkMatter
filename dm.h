@@ -50,6 +50,15 @@ depreciated
 #endif
 #endif
 
+/*********
+ALIGNMENT
+***********/
+#ifdef DM_PLATFORM_WIN32
+#define DM_ALIGN(X) __declspec(align(X))
+#else
+#define DM_ALIGN(X) __attribute((aligned(X))
+#endif
+
 /*****************************
 SIMD INTRINSICS DETERMINATION
 *******************************/
@@ -90,6 +99,8 @@ INCLUDES
 #define NK_INCLUDE_DEFAULT_FONT
 #include "Nuklear/nuklear.h"
 
+#include "cglm/cglm.h"
+
 /*****
 TYPES
 *******/
@@ -118,6 +129,7 @@ MATH
 #define DM_MATH_INV_SQRT2           0.70710678118654f
 #define DM_MATH_SQRT3               1.73205080756887f
 #define DM_MATH_INV_SQRT3           0.57735026918962f
+
 #define DM_MATH_DEG_TO_RAD          0.0174533f
 #define DM_MATH_RAD_TO_DEG          57.2958f
 
@@ -130,6 +142,23 @@ MATH
 #define DM_SIGNF(X) (float)((0 < X) - (X < 0))
 #define DM_CLAMP(X, MIN, MAX) DM_MIN(DM_MAX(X, MIN), MAX)
 #define DM_BIT_SHIFT(X) (1 << X)
+
+
+/**********
+MATH TYPES
+************/
+typedef float dm_vec2[2];
+typedef float dm_vec3[3];
+typedef DM_ALIGN(16) float dm_vec4[4];
+typedef DM_ALIGN(16) float dm_quat[4];
+
+typedef float dm_mat2[2][2];
+typedef float dm_mat3[3][3];
+#ifdef __AVX__
+typedef DM_ALIGN(32) float dm_mat4[4][4];
+#else
+typedef DM_ALIGN(16) float dm_mat4[4][4];
+#endif
 
 #define N2 2
 #define N3 3
@@ -1004,14 +1033,14 @@ IMGUI
 *******/
 typedef struct dm_imgui_vertex_t
 {
-    float   pos[2];
-    float   tex_coords[2];
-    uint8_t color[4];
+    dm_vec2 pos;
+    dm_vec2 tex_coords;
+    dm_vec4 color;
 } dm_imgui_vertex;
 
 typedef struct dm_imgui_uni_t
 {
-    float proj[4 * 4];
+    dm_mat4 proj;
 } dm_imgui_uni;
 
 typedef uint16_t dm_nk_element_t;
@@ -1125,100 +1154,6 @@ float dm_clamp(float x, float min, float max);
 
 float dm_rad_to_deg(float radians);
 float dm_deg_to_rad(float degrees);
-void dm_vec2_add_vec2(float left[N2], float right[N2], float out[N2]);
-void dm_vec2_sub_vec2(float left[N2], float right[N2], float out[N2]);
-void dm_vec2_add_scalar(float vec[N2], float scalar, float out[N2]);
-void dm_vec2_sub_scalar(float vec[N2], float scalar, float out[N2]);
-float dm_vec2_dot(float left[N2], float right[N2]);
-void dm_vec2_scale(float vec[N2], float s, float out[N2]);
-float dm_vec2_mag(float vec[N2]);
-void dm_vec2_norm(float vec[N2], float out[N2]);
-void dm_vec3_from_vec4(const float vec4[N4], float out[N3]);
-void dm_vec3_add_scalar(const float vec[N3], const float scalar, float out[N3]);
-void dm_vec3_sub_scalar(const float vec[N3], const float scalar, float out[N3]);
-void dm_vec3_add_vec3(const float left[N3], const float right[N3], float out[N3]);
-void dm_vec3_sub_vec3(const float left[N3], const float right[N3], float out[N3]);
-void dm_vec3_mul_vec3(const float left[N3], const float right[N3], float out[N3]);
-void dm_vec3_div_vec3(const float left[N3], const float right[N3], float out[N3]);
-float dm_vec3_dot(const float left[N3], const float right[N3]);
-void dm_vec3_cross(const float left[N3], const float right[N3], float out[N3]);
-void dm_vec3_cross_cross(const float first[N3], const float second[N3], const float third[N3], float out[N3]);
-void dm_vec3_scale(const float vec[N3], float s, float out[N3]);
-float dm_vec3_mag(const float vec[N3]);
-void dm_vec3_norm(const float vec[N3], float out[N3]);
-void dm_vec3_rotate(const float vec[N3], const float quat[N4], float out[N3]);
-void dm_vec3_negate(const float vec[N3], float out[N3]);
-bool dm_vec3_same_direction(const float left[N3], const float right[N3]);
-bool dm_vec3_equals_vec3(const float left[N3], const float right[N3]);
-void dm_vec3_sign(const float vec[N3], float out[N3]);
-void dm_vec4_from_vec3(const float vec3[N3], float out[N4]);
-void dm_vec4_add_vec4(const float left[N4], const float right[N4], float out[N4]);
-void dm_vec4_sub_vec4(const float left[N4], const float right[N4], float out[N4]);
-float dm_vec4_dot(const float left[N4], const float right[N4]);
-void dm_vec4_scale(const float vec[N4], float s, float out[N4]);
-float dm_vec4_mag(const float vec[N4]);
-void dm_vec4_norm(const float vec[N4], float out[N4]);
-void dm_quat_add_quat(const float left[N4], const float right[N4], float out[N4]);
-void dm_quat_sub_quat(const float left[N4], const float right[N4], float out[N4]);
-void dm_quat_cross(const float left[N4], const float right[N4], float out[N4]);
-void dm_quat_mul_quat(const float left[N4], const float right[N4], float out[N4]);
-void dm_vec3_mul_quat(const float v[N3], const float q[N4], float out[N4]);
-float dm_quat_mag(const float quat[N4]);
-void dm_quat_scale(const float quat[N4], float s, float out[N4]);
-void dm_quat_norm(const float quat[N4], float out[N4]);
-void dm_quat_conjugate(const float quat[N4], float out[N4]);
-void dm_quat_inverse(const float quat[N4], float out[N4]);
-float dm_quat_dot(const float left[N4], const float right[N4]);
-float dm_quat_angle(const float left[N4], const float right[N4]);
-void dm_quat_from_axis_angle(const float axis[N3], float angle, float out[N4]);
-void dm_quat_from_axis_angle_deg(const float axis[N3], float angle, float out[N4]);
-void dm_quat_from_vectors(const float vec1[N3], const float vec2[N3], float out[N4]);
-void dm_quat_negate(const float quat[N4], float out[N4]);
-void dm_quat_nlerp(const float quat_a[N4], const float quat_b[N4], float t, float out[N4]);
-void dm_mat2_identity(float mat[M2]);
-void dm_mat2_transpose(float mat[M2], float out[M2]);
-void dm_mat2_mul_mat2(float left[M2], float right[M2], float out[M2]);
-void dm_mat2_mul_vec2(float mat[M2], float vec[N2], float out[N2]);
-void dm_mat2_mul_scalar(float mat[M2], float scalar, float out[M2]);
-void dm_mat2_add_mat2(float left[M2], float right[M2], float out[M2]);
-void dm_mat2_sub_mat2(float left[M2], float right[M2], float out[M2]);
-float dm_mat2_det(float mat[M2]);
-void dm_mat2_inverse(float mat[M2], float out[M2]);
-void dm_mat3_identity(float mat[M3]);
-void dm_mat3_transpose(float mat[M3], float out[M3]);
-void dm_mat3_mul_mat3(float left[M3], float right[M3], float out[M3]);
-void dm_mat3_mul_vec3(float mat[M3], float vec[N3], float out[N3]);
-void dm_mat3_mul_scalar(float mat[M3], float scalar, float out[M3]);
-void dm_mat3_add_mat3(float left[M3], float right[M3], float out[M3]);
-void dm_mat3_sub_mat3(float left[M3], float right[M3], float out[M3]);
-void dm_mat3_inverse(float mat[M3], float dest[M3]);
-void dm_mat3_rotation(float radians, float axis[N3], float out[M3]);
-void dm_mat3_rotation_degrees(float degrees, float axis[3], float out[M3]);
-void dm_mat3_rotate_from_quat(const float quat[N4], float out[M3]);
-void dm_mat4_identity(float mat[M4]);
-void dm_mat4_transpose(const float mat[M4], float out[M4]);
-void dm_mat4_mul_mat4(float left[M4], float right[M4], float out[M4]);
-void dm_mat4_mul_vec4(const float mat[M4], const float vec[N4], float out[N4]);
-void dm_mat4_mul_vec3(const float mat[M4], const float vec[N3], const float val_4, float out[N4]);
-void dm_mat4_mul_scalar(float mat[M4], float scalar, float out[M4]);
-void dm_mat4_add_mat4(float left[M4], float right[M4], float out[M4]);
-void dm_mat4_sub_mat4(float  left[M4], float right[M4], float out[M4]);
-void dm_mat4_inverse(float mat[M4], float dest[M4]);
-bool dm_mat4_is_equal(float left[M4], float right[M4]);
-void dm_mat4_from_mat3(float mat[M3], float out[M4]);
-void dm_mat4_rotate_from_quat(const float quat[N4], float out[M4]);
-void dm_mat_scale_make(const float scale[N3], float out[M4]);
-void dm_mat_scale(float mat[M4], const float scale[N3], float out[M4]);
-void dm_mat_rotation_make(float radians, float axis[N3], float out[M4]);
-void dm_mat_rotation_degrees_make(float degrees, float axis[N3], float out[M4]);
-void dm_mat_translate_make(const float translation[N3], float out[M4]);
-void dm_mat_translate(float mat[M4], const float translation[N3], float out[M4]);
-void dm_mat_rotate(float mat[M4], float radians, float axis[N3], float out[M4]);
-void dm_mat_rotate_degrees(float mat[M4], float degrees, float axis[N3], float out[M4]);
-void dm_mat_view(const float view_origin[N3], const float target[N3], const float up[N3], float out[M4]);
-void dm_mat_perspective(float fov, float aspect_ratio, float n, float f, float out[M4]);
-void dm_mat_ortho(float left, float right, float bottom, float top, float n, float f, float out[M4]);
-
 
 // general input
 bool dm_input_is_key_pressed(dm_key_code key, dm_context* context);
@@ -1530,5 +1465,7 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
     
     return dm_ecs_entity_has_component_multiple_via_index(entity_index, component_mask, context);
 }
+
+#include "dm_math.h"
 
 #endif //DM_H

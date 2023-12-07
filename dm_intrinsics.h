@@ -25,7 +25,7 @@ DM_INLINE
 dm_mm_float dm_mm_load_ps(const float* d)
 {
 #ifdef DM_SIMD_X86
-    return _mm_loadu_ps(d);
+    return _mm_load_ps(d);
 #elif defined(DM_SIMD_ARM)
     return vld1q_f32(d);
 #endif
@@ -53,7 +53,7 @@ DM_INLINE
 void dm_mm_store_ps(float* d, dm_mm_float mm)
 {
 #ifdef DM_SIMD_X86
-    _mm_storeu_ps(d, mm);
+    _mm_store_ps(d, mm);
 #elif defined(DM_SIMD_ARM)
     vst1q_f32(d, mm);
 #endif
@@ -171,13 +171,10 @@ float dm_mm_extract_float(dm_mm_float mm)
 }
 #endif
 
-// https://stackoverflow.com/a/35270026/195787
 DM_INLINE
-float dm_mm_sum_elements(dm_mm_float mm)
+dm_mm_float dm_mm_hadd_fast_ps(dm_mm_float mm)
 {
-#ifdef DM_SIMD_ARM
-    return vaddvq_f32(mm);
-#elif defined(DM_SIMD_X86)
+#ifdef DM_SIMD_X86
     dm_mm_float shuf_reg, sums_reg;
     
     shuf_reg = _mm_movehdup_ps(mm);
@@ -185,17 +182,73 @@ float dm_mm_sum_elements(dm_mm_float mm)
     shuf_reg = _mm_movehl_ps(shuf_reg, sums_reg);
     sums_reg = _mm_add_ss(sums_reg, shuf_reg);
     
-    return _mm_cvtss_f32(sums_reg);
+    return dm_mm_set1_ps(dm_mm_extract_float(sums_reg));
+#endif
+}
+
+// https://stackoverflow.com/a/35270026/195787
+DM_INLINE
+float dm_mm_sum_elements(dm_mm_float mm)
+{
+#ifdef DM_SIMD_ARM
+    return vaddvq_f32(mm);
+#elif defined(DM_SIMD_X86)
+    dm_mm_float sums = dm_mm_hadd_fast_ps(mm);
+    
+    return _mm_cvtss_f32(sums);
 }
 #endif
 
 DM_INLINE
-float dm_mm_dot(dm_mm_float left, dm_mm_float right)
+float dm_mm_dot_ps(dm_mm_float left, dm_mm_float right)
 {
 #ifdef DM_SIMD_X86
-    const dm_mm_float mul_reg = dm_mm_mul_ps(left, right);
+    dm_mm_float dp = _mm_dp_ps(left,right, 0x7F);
+    return dm_mm_extract_float(dp);
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_normalize_ps(dm_mm_float mm)
+{
+#ifdef DM_SIMD_X86
+    dm_mm_float dp = _mm_dp_ps(mm,mm, 0x7F);
+    dm_mm_float mag = _mm_shuffle_ps(dp,dp, _MM_SHUFFLE(0,0,0,0));
+    mag = dm_mm_sqrt_ps(mag);
     
-    return dm_mm_sum_elements(mul_reg);
+    return dm_mm_div_ps(mm, mag);
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_broadcast_x_ps(dm_mm_float mm)
+{
+#ifdef DM_SIMD_X86
+    return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(0,0,0,0));
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_broadcast_y_ps(dm_mm_float mm)
+{
+#ifdef DM_SIMD_X86
+    return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(1,1,1,1));
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_broadcast_z_ps(dm_mm_float mm)
+{
+#ifdef DM_SIMD_X86
+    return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(2,2,2,2));
+#endif
+}
+
+DM_INLINE
+dm_mm_float dm_mm_broadcast_w_ps(dm_mm_float mm)
+{
+#ifdef DM_SIMD_X86
+    return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(3,3,3,3));
 #endif
 }
 
