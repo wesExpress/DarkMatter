@@ -400,6 +400,22 @@ dm_mm_int dm_mm_mul_i(dm_mm_int left, dm_mm_int right)
 #endif
 }
 
+DM_INLINE
+dm_mm_int dm_mm_min_i(dm_mm_int left, dm_mm_int right)
+{
+#ifdef DM_SIMD_X86
+    return _mm_min_epu32(left, right);
+#endif
+}
+
+DM_INLINE
+dm_mm_int dm_mm_max_i(dm_mm_int left, dm_mm_int right)
+{
+#ifdef DM_SIMD_X86
+    return _mm_max_epu32(left, right);
+#endif
+}
+
 /*
 MATRIX
 */

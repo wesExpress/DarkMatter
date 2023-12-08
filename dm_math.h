@@ -230,6 +230,24 @@ void dm_vec3_reflect(const dm_vec3 vec, const dm_vec3 normal, dm_vec3 out)
 VEC4
 ******/
 DM_INLINE
+void dm_vec4_set_from_floats(float x, float y, float z, float w, dm_vec4 out)
+{
+    out[0] = x;
+    out[1] = y;
+    out[2] = z;
+    out[3] = w;
+}
+
+DM_INLINE
+void dm_vec4_set_from_vec4(const dm_vec4 in, dm_vec4 out)
+{
+    out[0] = in[0];
+    out[1] = in[1];
+    out[2] = in[2];
+    out[3] = in[3];
+}
+
+DM_INLINE
 void dm_vec4_from_vec3(const dm_vec3 vec3, dm_vec4 out)
 {
     out[0] = vec3[0];

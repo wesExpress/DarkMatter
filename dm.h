@@ -99,8 +99,6 @@ INCLUDES
 #define NK_INCLUDE_DEFAULT_FONT
 #include "Nuklear/nuklear.h"
 
-#include "cglm/cglm.h"
-
 /*****
 TYPES
 *******/
