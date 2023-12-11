@@ -56,7 +56,7 @@ ALIGNMENT
 #ifdef DM_PLATFORM_WIN32
 #define DM_ALIGN(X) __declspec(align(X))
 #else
-#define DM_ALIGN(X) __attribute((aligned(X))
+#define DM_ALIGN(X) __attribute((aligned(X)))
 #endif
 
 /*****************************

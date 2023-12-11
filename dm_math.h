@@ -283,7 +283,7 @@ void dm_vec4_sub_vec4(const dm_vec4 left, const dm_vec4 right, dm_vec4 out)
 DM_INLINE
 float dm_vec4_dot(const dm_vec4 left, const dm_vec4 right)
 {
-    dm_mm_float l, r, o, shuf;
+    dm_mm_float l, r;
     
     l = dm_mm_load_ps(left);
     r = dm_mm_load_ps(right);
