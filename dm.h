@@ -146,7 +146,7 @@ MATH
 MATH TYPES
 ************/
 typedef float dm_vec2[2];
-typedef float dm_vec3[3];
+typedef DM_ALIGN(16) float dm_vec3[3];
 typedef DM_ALIGN(16) float dm_vec4[4];
 typedef DM_ALIGN(16) float dm_quat[4];
 
