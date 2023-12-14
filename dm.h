@@ -472,7 +472,7 @@ typedef struct dm_thread_task_t
 #ifndef DM_MAX_THREAD_COUNT
 #define DM_MAX_THREAD_COUNT 32
 #endif
-#define DM_MAX_TASK_COUNT   100
+#define DM_MAX_TASK_COUNT   1000
 
 typedef struct dm_threadpool_t
 {

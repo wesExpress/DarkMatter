@@ -186,6 +186,14 @@ dm_mm_float dm_mm_hadd_fast_ps(dm_mm_float mm)
 #endif
 }
 
+DM_INLINE
+dm_mm_float dm_mm_blendv_ps(dm_mm_float left, dm_mm_float right, dm_mm_float mask)
+{
+#ifdef DM_SIMD_X86
+    return _mm_blendv_ps(left, right, mask);
+#endif
+}
+
 // https://stackoverflow.com/a/35270026/195787
 DM_INLINE
 float dm_mm_sum_elements(dm_mm_float mm)
@@ -413,6 +421,14 @@ dm_mm_int dm_mm_max_i(dm_mm_int left, dm_mm_int right)
 {
 #ifdef DM_SIMD_X86
     return _mm_max_epu32(left, right);
+#endif
+}
+
+DM_INLINE
+dm_mm_int dm_mm_blendv_i(dm_mm_int left, dm_mm_int right, dm_mm_int mask)
+{
+#ifdef DM_SIMD_X86
+    return _mm_blendv_epi8(left, right, mask);
 #endif
 }
 
