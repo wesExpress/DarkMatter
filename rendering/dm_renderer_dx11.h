@@ -3,6 +3,8 @@
 
 #include "dm.h"
 
+#ifdef DM_PLATFORM_WINDOWS
+
 #define COBJMACROS
 #include <d3d11_1.h>
 #include <dxgi.h>
@@ -115,3 +117,5 @@ typedef struct dm_dx11_renderer
 } dm_dx11_renderer;
 
 #endif //DM_RENDERER_DX11_H
+
+#endif

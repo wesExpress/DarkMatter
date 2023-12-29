@@ -4,9 +4,9 @@ using namespace metal;
 
 struct vertex_in
 {
-	packed_float3 position;
-	packed_float2 tex_coords;
-    packed_float4 color;
+	float2 position;
+	float2 tex_coords;
+    float4 color;
 };
 
 struct vertex_out
@@ -34,7 +34,7 @@ vertex vertex_out vertex_main(
 	vertex_out v_out;
     vertex_in v_in = vertices[vid];
 
-	v_out.position = float4(v_in.position, 1);
+	v_out.position = float4(v_in.position, 0, 1);
     v_out.position = uni.proj * v_out.position;
 
 	v_out.tex_coords = v_in.tex_coords;
@@ -47,7 +47,8 @@ fragment fragment_out fragment_main(vertex_out v_in [[stage_in]], texture2d<floa
 {
 	fragment_out out;
 
-	out.color = v_in.color * font_texture.sample(samplr, v_in.tex_coords);
+	float4 tex_color = font_texture.sample(samplr, v_in.tex_coords);
+	out.color = v_in.color * tex_color;
 
 	return out;
 }

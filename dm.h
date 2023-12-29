@@ -1031,9 +1031,9 @@ IMGUI
 *******/
 typedef struct dm_imgui_vertex_t
 {
-    dm_vec2 pos;
-    dm_vec2 tex_coords;
-    dm_vec4 color;
+    float pos[2];
+    float tex_coords[2];
+    float color[4];
 } dm_imgui_vertex;
 
 typedef struct dm_imgui_uni_t

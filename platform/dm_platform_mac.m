@@ -9,18 +9,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 
-typedef struct dm_mac_threadpool_t
-{
-    pthread_mutex_t queue_mutex;
-    pthread_cond_t  queue_condition;
-    pthread_cond_t  queue_empty;
-
-    uint32_t queue_increment;
-
-    pthread_t threads[DM_MAX_THREAD_COUNT];
-} dm_mac_threadpool;
+void* dm_mac_thread_start_func(void* args);
 
 void* dm_mac_thread_start_func(void* args);
 void  dm_mac_thread_execute_task(dm_thread_task* task);
@@ -32,7 +22,7 @@ extern void dm_add_window_resize_event(uint32_t new_widt, uint32_t new_height, d
 extern void dm_add_mousebutton_down_event(dm_mousebutton_code button, dm_event_list* event_list);
 extern void dm_add_mousebutton_up_event(dm_mousebutton_code button, dm_event_list* event_list);
 extern void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* event_list);
-extern void dm_add_mouse_scroll_event(uint32_t delta, dm_event_list* event_list);
+extern void dm_add_mouse_scroll_event(float delta, dm_event_list* event_list);
 extern void dm_add_key_down_event(dm_key_code key, dm_event_list* event_list);
 extern void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 
@@ -273,9 +263,12 @@ bool dm_platform_threadpool_create(dm_threadpool* threadpool)
     threadpool->internal_pool = dm_alloc(sizeof(dm_mac_threadpool));
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
 
-    pthread_mutex_init(&mac_threadpool->queue_mutex, NULL);
-    pthread_cond_init(&mac_threadpool->queue_condition, NULL);
-    pthread_cond_init(&mac_threadpool->queue_empty, NULL);
+    pthread_mutex_init(&mac_threadpool->thread_count_mutex, NULL);
+    pthread_mutex_init(&mac_threadpool->task_queue.mutex, NULL);
+    pthread_mutex_init(&mac_threadpool->task_queue.has_tasks.mutex, NULL);
+    pthread_cond_init(&mac_threadpool->task_queue.has_tasks.cond, NULL);
+    pthread_cond_init(&mac_threadpool->all_threads_idle, NULL);
+    pthread_cond_init(&mac_threadpool->at_least_one_idle, NULL);
 
     for(uint32_t i=0; i<threadpool->thread_count; i++)
     {
@@ -292,9 +285,12 @@ void dm_platform_threadpool_destroy(dm_threadpool* threadpool)
 {
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
 
-    pthread_mutex_destroy(&mac_threadpool->queue_mutex);
-    pthread_cond_destroy(&mac_threadpool->queue_condition);
-    pthread_cond_destroy(&mac_threadpool->queue_empty);
+    pthread_mutex_destroy(&mac_threadpool->thread_count_mutex);
+    pthread_mutex_destroy(&mac_threadpool->task_queue.mutex);
+    pthread_mutex_destroy(&mac_threadpool->task_queue.has_tasks.mutex);
+    pthread_cond_destroy(&mac_threadpool->task_queue.has_tasks.cond);
+    pthread_cond_destroy(&mac_threadpool->all_threads_idle);
+    pthread_cond_destroy(&mac_threadpool->at_least_one_idle);
 
     dm_free(threadpool->internal_pool);
 }
@@ -303,63 +299,89 @@ void dm_platform_threadpool_submit_task(dm_thread_task* task, dm_threadpool* thr
 {
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
 
-    pthread_mutex_lock(&mac_threadpool->queue_mutex);
-    dm_memcpy(threadpool->tasks + threadpool->task_count, task, sizeof(dm_thread_task));
-    threadpool->task_count++;
-    pthread_mutex_unlock(&mac_threadpool->queue_mutex);
+    // insert task
+    pthread_mutex_lock(&mac_threadpool->task_queue.mutex);
+    dm_memcpy(mac_threadpool->task_queue.tasks + mac_threadpool->task_queue.count, task, sizeof(dm_thread_task));
+    mac_threadpool->task_queue.count++;
 
-    pthread_cond_signal(&mac_threadpool->queue_condition);
-}
+    // wake up at least one thread
+    pthread_mutex_lock(&mac_threadpool->task_queue.has_tasks.mutex);
+    mac_threadpool->task_queue.has_tasks.v = 1;
+    pthread_cond_signal(&mac_threadpool->task_queue.has_tasks.cond);
+    pthread_mutex_unlock(&mac_threadpool->task_queue.has_tasks.mutex);
 
-void dm_platform_threadpool_execute_task(dm_thread_task* task, dm_threadpool* threadpool)
-{
-    dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
-
-    task->func(task->args);
-    
-    pthread_mutex_lock(&mac_threadpool->queue_mutex);
-    threadpool->total_task_count--;
-    if(threadpool->total_task_count==0) pthread_cond_signal(&mac_threadpool->queue_empty);
-    pthread_mutex_unlock(&mac_threadpool->queue_mutex);
+    pthread_mutex_unlock(&mac_threadpool->task_queue.mutex);
 }
 
 void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool)
 {
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
 
-    pthread_mutex_lock(&mac_threadpool->queue_mutex);
-    while(threadpool->total_task_count>0) 
+    // sleep until there are NO working threads AND the task queue is empty
+    pthread_mutex_lock(&mac_threadpool->thread_count_mutex);
+    while(mac_threadpool->num_working_threads || mac_threadpool->task_queue.count)
     {
-        pthread_cond_wait(&mac_threadpool->queue_empty, &mac_threadpool->queue_mutex);
+        pthread_cond_wait(&mac_threadpool->all_threads_idle, &mac_threadpool->thread_count_mutex);
     }
-    pthread_mutex_unlock(&mac_threadpool->queue_mutex);
+    pthread_mutex_unlock(&mac_threadpool->thread_count_mutex);
 }
 
 void* dm_mac_thread_start_func(void* args)
 {
     dm_threadpool* threadpool = args;
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
-
-    dm_thread_task task;
-
+    
     while(1)
     {
-        pthread_mutex_lock(&mac_threadpool->queue_mutex);
-
-        while(threadpool->task_count==0)
+        // sleep until a new task is available
+        pthread_mutex_lock(&mac_threadpool->task_queue.has_tasks.mutex);
+        while(mac_threadpool->task_queue.has_tasks.v==0)
         {
-            pthread_cond_wait(&mac_threadpool->queue_condition, &mac_threadpool->queue_mutex);
+            pthread_cond_wait(&mac_threadpool->task_queue.has_tasks.cond, &mac_threadpool->task_queue.has_tasks.mutex);
+        }
+        mac_threadpool->task_queue.has_tasks.v = 0;
+        pthread_mutex_unlock(&mac_threadpool->task_queue.has_tasks.mutex);
+
+        // iterate thread working counter
+        pthread_mutex_lock(&mac_threadpool->thread_count_mutex);
+        mac_threadpool->num_working_threads++;
+        pthread_mutex_unlock(&mac_threadpool->thread_count_mutex);
+
+        // grab task
+        pthread_mutex_lock(&mac_threadpool->task_queue.mutex);
+        dm_thread_task* task = NULL;
+
+        // is there still a task since we've woken up?
+        if(mac_threadpool->task_queue.count)
+        {
+            task = dm_alloc(sizeof(dm_thread_task));
+            dm_memcpy(task, &mac_threadpool->task_queue.tasks[0], sizeof(dm_thread_task));
+            dm_memmove(mac_threadpool->task_queue.tasks, mac_threadpool->task_queue.tasks + 1, sizeof(dm_thread_task) * mac_threadpool->task_queue.count-1);
+            mac_threadpool->task_queue.count--;
         }
 
-         // copy over task
-        task = threadpool->tasks[0];
-        dm_memmove(threadpool->tasks, threadpool->tasks + 1, sizeof(dm_thread_task) * threadpool->task_count-1);
-        // decrement task count
-        threadpool->task_count--;
+        // if queue is still populated, need to set semaphore back
+        if(mac_threadpool->task_queue.count)
+        {
+            pthread_mutex_lock(&mac_threadpool->task_queue.has_tasks.mutex);
+            mac_threadpool->task_queue.has_tasks.v = 1;
+            pthread_cond_signal(&mac_threadpool->task_queue.has_tasks.cond);
+            pthread_mutex_unlock(&mac_threadpool->task_queue.has_tasks.mutex);
+        }
+        pthread_mutex_unlock(&mac_threadpool->task_queue.mutex);
 
-        pthread_mutex_unlock(&mac_threadpool->queue_mutex);
-        
-        dm_platform_threadpool_execute_task(&task, threadpool);
+        if(task)
+        {
+            task->func(task->args);
+            dm_free(task);
+        }
+
+        // decrement thread working counter
+        pthread_mutex_lock(&mac_threadpool->thread_count_mutex);
+        mac_threadpool->num_working_threads--;
+        if(mac_threadpool->num_working_threads==0) pthread_cond_signal(&mac_threadpool->all_threads_idle);
+        //else pthread_cond_signal(&linux_threadpool->at_least_one_idle);
+        pthread_mutex_unlock(&mac_threadpool->thread_count_mutex);
     }
 
     return NULL;

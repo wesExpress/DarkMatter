@@ -1,4 +1,6 @@
 #include "dm_renderer_dx11.h"
+
+#ifdef DM_PLATFORM_WINDOWS
 #include "platform/dm_platform_win32.h"
 
 #ifdef DM_DEBUG
@@ -1622,4 +1624,6 @@ const char* dm_dx11_decode_severity(D3D11_MESSAGE_SEVERITY severity)
         return "Unknown severity";
     }
 }
+#endif
+
 #endif

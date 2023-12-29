@@ -683,6 +683,7 @@ void dm_mat4_identity(dm_mat4 mat)
 DM_INLINE
 void dm_mat4_transpose(const dm_mat4 mat, dm_mat4 out)
 {
+#ifdef DM_SIMD_X86
     dm_mm_float row1 = dm_mm_load_ps(mat[0]);
     dm_mm_float row2 = dm_mm_load_ps(mat[1]);
     dm_mm_float row3 = dm_mm_load_ps(mat[2]);
@@ -694,6 +695,28 @@ void dm_mat4_transpose(const dm_mat4 mat, dm_mat4 out)
     dm_mm_store_ps(out[1], row2);
     dm_mm_store_ps(out[2], row3);
     dm_mm_store_ps(out[3], row4);
+#else
+    out[0][0] = mat[0][0];
+    out[1][1] = mat[1][1];
+    out[2][2] = mat[2][2];
+    out[3][3] = mat[3][3];
+    
+    out[0][1] = mat[1][0];
+    out[0][2] = mat[2][0];
+    out[0][3] = mat[3][0];
+    
+    out[1][0] = mat[0][1];
+    out[1][2] = mat[2][1];
+    out[1][3] = mat[3][1];
+    
+    out[2][0] = mat[0][2];
+    out[2][1] = mat[1][2];
+    out[2][3] = mat[3][2];
+    
+    out[3][0] = mat[0][3];
+    out[3][1] = mat[1][3];
+    out[3][2] = mat[2][3];
+#endif
 }
 
 DM_INLINE
@@ -1063,11 +1086,21 @@ void dm_mat_ortho(float left, float right, float bottom, float top, float n, flo
 {
     dm_memzero(out, sizeof(float) * M4);
     
-	out[0][0]  = 2.0f / (right - left);
-	out[1][1]  = 2.0f / (top - bottom);
+	out[0][0] = 2.0f / (right - left);
+	out[1][1] = 2.0f / (top - bottom);
+#ifdef DM_METAL
+    out[2][2] = 1.0f / (f - n);
+    
+    out[3][0] = (right + left) / (left - right);
+    out[3][1] = (top + bottom) / (bottom - top);
+    out[3][2] = n / (n - f);
+#else
 	out[2][2] = 2.0f / (n - f);
-	out[3][0] = -(right + left) / (right - left);
-	out[3][1] = -(top + bottom) / (top - bottom);
+    
+    out[3][0] = -(right + left) / (right - left);
+    out[3][1] = -(top + bottom) / (top - bottom);
+#endif
+    
 	out[3][3] = 1.0f;
 }
 

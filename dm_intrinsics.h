@@ -163,13 +163,15 @@ dm_mm_float dm_mm_min_ps(dm_mm_float a, dm_mm_float b)
 #endif
 }
 
-#ifdef DM_SIMD_X86
 DM_INLINE
 float dm_mm_extract_float(dm_mm_float mm)
 {
+#ifdef DM_SIMD_X86
     return _mm_cvtss_f32(mm);
-}
+#elif defined(DM_SIMD_ARM)
+    return vgetq_lane_f32(mm, 0);
 #endif
+}
 
 DM_INLINE
 dm_mm_float dm_mm_hadd_fast_ps(dm_mm_float mm)
@@ -204,8 +206,8 @@ float dm_mm_sum_elements(dm_mm_float mm)
     dm_mm_float sums = dm_mm_hadd_fast_ps(mm);
     
     return _mm_cvtss_f32(sums);
-}
 #endif
+}
 
 DM_INLINE
 float dm_mm_dot_ps(dm_mm_float left, dm_mm_float right)
@@ -213,6 +215,9 @@ float dm_mm_dot_ps(dm_mm_float left, dm_mm_float right)
 #ifdef DM_SIMD_X86
     dm_mm_float dp = _mm_dp_ps(left,right, 0x7F);
     return dm_mm_extract_float(dp);
+#elif defined(DM_SIMD_ARM)
+    dm_mm_float v = dm_mm_mul_ps(left, right);
+    return dm_mm_sum_elements(v);
 #endif
 }
 
@@ -225,6 +230,10 @@ dm_mm_float dm_mm_normalize_ps(dm_mm_float mm)
     mag = dm_mm_sqrt_ps(mag);
     
     return dm_mm_div_ps(mm, mag);
+#elif defined(DM_SIMD_ARM)
+    dm_mm_float mag = dm_mm_set1_ps(dm_mm_dot_ps(mm, mm));
+    mag = dm_mm_sqrt_ps(mag);
+    return dm_mm_div_ps(mm, mag);
 #endif
 }
 
@@ -233,6 +242,8 @@ dm_mm_float dm_mm_broadcast_x_ps(dm_mm_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(0,0,0,0));
+#elif defined(DM_SIMD_ARM)
+    return vdupq_lane_f32(vget_low_f32(mm), 0);
 #endif
 }
 
@@ -241,6 +252,8 @@ dm_mm_float dm_mm_broadcast_y_ps(dm_mm_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(1,1,1,1));
+#elif defined(DM_SIMD_ARM)
+    return vdupq_lane_f32(vget_low_f32(mm), 1);
 #endif
 }
 
@@ -249,6 +262,8 @@ dm_mm_float dm_mm_broadcast_z_ps(dm_mm_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(2,2,2,2));
+#elif defined(DM_SIMD_ARM)
+    return vdupq_lane_f32(vget_high_f32(mm), 0);
 #endif
 }
 
@@ -257,6 +272,8 @@ dm_mm_float dm_mm_broadcast_w_ps(dm_mm_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(3,3,3,3));
+#elif defined(DM_SIMD_ARM)
+    return vdupq_lane_f32(vget_high_f32(mm), 1);
 #endif
 }
 
@@ -307,6 +324,7 @@ dm_mm_float dm_mm_leq_ps(dm_mm_float left, dm_mm_float right)
 #endif
 }
 
+#if 0
 DM_INLINE
 int dm_mm_any_non_zero(dm_mm_float mm)
 {
@@ -319,6 +337,7 @@ int dm_mm_any_non_zero(dm_mm_float mm)
     return vget_lane_u32(vpmax_u32(tmp, tmp), 0);
 #endif
 }
+#endif
 
 DM_INLINE
 int dm_mm_any_zero(dm_mm_float mm)
@@ -435,6 +454,7 @@ dm_mm_int dm_mm_blendv_i(dm_mm_int left, dm_mm_int right, dm_mm_int mask)
 /*
 MATRIX
 */
+#ifdef DM_SIMD_X86
 DM_INLINE
 void dm_mm_transpose_mat4(dm_mm_float* row1, dm_mm_float* row2, dm_mm_float* row3, dm_mm_float* row4)
 {
@@ -442,5 +462,6 @@ void dm_mm_transpose_mat4(dm_mm_float* row1, dm_mm_float* row2, dm_mm_float* row
     _MM_TRANSPOSE4_PS(*row1, *row2, *row3, *row4);
 #endif
 }
+#endif
 
 #endif //DM_INTRINSICS_H
