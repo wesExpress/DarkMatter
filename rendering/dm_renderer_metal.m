@@ -856,6 +856,8 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
 	dm_metal_pipeline pipeline = metal_renderer->pipelines[handle];
 	if(!pipeline.pipeline_state) { DM_LOG_FATAL("Invalid Metal pipeline state"); return false; }
 
+    metal_renderer->active_primitive = pipeline.primitive_type;
+    
 	[metal_renderer->command_encoder setRenderPipelineState:pipeline.pipeline_state];
 	[metal_renderer->command_encoder setDepthStencilState:pipeline.depth_stencil_state];
 	[metal_renderer->command_encoder setFrontFacingWinding:pipeline.winding];
@@ -1037,7 +1039,7 @@ void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count, dm_re
 	DM_METAL_GET_RENDERER;
 
 	if(![metal_renderer->metal_view hasDrawable]) return;
-	[metal_renderer->command_encoder drawPrimitives:metal_renderer->pipelines[metal_renderer->active_pipeline].primitive_type vertexStart:start vertexCount:count];
+	[metal_renderer->command_encoder drawPrimitives:metal_renderer->active_primitive vertexStart:start vertexCount:count];
 }
 
 void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer)
