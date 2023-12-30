@@ -188,6 +188,8 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* 
 		backing: NSBackingStoreBuffered
 		defer: NO
 	];
+    
+    float t = [NSScreen mainScreen].backingScaleFactor;
 
 	// input view
 	apple_data->content_view = [[dm_content_view alloc] initWithWindow: apple_data->window AndPlatformData: platform_data];

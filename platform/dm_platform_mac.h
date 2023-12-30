@@ -27,7 +27,7 @@
 - (NSRect)getWindowFrame;
 @end
 
-@interface dm_app_delegate : NSObject<NSApplicationDelegate>
+@interface dm_app_delegate : NSObject<NSApplicationDelegate> {}
 @end
 
 typedef struct dm_mac_semaphore_t

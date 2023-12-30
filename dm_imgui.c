@@ -392,7 +392,6 @@ void dm_imgui_render(dm_context* context)
     {
         if(!cmd->elem_count) continue;
         
-        dm_render_command_set_scissor_rects((uint32_t)cmd->clip_rect.x, (uint32_t)(cmd->clip_rect.x + cmd->clip_rect.w), (uint32_t)cmd->clip_rect.y, (uint32_t)(cmd->clip_rect.y + cmd->clip_rect.h), context);
         dm_render_command_draw_indexed(cmd->elem_count, offset, 0, context);
         offset += cmd->elem_count;
     }

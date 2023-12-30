@@ -3,6 +3,7 @@
 
 #import <Metal/Metal.h>
 #import <QuartzCore/CAMetalLayer.h>
+#import <MetalKit/MetalKit.h>
 
 #include <stdbool.h>
 
@@ -50,25 +51,6 @@ typedef struct dm_metal_shader_t
 	dm_render_handle  index_buffer;
 } dm_metal_shader;
 
-@interface dm_metal_view : NSView
-{
-@public
-	float clear_color[4];
-}
-
-@property (nonatomic, strong) CAMetalLayer*       metal_layer;
-@property (nonatomic, strong) id<CAMetalDrawable> drawable;
-@property (nonatomic) MTLViewport                 viewport;
-@property (nonatomic, strong) id<MTLTexture>      depth_texture;
-
-- (id) init;
-- (void) dealloc;
-- (MTLRenderPassDescriptor*)currentRenderPassDescriptor;
-- (void) nextDrawable;
-- (bool) hasDrawable;
-- (void) presentDrawable : (id<MTLCommandBuffer>)command_buffer;
-@end
-
 typedef struct dm_metal_renderer_t
 {
 	id<MTLDevice>        device;
@@ -79,7 +61,12 @@ typedef struct dm_metal_renderer_t
     
 	MTLViewport          active_viewport;
 	
-	dm_metal_view* 	     metal_view;
+    CAMetalLayer*       swapchain;
+    id<MTLTexture>      depth_texture;
+    id<CAMetalDrawable> render_target;
+    
+    dm_vec4 clear_color;
+    
 	dm_render_handle     active_shader;
 	dm_render_handle     active_pipeline;
 	MTLPrimitiveType     active_primitive;
@@ -94,70 +81,6 @@ typedef struct dm_metal_renderer_t
 
 
 #define DM_METAL_GET_RENDERER dm_metal_renderer* metal_renderer = renderer->internal_renderer
-
-@implementation dm_metal_view
-
-+ (id) layerClass
-{
-	return [CAMetalLayer class];
-}
-
-- (id) init
-{
-	self = [super init];
-
-	if(self)
-	{
-		self.wantsLayer = true;
-		self.metal_layer = [CAMetalLayer layer];
-	}
-
-	return self;
-}
-
-- (void) dealloc
-{
-    [_depth_texture release];
-    [_drawable release];
-    [_metal_layer release];
-    
-    [super dealloc];
-}
-
-- (MTLRenderPassDescriptor*)currentRenderPassDescriptor
-{
-	MTLRenderPassDescriptor* desc = [MTLRenderPassDescriptor renderPassDescriptor];
-	
-	desc.colorAttachments[0].texture = [_drawable texture];
-	desc.colorAttachments[0].storeAction = MTLStoreActionStore;
-    desc.colorAttachments[0].clearColor = MTLClearColorMake(clear_color[0], clear_color[1], clear_color[2], clear_color[3]);
-    desc.colorAttachments[0].loadAction = MTLLoadActionClear;
-
-	MTLRenderPassDepthAttachmentDescriptor* depth_attachment = desc.depthAttachment;
-	depth_attachment.texture = _depth_texture;
-	depth_attachment.clearDepth = 1.0;
-	depth_attachment.storeAction = MTLStoreActionDontCare;
-    depth_attachment.loadAction = MTLLoadActionClear;
-    
-	return desc;
-}
-
-- (void) nextDrawable
-{
-	_drawable = [_metal_layer nextDrawable];
-}
-
-- (bool) hasDrawable
-{
-	return _drawable ? 1 : 0;
-}
-
-- (void) presentDrawable: (id<MTLCommandBuffer>)command_buffer
-{
-	[command_buffer presentDrawable:_drawable];
-}
-
-@end
 
 #define DM_METAL_BUFFER_ALIGNMENT 512
 
@@ -699,18 +622,11 @@ bool dm_renderer_backend_init(dm_context* context)
 	dm_metal_renderer* metal_renderer = context->renderer.internal_renderer;
 
 	metal_renderer->device = MTLCreateSystemDefaultDevice();
-	metal_renderer->metal_view = [[dm_metal_view alloc] init];
-	if(!metal_renderer->metal_view)
-	{
-		DM_LOG_FATAL("Could not create metal view.");
-		return false;
-	}
 
-	metal_renderer->metal_view.metal_layer.device = metal_renderer->device;
-	metal_renderer->metal_view.metal_layer.pixelFormat = MTLPixelFormatBGRA8Unorm;
-
-	[metal_renderer->metal_view setFrame:frame];
-	[metal_renderer->metal_view.metal_layer setFrame:frame];
+    // swapchain
+    metal_renderer->swapchain        = [CAMetalLayer layer];
+    metal_renderer->swapchain.device = metal_renderer->device;
+    metal_renderer->swapchain.opaque = YES;
 
 	metal_renderer->command_queue = [metal_renderer->device newCommandQueue];
 	if(!metal_renderer->command_queue)
@@ -719,26 +635,23 @@ bool dm_renderer_backend_init(dm_context* context)
 		return false;
 	}
 
-	// content view is the main view for our NSWindow
-    // must add our view to the subviews
-	[internal_data->content_view addSubview:metal_renderer->metal_view];
-
 	// must set the content view's layer to our metal layer
 	[internal_data->content_view setWantsLayer: YES];
-	[internal_data->content_view setLayer:metal_renderer->metal_view.metal_layer];
+	[internal_data->content_view setLayer:metal_renderer->swapchain];
 
-	CGFloat contents_scale = internal_data->content_view.layer.contentsScale;
     NSSize layer_size = internal_data->content_view.layer.frame.size;
-    metal_renderer->metal_view.metal_layer.contentsScale = contents_scale;
-    metal_renderer->metal_view.metal_layer.drawableSize = NSMakeSize(layer_size.width * contents_scale, layer_size.height * contents_scale);
-        
-	// create the depth texture
-    CGSize drawableSize = metal_renderer->metal_view.metal_layer.drawableSize;
-    MTLTextureDescriptor *descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float_Stencil8 width:drawableSize.width height:drawableSize.height mipmapped:NO];
+    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
+    metal_renderer->swapchain.contentsScale = scale;
+    NSSize drawable_size = NSMakeSize(layer_size.width * scale, layer_size.height * scale);
+    metal_renderer->swapchain.drawableSize = drawable_size;
+    
+    // depth texture
+    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float_Stencil8 width:drawable_size.width height:drawable_size.height mipmapped:NO];
     descriptor.storageMode = MTLStorageModePrivate;
-    descriptor.usage = MTLTextureUsageRenderTarget;
-    metal_renderer->metal_view.depth_texture = [metal_renderer->device newTextureWithDescriptor:descriptor];
-    metal_renderer->metal_view.depth_texture.label = @"DepthStencil";
+    descriptor.usage       = MTLTextureUsageRenderTarget;
+    
+    metal_renderer->depth_texture       = [metal_renderer->device newTextureWithDescriptor:descriptor];
+    metal_renderer->depth_texture.label = @"DepthStencil";
     
 	return true;
 }
@@ -771,7 +684,9 @@ void dm_renderer_backend_shutdown(dm_context* context)
         dm_renderer_backend_destroy_pipeline(i, &context->renderer);
     }
     
-	[metal_renderer->metal_view release];
+    [metal_renderer->swapchain release];
+    [metal_renderer->depth_texture release];
+	//[metal_renderer->metal_view release];
     [metal_renderer->command_encoder release];
     [metal_renderer->command_queue release];
 	[metal_renderer->device release];
@@ -781,15 +696,39 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 {
 	DM_METAL_GET_RENDERER;
 
-	[metal_renderer->metal_view nextDrawable];
+    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
+    metal_renderer->swapchain.contentsScale = scale;
+    CGSize size = metal_renderer->swapchain.bounds.size;
+    size.width *= scale;
+    size.height *= scale;
+    metal_renderer->swapchain.drawableSize = size;
+    
+    metal_renderer->render_target = [metal_renderer->swapchain nextDrawable];
+    if(!metal_renderer->render_target) { DM_LOG_FATAL("Could not get next Metal drawable!"); }
 
 	MTLCommandBufferDescriptor* desc = [MTLCommandBufferDescriptor new];
 	desc.errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
 	metal_renderer->command_buffer = [metal_renderer->command_queue commandBufferWithDescriptor:desc];
 
-    MTLRenderPassDescriptor* passDescriptor = [metal_renderer->metal_view currentRenderPassDescriptor];
-
-    metal_renderer->command_encoder = [metal_renderer->command_buffer renderCommandEncoderWithDescriptor:passDescriptor];
+    MTLRenderPassDescriptor* pass_desc = [MTLRenderPassDescriptor renderPassDescriptor];
+    
+    pass_desc.colorAttachments[0].texture     = [metal_renderer->render_target texture];
+    pass_desc.colorAttachments[0].storeAction = MTLStoreActionStore;
+    pass_desc.colorAttachments[0].loadAction  = MTLLoadActionClear;
+    pass_desc.colorAttachments[0].clearColor  = MTLClearColorMake(
+                                                                 metal_renderer->clear_color[0],
+                                                                 metal_renderer->clear_color[1],
+                                                                 metal_renderer->clear_color[2],
+                                                                 metal_renderer->clear_color[3]
+                                                                  );
+    
+    MTLRenderPassDepthAttachmentDescriptor* depth_attachment = pass_desc.depthAttachment;
+    depth_attachment.texture     = metal_renderer->depth_texture;
+    depth_attachment.clearDepth  = 1.0;
+    depth_attachment.storeAction = MTLStoreActionDontCare;
+    depth_attachment.loadAction  = MTLLoadActionClear;
+    
+    metal_renderer->command_encoder = [metal_renderer->command_buffer renderCommandEncoderWithDescriptor:pass_desc];
 
 	[desc release];
 
@@ -800,9 +739,10 @@ bool dm_renderer_backend_end_frame(dm_context* context)
 {
 	dm_metal_renderer* metal_renderer = context->renderer.internal_renderer;
 
-	metal_renderer->metal_view.metal_layer.displaySyncEnabled = context->renderer.vsync;
+	metal_renderer->swapchain.displaySyncEnabled = context->renderer.vsync;
     
-	if([metal_renderer->metal_view hasDrawable]) [metal_renderer->metal_view presentDrawable:metal_renderer->command_buffer];
+    if(metal_renderer->render_target) [metal_renderer->command_buffer presentDrawable:metal_renderer->render_target];
+    else { DM_LOG_FATAL("Render target is NULL!"); return false; }
 
     [metal_renderer->command_encoder endEncoding];
 	[metal_renderer->command_buffer commit];
@@ -816,6 +756,25 @@ bool dm_renderer_backend_end_frame(dm_context* context)
 
 bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
 {
+    DM_METAL_GET_RENDERER;
+    
+    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
+    metal_renderer->swapchain.contentsScale = scale;
+    CGSize drawable_size;
+    drawable_size.width  = width * scale;
+    drawable_size.height = height * scale;
+    metal_renderer->swapchain.drawableSize = drawable_size;
+    
+    // depth texture
+    [metal_renderer->depth_texture release];
+    
+    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float_Stencil8 width:drawable_size.width height:drawable_size.height mipmapped:NO];
+    descriptor.storageMode = MTLStorageModePrivate;
+    descriptor.usage       = MTLTextureUsageRenderTarget;
+    
+    metal_renderer->depth_texture       = [metal_renderer->device newTextureWithDescriptor:descriptor];
+    metal_renderer->depth_texture.label = @"DepthStencil";
+    
 	return true;
 }
 
@@ -826,10 +785,10 @@ void dm_render_command_backend_clear(float r, float g, float b, float a, dm_rend
 {
 	DM_METAL_GET_RENDERER;
 
-	metal_renderer->metal_view->clear_color[0] = r;
-	metal_renderer->metal_view->clear_color[1] = g;
-	metal_renderer->metal_view->clear_color[2] = b;
-	metal_renderer->metal_view->clear_color[3] = a;
+	metal_renderer->clear_color[0] = r;
+	metal_renderer->clear_color[1] = g;
+	metal_renderer->clear_color[2] = b;
+	metal_renderer->clear_color[3] = a;
 }
 
 void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer)
@@ -885,7 +844,7 @@ bool dm_render_command_backend_bind_shader(dm_render_handle handle, dm_renderer*
 {
 	DM_METAL_GET_RENDERER;
 
-	if(![metal_renderer->metal_view hasDrawable]) return false;
+	if(!metal_renderer->render_target) return false;
 
 	if(handle > metal_renderer->shader_count) { DM_LOG_FATAL("Trying to bind invalid Metal shader"); return false; }
 
@@ -902,8 +861,8 @@ bool dm_render_command_backend_bind_buffer(dm_render_handle handle, uint32_t slo
 {
 	DM_METAL_GET_RENDERER;
 
-	if(![metal_renderer->metal_view hasDrawable]) return false;
-
+    if(!metal_renderer->render_target) return false;
+    
 	if(handle > metal_renderer->buffer_count) { DM_LOG_FATAL("Trying to bind invalid Metal buffer"); return false; }
 
 	dm_metal_buffer* internal_buffer = &metal_renderer->buffers[handle];
@@ -925,8 +884,8 @@ bool dm_render_command_backend_update_buffer(dm_render_handle handle, void* data
 {
 	DM_METAL_GET_RENDERER;
 
-	if(![metal_renderer->metal_view hasDrawable]) return false;
-
+    if(!metal_renderer->render_target) return false;
+    
 	if(handle > metal_renderer->buffer_count) { DM_LOG_FATAL("Trying to update invalid Metal buffer"); return false; }
 
 	dm_memcpy([metal_renderer->buffers[handle].buffer contents]+offset, data, data_size);
@@ -938,8 +897,8 @@ bool dm_render_command_backend_bind_uniform(dm_render_handle handle, dm_uniform_
 {
 	DM_METAL_GET_RENDERER;
 
-	if(![metal_renderer->metal_view hasDrawable]) return false;
-
+    if(!metal_renderer->render_target) return false;
+    
 	if(handle > metal_renderer->buffer_count) { DM_LOG_FATAL("Trying to bind invalid Metal uniform"); return false; }
 
 	dm_metal_shader* active_shader = &metal_renderer->shaders[metal_renderer->active_shader];
@@ -960,8 +919,8 @@ bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t sl
 {
 	DM_METAL_GET_RENDERER;
 
-	if(![metal_renderer->metal_view hasDrawable]) return false;
-
+    if(!metal_renderer->render_target) return false;
+    
 	if(handle > metal_renderer->texture_count) { DM_LOG_FATAL("Trying to bind invalid Metal texture"); return false; }
 
 	[metal_renderer->command_encoder setFragmentTexture:metal_renderer->textures[handle].texture atIndex:slot];
@@ -1005,13 +964,6 @@ bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t 
     NSUInteger bytes_per_row = 4 * width;
 
     [internal_texture->texture replaceRegion:region mipmapLevel:0 withBytes:data bytesPerRow:bytes_per_row];
-
-    //id <MTLCommandBuffer> command_buffer = [metal_renderer->command_queue commandBuffer];
-    //id <MTLBlitCommandEncoder> blit_encoder = [command_buffer blitCommandEncoder];
-    //[blit_encoder generateMipmapsForTexture: internal_texture.texture];
-    //[blit_encoder endEncoding];
-    //[command_buffer commit];
-    //[command_buffer waitUntilCompleted];
     
     return true;
 }
@@ -1038,16 +990,16 @@ void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count, dm_re
 {
 	DM_METAL_GET_RENDERER;
 
-	if(![metal_renderer->metal_view hasDrawable]) return;
-	[metal_renderer->command_encoder drawPrimitives:metal_renderer->active_primitive vertexStart:start vertexCount:count];
+    if(!metal_renderer->render_target) return false;
+    [metal_renderer->command_encoder drawPrimitives:metal_renderer->active_primitive vertexStart:start vertexCount:count];
 }
 
 void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer)
 {
 	DM_METAL_GET_RENDERER;
 
-	if(![metal_renderer->metal_view hasDrawable]) return;
-
+    if(!metal_renderer->render_target) return false;
+    
 	dm_metal_shader* active_shader = &metal_renderer->shaders[metal_renderer->active_shader];
     dm_metal_buffer* index_buffer  = &metal_renderer->buffers[active_shader->index_buffer];
 
@@ -1067,8 +1019,8 @@ void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num
 {
 	DM_METAL_GET_RENDERER;
 
-	if(![metal_renderer->metal_view hasDrawable]) return;
-
+    if(!metal_renderer->render_target) return false;
+    
 	dm_metal_shader* active_shader = &metal_renderer->shaders[metal_renderer->active_shader];
     dm_metal_buffer* index_buffer  = &metal_renderer->buffers[active_shader->index_buffer];
     
@@ -1094,8 +1046,6 @@ void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* ren
 
 void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_renderer* renderer)
 {
-    if(((right-left)==8192) || ((bottom-top)==8192)) return;
-    
     DM_METAL_GET_RENDERER;
     
     MTLScissorRect rect;
