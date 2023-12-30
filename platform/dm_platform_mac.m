@@ -52,6 +52,13 @@ extern void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
     return frameSize;
 }
 
+- (void)windowDidResize:(NSNotification *)notification
+{
+    NSRect frame = [NSScreen mainScreen].frame;
+    
+    dm_add_window_resize_event(frame.size.width, frame.size.height, &platform_data->event_list);
+}
+
 @end
 
 @implementation dm_content_view
@@ -111,7 +118,30 @@ extern void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 - (void) mouseMoved: (NSEvent*) event
 {
     const NSPoint point = [event locationInWindow];
-	dm_add_mouse_move_event(point.x, point.y, &platform_data->event_list);
+    
+    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
+    CAMetalLayer* swapchain = (CAMetalLayer*)self.layer;
+    NSSize  size  = swapchain.drawableSize;
+    
+	dm_add_mouse_move_event(point.x * scale, size.height - (point.y * scale), &platform_data->event_list);
+}
+
+- (void)rightMouseDragged:(NSEvent *)event
+{
+    // Equivalent to moving the mouse for now
+    [self mouseMoved:event];
+}
+
+- (void)leftMouseDragged:(NSEvent *)event
+{
+    // Equivalent to moving the mouse for now
+    [self mouseMoved:event];
+}
+
+- (void)otherMouseDragged:(NSEvent *)event
+{
+    // Equivalent to moving the mouse for now
+    [self mouseMoved:event];
 }
 
 - (void) keyDown: (NSEvent*) event

@@ -638,6 +638,8 @@ bool dm_renderer_backend_init(dm_context* context)
 	// must set the content view's layer to our metal layer
 	[internal_data->content_view setWantsLayer: YES];
 	[internal_data->content_view setLayer:metal_renderer->swapchain];
+    
+    
 
     NSSize layer_size = internal_data->content_view.layer.frame.size;
     CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
@@ -686,7 +688,6 @@ void dm_renderer_backend_shutdown(dm_context* context)
     
     [metal_renderer->swapchain release];
     [metal_renderer->depth_texture release];
-	//[metal_renderer->metal_view release];
     [metal_renderer->command_encoder release];
     [metal_renderer->command_queue release];
 	[metal_renderer->device release];
@@ -795,11 +796,13 @@ void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_
 {
 	DM_METAL_GET_RENDERER;
 
+    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
+    
 	MTLViewport new_viewport;
 	new_viewport.originX = 0.0f;
 	new_viewport.originY = 0.0f;
-	new_viewport.width = width;
-	new_viewport.height = height;
+	new_viewport.width = width * scale;
+	new_viewport.height = height * scale;
 	new_viewport.znear = 0;
 	new_viewport.zfar = 1.0f;
 
