@@ -272,6 +272,13 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
             uint32_t x,y;
             dm_input_get_mouse_pos(&x,&y, context);
             
+#ifdef DM_PLATFORM_APPLE
+            float scale = dm_platform_apple_get_scale_factor();
+            
+            x /= scale;
+            y /= scale;
+#endif
+            
             switch(e.button)
             {
                 case DM_MOUSEBUTTON_L:
@@ -300,6 +307,13 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
             uint32_t x,y;
             dm_input_get_mouse_pos(&x,&y, context);
             
+#ifdef DM_PLATFORM_APPLE
+            float scale = dm_platform_apple_get_scale_factor();
+            
+            x /= scale;
+            y /= scale;
+#endif
+            
             switch(e.button)
             {
                 case DM_MOUSEBUTTON_L:
@@ -324,6 +338,14 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
         {
             uint32_t x,y;
             dm_input_get_mouse_pos(&x,&y,context);
+            
+#ifdef DM_PLATFORM_APPLE
+            float scale = dm_platform_apple_get_scale_factor();
+            
+            x /= scale;
+            y /= scale;
+#endif
+            
             nk_input_motion(&imgui_nk_ctx->ctx, x,y);
         } break;
         

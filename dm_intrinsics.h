@@ -193,6 +193,8 @@ dm_mm_float dm_mm_blendv_ps(dm_mm_float left, dm_mm_float right, dm_mm_float mas
 {
 #ifdef DM_SIMD_X86
     return _mm_blendv_ps(left, right, mask);
+#elif defined(DM_SIMD_ARM)
+    return vbslq_f32(left, right, mask);
 #endif
 }
 
@@ -448,6 +450,8 @@ dm_mm_int dm_mm_blendv_i(dm_mm_int left, dm_mm_int right, dm_mm_int mask)
 {
 #ifdef DM_SIMD_X86
     return _mm_blendv_epi8(left, right, mask);
+#elif defined(DM_SIMD_ARM)
+    return vbslq_u32(left, right, mask);
 #endif
 }
 

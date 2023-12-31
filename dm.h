@@ -1204,6 +1204,11 @@ void dm_add_mouse_scroll_event(float delta, dm_event_list* event_list);
 void dm_add_key_down_event(dm_key_code key, dm_event_list* event_list);
 void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 
+// scetchyness
+#ifdef DM_PLATFORM_APPLE
+float dm_platform_apple_get_scale_factor();
+#endif
+
 // threads
 uint32_t dm_get_available_processor_count(dm_context* context);
 bool     dm_threads_create(void* (*thread_func)(void*), void* args, size_t args_size, uint32_t num_threads, dm_context* context);

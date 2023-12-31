@@ -274,17 +274,14 @@ bool dm_platform_pump_events(dm_platform_data* platform_data)
 
 double dm_platform_get_time(dm_platform_data* platform_data)
 {
-	const uint64_t factor = 1000000;
-    static mach_timebase_info_data_t s_timebase_info;
-    static dispatch_once_t once_token;
-
-    dispatch_once(&once_token, ^{
-        (void) mach_timebase_info(&s_timebase_info);
-    });
-
-    float mili = (float)((mach_absolute_time() * s_timebase_info.numer) / (factor * s_timebase_info.denom));
-
-    return mili / 1000.0;
+    mach_timebase_info_data_t clock_timebase;
+    mach_timebase_info(&clock_timebase);
+    
+    uint64_t mach_absolute = mach_absolute_time();
+    
+    uint64_t nanos = (double)(mach_absolute * (uint64_t)clock_timebase.numer) / (double)clock_timebase.denom;
+    
+    return nanos / 1.0e9;
 }
 
 /**********
@@ -560,6 +557,12 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key)
         DM_LOG_ERROR("Unknown key code! Reeturning 'A'...");
         return DM_KEY_A;
     }
+}
+
+// sketchiness
+float dm_platform_apple_get_scale_factor()
+{
+    return [NSScreen mainScreen].backingScaleFactor;
 }
 
 #endif
