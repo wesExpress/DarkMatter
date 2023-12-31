@@ -3,7 +3,7 @@
 
 #include "dm.h"
 
-#ifdef DM_PLATFORM_WINDOWS
+#ifdef DM_DIRECTX
 
 #define COBJMACROS
 #include <d3d11_1.h>

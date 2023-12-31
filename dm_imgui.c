@@ -24,7 +24,7 @@ bool dm_imgui_init(dm_context* context)
     dm_vertex_attrib_desc attrib_descs[] = {
         { .name="POSITION", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, pos), .count=2, .index=0, .normalized=false },
         { .name="TEXCOORD", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, tex_coords), .count=2, .index=0, .normalized=false },
-        { .name="COLOR", .data_t=DM_VERTEX_DATA_T_UBYTE_NORM, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, color), .count=4, .index=0, .normalized=false }
+        { .name="COLOR", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, color), .count=4, .index=0, .normalized=false }
     };
     
     // pipeline desc
@@ -368,7 +368,7 @@ void dm_imgui_render(dm_context* context)
     
     dm_render_command_bind_shader(imgui_ctx->shader, context);
     dm_render_command_bind_pipeline(imgui_ctx->pipe, context);
-        
+    
     struct nk_convert_config config = { 0 };
     NK_STORAGE const struct nk_draw_vertex_layout_element vertex_layout[] = {
         { NK_VERTEX_POSITION, NK_FORMAT_FLOAT,    NK_OFFSETOF(dm_imgui_vertex, pos) },

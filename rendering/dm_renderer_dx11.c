@@ -1,6 +1,6 @@
 #include "dm_renderer_dx11.h"
 
-#ifdef DM_PLATFORM_WINDOWS
+#ifdef DM_DIRECTX
 #include "platform/dm_platform_win32.h"
 
 #ifdef DM_DEBUG
