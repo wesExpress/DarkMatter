@@ -696,26 +696,30 @@ void dm_mat4_transpose(const dm_mat4 mat, dm_mat4 out)
     dm_mm_store_ps(out[2], row3);
     dm_mm_store_ps(out[3], row4);
 #else
-    out[0][0] = mat[0][0];
-    out[1][1] = mat[1][1];
-    out[2][2] = mat[2][2];
-    out[3][3] = mat[3][3];
+    dm_mat4 d = { 0 };
     
-    out[0][1] = mat[1][0];
-    out[0][2] = mat[2][0];
-    out[0][3] = mat[3][0];
+    d[0][0] = mat[0][0];
+    d[1][1] = mat[1][1];
+    d[2][2] = mat[2][2];
+    d[3][3] = mat[3][3];
     
-    out[1][0] = mat[0][1];
-    out[1][2] = mat[2][1];
-    out[1][3] = mat[3][1];
+    d[0][1] = mat[1][0];
+    d[0][2] = mat[2][0];
+    d[0][3] = mat[3][0];
     
-    out[2][0] = mat[0][2];
-    out[2][1] = mat[1][2];
-    out[2][3] = mat[3][2];
+    d[1][0] = mat[0][1];
+    d[1][2] = mat[2][1];
+    d[1][3] = mat[3][1];
     
-    out[3][0] = mat[0][3];
-    out[3][1] = mat[1][3];
-    out[3][2] = mat[2][3];
+    d[2][0] = mat[0][2];
+    d[2][1] = mat[1][2];
+    d[2][3] = mat[3][2];
+    
+    d[3][0] = mat[0][3];
+    d[3][1] = mat[1][3];
+    d[3][2] = mat[2][3];
+    
+    dm_memcpy(out, d, sizeof(d));
 #endif
 }
 
