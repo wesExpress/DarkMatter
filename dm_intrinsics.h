@@ -131,6 +131,7 @@ dm_mm_float dm_mm_fmadd_ps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
 #ifdef DM_SIMD_X86
     return _mm_fmadd_ps(a, b, c);
 #elif defined(DM_SIMD_ARM)
+    // the order is backwards for some reason!
     return vfmaq_f32(c,a,b);
 #endif
 }
@@ -139,6 +140,7 @@ dm_mm_float dm_mm_fmadd_ps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
 DM_INLINE
 dm_mm_float dm_mm_fsubps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
 {
+    // the order is backwards for some reason!
     return vfmsq_f32(c,a,b);
 }
 #endif

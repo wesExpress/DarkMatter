@@ -510,9 +510,9 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
 	MTLTextureDescriptor* texture_desc = [[MTLTextureDescriptor alloc] init];
 
 	texture_desc.pixelFormat = MTLPixelFormatRGBA8Unorm;
-	texture_desc.width = width;
-	texture_desc.height = height;
-	texture_desc.usage = MTLTextureUsageShaderRead;
+	texture_desc.width       = width;
+	texture_desc.height      = height;
+	texture_desc.usage       = MTLTextureUsageShaderRead;
 
 	internal_texture.texture = [metal_renderer->device newTextureWithDescriptor:texture_desc];
 	if(!internal_texture.texture)
@@ -639,8 +639,6 @@ bool dm_renderer_backend_init(dm_context* context)
 	[internal_data->content_view setWantsLayer: YES];
 	[internal_data->content_view setLayer:metal_renderer->swapchain];
     
-    
-
     NSSize layer_size = internal_data->content_view.layer.frame.size;
     CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
     metal_renderer->swapchain.contentsScale = scale;
