@@ -125,6 +125,21 @@ void dm_vec3_div_vec3(const dm_vec3 left, const dm_vec3 right, dm_vec3 out)
 DM_INLINE
 float dm_vec3_dot(const dm_vec3 left, const dm_vec3 right)
 {
+#if 1
+    dm_simd_float x1 = dm_simd_set1_float(left[0]);
+    dm_simd_float y1 = dm_simd_set1_float(left[1]);
+    dm_simd_float z1 = dm_simd_set1_float(left[2]);
+    
+    dm_simd_float x2 = dm_simd_set1_float(right[0]);
+    dm_simd_float y2 = dm_simd_set1_float(right[1]);
+    dm_simd_float z2 = dm_simd_set1_float(right[2]);
+    
+    dm_simd_float result = dm_simd_mul_float(x1, x2);
+    result = dm_simd_fmadd_float(y1, y2, result);
+    result = dm_simd_fmadd_float(z1, z2, result);
+    
+    return dm_simd_extract_float(result);
+#else
     float r;
     
     r  = left[0] * right[0];
@@ -132,6 +147,7 @@ float dm_vec3_dot(const dm_vec3 left, const dm_vec3 right)
     r += left[2] * right[2];
     
     return r;
+#endif
 }
 
 DM_INLINE
@@ -259,69 +275,69 @@ void dm_vec4_from_vec3(const dm_vec3 vec3, dm_vec4 out)
 DM_INLINE
 void dm_vec4_add_vec4(const dm_vec4 left, const dm_vec4 right, dm_vec4 out)
 {
-    dm_mm_float l, r, o;
+    dm_simd_float l, r, o;
     
-    l = dm_mm_load_ps(left);
-    r = dm_mm_load_ps(right);
-    o = dm_mm_add_ps(l, r);
+    l = dm_simd_load_float(left);
+    r = dm_simd_load_float(right);
+    o = dm_simd_add_float(l, r);
     
-    dm_mm_store_ps(out, o);
+    dm_simd_store_float(out, o);
 }
 
 DM_INLINE
 void dm_vec4_sub_vec4(const dm_vec4 left, const dm_vec4 right, dm_vec4 out)
 {
-    dm_mm_float l, r, o;
+    dm_simd_float l, r, o;
     
-    l = dm_mm_load_ps(left);
-    r = dm_mm_load_ps(right);
-    o = dm_mm_sub_ps(l, r);
+    l = dm_simd_load_float(left);
+    r = dm_simd_load_float(right);
+    o = dm_simd_sub_float(l, r);
     
-    dm_mm_store_ps(out, o);
+    dm_simd_store_float(out, o);
 }
 
 DM_INLINE
 float dm_vec4_dot(const dm_vec4 left, const dm_vec4 right)
 {
-    dm_mm_float l, r;
+    dm_simd_float l, r;
     
-    l = dm_mm_load_ps(left);
-    r = dm_mm_load_ps(right);
+    l = dm_simd_load_float(left);
+    r = dm_simd_load_float(right);
     
-    return dm_mm_dot_ps(l, r);
+    return dm_simd_dot_float(l, r);
 }
 
 DM_INLINE
 void dm_vec4_scale(const dm_vec4 vec, float s, dm_vec4 out)
 {
-    dm_mm_float v, scalar;
+    dm_simd_float v, scalar;
     
-    scalar = dm_mm_set1_ps(s);
-    v      = dm_mm_load_ps(vec);
-    v = dm_mm_mul_ps(v, scalar);
+    scalar = dm_simd_set1_float(s);
+    v      = dm_simd_load_float(vec);
+    v      = dm_simd_mul_float(v, scalar);
     
-    dm_mm_store_ps(out, v);
+    dm_simd_store_float(out, v);
 }
 
 DM_INLINE
 float dm_vec4_mag(const dm_vec4 vec)
 {
-    dm_mm_float v = dm_mm_load_ps(vec);
-    return dm_mm_dot_ps(v,v);
+    dm_simd_float v = dm_simd_load_float(vec);
+    return dm_simd_dot_float(v,v);
 }
 
 DM_INLINE
 void dm_vec4_norm(const dm_vec4 vec, dm_vec4 out)
 {
-    dm_mm_float v    = dm_mm_load_ps(vec);
-    dm_mm_float v_sq = dm_mm_mul_ps(v, v);
+    dm_simd_float v    = dm_simd_load_float(vec);
+    dm_simd_float v_sq = dm_simd_mul_float(v, v);
+    dm_simd_float mag  = dm_simd_hadd_fast_float(v_sq);
     
-    dm_mm_float mag = dm_mm_hadd_fast_ps(v_sq);
-    mag = dm_mm_sqrt_ps(mag);
+    mag = dm_simd_sqrt_float(mag);
     
-    v = dm_mm_div_ps(v, mag);
+    v = dm_simd_div_float(v, mag);
     
-    dm_mm_store_ps(out, v);
+    dm_simd_store_float(out, v);
 }
 
 /**********
@@ -678,17 +694,17 @@ DM_INLINE
 void dm_mat4_transpose(const dm_mat4 mat, dm_mat4 out)
 {
 #ifdef DM_SIMD_X86
-    dm_mm_float row1 = dm_mm_load_ps(mat[0]);
-    dm_mm_float row2 = dm_mm_load_ps(mat[1]);
-    dm_mm_float row3 = dm_mm_load_ps(mat[2]);
-    dm_mm_float row4 = dm_mm_load_ps(mat[3]);
+    dm_simd_float row1 = dm_simd_load_float(mat[0]);
+    dm_simd_float row2 = dm_simd_load_float(mat[1]);
+    dm_simd_float row3 = dm_simd_load_float(mat[2]);
+    dm_simd_float row4 = dm_simd_load_float(mat[3]);
     
-    dm_mm_transpose_mat4(&row1, &row2, &row3, &row4);
+    dm_simd_transpose_mat4(&row1, &row2, &row3, &row4);
     
-    dm_mm_store_ps(out[0], row1);
-    dm_mm_store_ps(out[1], row2);
-    dm_mm_store_ps(out[2], row3);
-    dm_mm_store_ps(out[3], row4);
+    dm_simd_store_float(out[0], row1);
+    dm_simd_store_float(out[1], row2);
+    dm_simd_store_float(out[2], row3);
+    dm_simd_store_float(out[3], row4);
 #else
     dm_mat4 d = { 0 };
     
@@ -723,29 +739,29 @@ void dm_mat4_mul_mat4(const dm_mat4 left, const dm_mat4 right, dm_mat4 out)
     dm_mat4 right_t;
     dm_mat4_transpose(right, right_t);
     
-    dm_mm_float row_1, row_2, row_3, row_4;
-    dm_mm_float left_r, right_r;
+    dm_simd_float row_1, row_2, row_3, row_4;
+    dm_simd_float left_r, right_r;
     
-    left_r  = dm_mm_load_ps(left[0]);
-    right_r = dm_mm_load_ps(right_t[0]);
-    row_1   = dm_mm_mul_ps(left_r, right_r);
+    left_r  = dm_simd_load_float(left[0]);
+    right_r = dm_simd_load_float(right_t[0]);
+    row_1   = dm_simd_mul_float(left_r, right_r);
     
-    left_r  = dm_mm_load_ps(left[1]);
-    right_r = dm_mm_load_ps(right_t[1]);
-    row_2   = dm_mm_mul_ps(left_r, right_r);
+    left_r  = dm_simd_load_float(left[1]);
+    right_r = dm_simd_load_float(right_t[1]);
+    row_2   = dm_simd_mul_float(left_r, right_r);
     
-    left_r  = dm_mm_load_ps(left[2]);
-    right_r = dm_mm_load_ps(right_t[2]);
-    row_3   = dm_mm_mul_ps(left_r, right_r);
+    left_r  = dm_simd_load_float(left[2]);
+    right_r = dm_simd_load_float(right_t[2]);
+    row_3   = dm_simd_mul_float(left_r, right_r);
     
-    left_r  = dm_mm_load_ps(left[3]);
-    right_r = dm_mm_load_ps(right_t[3]);
-    row_4   = dm_mm_mul_ps(left_r, right_r);
+    left_r  = dm_simd_load_float(left[3]);
+    right_r = dm_simd_load_float(right_t[3]);
+    row_4   = dm_simd_mul_float(left_r, right_r);
     
-    dm_mm_store_ps(out[0], row_1);
-    dm_mm_store_ps(out[1], row_2);
-    dm_mm_store_ps(out[2], row_3);
-    dm_mm_store_ps(out[3], row_4);
+    dm_simd_store_float(out[0], row_1);
+    dm_simd_store_float(out[1], row_2);
+    dm_simd_store_float(out[2], row_3);
+    dm_simd_store_float(out[3], row_4);
 }
 
 DM_INLINE
@@ -754,23 +770,23 @@ void dm_mat4_mul_vec4(const dm_mat4 mat, const dm_vec4 vec, dm_vec4 out)
     dm_mat4 mat_t;
     dm_mat4_transpose(mat, mat_t);
     
-    const dm_mm_float v_x = dm_mm_set1_ps(vec[0]);
-    const dm_mm_float v_y = dm_mm_set1_ps(vec[1]);
-    const dm_mm_float v_z = dm_mm_set1_ps(vec[2]);
-    const dm_mm_float v_w = dm_mm_set1_ps(vec[3]);
+    const dm_simd_float v_x = dm_simd_set1_float(vec[0]);
+    const dm_simd_float v_y = dm_simd_set1_float(vec[1]);
+    const dm_simd_float v_z = dm_simd_set1_float(vec[2]);
+    const dm_simd_float v_w = dm_simd_set1_float(vec[3]);
     
-    const dm_mm_float m1 = dm_mm_load_ps(mat_t[0]);
-    const dm_mm_float m2 = dm_mm_load_ps(mat_t[1]);
-    const dm_mm_float m3 = dm_mm_load_ps(mat_t[2]);
-    const dm_mm_float m4 = dm_mm_load_ps(mat_t[3]);
+    const dm_simd_float m1 = dm_simd_load_float(mat_t[0]);
+    const dm_simd_float m2 = dm_simd_load_float(mat_t[1]);
+    const dm_simd_float m3 = dm_simd_load_float(mat_t[2]);
+    const dm_simd_float m4 = dm_simd_load_float(mat_t[3]);
     
-    dm_mm_float v;
-    v = dm_mm_mul_ps(m1, v_x);
-    v = dm_mm_fmadd_ps(m2,v_y, v);
-    v = dm_mm_fmadd_ps(m3,v_z, v);
-    v = dm_mm_fmadd_ps(m4,v_w, v);
+    dm_simd_float v;
+    v = dm_simd_mul_float(m1, v_x);
+    v = dm_simd_fmadd_float(m2,v_y, v);
+    v = dm_simd_fmadd_float(m3,v_z, v);
+    v = dm_simd_fmadd_float(m4,v_w, v);
     
-    dm_mm_store_ps(out, v);
+    dm_simd_store_float(out, v);
 }
 
 DM_INLINE
@@ -783,81 +799,81 @@ void dm_mat4_mul_vec3(const dm_mat4 mat, const dm_vec3 vec, const float val_4, d
 DM_INLINE
 void dm_mat4_mul_scalar(const dm_mat4 mat, float scalar, dm_mat4 out)
 {
-    const dm_mm_float s = dm_mm_set1_ps(scalar);
-    dm_mm_float row_1, row_2, row_3, row_4;
+    const dm_simd_float s = dm_simd_set1_float(scalar);
+    dm_simd_float row_1, row_2, row_3, row_4;
     
-    row_1 = dm_mm_load_ps(mat[0]);
-    row_1 = dm_mm_mul_ps(row_1, s);
+    row_1 = dm_simd_load_float(mat[0]);
+    row_1 = dm_simd_mul_float(row_1, s);
     
-    row_2 = dm_mm_load_ps(mat[1]);
-    row_2 = dm_mm_mul_ps(row_2, s);
+    row_2 = dm_simd_load_float(mat[1]);
+    row_2 = dm_simd_mul_float(row_2, s);
     
-    row_3 = dm_mm_load_ps(mat[2]);
-    row_3 = dm_mm_mul_ps(row_3, s);
+    row_3 = dm_simd_load_float(mat[2]);
+    row_3 = dm_simd_mul_float(row_3, s);
     
-    row_4 = dm_mm_load_ps(mat[3]);
-    row_4 = dm_mm_mul_ps(row_4, s);
+    row_4 = dm_simd_load_float(mat[3]);
+    row_4 = dm_simd_mul_float(row_4, s);
     
-    dm_mm_store_ps(out[0], row_1);
-    dm_mm_store_ps(out[1], row_2);
-    dm_mm_store_ps(out[2], row_3);
-    dm_mm_store_ps(out[3], row_4);
+    dm_simd_store_float(out[0], row_1);
+    dm_simd_store_float(out[1], row_2);
+    dm_simd_store_float(out[2], row_3);
+    dm_simd_store_float(out[3], row_4);
 }
 
 DM_INLINE
 void dm_mat4_add_mat4(const dm_mat4 left, const dm_mat4 right, dm_mat4 out)
 {
-    dm_mm_float l, r;
-    dm_mm_float row_1, row_2, row_3, row_4;
+    dm_simd_float l, r;
+    dm_simd_float row_1, row_2, row_3, row_4;
     
-    l     = dm_mm_load_ps(left[0]);
-    r     = dm_mm_load_ps(right[0]);
-    row_1 = dm_mm_add_ps(l, r);
+    l     = dm_simd_load_float(left[0]);
+    r     = dm_simd_load_float(right[0]);
+    row_1 = dm_simd_add_float(l, r);
     
-    l     = dm_mm_load_ps(left[1]);
-    r     = dm_mm_load_ps(right[1]);
-    row_2 = dm_mm_add_ps(l, r);
+    l     = dm_simd_load_float(left[1]);
+    r     = dm_simd_load_float(right[1]);
+    row_2 = dm_simd_add_float(l, r);
     
-    l     = dm_mm_load_ps(left[2]);
-    r     = dm_mm_load_ps(right[2]);
-    row_3 = dm_mm_add_ps(l, r);
+    l     = dm_simd_load_float(left[2]);
+    r     = dm_simd_load_float(right[2]);
+    row_3 = dm_simd_add_float(l, r);
     
-    l     = dm_mm_load_ps(left[3]);
-    r     = dm_mm_load_ps(right[3]);
-    row_4 = dm_mm_add_ps(l, r);
+    l     = dm_simd_load_float(left[3]);
+    r     = dm_simd_load_float(right[3]);
+    row_4 = dm_simd_add_float(l, r);
     
-    dm_mm_store_ps(out[0], row_1);
-    dm_mm_store_ps(out[1], row_2);
-    dm_mm_store_ps(out[2], row_3);
-    dm_mm_store_ps(out[3], row_4);
+    dm_simd_store_float(out[0], row_1);
+    dm_simd_store_float(out[1], row_2);
+    dm_simd_store_float(out[2], row_3);
+    dm_simd_store_float(out[3], row_4);
 }
 
 DM_INLINE
 void dm_mat4_sub_mat4(const dm_mat4 left, const dm_mat4 right, dm_mat4 out)
 {
-	dm_mm_float l, r;
-    dm_mm_float row_1, row_2, row_3, row_4;
+	dm_simd_float l, r;
+    dm_simd_float row_1, row_2, row_3, row_4;
     
-    l     = dm_mm_load_ps(left[0]);
-    r     = dm_mm_load_ps(right[0]);
-    row_1 = dm_mm_sub_ps(l, r);
+    l     = dm_simd_load_float(left[0]);
+    r     = dm_simd_load_float(right[0]);
+    row_1 = dm_simd_sub_float(l, r);
     
-    l     = dm_mm_load_ps(left[1]);
-    r     = dm_mm_load_ps(right[1]);
-    row_2 = dm_mm_sub_ps(l, r);
+    l     = dm_simd_load_float(left[1]);
+    r     = dm_simd_load_float(right[1]);
+    row_2 = dm_simd_sub_float(l, r);
     
-    l     = dm_mm_load_ps(left[2]);
-    r     = dm_mm_load_ps(right[2]);
-    row_3 = dm_mm_sub_ps(l, r);
+    l     = dm_simd_load_float(left[2]);
+    r     = dm_simd_load_float(right[2]);
+    row_3 = dm_simd_sub_float(l, r);
     
-    l     = dm_mm_load_ps(left[3]);
-    r     = dm_mm_load_ps(right[3]);
-    row_4 = dm_mm_sub_ps(l, r);
+    l     = dm_simd_load_float(left[3]);
+    r     = dm_simd_load_float(right[3]);
+    row_4 = dm_simd_sub_float(l, r);
     
-    dm_mm_store_ps(out[0], row_1);
-    dm_mm_store_ps(out[1], row_2);
-    dm_mm_store_ps(out[2], row_3);
-    dm_mm_store_ps(out[3], row_4);
+    dm_simd_store_float(out[0], row_1);
+    dm_simd_store_float(out[1], row_2);
+    dm_simd_store_float(out[2], row_3);
+    dm_simd_store_float(out[3], row_4);
 }
 
 // https://github.com/recp/cglm/blob/cdd4d0e83e9ee79f73aeb0a4fb60b4abd8ecf947/include/cglm/mat4.h#L640

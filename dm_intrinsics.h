@@ -6,13 +6,13 @@ casting
 *********/
 #ifndef DM_SIMD_ARM
 DM_INLINE
-dm_mm_int dm_mm_cast_float_to_int(dm_mm_float mm)
+dm_simd_int dm_simd_cast_float_to_int(dm_simd_float mm)
 {
     return _mm_castps_si128(mm);
 }
 
 DM_INLINE
-dm_mm_float dm_mm_cast_int_to_float(dm_mm_int mm)
+dm_simd_float dm_simd_cast_int_to_float(dm_simd_int mm)
 {
     return _mm_castsi128_ps(mm);
 }
@@ -22,7 +22,7 @@ dm_mm_float dm_mm_cast_int_to_float(dm_mm_int mm)
 float
 *******/
 DM_INLINE
-dm_mm_float dm_mm_load_ps(const float* d)
+dm_simd_float dm_simd_load_float(const float* d)
 {
 #ifdef DM_SIMD_X86
     return _mm_load_ps(d);
@@ -32,7 +32,7 @@ dm_mm_float dm_mm_load_ps(const float* d)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_set_ps(const float x, const float y, const float z, const float w)
+dm_simd_float dm_simd_set_float(const float x, const float y, const float z, const float w)
 {
 #ifdef DM_SIMD_X86
     return _mm_set_ps(x,y,z,w);
@@ -40,7 +40,7 @@ dm_mm_float dm_mm_set_ps(const float x, const float y, const float z, const floa
 }
 
 DM_INLINE
-dm_mm_float dm_mm_set1_ps(const float d)
+dm_simd_float dm_simd_set1_float(const float d)
 {
 #ifdef DM_SIMD_X86
     return _mm_set1_ps(d);
@@ -50,7 +50,7 @@ dm_mm_float dm_mm_set1_ps(const float d)
 }
 
 DM_INLINE
-void dm_mm_store_ps(float* d, dm_mm_float mm)
+void dm_simd_store_float(float* d, dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
     _mm_store_ps(d, mm);
@@ -60,7 +60,7 @@ void dm_mm_store_ps(float* d, dm_mm_float mm)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_add_ps(dm_mm_float left, dm_mm_float right)
+dm_simd_float dm_simd_add_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_add_ps(left, right);
@@ -70,7 +70,7 @@ dm_mm_float dm_mm_add_ps(dm_mm_float left, dm_mm_float right)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_sub_ps(dm_mm_float left, dm_mm_float right)
+dm_simd_float dm_simd_sub_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_sub_ps(left, right);
@@ -80,7 +80,7 @@ dm_mm_float dm_mm_sub_ps(dm_mm_float left, dm_mm_float right)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_mul_ps(dm_mm_float left, dm_mm_float right)
+dm_simd_float dm_simd_mul_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_mul_ps(left, right);
@@ -90,7 +90,7 @@ dm_mm_float dm_mm_mul_ps(dm_mm_float left, dm_mm_float right)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_div_ps(dm_mm_float left, dm_mm_float right)
+dm_simd_float dm_simd_div_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_div_ps(left, right);
@@ -100,7 +100,7 @@ dm_mm_float dm_mm_div_ps(dm_mm_float left, dm_mm_float right)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_sqrt_ps(dm_mm_float mm)
+dm_simd_float dm_simd_sqrt_float(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_sqrt_ps(mm);
@@ -110,7 +110,7 @@ dm_mm_float dm_mm_sqrt_ps(dm_mm_float mm)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_rsqrt_ps(dm_mm_float mm)
+dm_simd_float dm_simd_rsqrt_float(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_rsqrt_ps(mm);
@@ -118,7 +118,7 @@ dm_mm_float dm_mm_rsqrt_ps(dm_mm_float mm)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_hadd_ps(dm_mm_float left, dm_mm_float right)
+dm_simd_float dm_simd_hadd_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_hadd_ps(left, right);
@@ -126,7 +126,7 @@ dm_mm_float dm_mm_hadd_ps(dm_mm_float left, dm_mm_float right)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_fmadd_ps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
+dm_simd_float dm_simd_fmadd_float(dm_simd_float a, dm_simd_float b, dm_simd_float c)
 {
 #ifdef DM_SIMD_X86
     return _mm_fmadd_ps(a, b, c);
@@ -138,7 +138,7 @@ dm_mm_float dm_mm_fmadd_ps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
 
 #ifdef DM_SIMD_ARM
 DM_INLINE
-dm_mm_float dm_mm_fsubps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
+dm_simd_float dm_simd_fsubps(dm_simd_float a, dm_simd_float b, dm_simd_float c)
 {
     // the order is backwards for some reason!
     return vfmsq_f32(c,a,b);
@@ -146,7 +146,7 @@ dm_mm_float dm_mm_fsubps(dm_mm_float a, dm_mm_float b, dm_mm_float c)
 #endif
 
 DM_INLINE
-dm_mm_float dm_mm_max_ps(dm_mm_float a, dm_mm_float b)
+dm_simd_float dm_simd_max_float(dm_simd_float a, dm_simd_float b)
 {
 #ifdef DM_SIMD_X86
     return _mm_max_ps(a, b);
@@ -156,7 +156,7 @@ dm_mm_float dm_mm_max_ps(dm_mm_float a, dm_mm_float b)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_min_ps(dm_mm_float a, dm_mm_float b)
+dm_simd_float dm_simd_min_float(dm_simd_float a, dm_simd_float b)
 {
 #ifdef DM_SIMD_X86
     return _mm_min_ps(a, b);
@@ -166,7 +166,7 @@ dm_mm_float dm_mm_min_ps(dm_mm_float a, dm_mm_float b)
 }
 
 DM_INLINE
-float dm_mm_extract_float(dm_mm_float mm)
+float dm_simd_extract_float(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_cvtss_f32(mm);
@@ -176,24 +176,24 @@ float dm_mm_extract_float(dm_mm_float mm)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_hadd_fast_ps(dm_mm_float mm)
+dm_simd_float dm_simd_hadd_fast_float(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
-    dm_mm_float shuf_reg, sums_reg;
+    dm_simd_float shuf_reg, sums_reg;
     
     shuf_reg = _mm_movehdup_ps(mm);
     sums_reg = _mm_add_ps(mm, shuf_reg);
     shuf_reg = _mm_movehl_ps(shuf_reg, sums_reg);
     sums_reg = _mm_add_ss(sums_reg, shuf_reg);
     
-    return dm_mm_set1_ps(dm_mm_extract_float(sums_reg));
+    return dm_simd_set1_float(dm_simd_extract_float(sums_reg));
 #elif defined(DM_SIMD_ARM)
-    return dm_mm_set1_ps(vaddvq_f32(mm));
+    return dm_simd_set1_float(vaddvq_f32(mm));
 #endif
 }
 
 DM_INLINE
-dm_mm_float dm_mm_blendv_ps(dm_mm_float left, dm_mm_float right, dm_mm_float mask)
+dm_simd_float dm_simd_blendv_float(dm_simd_float left, dm_simd_float right, dm_simd_float mask)
 {
 #ifdef DM_SIMD_X86
     return _mm_blendv_ps(left, right, mask);
@@ -204,47 +204,47 @@ dm_mm_float dm_mm_blendv_ps(dm_mm_float left, dm_mm_float right, dm_mm_float mas
 
 // https://stackoverflow.com/a/35270026/195787
 DM_INLINE
-float dm_mm_sum_elements(dm_mm_float mm)
+float dm_simd_sum_elements(dm_simd_float mm)
 {
 #ifdef DM_SIMD_ARM
     return vaddvq_f32(mm);
 #elif defined(DM_SIMD_X86)
-    dm_mm_float sums = dm_mm_hadd_fast_ps(mm);
+    dm_simd_float sums = dm_simd_hadd_fast_ps(mm);
     
     return _mm_cvtss_f32(sums);
 #endif
 }
 
 DM_INLINE
-float dm_mm_dot_ps(dm_mm_float left, dm_mm_float right)
+float dm_simd_dot_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
-    dm_mm_float dp = _mm_dp_ps(left,right, 0x7F);
-    return dm_mm_extract_float(dp);
+    dm_simd_float dp = _mm_dp_ps(left,right, 0x7F);
+    return dm_simd_extract_float(dp);
 #elif defined(DM_SIMD_ARM)
-    dm_mm_float v = dm_mm_mul_ps(left, right);
-    return dm_mm_sum_elements(v);
+    dm_simd_float v = dm_simd_mul_float(left, right);
+    return dm_simd_sum_elements(v);
 #endif
 }
 
 DM_INLINE
-dm_mm_float dm_mm_normalize_ps(dm_mm_float mm)
+dm_simd_float dm_simd_normalize_float(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
-    dm_mm_float dp = _mm_dp_ps(mm,mm, 0x7F);
-    dm_mm_float mag = _mm_shuffle_ps(dp,dp, _MM_SHUFFLE(0,0,0,0));
-    mag = dm_mm_sqrt_ps(mag);
+    dm_simd_float dp = _mm_dp_ps(mm,mm, 0x7F);
+    dm_simd_float mag = _mm_shuffle_ps(dp,dp, _MM_SHUFFLE(0,0,0,0));
+    mag = dm_simd_sqrt_ps(mag);
     
-    return dm_mm_div_ps(mm, mag);
+    return dm_simd_div_ps(mm, mag);
 #elif defined(DM_SIMD_ARM)
-    dm_mm_float mag = dm_mm_set1_ps(dm_mm_dot_ps(mm, mm));
-    mag = dm_mm_sqrt_ps(mag);
-    return dm_mm_div_ps(mm, mag);
+    dm_simd_float mag = dm_simd_set1_float(dm_simd_dot_float(mm, mm));
+    mag = dm_simd_sqrt_float(mag);
+    return dm_simd_div_float(mm, mag);
 #endif
 }
 
 DM_INLINE
-dm_mm_float dm_mm_broadcast_x_ps(dm_mm_float mm)
+dm_simd_float dm_simd_broadcast_x_float(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(0,0,0,0));
@@ -254,7 +254,7 @@ dm_mm_float dm_mm_broadcast_x_ps(dm_mm_float mm)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_broadcast_y_ps(dm_mm_float mm)
+dm_simd_float dm_simd_broadcast_y_float(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(1,1,1,1));
@@ -264,7 +264,7 @@ dm_mm_float dm_mm_broadcast_y_ps(dm_mm_float mm)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_broadcast_z_ps(dm_mm_float mm)
+dm_simd_float dm_simd_broadcast_z_float(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(2,2,2,2));
@@ -274,7 +274,7 @@ dm_mm_float dm_mm_broadcast_z_ps(dm_mm_float mm)
 }
 
 DM_INLINE
-dm_mm_float dm_mm_broadcast_w_ps(dm_mm_float mm)
+dm_simd_float dm_simd_broadcast_w_float(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_shuffle_ps(mm,mm, _MM_SHUFFLE(3,3,3,3));
@@ -288,7 +288,7 @@ COMPARISSONS
 **************/
 // gt
 DM_INLINE
-dm_mm_float dm_mm_gt_ps(dm_mm_float left, dm_mm_float right)
+dm_simd_float dm_simd_gt_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_cmp_ps(left, right, _CMP_GT_OQ);
@@ -299,7 +299,7 @@ dm_mm_float dm_mm_gt_ps(dm_mm_float left, dm_mm_float right)
 
 // geq
 DM_INLINE
-dm_mm_float dm_mm_geq_ps(dm_mm_float left, dm_mm_float right)
+dm_simd_float dm_simd_geq_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_cmp_ps(left, right, _CMP_GE_OQ);
@@ -310,7 +310,7 @@ dm_mm_float dm_mm_geq_ps(dm_mm_float left, dm_mm_float right)
 
 // lt
 DM_INLINE
-dm_mm_float dm_mm_lt_ps(dm_mm_float left, dm_mm_float right)
+dm_simd_float dm_simd_lt_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_cmp_ps(left, right, _CMP_LT_OQ);
@@ -321,7 +321,7 @@ dm_mm_float dm_mm_lt_ps(dm_mm_float left, dm_mm_float right)
 
 // leq
 DM_INLINE
-dm_mm_float dm_mm_leq_ps(dm_mm_float left, dm_mm_float right)
+dm_simd_float dm_simd_leq_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_cmp_ps(left, right, _CMP_LE_OQ);
@@ -332,10 +332,10 @@ dm_mm_float dm_mm_leq_ps(dm_mm_float left, dm_mm_float right)
 
 #if 0
 DM_INLINE
-int dm_mm_any_non_zero(dm_mm_float mm)
+int dm_simd_any_non_zero(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
-    dm_mm_float vcmp = _mm_cmp_ps(mm, _mm_set1_ps(0), _CMP_EQ_OQ);
+    dm_simd_float vcmp = _mm_cmp_ps(mm, _mm_set1_ps(0), _CMP_EQ_OQ);
     int mask = _mm_movemask_ps(vcmp);
     return (mask != 0xff);
 #elif defined(DM_SIMD_ARM)
@@ -346,10 +346,10 @@ int dm_mm_any_non_zero(dm_mm_float mm)
 #endif
 
 DM_INLINE
-int dm_mm_any_zero(dm_mm_float mm)
+int dm_simd_any_zero(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
-    dm_mm_float vcmp = _mm_cmp_ps(mm, _mm_set1_ps(0), _CMP_EQ_OQ);
+    dm_simd_float vcmp = _mm_cmp_ps(mm, _mm_set1_ps(0), _CMP_EQ_OQ);
     int mask = _mm_movemask_ps(vcmp);
     return (mask == 0xff);
 #elif defined(DM_SIMD_ARM)
@@ -361,7 +361,7 @@ int dm_mm_any_zero(dm_mm_float mm)
 BITWISE
 *********/
 DM_INLINE
-dm_mm_float dm_mm_and_ps(dm_mm_float left, dm_mm_float right)
+dm_simd_float dm_simd_and_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_and_ps(left, right);
@@ -374,17 +374,17 @@ dm_mm_float dm_mm_and_ps(dm_mm_float left, dm_mm_float right)
  int
 */
 DM_INLINE
-dm_mm_int dm_mm_load_i(int* d)
+dm_simd_int dm_simd_load_i(int* d)
 {
 #ifdef DM_SIMD_X86
-    return _mm_load_si128((dm_mm_int*)d);
+    return _mm_load_si128((dm_simd_int*)d);
 #elif defined(DM_SIMD_ARM)
     return vld1q_s32(d);
 #endif
 }
 
 DM_INLINE
-dm_mm_int dm_mm_set1_i(int d)
+dm_simd_int dm_simd_set1_i(int d)
 {
 #ifdef DM_SIMD_X86
     return _mm_set1_epi32(d);
@@ -394,17 +394,17 @@ dm_mm_int dm_mm_set1_i(int d)
 }
 
 DM_INLINE
-void dm_mm_store_i(int* i, dm_mm_int mm)
+void dm_simd_store_i(int* i, dm_simd_int mm)
 {
 #ifdef DM_SIMD_X86
-    _mm_store_si128((dm_mm_int*)i, mm);
+    _mm_store_si128((dm_simd_int*)i, mm);
 #elif defined(DM_SIMD_ARM)
     vst1q_s32(i, mm);
 #endif
 }
 
 DM_INLINE
-dm_mm_int dm_mm_add_i(dm_mm_int left, dm_mm_int right)
+dm_simd_int dm_simd_add_i(dm_simd_int left, dm_simd_int right)
 {
 #ifdef DM_SIMD_X86
     return _mm_add_epi32(left, right);
@@ -414,7 +414,7 @@ dm_mm_int dm_mm_add_i(dm_mm_int left, dm_mm_int right)
 }
 
 DM_INLINE
-dm_mm_int dm_mm_sub_i(dm_mm_int left, dm_mm_int right)
+dm_simd_int dm_simd_sub_i(dm_simd_int left, dm_simd_int right)
 {
 #ifdef DM_SIMD_X86
     return _mm_sub_epi32(left, right);
@@ -424,7 +424,7 @@ dm_mm_int dm_mm_sub_i(dm_mm_int left, dm_mm_int right)
 }
 
 DM_INLINE
-dm_mm_int dm_mm_mul_i(dm_mm_int left, dm_mm_int right)
+dm_simd_int dm_simd_mul_i(dm_simd_int left, dm_simd_int right)
 {
 #ifdef DM_SIMD_X86
     return _mm_mul_epi32(left, right);
@@ -434,7 +434,7 @@ dm_mm_int dm_mm_mul_i(dm_mm_int left, dm_mm_int right)
 }
 
 DM_INLINE
-dm_mm_int dm_mm_min_i(dm_mm_int left, dm_mm_int right)
+dm_simd_int dm_simd_min_i(dm_simd_int left, dm_simd_int right)
 {
 #ifdef DM_SIMD_X86
     return _mm_min_epu32(left, right);
@@ -442,7 +442,7 @@ dm_mm_int dm_mm_min_i(dm_mm_int left, dm_mm_int right)
 }
 
 DM_INLINE
-dm_mm_int dm_mm_max_i(dm_mm_int left, dm_mm_int right)
+dm_simd_int dm_simd_max_i(dm_simd_int left, dm_simd_int right)
 {
 #ifdef DM_SIMD_X86
     return _mm_max_epu32(left, right);
@@ -450,7 +450,7 @@ dm_mm_int dm_mm_max_i(dm_mm_int left, dm_mm_int right)
 }
 
 DM_INLINE
-dm_mm_int dm_mm_blendv_i(dm_mm_int left, dm_mm_int right, dm_mm_int mask)
+dm_simd_int dm_simd_blendv_i(dm_simd_int left, dm_simd_int right, dm_simd_int mask)
 {
 #ifdef DM_SIMD_X86
     return _mm_blendv_epi8(left, right, mask);
@@ -464,7 +464,7 @@ MATRIX
 */
 #ifdef DM_SIMD_X86
 DM_INLINE
-void dm_mm_transpose_mat4(dm_mm_float* row1, dm_mm_float* row2, dm_mm_float* row3, dm_mm_float* row4)
+void dm_simd_transpose_mat4(dm_simd_float* row1, dm_simd_float* row2, dm_simd_float* row3, dm_simd_float* row4)
 {
 #ifdef DM_SIMD_X86
     _MM_TRANSPOSE4_PS(*row1, *row2, *row3, *row4);

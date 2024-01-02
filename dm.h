@@ -185,18 +185,18 @@ typedef DM_ALIGN(16) float dm_mat4[4][4];
 SIMD
 ******/
 #ifdef DM_SIMD_X86
-typedef __m256  dm_mm256_float;
-typedef __m256i dm_mm256_int;
+typedef __m256  dm_simd256_float;
+typedef __m256i dm_simd256_int;
 
-typedef __m128  dm_mm_float;
-typedef __m128i dm_mm_int;
+typedef __m128  dm_simd_float;
+typedef __m128i dm_simd_int;
 
 #define DM_SIMD256_FLOAT_N 8
 #elif defined(DM_SIMD_ARM)
 // neon does not support 256bit registers
-typedef float32x4_t dm_mm_float;
+typedef float32x4_t dm_simd_float;
 
-typedef int32x4_t dm_mm_int;
+typedef int32x4_t dm_simd_int;
 #endif
 
 #define DM_SIMD_FLOAT_N    4
@@ -1210,7 +1210,6 @@ void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 
 // threads
 uint32_t dm_get_available_processor_count(dm_context* context);
-bool     dm_threads_create(void* (*thread_func)(void*), void* args, size_t args_size, uint32_t num_threads, dm_context* context);
 
 bool dm_threadpool_create(const char* tag, uint32_t num_threads, dm_threadpool* threadpool);
 void dm_threadpool_destroy(dm_threadpool* threadpool);
