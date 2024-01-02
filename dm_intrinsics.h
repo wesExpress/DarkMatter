@@ -187,6 +187,8 @@ dm_mm_float dm_mm_hadd_fast_ps(dm_mm_float mm)
     sums_reg = _mm_add_ss(sums_reg, shuf_reg);
     
     return dm_mm_set1_ps(dm_mm_extract_float(sums_reg));
+#elif defined(DM_SIMD_ARM)
+    return dm_mm_set1_ps(vaddvq_f32(mm));
 #endif
 }
 

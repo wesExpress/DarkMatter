@@ -519,6 +519,7 @@ void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* 
 {
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSE_MOVE;
+
     e->coords[0] = mouse_x;
     e->coords[1] = mouse_y;
 }

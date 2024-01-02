@@ -10,12 +10,25 @@
 #include <stdlib.h>
 #include <string.h>
 
+// https://github.com/travisvroman/kohi/blob/main/engine/src/platform/platform_macos.m#L57enum
+typedef enum macos_modifier_keys_t {
+    MACOS_MODIFIER_KEY_LSHIFT = 0x01,
+    MACOS_MODIFIER_KEY_RSHIFT = 0x02,
+    MACOS_MODIFIER_KEY_LCTRL = 0x04,
+    MACOS_MODIFIER_KEY_RCTRL = 0x08,
+    MACOS_MODIFIER_KEY_LOPTION = 0x10,
+    MACOS_MODIFIER_KEY_ROPTION = 0x20,
+    MACOS_MODIFIER_KEY_LCOMMAND = 0x40,
+    MACOS_MODIFIER_KEY_RCOMMAND = 0x80
+} macos_modifier_keys;
+
 void* dm_mac_thread_start_func(void* args);
 
 void* dm_mac_thread_start_func(void* args);
 void  dm_mac_thread_execute_task(dm_thread_task* task);
 
 dm_key_code dm_translate_key_code(uint32_t cocoa_key);
+void dm_handle_modifier_keys(uint32_t ns_keycode, uint32_t modifier_flags, dm_event_list* event_list);
 
 extern void dm_add_window_close_event(dm_event_list* event_list);
 extern void dm_add_window_resize_event(uint32_t new_widt, uint32_t new_height, dm_event_list* event_list);
@@ -123,7 +136,8 @@ extern void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
     CAMetalLayer* swapchain = (CAMetalLayer*)self.layer;
     NSSize  size  = swapchain.drawableSize;
     
-	dm_add_mouse_move_event(point.x * scale, size.height - (point.y * scale), &platform_data->event_list);
+	//dm_add_mouse_move_event(point.x * scale, size.height - (point.y * scale), &platform_data->event_list);
+    dm_add_mouse_move_event(point.x, size.height / scale - point.y , &platform_data->event_list);
 }
 
 - (void)rightMouseDragged:(NSEvent *)event
@@ -154,6 +168,10 @@ extern void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 {
     dm_key_code key = dm_translate_key_code((uint32_t)[event keyCode]);
 	dm_add_key_up_event(key, &platform_data->event_list);
+}
+
+- (void) flagsChanged:(NSEvent *) event {
+    dm_handle_modifier_keys([event keyCode], [event modifierFlags], &platform_data->event_list);
 }
 
 // must be implemented for the protocol to shut up in the compiler
@@ -218,8 +236,6 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* 
 		backing: NSBackingStoreBuffered
 		defer: NO
 	];
-    
-    float t = [NSScreen mainScreen].backingScaleFactor;
 
 	// input view
 	apple_data->content_view = [[dm_content_view alloc] initWithWindow: apple_data->window AndPlatformData: platform_data];
@@ -556,6 +572,97 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key)
     default:
         DM_LOG_ERROR("Unknown key code! Reeturning 'A'...");
         return DM_KEY_A;
+    }
+}
+
+// Bit masks for left and right versions of these keys.
+#define MACOS_LSHIFT_MASK (1 << 1)
+#define MACOS_RSHIFT_MASK (1 << 2)
+#define MACOS_LCTRL_MASK (1 << 0)
+#define MACOS_RCTRL_MASK (1 << 13)
+#define MACOS_LCOMMAND_MASK (1 << 3)
+#define MACOS_RCOMMAND_MASK (1 << 4)
+#define MACOS_LALT_MASK (1 << 5)
+#define MACOS_RALT_MASK (1 << 6)
+
+static void dm_handle_modifier_key(
+    uint32_t ns_keycode,
+    uint32_t ns_key_mask,
+    uint32_t ns_l_keycode,
+    uint32_t ns_r_keycode,
+    uint32_t left_keycode,
+    uint32_t right_keycode,
+    uint32_t modifier_flags,
+    uint32_t left_mask,
+    uint32_t right_mask, dm_event_list* event_list)
+{
+    if(modifier_flags & ns_key_mask)
+    {
+        if(modifier_flags & left_mask) dm_add_key_down_event(left_keycode, event_list);
+        if(modifier_flags & right_mask) dm_add_key_down_event(right_keycode, event_list);
+    }
+    else
+    {
+        if(ns_keycode == ns_l_keycode) dm_add_key_up_event(left_keycode, event_list);
+        if(ns_keycode == ns_r_keycode) dm_add_key_up_event(right_keycode, event_list);
+    }
+}
+
+void dm_handle_modifier_keys(uint32_t ns_keycode, uint32_t modifier_flags, dm_event_list* event_list)
+{
+    // Shift
+    dm_handle_modifier_key(
+        ns_keycode,
+        NSEventModifierFlagShift,
+        0x38,
+        0x3C,
+        DM_KEY_LSHIFT,
+        DM_KEY_RSHIFT,
+        modifier_flags,
+        MACOS_LSHIFT_MASK,
+        MACOS_RSHIFT_MASK, event_list);
+
+    // Ctrl
+    dm_handle_modifier_key(
+        ns_keycode,
+        NSEventModifierFlagControl,
+        0x3B,
+        0x3E,
+        DM_KEY_LCTRL,
+        DM_KEY_RCTRL,
+        modifier_flags,
+        MACOS_LCTRL_MASK,
+        MACOS_RCTRL_MASK, event_list);
+
+    // Alt/Option
+    dm_handle_modifier_key(
+        ns_keycode,
+        NSEventModifierFlagOption,
+        0x3A,
+        0x3D,
+        DM_KEY_LALT,
+        DM_KEY_RALT,
+        modifier_flags,
+        MACOS_LALT_MASK,
+        MACOS_RALT_MASK, event_list);
+
+    // Command/Super
+    dm_handle_modifier_key(
+        ns_keycode,
+        NSEventModifierFlagCommand,
+        0x37,
+        0x36,
+        DM_KEY_LSUPER,
+        DM_KEY_RSUPER,
+        modifier_flags,
+        MACOS_LCOMMAND_MASK,
+        MACOS_RCOMMAND_MASK, event_list);
+
+    // Caps lock - handled a bit differently than other keys.
+    if(ns_keycode == 0x39)
+    {
+        if(modifier_flags & NSEventModifierFlagCapsLock) dm_add_key_down_event(DM_KEY_CAPSLOCK, event_list);
+        else                                             dm_add_key_up_event(DM_KEY_CAPSLOCK, event_list);
     }
 }
 

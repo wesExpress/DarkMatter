@@ -316,12 +316,6 @@ void dm_vec4_norm(const dm_vec4 vec, dm_vec4 out)
     dm_mm_float v    = dm_mm_load_ps(vec);
     dm_mm_float v_sq = dm_mm_mul_ps(v, v);
     
-#if 0
-    dm_mm_float mag = dm_mm_hadd_ps(v_sq, v_sq);
-    mag = dm_mm_hadd_ps(mag, mag);
-    mag = dm_mm_rsqrt_ps(mag);
-#endif
-    
     dm_mm_float mag = dm_mm_hadd_fast_ps(v_sq);
     mag = dm_mm_sqrt_ps(mag);
     

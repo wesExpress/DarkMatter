@@ -360,7 +360,11 @@ typedef enum dm_key_code
 	MAKE_KEYCODE(RCTRL,     0xA2),
 	MAKE_KEYCODE(LCTRL,     0xA3),
 	MAKE_KEYCODE(ALT,       0x12),
+    MAKE_KEYCODE(LALT,      0xA4),
+    MAKE_KEYCODE(RALT,      0xA5),
 	MAKE_KEYCODE(CAPSLOCK,  0x14),
+    MAKE_KEYCODE(LSUPER,    0x5B),
+    MAKE_KEYCODE(RSUPER,    0x5C),
     
 	// misc
 	MAKE_KEYCODE(COMMA,     0xBC),
@@ -1203,11 +1207,6 @@ void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* 
 void dm_add_mouse_scroll_event(float delta, dm_event_list* event_list);
 void dm_add_key_down_event(dm_key_code key, dm_event_list* event_list);
 void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
-
-// scetchyness
-#ifdef DM_PLATFORM_APPLE
-float dm_platform_apple_get_scale_factor();
-#endif
 
 // threads
 uint32_t dm_get_available_processor_count(dm_context* context);
