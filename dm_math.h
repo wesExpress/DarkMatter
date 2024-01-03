@@ -180,6 +180,12 @@ float dm_vec3_mag(const dm_vec3 vec)
 }
 
 DM_INLINE
+float dm_vec3_mag2(const dm_vec3 vec)
+{
+    return vec[0] * vec[0] + vec[1] * vec[1] + vec[2] * vec[2];
+}
+
+DM_INLINE
 void dm_vec3_norm(const dm_vec3 vec, dm_vec3 out)
 {
     float mag = dm_vec3_mag(vec);
@@ -235,11 +241,44 @@ void dm_vec3_sign(const dm_vec3 vec, dm_vec3 out)
 DM_INLINE
 void dm_vec3_reflect(const dm_vec3 vec, const dm_vec3 normal, dm_vec3 out)
 {
-    float s = 2.0f * dm_vec3_dot(normal, vec);
+    float s;
+    dm_vec3 n, v;
     
-    dm_vec3 r;
-    dm_vec3_scale(normal, s, r);
-    dm_vec3_sub_vec3(vec, r, out);
+    dm_vec3_norm(vec, v);
+    s = dm_vec3_dot(vec, normal);
+    s *= 2.f;
+    dm_vec3_scale(normal, s, n);
+    
+    dm_vec3_sub_vec3(vec, n, out);
+}
+
+DM_INLINE
+void dm_vec3_refract(const dm_vec3 vec, const dm_vec3 n, const float e, dm_vec3 out)
+{
+    float cos_theta, sin_theta, s;
+    dm_vec3 neg_v, perp, para;
+    
+    dm_vec3_negate(vec, neg_v);
+    dm_vec3_norm(neg_v, neg_v);
+    cos_theta = dm_vec3_dot(neg_v, n);
+    cos_theta = DM_MIN(cos_theta, 1);
+    
+    sin_theta = cos_theta * cos_theta;
+    sin_theta = 1 - sin_theta;
+    sin_theta = dm_sqrtf(sin_theta);
+    
+    dm_vec3_scale(n, cos_theta, perp);
+    dm_vec3_add_vec3(perp, vec, perp);
+    dm_vec3_scale(perp, e, perp);
+    
+    s = dm_vec3_mag2(perp);
+    s = 1 - s;
+    s = dm_fabs(s);
+    s = dm_sqrtf(s);
+    dm_vec3_scale(n, s, para);
+    
+    dm_vec3_add_vec3(perp, para, out);
+    //dm_vec3_negate(out, out);
 }
 
 /****

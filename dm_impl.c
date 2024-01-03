@@ -256,10 +256,10 @@ int dm_random_int(dm_context* context)
 
 int dm_random_int_range(int start, int end, dm_context* context)
 {
-    int old_range = UINT_MAX;
+    int old_range = INT_MAX;
     int new_range = end - start;
     
-    return ((dm_random_int(context) + INT_MAX) * new_range) / old_range + start;
+    return (dm_random_int(context) + new_range) / old_range + start;
 }
 
 uint32_t dm_random_uint32(dm_context* context)

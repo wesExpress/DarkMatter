@@ -666,10 +666,9 @@ void dm_handle_modifier_keys(uint32_t ns_keycode, uint32_t modifier_flags, dm_ev
     }
 }
 
-// sketchiness
-float dm_platform_apple_get_scale_factor()
+uint32_t dm_get_available_processor_count(dm_context* context)
 {
-    return [NSScreen mainScreen].backingScaleFactor;
+    return [[NSProcessInfo processInfo] processorCount];
 }
 
 #endif
