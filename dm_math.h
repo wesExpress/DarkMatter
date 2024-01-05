@@ -274,11 +274,10 @@ void dm_vec3_refract(const dm_vec3 vec, const dm_vec3 n, const float e, dm_vec3 
     s = dm_vec3_mag2(perp);
     s = 1 - s;
     s = dm_fabs(s);
-    s = dm_sqrtf(s);
+    s = -dm_sqrtf(s);
     dm_vec3_scale(n, s, para);
     
     dm_vec3_add_vec3(perp, para, out);
-    //dm_vec3_negate(out, out);
 }
 
 /****
