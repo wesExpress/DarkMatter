@@ -255,17 +255,13 @@ void dm_vec3_reflect(const dm_vec3 vec, const dm_vec3 normal, dm_vec3 out)
 DM_INLINE
 void dm_vec3_refract(const dm_vec3 vec, const dm_vec3 n, const float e, dm_vec3 out)
 {
-    float cos_theta, sin_theta, s;
+    float cos_theta, s;
     dm_vec3 neg_v, perp, para;
     
+#if 0
     dm_vec3_negate(vec, neg_v);
-    dm_vec3_norm(neg_v, neg_v);
     cos_theta = dm_vec3_dot(neg_v, n);
     cos_theta = DM_MIN(cos_theta, 1);
-    
-    sin_theta = cos_theta * cos_theta;
-    sin_theta = 1 - sin_theta;
-    sin_theta = dm_sqrtf(sin_theta);
     
     dm_vec3_scale(n, cos_theta, perp);
     dm_vec3_add_vec3(perp, vec, perp);
@@ -278,6 +274,16 @@ void dm_vec3_refract(const dm_vec3 vec, const dm_vec3 n, const float e, dm_vec3 
     dm_vec3_scale(n, s, para);
     
     dm_vec3_add_vec3(perp, para, out);
+#else
+    float vec_length = dm_vec3_mag(vec);
+    float c = -dm_vec3_dot(vec, n) / vec_length;
+
+    float aux = vec_length * (e * c - dm_sqrtf(1 - e * e * (1 - c * c)));
+    dm_vec3 nv, nn;
+    dm_vec3_scale(vec, e, nv);
+    dm_vec3_scale(n, aux, nn);
+    dm_vec3_add_vec3(nv, nn, out);
+#endif
 }
 
 /****
