@@ -506,6 +506,7 @@ typedef enum dm_buffer_type
 {
 	DM_BUFFER_TYPE_VERTEX,
 	DM_BUFFER_TYPE_INDEX,
+    DM_BUFFER_TYPE_COMPUTE,
     DM_BUFFER_TYPE_UNKNOWN
 } dm_buffer_type;
 
@@ -650,7 +651,8 @@ typedef enum dm_uniform_stage_t
     DM_UNIFORM_STAGE_UNKNOWN
 } dm_uniform_stage;
 
-typedef uint32_t dm_render_handle;
+typedef uint32_t         dm_render_handle;
+typedef dm_render_handle dm_compute_handle;
 
 #define DM_RENDER_HANDLE_INVALID UINT_MAX
 #define DM_BUFFER_INVALID        DM_RENDER_HANDLE_INVALID
@@ -718,8 +720,9 @@ typedef struct dm_shader_desc_t
 typedef struct dm_compute_shader_desc_t
 {
     char     path[512];
-    size_t   input_stride;
-    uint32_t max_input_count;
+#ifdef DM_METAL
+    char     function[512];
+#endif
 } dm_compute_shader_desc;
 
 typedef enum dm_load_operation_t
@@ -1233,6 +1236,7 @@ bool dm_renderer_create_static_vertex_buffer(void* data, size_t data_size, size_
 bool dm_renderer_create_dynamic_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context);
+
 bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context);
 bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context);
@@ -1248,9 +1252,6 @@ dm_pipeline_desc dm_renderer_default_pipeline();
 void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context);
 
 bool dm_renderer_load_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, dm_mesh_index_type index_type, float** vertices, void** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context);
-
-// compute shader
-bool dm_renderer_create_compute_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_context* context);
 
 // render commands
 void dm_render_command_clear(float r, float g, float b, float a, dm_context* context);
@@ -1274,6 +1275,16 @@ void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, 
 void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 void dm_render_command_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_context* context);
 void dm_render_command_map_callback(dm_render_handle handle, void (*callback)(dm_context*), dm_context* context);
+
+// compute commands
+bool dm_compute_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_context* context);
+bool dm_compute_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_context* context);
+
+bool  dm_compute_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_context* context);
+bool  dm_compute_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
+void* dm_compute_command_get_buffer_data(dm_compute_handle handle, dm_context* context);
+bool  dm_compute_command_bind_shader(dm_compute_handle handle, dm_context* context);
+bool  dm_compute_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps, dm_context* context);
 
 // ecs
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);

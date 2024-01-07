@@ -604,6 +604,7 @@ extern void* dm_renderer_backend_get_internal_texture_ptr(dm_render_handle handl
 
 extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
+
 extern bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
@@ -628,7 +629,14 @@ extern void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint3
 extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer);
 extern void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_renderer* renderer);
 
-extern bool dm_renderer_backend_create_compute_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_renderer* renderer);
+// compute
+extern bool  dm_compute_backend_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
+extern bool  dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_renderer* renderer);
+extern bool  dm_compute_backend_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_renderer* renderer);
+extern bool  dm_compute_backend_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
+extern void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_renderer* renderer);
+extern bool  dm_compute_backend_command_bind_shader(dm_compute_handle handle, dm_renderer* renderer);
+extern bool  dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps,dm_renderer* renderer);
 
 // renderer
 bool dm_renderer_init(dm_context* context)
@@ -702,6 +710,14 @@ bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, size_
     };
     
     return dm_renderer_create_buffer(desc, data, handle, context);
+}
+
+bool dm_compute_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_context* context)
+{
+    if(dm_compute_backend_create_buffer(data_size, elem_size, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create compute buffer");
+    return false;
 }
 
 bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context)
@@ -839,11 +855,48 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
     return true;
 }
 
-bool dm_renderer_create_compute_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_context* context)
+bool dm_compute_create_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_context* context)
 {
-    if(dm_renderer_backend_create_compute_shader(desc, handle, &context->renderer)) return true;
+    if(dm_compute_backend_create_shader(desc, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Could not create compute shader from: %s", desc.path);
+    return false;
+}
+
+bool dm_compute_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_context* context)
+{
+    if(dm_compute_backend_command_bind_buffer(handle, offset, slot, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not bind compute buffer");
+    return false;
+}
+
+bool dm_compute_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_context* context)
+{
+    if(dm_compute_backend_command_update_buffer(handle, data, data_size, offset, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not update compute buffer");
+    return false;
+}
+
+void* dm_compute_command_get_buffer_data(dm_compute_handle handle, dm_context* context)
+{
+    return dm_compute_backend_command_get_buffer_data(handle, &context->renderer);
+}
+
+bool dm_compute_command_bind_shader(dm_compute_handle handle, dm_context* context)
+{
+    if(dm_compute_backend_command_bind_shader(handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not bind compute shader");
+    return false;
+}
+
+bool dm_compute_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps, dm_context* context)
+{
+    if(dm_compute_backend_command_dispatch(x_size, y_size, z_size, x_thread_grps, y_thread_grps, z_thread_grps, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Compute dispatch failed");
     return false;
 }
 

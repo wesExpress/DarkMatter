@@ -11,6 +11,7 @@ typedef enum dm_metal_buffer_type_t
 {
 	DM_METAL_BUFFER_TYPE_VERTEX,
 	DM_METAL_BUFFER_TYPE_INDEX,
+    DM_METAL_BUFFER_TYPE_COMPUTE,
 	DM_METAL_BUFFER_TYPE_UNKNOWN
 } dm_metal_buffer_type;
 
@@ -51,13 +52,23 @@ typedef struct dm_metal_shader_t
 	dm_render_handle  index_buffer;
 } dm_metal_shader;
 
+typedef struct dm_metal_compute_shader_t
+{
+    id<MTLLibrary>              library;
+    id<MTLFunction>             function;
+    id<MTLComputePipelineState> compute_pipeline;
+} dm_metal_compute_shader;
+
 typedef struct dm_metal_renderer_t
 {
 	id<MTLDevice>        device;
     
-	id<MTLCommandQueue>         command_queue;
-	id<MTLCommandBuffer>        command_buffer;
-    id<MTLRenderCommandEncoder> command_encoder;
+	id<MTLCommandQueue>          command_queue;
+	id<MTLCommandBuffer>         command_buffer;
+    id<MTLRenderCommandEncoder>  command_encoder;
+    
+    id<MTLCommandBuffer>         compute_command_buffer;
+    id<MTLComputeCommandEncoder> compute_command_encoder;
     
 	MTLViewport          active_viewport;
 	
@@ -68,15 +79,17 @@ typedef struct dm_metal_renderer_t
     dm_vec4 clear_color;
     
 	dm_render_handle     active_shader;
+    dm_compute_handle    active_compute_shader;
 	dm_render_handle     active_pipeline;
 	MTLPrimitiveType     active_primitive;
 	
-	dm_metal_buffer      buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
-	dm_metal_shader      shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
-	dm_metal_texture     textures[DM_RENDERER_MAX_RESOURCE_COUNT];
-	dm_metal_pipeline    pipelines[DM_RENDERER_MAX_RESOURCE_COUNT];
+	dm_metal_buffer         buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
+	dm_metal_shader         shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_metal_compute_shader compute_shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
+	dm_metal_texture        textures[DM_RENDERER_MAX_RESOURCE_COUNT];
+	dm_metal_pipeline       pipelines[DM_RENDERER_MAX_RESOURCE_COUNT];
 	
-	uint32_t buffer_count, shader_count, texture_count, pipeline_count;
+	uint32_t buffer_count, shader_count, compute_count, texture_count, pipeline_count;
 } dm_metal_renderer;
 
 
@@ -256,6 +269,29 @@ bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_rende
 	*handle = metal_renderer->buffer_count++;
 	
 	return true;
+}
+
+bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_renderer* renderer)
+{
+    DM_METAL_GET_RENDERER;
+    
+    dm_metal_buffer internal_buffer = { 0 };
+
+    internal_buffer.buffer = [metal_renderer->device newBufferWithLength:data_size options:MTLResourceStorageModeShared];
+
+    internal_buffer.elem_size = elem_size;
+    internal_buffer.type = DM_METAL_BUFFER_TYPE_COMPUTE;
+    
+    if(!internal_buffer.buffer)
+    {
+        DM_LOG_FATAL("Could not create metal buffer");
+        return false;
+    }
+    
+    dm_memcpy(metal_renderer->buffers + metal_renderer->buffer_count, &internal_buffer, sizeof(dm_metal_buffer));
+    *handle = metal_renderer->buffer_count++;
+    
+    return true;
 }
 
 void dm_renderer_backend_destroy_buffer(dm_render_handle handle, dm_renderer* renderer)
@@ -489,10 +525,68 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
 	return true;
 }
 
-bool dm_renderer_backend_create_compute_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+bool dm_compute_backend_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_renderer* renderer)
 {
-    DM_LOG_FATAL("Not supported");
-    return false;
+    DM_METAL_GET_RENDERER;
+    
+    dm_metal_compute_shader internal_shader = { 0 };
+    
+    // library
+    char file_buffer[256];
+    strcpy(file_buffer, desc.path);
+
+    NSString* shader_file = [NSString stringWithUTF8String:file_buffer];
+        
+    internal_shader.library = [metal_renderer->device newLibraryWithFile:shader_file error:NULL];
+    if(!internal_shader.library)
+    {
+        DM_LOG_FATAL("Could not create metal library from file %s", [shader_file UTF8String]);
+        return false;
+    }
+    
+    // function
+    char function_buffer[256];
+    strcpy(function_buffer, desc.function);
+    
+    NSString* function_string = [NSString stringWithUTF8String:function_buffer];
+    
+    internal_shader.function = [internal_shader.library newFunctionWithName:function_string];
+    if(!internal_shader.function)
+    {
+        DM_LOG_FATAL("Could not create compute shader function '%s' from compute shader '%s'", [function_string UTF8String], [shader_file UTF8String]);
+        return false;
+    }
+    
+    // compute pipeline
+    NSError* error = NULL;
+    internal_shader.compute_pipeline = [metal_renderer->device newComputePipelineStateWithFunction:internal_shader.function error:&error];
+    if(!internal_shader.compute_pipeline)
+    {
+        NSString* str_error = [NSString stringWithFormat:@"%@", error];
+        const char* c = [str_error cStringUsingEncoding:NSUTF8StringEncoding];
+        DM_LOG_FATAL("Could not create metal compute shader pipeline state: %s", c);
+        
+        return false;
+    }
+    
+    // write it out
+    dm_memcpy(metal_renderer->compute_shaders + metal_renderer->compute_count, &internal_shader, sizeof(dm_metal_compute_shader));
+    *handle = metal_renderer->compute_count++;
+    
+    return true;
+}
+
+void dm_compute_backend_destroy_shader(dm_compute_handle handle, dm_renderer* renderer)
+{
+    DM_METAL_GET_RENDERER;
+
+    if(handle > metal_renderer->compute_count) { DM_LOG_ERROR("Trying to destroy invalid Metal compute shader"); return; }
+
+    dm_metal_compute_shader* internal_shader = &metal_renderer->compute_shaders[handle];
+
+    [internal_shader->library release];
+    [internal_shader->function release];
+    [internal_shader->compute_pipeline release];
 }
 
 /*************
@@ -622,6 +716,11 @@ bool dm_renderer_backend_init(dm_context* context)
 	dm_metal_renderer* metal_renderer = context->renderer.internal_renderer;
 
 	metal_renderer->device = MTLCreateSystemDefaultDevice();
+    if(!metal_renderer->device)
+    {
+        DM_LOG_FATAL("Could not create Metal device");
+        return false;
+    }
 
     // swapchain
     metal_renderer->swapchain        = [CAMetalLayer layer];
@@ -652,6 +751,13 @@ bool dm_renderer_backend_init(dm_context* context)
     
     metal_renderer->depth_texture       = [metal_renderer->device newTextureWithDescriptor:descriptor];
     metal_renderer->depth_texture.label = @"DepthStencil";
+    if(!metal_renderer->depth_texture)
+    {
+        DM_LOG_FATAL("Could not create depth texture");
+        return false;
+    }
+    
+    [descriptor release];
     
 	return true;
 }
@@ -672,6 +778,11 @@ void dm_renderer_backend_shutdown(dm_context* context)
         dm_renderer_backend_destroy_shader(i, &context->renderer);
     }
     
+    for(uint32_t i=0; i<metal_renderer->compute_count; i++)
+    {
+        dm_compute_backend_destroy_shader(i, &context->renderer);
+    }
+    
     // textures
     for(uint32_t i=0; i<metal_renderer->texture_count; i++)
     {
@@ -687,6 +798,7 @@ void dm_renderer_backend_shutdown(dm_context* context)
     [metal_renderer->swapchain release];
     [metal_renderer->depth_texture release];
     [metal_renderer->command_encoder release];
+    [metal_renderer->compute_command_encoder release];
     [metal_renderer->command_queue release];
 	[metal_renderer->device release];
 }
@@ -728,7 +840,8 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     depth_attachment.loadAction  = MTLLoadActionClear;
     
     metal_renderer->command_encoder = [metal_renderer->command_buffer renderCommandEncoderWithDescriptor:pass_desc];
-
+    if(!metal_renderer->command_encoder) { DM_LOG_FATAL("Could not get Metal render command encoder"); return false; }
+    
 	[desc release];
 
 	return true;
@@ -1057,4 +1170,79 @@ void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t right, 
     rect.height = bottom - top;
     
     [metal_renderer->command_encoder setScissorRect:rect];
+}
+
+bool dm_compute_backend_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_renderer* renderer)
+{
+    DM_METAL_GET_RENDERER;
+    
+    if(handle > metal_renderer->buffer_count) { DM_LOG_FATAL("Trying to bind invalid Metal compute buffer"); return false; }
+    
+    dm_metal_buffer* internal_buffer = &metal_renderer->buffers[handle];
+    
+    [metal_renderer->compute_command_encoder setBuffer:internal_buffer->buffer offset:offset atIndex:slot];
+    
+    return true;
+}
+
+extern bool dm_compute_backend_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer)
+{
+    DM_METAL_GET_RENDERER;
+    
+    if(handle > metal_renderer->buffer_count) { DM_LOG_FATAL("Trying to bind invalid Metal compute buffer"); return false; }
+    
+    dm_metal_buffer* internal_buffer = &metal_renderer->buffers[handle];
+    
+    dm_memcpy(internal_buffer->buffer.contents + offset, data, data_size);
+    
+    return true;
+}
+
+void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_renderer* renderer)
+{
+    DM_METAL_GET_RENDERER;
+    
+    if(handle > metal_renderer->buffer_count) { DM_LOG_FATAL("Trying to bind invalid Metal compute buffer"); return NULL; }
+    
+    return metal_renderer->buffers[handle].buffer.contents;
+}
+
+bool dm_compute_backend_command_bind_shader(dm_compute_handle handle, dm_renderer* renderer)
+{
+    DM_METAL_GET_RENDERER;
+    
+    if(handle > metal_renderer->compute_count) { DM_LOG_FATAL("Trying to bind invalid Metal compute shader"); return false; }
+    
+    dm_metal_compute_shader* internal_shader = &metal_renderer->compute_shaders[handle];
+    
+    metal_renderer->compute_command_buffer = [metal_renderer->command_queue commandBuffer];
+    if(!metal_renderer->compute_command_buffer) { DM_LOG_FATAL("Could not get Metal compute command buffer"); return false; }
+    
+    metal_renderer->compute_command_encoder = [metal_renderer->compute_command_buffer computeCommandEncoder];
+    if(!metal_renderer->compute_command_encoder) { DM_LOG_FATAL("Could not get Metal compute command encoder"); return false; }
+    
+    [metal_renderer->compute_command_encoder setComputePipelineState:internal_shader->compute_pipeline];
+    
+    metal_renderer->active_compute_shader = handle;
+    
+    return true;
+}
+
+bool dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps, dm_renderer* renderer)
+{
+    DM_METAL_GET_RENDERER;
+    
+    NSInteger max_grp = metal_renderer->compute_shaders[metal_renderer->active_compute_shader].compute_pipeline.maxTotalThreadsPerThreadgroup;
+    
+    MTLSize grid_size = MTLSizeMake(x_size, y_size, z_size);
+    MTLSize group_size = MTLSizeMake(x_thread_grps, y_thread_grps, z_thread_grps);
+    
+    [metal_renderer->compute_command_encoder dispatchThreads:grid_size threadsPerThreadgroup:group_size];
+    
+    [metal_renderer->compute_command_encoder endEncoding];
+    [metal_renderer->compute_command_buffer commit];
+    
+    [metal_renderer->compute_command_buffer waitUntilCompleted];
+    
+    return true;
 }
