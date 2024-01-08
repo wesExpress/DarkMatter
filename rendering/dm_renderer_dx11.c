@@ -785,7 +785,10 @@ void dm_renderer_backend_destroy_shader(dm_render_handle handle, dm_renderer* re
     DM_DX11_RELEASE(dx11_renderer->shaders[handle].input_layout);
 }
 
-bool dm_renderer_backend_create_compute_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+/*******
+COMPUTE
+*********/
+bool dm_compute_backend_create_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_renderer* renderer)
 {
     DM_DX11_GET_RENDERER;
     
@@ -805,6 +808,7 @@ bool dm_renderer_backend_create_compute_shader(dm_compute_shader_desc desc, dm_r
     
     DM_DX11_RELEASE(blob);
     
+#if 0 
     // input buffer
     D3D11_BUFFER_DESC b_desc = { 0 };
     
@@ -820,7 +824,7 @@ bool dm_renderer_backend_create_compute_shader(dm_compute_shader_desc desc, dm_r
     
     // output buffer
     dm_memzero(&b_desc, sizeof(b_desc));
-    
+#endif
     
     
     // constant buffer
@@ -840,6 +844,41 @@ void dm_renderer_backend_destroy_compute_shader(dm_render_handle handle, dm_rend
     
     DM_DX11_RELEASE(dx11_renderer->compute_shaders[handle].input_buffer);
     DM_DX11_RELEASE(dx11_renderer->compute_shaders[handle].shader);
+}
+
+bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_renderer* renderer)
+{
+    return true;
+}
+
+bool dm_compute_backend_create_uniform(size_t data_size, dm_compute_handle* handle, dm_renderer* renderer)
+{
+    return true;
+}
+
+bool dm_compute_backend_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_renderer* renderer)
+{
+    return true;
+}
+
+bool dm_compute_backend_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer)
+{
+    return true;
+}
+
+void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_renderer* renderer)
+{
+    return NULL;
+}
+
+bool dm_compute_backend_command_bind_shader(dm_compute_handle handle, dm_renderer* renderer)
+{
+    return true;
+}
+
+bool dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps,dm_renderer* renderer)
+{
+    return true;
 }
 
 /******

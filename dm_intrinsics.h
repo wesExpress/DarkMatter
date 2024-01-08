@@ -209,7 +209,7 @@ float dm_simd_sum_elements(dm_simd_float mm)
 #ifdef DM_SIMD_ARM
     return vaddvq_f32(mm);
 #elif defined(DM_SIMD_X86)
-    dm_simd_float sums = dm_simd_hadd_fast_ps(mm);
+    dm_simd_float sums = dm_simd_hadd_fast_float(mm);
     
     return _mm_cvtss_f32(sums);
 #endif
@@ -233,9 +233,9 @@ dm_simd_float dm_simd_normalize_float(dm_simd_float mm)
 #ifdef DM_SIMD_X86
     dm_simd_float dp = _mm_dp_ps(mm,mm, 0x7F);
     dm_simd_float mag = _mm_shuffle_ps(dp,dp, _MM_SHUFFLE(0,0,0,0));
-    mag = dm_simd_sqrt_ps(mag);
+    mag = dm_simd_sqrt_float(mag);
     
-    return dm_simd_div_ps(mm, mag);
+    return dm_simd_div_float(mm, mag);
 #elif defined(DM_SIMD_ARM)
     dm_simd_float mag = dm_simd_set1_float(dm_simd_dot_float(mm, mm));
     mag = dm_simd_sqrt_float(mag);
