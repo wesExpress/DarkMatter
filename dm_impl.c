@@ -632,6 +632,8 @@ extern void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t 
 // compute
 extern bool  dm_compute_backend_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
 extern bool  dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_renderer* renderer);
+extern bool  dm_compute_backend_create_uniform(size_t data_size, dm_compute_handle* handle, dm_renderer* renderer);
+
 extern bool  dm_compute_backend_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_renderer* renderer);
 extern bool  dm_compute_backend_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
 extern void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_renderer* renderer);
@@ -853,6 +855,14 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
     *handle = context->renderer.font_count++;
     
     return true;
+}
+
+bool dm_compute_create_uniform(size_t data_size, dm_compute_handle* handle, dm_context* context)
+{
+    if(dm_compute_backend_create_uniform(data_size, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create compute uniform");
+    return false;
 }
 
 bool dm_compute_create_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_context* context)

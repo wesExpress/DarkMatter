@@ -332,6 +332,27 @@ void dm_renderer_backend_destroy_uniform(dm_render_handle handle, dm_renderer* r
 	[metal_renderer->buffers[handle].buffer release];
 }
 
+bool dm_compute_backend_create_uniform(size_t data_size, dm_compute_handle* handle, dm_renderer* renderer)
+{
+    DM_METAL_GET_RENDERER;
+    
+    dm_metal_buffer internal_uniform = { 0 };
+    
+    size_t aligned_size = dm_metal_align(data_size, DM_METAL_BUFFER_ALIGNMENT);
+    internal_uniform.buffer = [metal_renderer->device newBufferWithLength:aligned_size options:MTLResourceOptionCPUCacheModeDefault];
+    
+    if(!internal_uniform.buffer)
+    {
+        DM_LOG_FATAL("Could not create Metal compute uniform");
+        return false;
+    }
+    
+    dm_memcpy(metal_renderer->buffers + metal_renderer->buffer_count, &internal_uniform, sizeof(dm_metal_buffer));
+    metal_renderer->buffer_count++;
+    
+    return true;
+}
+
 /**************
 METAL PIPELINE
 ****************/

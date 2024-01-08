@@ -1279,6 +1279,7 @@ void dm_render_command_map_callback(dm_render_handle handle, void (*callback)(dm
 // compute commands
 bool dm_compute_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_context* context);
 bool dm_compute_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_context* context);
+bool dm_compute_create_uniform(size_t data_size, dm_compute_handle* handle, dm_context* context);
 
 bool  dm_compute_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_context* context);
 bool  dm_compute_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
