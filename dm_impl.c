@@ -1206,11 +1206,13 @@ RENDER COMMANDS
 void __dm_renderer_submit_render_command(dm_render_command* command, dm_render_command_manager* manager)
 {
     dm_render_command* c = &manager->commands[manager->command_count++];
+    
+    if(!c->params.data) c->params.data = dm_alloc(command->params.size);
+    else if(c->params.size != command->params.size) c->params.data = dm_realloc(c->params.data, command->params.size);
+    dm_memcpy(c->params.data, command->params.data, command->params.size);
+    
     c->type = command->type;
     c->params.size = command->params.size;
-    if(!c->params.data) c->params.data = dm_alloc(command->params.size);
-    else c->params.data = dm_realloc(c->params.data, command->params.size);
-    dm_memcpy(c->params.data, command->params.data, command->params.size);
     
     dm_free(command->params.data);
 }

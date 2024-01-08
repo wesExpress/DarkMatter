@@ -339,7 +339,7 @@ bool dm_compute_backend_create_uniform(size_t data_size, dm_compute_handle* hand
     dm_metal_buffer internal_uniform = { 0 };
     
     size_t aligned_size = dm_metal_align(data_size, DM_METAL_BUFFER_ALIGNMENT);
-    internal_uniform.buffer = [metal_renderer->device newBufferWithLength:aligned_size options:MTLResourceOptionCPUCacheModeDefault];
+    internal_uniform.buffer = [metal_renderer->device newBufferWithLength:data_size options:MTLResourceOptionCPUCacheModeDefault];
     
     if(!internal_uniform.buffer)
     {
