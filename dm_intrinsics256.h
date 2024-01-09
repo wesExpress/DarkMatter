@@ -41,9 +41,9 @@ DM_INLINE
 void dm_simd256_store_float(float* d, dm_simd256_float mm)
 {
 #ifdef DM_PLATFORM_LINUX
-    _simd256_storeu_ps(d, mm);
+    _mm256_storeu_ps(d, mm);
 #else
-    _simd256_store_ps(d, mm);
+    _mm256_store_ps(d, mm);
 #endif
 }
 

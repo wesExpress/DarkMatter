@@ -19,6 +19,7 @@ typedef struct dm_dx11_buffer_t
 typedef struct dm_dx11_compute_buffer_t
 {
     ID3D11Buffer*              buffer;
+    ID3D11Buffer*              output_buffer;
     
     union
     {

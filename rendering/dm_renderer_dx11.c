@@ -850,26 +850,30 @@ bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_com
     
     dm_dx11_compute_buffer internal_buffer = { 0 };
     
-    D3D11_BUFFER_DESC b_desc = { 0 };
-    
-    b_desc.ByteWidth           = data_size;
-    b_desc.BindFlags           = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-    b_desc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-    b_desc.StructureByteStride = elem_size;
-    
-    if(type==DM_COMPUTE_BUFFER_TYPE_OUTPUT)
-    {
-        b_desc.Usage          = D3D11_USAGE_DYNAMIC;
-        b_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
-    }
-    
-    hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &internal_buffer.buffer);
-    if(hr!=S_OK) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
-    
     switch(type)
     {
         case DM_COMPUTE_BUFFER_TYPE_INPUT:
         {
+            D3D11_BUFFER_DESC b_desc   = { 0 };
+            b_desc.ByteWidth           = data_size;
+            b_desc.Usage               = D3D11_USAGE_DEFAULT;
+            b_desc.BindFlags           = D3D11_BIND_SHADER_RESOURCE;
+            b_desc.CPUAccessFlags      = D3D11_CPU_ACCESS_WRITE;
+            b_desc.StructureByteStride = elem_size;
+            b_desc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+            
+            hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &internal_buffer.buffer);
+            if(hr!=S_OK) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
+            
+            
+            b_desc.Usage             = D3D11_USAGE_STAGING;
+            b_desc.CPUAccessFlags    = D3D11_CPU_ACCESS_READ;
+            b_desc.BindFlags         = 0;
+            
+            hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &internal_buffer.output_buffer);
+            if(hr!=S_OK) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
+            
+            
             D3D11_SHADER_RESOURCE_VIEW_DESC desc_view = { 0 };
             desc_view.ViewDimension         = D3D11_SRV_DIMENSION_BUFFEREX;
             desc_view.Format                = DXGI_FORMAT_UNKNOWN;
@@ -881,6 +885,24 @@ bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_com
         
         case DM_COMPUTE_BUFFER_TYPE_OUTPUT:
         {
+            D3D11_BUFFER_DESC b_desc   = { 0 };
+            b_desc.ByteWidth           = data_size;
+            b_desc.Usage               = D3D11_USAGE_DEFAULT;
+            b_desc.BindFlags           = D3D11_BIND_UNORDERED_ACCESS;
+            b_desc.StructureByteStride = elem_size;
+            b_desc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+            
+            hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &internal_buffer.buffer);
+            if(hr!=S_OK) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
+            
+            b_desc.Usage             = D3D11_USAGE_STAGING;
+            b_desc.CPUAccessFlags    = D3D11_CPU_ACCESS_READ;
+            b_desc.BindFlags         = 0;
+            
+            hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &internal_buffer.output_buffer);
+            if(hr!=S_OK) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
+            
+            
             D3D11_UNORDERED_ACCESS_VIEW_DESC desc_view = { 0 };
             desc_view.ViewDimension        = D3D11_UAV_DIMENSION_BUFFER;
             desc_view.Format               = DXGI_FORMAT_UNKNOWN;
@@ -898,7 +920,7 @@ bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_com
     internal_buffer.type = type;
     
     dm_memcpy(dx11_renderer->compute_buffers + dx11_renderer->compute_buffer_count, &internal_buffer, sizeof(internal_buffer));
-    dx11_renderer->compute_buffer_count++;
+    *handle = dx11_renderer->compute_buffer_count++;
     
     return true;
 }
@@ -1608,7 +1630,7 @@ bool dm_compute_backend_command_bind_buffer(dm_compute_handle handle, uint32_t o
         break;
         
         case DM_COMPUTE_BUFFER_TYPE_OUTPUT:
-        ID3D11DeviceContext_CSSetUnorderedAccessViews(dx11_renderer->context, slot, 1, &internal_buffer->access_view, NULL);
+        ID3D11DeviceContext_CSSetUnorderedAccessViews(dx11_renderer->context, 0, 1, &internal_buffer->access_view, NULL);
         break;
         
         default:
@@ -1627,7 +1649,6 @@ bool dm_compute_backend_command_update_buffer(dm_compute_handle handle, void* da
     
     dm_dx11_compute_buffer* internal_buffer = &dx11_renderer->compute_buffers[handle];
     
-    //return dm_dx11_update_resource(internal_buffer->buffer, data, data_size, dx11_renderer);
     ID3D11DeviceContext_UpdateSubresource(dx11_renderer->context, (ID3D11Resource*)internal_buffer->buffer, 0, NULL, data, 0, 0);
     
     return true;
@@ -1643,15 +1664,17 @@ void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_re
     
     dm_dx11_compute_buffer* internal_buffer = &dx11_renderer->compute_buffers[handle];
     
+    ID3D11DeviceContext_CopyResource(dx11_renderer->context, (ID3D11Resource*)internal_buffer->output_buffer, (ID3D11Resource*)internal_buffer->buffer);
+    
     D3D11_MAPPED_SUBRESOURCE msr;
     ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
     
-    hr = ID3D11DeviceContext_Map(dx11_renderer->context, (ID3D11Resource*)internal_buffer->buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr);
+    hr = ID3D11DeviceContext_Map(dx11_renderer->context, (ID3D11Resource*)internal_buffer->output_buffer, 0, D3D11_MAP_READ, 0, &msr);
     if(hr!=S_OK) { DM_LOG_FATAL("ID3D11DeviceContext_Map failed!"); return false; }
     
     void* result = msr.pData;
     
-    ID3D11DeviceContext_Unmap(dx11_renderer->context, (ID3D11Resource*)internal_buffer->buffer, 0);
+    ID3D11DeviceContext_Unmap(dx11_renderer->context, (ID3D11Resource*)internal_buffer->output_buffer, 0);
     
     return result;
 }
