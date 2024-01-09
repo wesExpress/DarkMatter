@@ -271,12 +271,13 @@ bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_rende
 	return true;
 }
 
-bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_renderer* renderer)
+bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_buffer_type type, dm_compute_handle* handle, dm_renderer* renderer)
 {
     DM_METAL_GET_RENDERER;
     
     dm_metal_buffer internal_buffer = { 0 };
 
+    size_t aligned_size = dm_metal_align(data_size, DM_METAL_BUFFER_ALIGNMENT);
     internal_buffer.buffer = [metal_renderer->device newBufferWithLength:data_size options:MTLResourceStorageModeShared];
 
     internal_buffer.elem_size = elem_size;
