@@ -1,6 +1,7 @@
 #define NK_IMPLEMENTATION
 #include "dm.h"
 
+#include <assert.h>
 #include <float.h>
 
 extern void dm_platform_clipboard_copy(const char* text, int len);
@@ -21,9 +22,9 @@ bool dm_imgui_init(dm_context* context)
     if(!dm_renderer_create_uniform(sizeof(dm_imgui_uni), DM_UNIFORM_STAGE_VERTEX, &imgui_ctx->uni, context)) return false;
     
     dm_vertex_attrib_desc attrib_descs[] = {
-        { .name="POSITION", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, pos), .count=4, .index=0, .normalized=false },
+        { .name="POSITION", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, pos), .count=2, .index=0, .normalized=false },
         { .name="TEXCOORD", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, tex_coords), .count=2, .index=0, .normalized=false },
-        { .name="COLOR", .data_t=DM_VERTEX_DATA_T_UBYTE_NORM, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, color), .count=4, .index=0, .normalized=false }
+        { .name="COLOR", .data_t=DM_VERTEX_DATA_T_FLOAT, .attrib_class=DM_VERTEX_ATTRIB_CLASS_VERTEX, .stride=sizeof(dm_imgui_vertex), .offset=offsetof(dm_imgui_vertex, color), .count=4, .index=0, .normalized=false }
     };
     
     // pipeline desc
@@ -61,10 +62,13 @@ bool dm_imgui_init(dm_context* context)
 #elif defined(DM_DIRECTX)
     strcpy(shader_desc.vertex, "assets/shaders/dm_imgui_vertex.fxc");
     strcpy(shader_desc.pixel,  "assets/shaders/dm_imgui_pixel.fxc");
-#else
+#elif defined(DM_METAL)
     strcpy(shader_desc.vertex, "vertex_main");
     strcpy(shader_desc.pixel,  "fragment_main");
     strcpy(shader_desc.master, "assets/shaders/dm_imgui.metallib");
+#else
+    DM_LOG_FATAL("Unknown render backend!");
+    assert(false);
 #endif
     
     if(!dm_renderer_create_shader_and_pipeline(shader_desc, pipeline_desc, attrib_descs, DM_ARRAY_LEN(attrib_descs), &imgui_ctx->shader, &imgui_ctx->pipe, context)) return false;
@@ -89,7 +93,7 @@ bool dm_imgui_init(dm_context* context)
     int w, h;
     const void* image = nk_font_atlas_bake(&imgui_nk_ctx->atlas, &w, &h, NK_FONT_ATLAS_RGBA32);
     
-    if(!dm_renderer_create_texture_from_data(w,h, 4, image, "imgui_font", &imgui_ctx->font_texture, context)) return false;
+    if(!dm_renderer_create_texture_from_data(w,h, 4, image, "font_texture", &imgui_ctx->font_texture, context)) return false;
     
     nk_font_atlas_end(&imgui_nk_ctx->atlas, nk_handle_ptr(dm_renderer_get_internal_texture_ptr(imgui_ctx->font_texture, context)), &imgui_nk_ctx->tex_null);
     if(imgui_nk_ctx->atlas.default_font) nk_style_set_font(&imgui_nk_ctx->ctx, &imgui_nk_ctx->atlas.default_font->handle);
@@ -257,7 +261,7 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
                 case DM_KEY_R:
                 nk_input_key(&imgui_nk_ctx->ctx, NK_KEY_TEXT_REDO, down);
                 break;
-
+                
                 default:
                 break;
             }
@@ -285,7 +289,7 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
                 case DM_MOUSEBUTTON_DOUBLE:
                 nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_DOUBLE, x,y, 1);
                 break;
-
+                
                 default:
                 break;
             }
@@ -310,7 +314,7 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
                 case DM_MOUSEBUTTON_M:
                 nk_input_button(&imgui_nk_ctx->ctx, NK_BUTTON_MIDDLE, x,y, 0);
                 break;
-
+                
                 default:
                 break;
             }
@@ -320,13 +324,14 @@ void dm_imgui_input_event(dm_event e, dm_context* context)
         {
             uint32_t x,y;
             dm_input_get_mouse_pos(&x,&y,context);
+            
             nk_input_motion(&imgui_nk_ctx->ctx, x,y);
         } break;
         
         case DM_EVENT_MOUSE_SCROLL:
         nk_input_scroll(&imgui_nk_ctx->ctx, nk_vec2(0,e.delta));
         break;
-
+        
         default:
         break;
     }
@@ -343,19 +348,11 @@ void dm_imgui_render(dm_context* context)
     dm_render_command_bind_shader(imgui_ctx->shader, context);
     dm_render_command_bind_pipeline(imgui_ctx->pipe, context);
     
-    dm_imgui_uni uni = { 0 };
-    dm_mat_ortho(0,(float)context->renderer.width, (float)context->renderer.height,0, -1,1, uni.proj);
-#ifdef DM_DIRECTX
-    dm_mat4_transpose(uni.proj, uni.proj);
-#endif
-    dm_render_command_bind_uniform(imgui_ctx->uni, 0, DM_UNIFORM_STAGE_VERTEX, 0, context);
-    dm_render_command_update_uniform(imgui_ctx->uni, &uni, sizeof(uni), context);
-    
     struct nk_convert_config config = { 0 };
     NK_STORAGE const struct nk_draw_vertex_layout_element vertex_layout[] = {
         { NK_VERTEX_POSITION, NK_FORMAT_FLOAT,    NK_OFFSETOF(dm_imgui_vertex, pos) },
         { NK_VERTEX_TEXCOORD, NK_FORMAT_FLOAT,    NK_OFFSETOF(dm_imgui_vertex, tex_coords) },
-        { NK_VERTEX_COLOR,    NK_FORMAT_R8G8B8A8, NK_OFFSETOF(dm_imgui_vertex, color) },
+        { NK_VERTEX_COLOR,    NK_FORMAT_R32G32B32A32_FLOAT, NK_OFFSETOF(dm_imgui_vertex, color) },
         { NK_VERTEX_LAYOUT_END }
     };
     
@@ -380,14 +377,22 @@ void dm_imgui_render(dm_context* context)
     dm_render_command_bind_buffer(imgui_ctx->ib, 0, context);
     dm_render_command_update_buffer(imgui_ctx->ib, imgui_nk_ctx->indices, DM_IMGUI_MAX_INDICES, 0, context);
     
+    dm_imgui_uni uni = { 0 };
+    dm_mat_ortho(0,(float)context->renderer.width, (float)context->renderer.height,0, -1,1, uni.proj);
+#ifdef DM_DIRECTX
+    dm_mat4_transpose(uni.proj, uni.proj);
+#endif
+    dm_render_command_bind_uniform(imgui_ctx->uni, 0, DM_UNIFORM_STAGE_VERTEX, 0, context);
+    dm_render_command_update_uniform(imgui_ctx->uni, &uni, sizeof(uni), context);
+    
+    dm_render_command_bind_texture(imgui_ctx->font_texture, 0, context);
+    
     const struct nk_draw_command* cmd;
     uint32_t offset = 0;
     nk_draw_foreach(cmd, &imgui_nk_ctx->ctx, &imgui_nk_ctx->cmds)
     {
         if(!cmd->elem_count) continue;
         
-        dm_render_command_bind_texture(imgui_ctx->font_texture, 0, context);
-        dm_render_command_set_scissor_rects((uint32_t)cmd->clip_rect.x, (uint32_t)(cmd->clip_rect.x + cmd->clip_rect.w), (uint32_t)cmd->clip_rect.y, (uint32_t)(cmd->clip_rect.y + cmd->clip_rect.h), context);
         dm_render_command_draw_indexed(cmd->elem_count, offset, 0, context);
         offset += cmd->elem_count;
     }

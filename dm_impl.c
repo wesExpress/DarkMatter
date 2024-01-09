@@ -4,6 +4,7 @@
 #include <math.h>
 #include <time.h>
 #include <float.h>
+#include <assert.h>
 
 #include "mt19937/mt19937.h"
 #include "mt19937/mt19937_64.h"
@@ -184,6 +185,16 @@ float dm_clamp(float x, float min, float max)
     return DM_MAX(t, min);
 }
 
+float dm_rad_to_deg(float radians)
+{
+	return  (float)(radians * (180.0f / DM_MATH_PI));
+}
+
+float dm_deg_to_rad(float degrees)
+{
+	return (float)(degrees * (DM_MATH_PI / 180.0f));
+}
+
 /******
 MEMORY
 ********/
@@ -245,10 +256,10 @@ int dm_random_int(dm_context* context)
 
 int dm_random_int_range(int start, int end, dm_context* context)
 {
-    int old_range = UINT_MAX;
+    int old_range = INT_MAX;
     int new_range = end - start;
     
-    return ((dm_random_int(context) + INT_MAX) * new_range) / old_range + start;
+    return (dm_random_int(context) + new_range) / old_range + start;
 }
 
 uint32_t dm_random_uint32(dm_context* context)
@@ -508,6 +519,7 @@ void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* 
 {
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSE_MOVE;
+    
     e->coords[0] = mouse_x;
     e->coords[1] = mouse_y;
 }
@@ -592,8 +604,10 @@ extern void* dm_renderer_backend_get_internal_texture_ptr(dm_render_handle handl
 
 extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
+
 extern bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
 
 extern void dm_render_command_backend_clear(float r, float g, float b, float a, dm_renderer* renderer);
 extern void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer);
@@ -614,6 +628,17 @@ extern void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_
 extern void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer);
 extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer);
 extern void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_renderer* renderer);
+
+// compute
+extern bool  dm_compute_backend_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
+extern bool  dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_buffer_type type, dm_compute_handle* handle, dm_renderer* renderer);
+extern bool  dm_compute_backend_create_uniform(size_t data_size, dm_compute_handle* handle, dm_renderer* renderer);
+
+extern bool  dm_compute_backend_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_renderer* renderer);
+extern bool  dm_compute_backend_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
+extern void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_renderer* renderer);
+extern bool  dm_compute_backend_command_bind_shader(dm_compute_handle handle, dm_renderer* renderer);
+extern bool  dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps,dm_renderer* renderer);
 
 // renderer
 bool dm_renderer_init(dm_context* context)
@@ -689,6 +714,14 @@ bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, size_
     return dm_renderer_create_buffer(desc, data, handle, context);
 }
 
+bool dm_compute_create_buffer(size_t data_size, size_t elem_size, dm_compute_buffer_type type, dm_compute_handle* handle, dm_context* context)
+{
+    if(dm_compute_backend_create_buffer(data_size, elem_size, type, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create compute buffer");
+    return false;
+}
+
 bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context)
 {
     if(dm_renderer_backend_create_shader_and_pipeline(shader_desc, pipe_desc, attrib_descs, attrib_count, shader_handle, pipe_handle, &context->renderer)) return true;
@@ -740,13 +773,18 @@ bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels,
 
 bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context)
 {
-    if(!dm_renderer_backend_create_texture(width, height, n_channels, data, name, handle, &context->renderer))
-    {
-        DM_LOG_FATAL("Failed to create texture from data");
-        return false;
-    }
+    if(dm_renderer_backend_create_texture(width, height, n_channels, data, name, handle, &context->renderer)) return true;
     
-    return true;
+    DM_LOG_FATAL("Failed to create texture from data");
+    return false;
+}
+
+bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context)
+{
+    if(dm_renderer_backend_create_dynamic_texture(width, height, n_channels, data, name, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create dynamic texture");
+    return false;
 }
 
 void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context)
@@ -819,6 +857,59 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
     return true;
 }
 
+bool dm_compute_create_uniform(size_t data_size, dm_compute_handle* handle, dm_context* context)
+{
+    if(dm_compute_backend_create_uniform(data_size, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create compute uniform");
+    return false;
+}
+
+bool dm_compute_create_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_context* context)
+{
+    if(dm_compute_backend_create_shader(desc, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create compute shader from: %s", desc.path);
+    return false;
+}
+
+bool dm_compute_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_context* context)
+{
+    if(dm_compute_backend_command_bind_buffer(handle, offset, slot, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not bind compute buffer");
+    return false;
+}
+
+bool dm_compute_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_context* context)
+{
+    if(dm_compute_backend_command_update_buffer(handle, data, data_size, offset, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not update compute buffer");
+    return false;
+}
+
+void* dm_compute_command_get_buffer_data(dm_compute_handle handle, dm_context* context)
+{
+    return dm_compute_backend_command_get_buffer_data(handle, &context->renderer);
+}
+
+bool dm_compute_command_bind_shader(dm_compute_handle handle, dm_context* context)
+{
+    if(dm_compute_backend_command_bind_shader(handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not bind compute shader");
+    return false;
+}
+
+bool dm_compute_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps, dm_context* context)
+{
+    if(dm_compute_backend_command_dispatch(x_size, y_size, z_size, x_thread_grps, y_thread_grps, z_thread_grps, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Compute dispatch failed");
+    return false;
+}
+
 /*************
 MODEL LOADING
 ***************/
@@ -831,7 +922,8 @@ bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* a
     
     int indx = 0;
     
-    int pos_offset, norm_offset, tex_offset = -1;
+    int pos_offset, norm_offset, tex_offset; 
+    pos_offset = norm_offset = tex_offset = -1;
     size_t vertex_size = 0;
     
     for(uint32_t i=0; i<attrib_count; i++)
@@ -998,7 +1090,9 @@ bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* 
     const uint32_t count = primitive.attributes[0].data->count;
     
     // get attribute offsets into our vertices buffer
-    int pos_offset, norm_offset, tex_offset = -1;
+    int pos_offset, norm_offset, tex_offset;
+    pos_offset = norm_offset = tex_offset = -1;
+    
     size_t vertex_stride = 0;
     
     for(uint32_t i=0; i<attrib_count; i++)
@@ -1034,7 +1128,7 @@ bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* 
     cgltf_buffer_view* buffer_view = NULL;
     float* buffer = NULL;
     
-    size_t stride;
+    size_t stride = 0;
     size_t size = 0;
     size_t offset = 0;
     
@@ -1112,11 +1206,13 @@ RENDER COMMANDS
 void __dm_renderer_submit_render_command(dm_render_command* command, dm_render_command_manager* manager)
 {
     dm_render_command* c = &manager->commands[manager->command_count++];
+    
+    if(!c->params.data) c->params.data = dm_alloc(command->params.size);
+    else if(c->params.size != command->params.size) c->params.data = dm_realloc(c->params.data, command->params.size);
+    dm_memcpy(c->params.data, command->params.data, command->params.size);
+    
     c->type = command->type;
     c->params.size = command->params.size;
-    if(!c->params.data) c->params.data = dm_alloc(command->params.size);
-    else c->params.data = dm_realloc(c->params.data, command->params.size);
-    dm_memcpy(c->params.data, command->params.data, command->params.size);
     
     dm_free(command->params.data);
 }
@@ -2246,6 +2342,10 @@ extern bool dm_application_update(dm_context* context);
 extern bool dm_application_render(dm_context* context);
 extern void dm_application_shutdown(dm_context* context);
 
+#ifdef DM_MATH_TESTS
+void dm_math_tests();
+#endif
+
 typedef enum dm_exit_code_t
 {
     DM_EXIT_CODE_SUCCESS,
@@ -2261,6 +2361,10 @@ typedef enum dm_exit_code_t
 #define DM_DEFAULT_ASSETS_FOLDER "assets"
 int main(int argc, char** argv)
 {
+#ifdef DM_MATH_TESTS
+    dm_math_tests();
+#endif
+    
     dm_context_init_packet init_packet = {
         DM_DEFAULT_SCREEN_X, DM_DEFAULT_SCREEN_Y,
         DM_DEFAULT_SCREEN_WIDTH, DM_DEFAULT_SCREEN_HEIGHT,
@@ -2310,3 +2414,112 @@ int main(int argc, char** argv)
     
     return DM_EXIT_CODE_SUCCESS;
 }
+
+#ifdef DM_MATH_TESTS
+#define DM_MATH_ASSERT(COND, MESSAGE) if(!(COND)) { DM_LOG_FATAL(MESSAGE); assert(false); }
+#define DM_MATH_CLOSE_ENOUGH(X,Y) (dm_fabs((X)-(Y)) < 0.001f)
+
+void dm_vec3_tests()
+{
+    const dm_vec3 v1 = { 1,1,1 };
+    const dm_vec3 v2 = { 2,2,2 };
+    const dm_vec3 v3 = { 0.1f,0.1f,0.1f };
+    const dm_vec3 v4 = { -0.1f,-0.1f,-0.1f };
+    
+    DM_MATH_ASSERT(dm_vec3_dot(v1,v2)==6, "Vec3 dot product failed");
+    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(dm_vec3_dot(v2,v3),0.6f), "Vec3 dot product failed");
+    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(dm_vec3_dot(v3,v4),-0.03f), "Vec3 dot product failed");
+    
+    dm_vec3 result;
+    dm_vec3_sub_vec3(v1,v2, result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],-1.0f)) && (DM_MATH_CLOSE_ENOUGH(result[1],-1.0f)) && (DM_MATH_CLOSE_ENOUGH(result[2],-1.0f)), "Vec3 sub vec3 failed");
+    
+    dm_vec3_sub_vec3(v2,v3, result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],1.9f)) && (DM_MATH_CLOSE_ENOUGH(result[1],1.9f)) && (DM_MATH_CLOSE_ENOUGH(result[2],1.9f)), "Vec3 sub vec3 failed");
+    
+    dm_vec3_add_vec3(v1,v2, result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],3)) && (DM_MATH_CLOSE_ENOUGH(result[1],3)) && (DM_MATH_CLOSE_ENOUGH(result[2],3)), "Vec3 sub vec3 failed");
+    
+    dm_vec3_add_vec3(v2,v3, result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],2.1f)) && (DM_MATH_CLOSE_ENOUGH(result[1],2.1f)) && (DM_MATH_CLOSE_ENOUGH(result[2],2.1f)), "Vec3 sub vec3 failed");
+    
+    dm_vec3_norm(v1,result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],DM_MATH_INV_SQRT3)) && (DM_MATH_CLOSE_ENOUGH(result[1],DM_MATH_INV_SQRT3)) && (DM_MATH_CLOSE_ENOUGH(result[2],DM_MATH_INV_SQRT3)), "Vec3 norm failed");
+    
+    dm_vec3_scale(v1, 4, result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],4)) && (DM_MATH_CLOSE_ENOUGH(result[1],4)) && (DM_MATH_CLOSE_ENOUGH(result[2],4)), "Vec3 scale failed");
+}
+
+void dm_vec4_tests()
+{
+    const dm_vec4 v1 = { 1,1,1,1 };
+    const dm_vec4 v2 = { 2,2,2,2 };
+    const dm_vec4 v3 = { 0.1f,0.1f,0.1f,0.1f };
+    const dm_vec4 v4 = { -0.1f,-0.1f,-0.1f,-0.1f };
+    
+    DM_MATH_ASSERT(dm_vec4_dot(v1,v2)==8, "Vec4 dot product failed");
+    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(dm_vec4_dot(v2,v3),0.8f), "Vec4 dot product failed");
+    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(dm_vec4_dot(v3,v4),-0.04f), "Vec4 dot product failed");
+    
+    dm_vec4 result;
+    dm_vec4_sub_vec4(v1,v2, result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],-1.0f)) && (DM_MATH_CLOSE_ENOUGH(result[1],-1.0f)) && (DM_MATH_CLOSE_ENOUGH(result[2],-1.0f)) && (DM_MATH_CLOSE_ENOUGH(result[3],-1.0f)), "Vec4 sub vec4 failed");
+    
+    dm_vec4_sub_vec4(v2,v3, result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],1.9f)) && (DM_MATH_CLOSE_ENOUGH(result[1],1.9f)) && (DM_MATH_CLOSE_ENOUGH(result[2],1.9f)) && (DM_MATH_CLOSE_ENOUGH(result[3],1.9f)), "Vec4 sub vec4 failed");
+    
+    dm_vec4_add_vec4(v1,v2, result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],3)) && (DM_MATH_CLOSE_ENOUGH(result[1],3)) && (DM_MATH_CLOSE_ENOUGH(result[2],3)) && (DM_MATH_CLOSE_ENOUGH(result[3],3)), "Vec4 sub vec4 failed");
+    
+    dm_vec4_add_vec4(v2,v3, result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],2.1f)) && (DM_MATH_CLOSE_ENOUGH(result[1],2.1f)) && (DM_MATH_CLOSE_ENOUGH(result[2],2.1f)) && (DM_MATH_CLOSE_ENOUGH(result[3],2.1f)), "Vec4 sub vec4 failed");
+    
+    dm_vec4_norm(v1,result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],0.5f)) && (DM_MATH_CLOSE_ENOUGH(result[1],0.5f)) && (DM_MATH_CLOSE_ENOUGH(result[2],0.5f)) && (DM_MATH_CLOSE_ENOUGH(result[3],0.5f)), "Vec4 norm failed");
+    
+    dm_vec4_scale(v1,4,result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],4)) && (DM_MATH_CLOSE_ENOUGH(result[1],4)) && (DM_MATH_CLOSE_ENOUGH(result[2],4)) && (DM_MATH_CLOSE_ENOUGH(result[3],4)), "Vec4 norm failed");
+}
+
+void dm_mat4_tests()
+{
+    const dm_mat4 m1 = {
+        {1,2,3,4},
+        {1,2,3,4},
+        {1,2,3,4},
+        {1,2,3,4}
+    };
+    
+    const dm_vec4 v1 = {
+        2,2,2,2
+    };
+    
+    dm_vec4 result;
+    dm_mat4_mul_vec4(m1,v1, result);
+    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],20.0f)) && (DM_MATH_CLOSE_ENOUGH(result[1],20.0f)) && (DM_MATH_CLOSE_ENOUGH(result[2],20.0f)) && (DM_MATH_CLOSE_ENOUGH(result[3],20.0f)), "Mat4 mul vec4 failed");
+    
+    const dm_mat4 m2 = {
+        { 1,0,10,0 },
+        { 0,1,0,0  },
+        { 0,0,1,0  },
+        { 0,10,0,1 }
+    };
+    const dm_mat4 m3 = {
+        { 1,0,-10,0 },
+        { 0,1,0,0  },
+        { 0,0,1,0  },
+        { 0,-10,0,1 }
+    };
+    
+    dm_mat4 r;
+    dm_mat4_inverse(m2,r);
+    DM_MATH_ASSERT(dm_mat4_is_equal(m3,r), "Mat4 inverse failed");
+}
+
+void dm_math_tests()
+{
+    dm_vec3_tests();
+    dm_vec4_tests();
+    dm_mat4_tests();
+}
+#endif

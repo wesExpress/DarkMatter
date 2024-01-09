@@ -9,30 +9,33 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
 
-typedef struct dm_mac_threadpool_t
-{
-    pthread_mutex_t queue_mutex;
-    pthread_cond_t  queue_condition;
-    pthread_cond_t  queue_empty;
+// https://github.com/travisvroman/kohi/blob/main/engine/src/platform/platform_macos.m#L57enum
+typedef enum macos_modifier_keys_t {
+    MACOS_MODIFIER_KEY_LSHIFT = 0x01,
+    MACOS_MODIFIER_KEY_RSHIFT = 0x02,
+    MACOS_MODIFIER_KEY_LCTRL = 0x04,
+    MACOS_MODIFIER_KEY_RCTRL = 0x08,
+    MACOS_MODIFIER_KEY_LOPTION = 0x10,
+    MACOS_MODIFIER_KEY_ROPTION = 0x20,
+    MACOS_MODIFIER_KEY_LCOMMAND = 0x40,
+    MACOS_MODIFIER_KEY_RCOMMAND = 0x80
+} macos_modifier_keys;
 
-    uint32_t queue_increment;
-
-    pthread_t threads[DM_MAX_THREAD_COUNT];
-} dm_mac_threadpool;
+void* dm_mac_thread_start_func(void* args);
 
 void* dm_mac_thread_start_func(void* args);
 void  dm_mac_thread_execute_task(dm_thread_task* task);
 
 dm_key_code dm_translate_key_code(uint32_t cocoa_key);
+void dm_handle_modifier_keys(uint32_t ns_keycode, uint32_t modifier_flags, dm_event_list* event_list);
 
 extern void dm_add_window_close_event(dm_event_list* event_list);
 extern void dm_add_window_resize_event(uint32_t new_widt, uint32_t new_height, dm_event_list* event_list);
 extern void dm_add_mousebutton_down_event(dm_mousebutton_code button, dm_event_list* event_list);
 extern void dm_add_mousebutton_up_event(dm_mousebutton_code button, dm_event_list* event_list);
 extern void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* event_list);
-extern void dm_add_mouse_scroll_event(uint32_t delta, dm_event_list* event_list);
+extern void dm_add_mouse_scroll_event(float delta, dm_event_list* event_list);
 extern void dm_add_key_down_event(dm_key_code key, dm_event_list* event_list);
 extern void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 
@@ -60,6 +63,13 @@ extern void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 	dm_add_window_resize_event(frameSize.width, frameSize.height, &platform_data->event_list);
 
     return frameSize;
+}
+
+- (void)windowDidResize:(NSNotification *)notification
+{
+    NSRect frame = [NSScreen mainScreen].frame;
+    
+    dm_add_window_resize_event(frame.size.width, frame.size.height, &platform_data->event_list);
 }
 
 @end
@@ -121,7 +131,31 @@ extern void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 - (void) mouseMoved: (NSEvent*) event
 {
     const NSPoint point = [event locationInWindow];
-	dm_add_mouse_move_event(point.x, point.y, &platform_data->event_list);
+    
+    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
+    CAMetalLayer* swapchain = (CAMetalLayer*)self.layer;
+    NSSize  size  = swapchain.drawableSize;
+    
+	//dm_add_mouse_move_event(point.x * scale, size.height - (point.y * scale), &platform_data->event_list);
+    dm_add_mouse_move_event(point.x, size.height / scale - point.y , &platform_data->event_list);
+}
+
+- (void)rightMouseDragged:(NSEvent *)event
+{
+    // Equivalent to moving the mouse for now
+    [self mouseMoved:event];
+}
+
+- (void)leftMouseDragged:(NSEvent *)event
+{
+    // Equivalent to moving the mouse for now
+    [self mouseMoved:event];
+}
+
+- (void)otherMouseDragged:(NSEvent *)event
+{
+    // Equivalent to moving the mouse for now
+    [self mouseMoved:event];
 }
 
 - (void) keyDown: (NSEvent*) event
@@ -134,6 +168,10 @@ extern void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 {
     dm_key_code key = dm_translate_key_code((uint32_t)[event keyCode]);
 	dm_add_key_up_event(key, &platform_data->event_list);
+}
+
+- (void) flagsChanged:(NSEvent *) event {
+    dm_handle_modifier_keys([event keyCode], [event modifierFlags], &platform_data->event_list);
 }
 
 // must be implemented for the protocol to shut up in the compiler
@@ -252,17 +290,14 @@ bool dm_platform_pump_events(dm_platform_data* platform_data)
 
 double dm_platform_get_time(dm_platform_data* platform_data)
 {
-	const uint64_t factor = 1000000;
-    static mach_timebase_info_data_t s_timebase_info;
-    static dispatch_once_t once_token;
-
-    dispatch_once(&once_token, ^{
-        (void) mach_timebase_info(&s_timebase_info);
-    });
-
-    float mili = (float)((mach_absolute_time() * s_timebase_info.numer) / (factor * s_timebase_info.denom));
-
-    return mili / 1000.0;
+    mach_timebase_info_data_t clock_timebase;
+    mach_timebase_info(&clock_timebase);
+    
+    uint64_t mach_absolute = mach_absolute_time();
+    
+    uint64_t nanos = (double)(mach_absolute * (uint64_t)clock_timebase.numer) / (double)clock_timebase.denom;
+    
+    return nanos / 1.0e9;
 }
 
 /**********
@@ -273,9 +308,12 @@ bool dm_platform_threadpool_create(dm_threadpool* threadpool)
     threadpool->internal_pool = dm_alloc(sizeof(dm_mac_threadpool));
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
 
-    pthread_mutex_init(&mac_threadpool->queue_mutex, NULL);
-    pthread_cond_init(&mac_threadpool->queue_condition, NULL);
-    pthread_cond_init(&mac_threadpool->queue_empty, NULL);
+    pthread_mutex_init(&mac_threadpool->thread_count_mutex, NULL);
+    pthread_mutex_init(&mac_threadpool->task_queue.mutex, NULL);
+    pthread_mutex_init(&mac_threadpool->task_queue.has_tasks.mutex, NULL);
+    pthread_cond_init(&mac_threadpool->task_queue.has_tasks.cond, NULL);
+    pthread_cond_init(&mac_threadpool->all_threads_idle, NULL);
+    pthread_cond_init(&mac_threadpool->at_least_one_idle, NULL);
 
     for(uint32_t i=0; i<threadpool->thread_count; i++)
     {
@@ -292,9 +330,12 @@ void dm_platform_threadpool_destroy(dm_threadpool* threadpool)
 {
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
 
-    pthread_mutex_destroy(&mac_threadpool->queue_mutex);
-    pthread_cond_destroy(&mac_threadpool->queue_condition);
-    pthread_cond_destroy(&mac_threadpool->queue_empty);
+    pthread_mutex_destroy(&mac_threadpool->thread_count_mutex);
+    pthread_mutex_destroy(&mac_threadpool->task_queue.mutex);
+    pthread_mutex_destroy(&mac_threadpool->task_queue.has_tasks.mutex);
+    pthread_cond_destroy(&mac_threadpool->task_queue.has_tasks.cond);
+    pthread_cond_destroy(&mac_threadpool->all_threads_idle);
+    pthread_cond_destroy(&mac_threadpool->at_least_one_idle);
 
     dm_free(threadpool->internal_pool);
 }
@@ -303,63 +344,89 @@ void dm_platform_threadpool_submit_task(dm_thread_task* task, dm_threadpool* thr
 {
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
 
-    pthread_mutex_lock(&mac_threadpool->queue_mutex);
-    dm_memcpy(threadpool->tasks + threadpool->task_count, task, sizeof(dm_thread_task));
-    threadpool->task_count++;
-    pthread_mutex_unlock(&mac_threadpool->queue_mutex);
+    // insert task
+    pthread_mutex_lock(&mac_threadpool->task_queue.mutex);
+    dm_memcpy(mac_threadpool->task_queue.tasks + mac_threadpool->task_queue.count, task, sizeof(dm_thread_task));
+    mac_threadpool->task_queue.count++;
 
-    pthread_cond_signal(&mac_threadpool->queue_condition);
-}
+    // wake up at least one thread
+    pthread_mutex_lock(&mac_threadpool->task_queue.has_tasks.mutex);
+    mac_threadpool->task_queue.has_tasks.v = 1;
+    pthread_cond_signal(&mac_threadpool->task_queue.has_tasks.cond);
+    pthread_mutex_unlock(&mac_threadpool->task_queue.has_tasks.mutex);
 
-void dm_platform_threadpool_execute_task(dm_thread_task* task, dm_threadpool* threadpool)
-{
-    dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
-
-    task->func(task->args);
-    
-    pthread_mutex_lock(&mac_threadpool->queue_mutex);
-    threadpool->total_task_count--;
-    if(threadpool->total_task_count==0) pthread_cond_signal(&mac_threadpool->queue_empty);
-    pthread_mutex_unlock(&mac_threadpool->queue_mutex);
+    pthread_mutex_unlock(&mac_threadpool->task_queue.mutex);
 }
 
 void dm_platform_threadpool_wait_for_completion(dm_threadpool* threadpool)
 {
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
 
-    pthread_mutex_lock(&mac_threadpool->queue_mutex);
-    while(threadpool->total_task_count>0) 
+    // sleep until there are NO working threads AND the task queue is empty
+    pthread_mutex_lock(&mac_threadpool->thread_count_mutex);
+    while(mac_threadpool->num_working_threads || mac_threadpool->task_queue.count)
     {
-        pthread_cond_wait(&mac_threadpool->queue_empty, &mac_threadpool->queue_mutex);
+        pthread_cond_wait(&mac_threadpool->all_threads_idle, &mac_threadpool->thread_count_mutex);
     }
-    pthread_mutex_unlock(&mac_threadpool->queue_mutex);
+    pthread_mutex_unlock(&mac_threadpool->thread_count_mutex);
 }
 
 void* dm_mac_thread_start_func(void* args)
 {
     dm_threadpool* threadpool = args;
     dm_mac_threadpool* mac_threadpool = threadpool->internal_pool;
-
-    dm_thread_task task;
-
+    
     while(1)
     {
-        pthread_mutex_lock(&mac_threadpool->queue_mutex);
-
-        while(threadpool->task_count==0)
+        // sleep until a new task is available
+        pthread_mutex_lock(&mac_threadpool->task_queue.has_tasks.mutex);
+        while(mac_threadpool->task_queue.has_tasks.v==0)
         {
-            pthread_cond_wait(&mac_threadpool->queue_condition, &mac_threadpool->queue_mutex);
+            pthread_cond_wait(&mac_threadpool->task_queue.has_tasks.cond, &mac_threadpool->task_queue.has_tasks.mutex);
+        }
+        mac_threadpool->task_queue.has_tasks.v = 0;
+        pthread_mutex_unlock(&mac_threadpool->task_queue.has_tasks.mutex);
+
+        // iterate thread working counter
+        pthread_mutex_lock(&mac_threadpool->thread_count_mutex);
+        mac_threadpool->num_working_threads++;
+        pthread_mutex_unlock(&mac_threadpool->thread_count_mutex);
+
+        // grab task
+        pthread_mutex_lock(&mac_threadpool->task_queue.mutex);
+        dm_thread_task* task = NULL;
+
+        // is there still a task since we've woken up?
+        if(mac_threadpool->task_queue.count)
+        {
+            task = dm_alloc(sizeof(dm_thread_task));
+            dm_memcpy(task, &mac_threadpool->task_queue.tasks[0], sizeof(dm_thread_task));
+            dm_memmove(mac_threadpool->task_queue.tasks, mac_threadpool->task_queue.tasks + 1, sizeof(dm_thread_task) * mac_threadpool->task_queue.count-1);
+            mac_threadpool->task_queue.count--;
         }
 
-         // copy over task
-        task = threadpool->tasks[0];
-        dm_memmove(threadpool->tasks, threadpool->tasks + 1, sizeof(dm_thread_task) * threadpool->task_count-1);
-        // decrement task count
-        threadpool->task_count--;
+        // if queue is still populated, need to set semaphore back
+        if(mac_threadpool->task_queue.count)
+        {
+            pthread_mutex_lock(&mac_threadpool->task_queue.has_tasks.mutex);
+            mac_threadpool->task_queue.has_tasks.v = 1;
+            pthread_cond_signal(&mac_threadpool->task_queue.has_tasks.cond);
+            pthread_mutex_unlock(&mac_threadpool->task_queue.has_tasks.mutex);
+        }
+        pthread_mutex_unlock(&mac_threadpool->task_queue.mutex);
 
-        pthread_mutex_unlock(&mac_threadpool->queue_mutex);
-        
-        dm_platform_threadpool_execute_task(&task, threadpool);
+        if(task)
+        {
+            task->func(task->args);
+            dm_free(task);
+        }
+
+        // decrement thread working counter
+        pthread_mutex_lock(&mac_threadpool->thread_count_mutex);
+        mac_threadpool->num_working_threads--;
+        if(mac_threadpool->num_working_threads==0) pthread_cond_signal(&mac_threadpool->all_threads_idle);
+        //else pthread_cond_signal(&linux_threadpool->at_least_one_idle);
+        pthread_mutex_unlock(&mac_threadpool->thread_count_mutex);
     }
 
     return NULL;
@@ -506,6 +573,102 @@ dm_key_code dm_translate_key_code(uint32_t cocoa_key)
         DM_LOG_ERROR("Unknown key code! Reeturning 'A'...");
         return DM_KEY_A;
     }
+}
+
+// Bit masks for left and right versions of these keys.
+#define MACOS_LSHIFT_MASK (1 << 1)
+#define MACOS_RSHIFT_MASK (1 << 2)
+#define MACOS_LCTRL_MASK (1 << 0)
+#define MACOS_RCTRL_MASK (1 << 13)
+#define MACOS_LCOMMAND_MASK (1 << 3)
+#define MACOS_RCOMMAND_MASK (1 << 4)
+#define MACOS_LALT_MASK (1 << 5)
+#define MACOS_RALT_MASK (1 << 6)
+
+static void dm_handle_modifier_key(
+    uint32_t ns_keycode,
+    uint32_t ns_key_mask,
+    uint32_t ns_l_keycode,
+    uint32_t ns_r_keycode,
+    uint32_t left_keycode,
+    uint32_t right_keycode,
+    uint32_t modifier_flags,
+    uint32_t left_mask,
+    uint32_t right_mask, dm_event_list* event_list)
+{
+    if(modifier_flags & ns_key_mask)
+    {
+        if(modifier_flags & left_mask) dm_add_key_down_event(left_keycode, event_list);
+        if(modifier_flags & right_mask) dm_add_key_down_event(right_keycode, event_list);
+    }
+    else
+    {
+        if(ns_keycode == ns_l_keycode) dm_add_key_up_event(left_keycode, event_list);
+        if(ns_keycode == ns_r_keycode) dm_add_key_up_event(right_keycode, event_list);
+    }
+}
+
+void dm_handle_modifier_keys(uint32_t ns_keycode, uint32_t modifier_flags, dm_event_list* event_list)
+{
+    // Shift
+    dm_handle_modifier_key(
+        ns_keycode,
+        NSEventModifierFlagShift,
+        0x38,
+        0x3C,
+        DM_KEY_LSHIFT,
+        DM_KEY_RSHIFT,
+        modifier_flags,
+        MACOS_LSHIFT_MASK,
+        MACOS_RSHIFT_MASK, event_list);
+
+    // Ctrl
+    dm_handle_modifier_key(
+        ns_keycode,
+        NSEventModifierFlagControl,
+        0x3B,
+        0x3E,
+        DM_KEY_LCTRL,
+        DM_KEY_RCTRL,
+        modifier_flags,
+        MACOS_LCTRL_MASK,
+        MACOS_RCTRL_MASK, event_list);
+
+    // Alt/Option
+    dm_handle_modifier_key(
+        ns_keycode,
+        NSEventModifierFlagOption,
+        0x3A,
+        0x3D,
+        DM_KEY_LALT,
+        DM_KEY_RALT,
+        modifier_flags,
+        MACOS_LALT_MASK,
+        MACOS_RALT_MASK, event_list);
+
+    // Command/Super
+    dm_handle_modifier_key(
+        ns_keycode,
+        NSEventModifierFlagCommand,
+        0x37,
+        0x36,
+        DM_KEY_LSUPER,
+        DM_KEY_RSUPER,
+        modifier_flags,
+        MACOS_LCOMMAND_MASK,
+        MACOS_RCOMMAND_MASK, event_list);
+
+    // Caps lock - handled a bit differently than other keys.
+    if(ns_keycode == 0x39)
+    {
+        if(modifier_flags & NSEventModifierFlagCapsLock) dm_add_key_down_event(DM_KEY_CAPSLOCK, event_list);
+        else                                             dm_add_key_up_event(DM_KEY_CAPSLOCK, event_list);
+    }
+}
+
+uint32_t dm_get_available_processor_count(dm_context* context)
+{
+    return [[NSProcessInfo processInfo] processorCount];
 }
 
 #endif

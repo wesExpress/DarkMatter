@@ -536,6 +536,14 @@ void dm_platform_clipboard_paste(void (*callback)(char*,int,void*), void* edit)
     CloseClipboard();
 }
 
+uint32_t dm_get_available_processor_count(dm_context* context)
+{
+    SYSTEM_INFO sysinfo;
+    GetSystemInfo(&sysinfo);
+    
+    return sysinfo.dwNumberOfProcessors;
+}
+
 /******
 OPENGL
 ********/
@@ -672,6 +680,9 @@ void dm_platform_swap_buffers(bool vsync, dm_platform_data* platform_data)
 }
 #endif
 
+/******
+VULKAN
+********/
 #ifdef DM_VULKAN
 bool dm_platform_create_vulkan_surface(dm_platform_data* platform_data, VkInstance* instance, VkSurfaceKHR* surface)
 {

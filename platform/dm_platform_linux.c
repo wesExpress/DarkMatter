@@ -1,5 +1,7 @@
 #include "dm.h"
 
+#ifdef DM_PLATFORM_LINUX
+
 #include <xcb/xcb.h>
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
@@ -45,7 +47,7 @@ typedef struct dm_linux_semaphore_t
 
 typedef struct dm_linux_task_queue_t
 {
-    dm_thread_task tasks[DM_MAX_THREAD_COUNT];
+    dm_thread_task tasks[DM_MAX_TASK_COUNT];
     uint32_t       count;
 
     pthread_mutex_t    mutex;
@@ -647,3 +649,5 @@ void* dm_linux_thread_start_func(void* args)
 
     return NULL;
 }
+
+#endif

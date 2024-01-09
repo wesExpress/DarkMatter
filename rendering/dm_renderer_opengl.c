@@ -33,6 +33,7 @@ typedef struct dm_opengl_texture_t
     uint32_t pbo_index, pbo_n_index;
 	GLint location;
     char name[512];
+    bool is_dynamic;
 } dm_opengl_texture;
 
 typedef struct dm_opengl_shader_t
@@ -426,6 +427,61 @@ void* dm_renderer_backend_get_internal_texture_ptr(dm_render_handle handle, dm_r
     return &opengl_renderer->textures[handle].id;
 }
 
+bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_OPENGL_GET_RENDERER;
+    
+    dm_opengl_texture internal_texture = { 0 };
+    strcpy(internal_texture.name, name);
+    internal_texture.is_dynamic = true;
+    
+    GLenum format;
+    switch(num_channels)
+    {
+        case 3: format = GL_RGB; 
+        break;
+        case 4: format = GL_RGBA; 
+        break;
+        
+        default: 
+        DM_LOG_ERROR("Unknown texture format");
+        format = GL_RGBA;
+        break;
+    }
+    
+    glGenTextures(1, &internal_texture.id);
+    if(glCheckError()) return false;
+    
+    glBindTexture(GL_TEXTURE_2D, internal_texture.id);
+    if(glCheckError()) return false;
+    
+    // load data
+    glTexImage2D(GL_TEXTURE_2D, 0, format, width, height, 0, format, GL_UNSIGNED_BYTE, data);
+    if(glCheckError()) return false;
+    glGenerateMipmap(GL_TEXTURE_2D);
+    if(glCheckError()) return false;
+    
+    // pbos
+    for(uint32_t i=0; i<2; i++)
+    {
+        glGenBuffers(1, &internal_texture.pbos[i]);
+        if(glCheckError()) return false;
+        glBindBuffer(GL_PIXEL_UNPACK_BUFFER, internal_texture.pbos[i]);
+        if(glCheckError()) return false;
+        glBufferData(GL_PIXEL_UNPACK_BUFFER, width * height * sizeof(uint32_t), 0, GL_STATIC_DRAW);
+        if(glCheckError()) return false;
+    }
+    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    
+    internal_texture.pbo_index = 0;
+    internal_texture.pbo_n_index = 1;
+    
+    dm_memcpy(opengl_renderer->textures + opengl_renderer->texture_count, &internal_texture, sizeof(dm_opengl_texture));
+    *handle = opengl_renderer->texture_count++;
+    
+    return true;
+}
+
 /***************
 OPENGL_PIPELINE
 *****************/
@@ -737,6 +793,11 @@ void dm_renderer_backend_destroy_shader(dm_render_handle handle, dm_renderer* re
     
     glDeleteProgram(opengl_renderer->shaders[handle].shader);
     if(glCheckError()) return;
+}
+
+bool dm_renderer_backend_create_compute_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    return true;
 }
 
 /******************
@@ -1122,12 +1183,13 @@ bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t sl
     
     if(handle > opengl_renderer->texture_count) { DM_LOG_FATAL("Trying to update invalid OpenGL texture"); return false; }
     
+    dm_opengl_texture* internal_texture = &opengl_renderer->textures[handle];
+    
     glActiveTexture(GL_TEXTURE0 + slot);
     if(glCheckError()) return false;
-    glBindTexture(GL_TEXTURE_2D, opengl_renderer->textures[handle].id);
+    glBindTexture(GL_TEXTURE_2D, internal_texture->id);
     if(glCheckError()) return false;
     
-    /*
     GLint location = -1;
     location = glGetUniformLocation(opengl_renderer->shaders[opengl_renderer->active_shader].shader, internal_texture->name);
     
@@ -1138,8 +1200,7 @@ bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t sl
     }
     
     glUniform1i(location, slot);
-    glCheckErrorReturn();
-    */
+    if(glCheckError()) return false;
     
     return true;
 }
@@ -1151,31 +1212,13 @@ bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t 
     if(handle > opengl_renderer->texture_count) { DM_LOG_FATAL("Trying to update invalid OpenGL texture"); return false; }
     
     dm_opengl_texture internal_texture = opengl_renderer->textures[handle];
-    
-    internal_texture.pbo_index = (internal_texture.pbo_index + 1) % 2;
-    internal_texture.pbo_n_index = (internal_texture.pbo_n_index + 1) % 2;
+    if(!internal_texture.is_dynamic) { DM_LOG_FATAL("Trying to update non-dynamic texture"); return false; }
     
     glBindTexture(GL_TEXTURE_2D, internal_texture.id);
-    if(glCheckError()) return false;
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, internal_texture.pbos[internal_texture.pbo_index]);
-    if(glCheckError()) return false;
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-    if(glCheckError()) return false;
     
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, internal_texture.pbos[internal_texture.pbo_n_index]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
     if(glCheckError()) return false;
-    glBufferData(GL_PIXEL_UNPACK_BUFFER, data_size, 0, GL_STREAM_DRAW);
-    if(glCheckError()) return false;
-    
-    void* ptr = glMapBuffer(GL_PIXEL_UNPACK_BUFFER, GL_WRITE_ONLY);
-    if(ptr)
-    {
-        dm_memcpy(ptr, data, data_size);
-        glUnmapBuffer(GL_PIXEL_UNPACK_BUFFER);
-        if(glCheckError()) return false;
-    }
-    
-    glBindBuffer(GL_PIXEL_UNPACK_BUFFER, 0);
+    glGenerateMipmap(GL_TEXTURE_2D);
     if(glCheckError()) return false;
     
     return true;
@@ -1273,23 +1316,26 @@ OPENGL DEBUG
 GLenum glCheckError_(const char *file, int line)
 {
     GLenum errorCode = GL_NO_ERROR;
-    while ((errorCode = glGetError()) != GL_NO_ERROR)
+    
+    errorCode = glGetError();
+    
+    const char* error;
+    switch (errorCode)
     {
-        const char* error;
-        switch (errorCode)
-        {
-            case GL_INVALID_ENUM:                  error = "INVALID_ENUM"; break;
-            case GL_INVALID_VALUE:                 error = "INVALID_VALUE"; break;
-            case GL_INVALID_OPERATION:             error = "INVALID_OPERATION"; break;
-            case GL_STACK_OVERFLOW:                error = "STACK_OVERFLOW"; break;
-            case GL_STACK_UNDERFLOW:               error = "STACK_UNDERFLOW"; break;
-            case GL_OUT_OF_MEMORY:                 error = "OUT_OF_MEMORY"; break;
-            case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
-            case GL_CONTEXT_LOST:                  error = "CONTEXT_LOST"; break;
-            default:                               error = "NO_ERROR"; break;
-        }
-        DM_LOG_ERROR("%s | %s (%d)", error, file, line);
+        case GL_INVALID_ENUM:                  error = "INVALID_ENUM"; break;
+        case GL_INVALID_VALUE:                 error = "INVALID_VALUE"; break;
+        case GL_INVALID_OPERATION:             error = "INVALID_OPERATION"; break;
+        case GL_STACK_OVERFLOW:                error = "STACK_OVERFLOW"; break;
+        case GL_STACK_UNDERFLOW:               error = "STACK_UNDERFLOW"; break;
+        case GL_OUT_OF_MEMORY:                 error = "OUT_OF_MEMORY"; break;
+        case GL_INVALID_FRAMEBUFFER_OPERATION: error = "INVALID_FRAMEBUFFER_OPERATION"; break;
+        case GL_CONTEXT_LOST:                  error = "CONTEXT_LOST"; break;
+        default:                               error = "NO_ERROR"; break;
     }
+    
+    if(errorCode == GL_NO_ERROR) return GL_NO_ERROR;
+    
+    DM_LOG_ERROR("%s | %s (%d)", error, file, line);
     return errorCode;
 }
 #endif

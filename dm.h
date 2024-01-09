@@ -50,6 +50,15 @@ depreciated
 #endif
 #endif
 
+/*********
+ALIGNMENT
+***********/
+#ifdef DM_PLATFORM_WIN32
+#define DM_ALIGN(X) __declspec(align(X))
+#else
+#define DM_ALIGN(X) __attribute((aligned(X)))
+#endif
+
 /*****************************
 SIMD INTRINSICS DETERMINATION
 *******************************/
@@ -65,6 +74,7 @@ INCLUDES
 #ifdef DM_PLATFORM_LINUX
 #define _GNU_SOURCE
 #endif
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <stdint.h>
@@ -117,6 +127,7 @@ MATH
 #define DM_MATH_INV_SQRT2           0.70710678118654f
 #define DM_MATH_SQRT3               1.73205080756887f
 #define DM_MATH_INV_SQRT3           0.57735026918962f
+
 #define DM_MATH_DEG_TO_RAD          0.0174533f
 #define DM_MATH_RAD_TO_DEG          57.2958f
 
@@ -130,22 +141,62 @@ MATH
 #define DM_CLAMP(X, MIN, MAX) DM_MIN(DM_MAX(X, MIN), MAX)
 #define DM_BIT_SHIFT(X) (1 << X)
 
+
+/**********
+MATH TYPES
+************/
+typedef float dm_vec2[2];
+typedef float dm_vec3[3];
+typedef DM_ALIGN(16) float dm_vec4[4];
+typedef DM_ALIGN(16) float dm_quat[4];
+
+typedef float dm_mat2[2][2];
+typedef float dm_mat3[3][3];
+#ifdef __AVX__
+typedef DM_ALIGN(32) float dm_mat4[4][4];
+#else
+typedef DM_ALIGN(16) float dm_mat4[4][4];
+#endif
+
+#define N2 2
+#define N3 3
+#define N4 4
+#define M2 N2 * N2
+#define M3 N3 * N3
+#define M4 N4 * N4
+
+#define DM_VEC2_SIZE sizeof(float) * N2
+#define DM_VEC3_SIZE sizeof(float) * N3
+#define DM_VEC4_SIZE sizeof(float) * N4
+#define DM_QUAT_SIZE DM_VEC4_SIZE
+#define DM_MAT2_SIZE sizeof(float) * N2
+#define DM_MAT3_SIZE sizeof(float) * M3
+#define DM_MAT4_SIZE sizeof(float) * M4
+
+#define DM_VEC2_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC2_SIZE)
+#define DM_VEC3_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC3_SIZE)
+#define DM_VEC4_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC4_SIZE)
+#define DM_QUAT_COPY(DEST, SRC) DM_VEC4_COPY(DEST, SRC)
+#define DM_MAT2_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT2_SIZE)
+#define DM_MAT3_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT3_SIZE)
+#define DM_MAT4_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT4_SIZE)
+
 /****
 SIMD
 ******/
 #ifdef DM_SIMD_X86
-typedef __m256  dm_mm256_float;
-typedef __m256i dm_mm256_int;
+typedef __m256  dm_simd256_float;
+typedef __m256i dm_simd256_int;
 
-typedef __m128  dm_mm_float;
-typedef __m128i dm_mm_int;
+typedef __m128  dm_simd_float;
+typedef __m128i dm_simd_int;
 
 #define DM_SIMD256_FLOAT_N 8
 #elif defined(DM_SIMD_ARM)
 // neon does not support 256bit registers
-typedef float32x4_t dm_mm_float;
+typedef float32x4_t dm_simd_float;
 
-typedef int32x4_t dm_mm_int;
+typedef int32x4_t dm_simd_int;
 #endif
 
 #define DM_SIMD_FLOAT_N    4
@@ -309,7 +360,11 @@ typedef enum dm_key_code
 	MAKE_KEYCODE(RCTRL,     0xA2),
 	MAKE_KEYCODE(LCTRL,     0xA3),
 	MAKE_KEYCODE(ALT,       0x12),
+    MAKE_KEYCODE(LALT,      0xA4),
+    MAKE_KEYCODE(RALT,      0xA5),
 	MAKE_KEYCODE(CAPSLOCK,  0x14),
+    MAKE_KEYCODE(LSUPER,    0x5B),
+    MAKE_KEYCODE(RSUPER,    0x5C),
     
 	// misc
 	MAKE_KEYCODE(COMMA,     0xBC),
@@ -421,7 +476,7 @@ typedef struct dm_thread_task_t
 #ifndef DM_MAX_THREAD_COUNT
 #define DM_MAX_THREAD_COUNT 32
 #endif
-#define DM_MAX_TASK_COUNT   100
+#define DM_MAX_TASK_COUNT   1000
 
 typedef struct dm_threadpool_t
 {
@@ -447,14 +502,15 @@ RENDERING
 #define DM_DEFAULT_MAX_FPS 60.0f
 
 // render enums
-typedef enum dm_buffer_type
+typedef enum dm_buffer_type_t
 {
 	DM_BUFFER_TYPE_VERTEX,
 	DM_BUFFER_TYPE_INDEX,
+    DM_BUFFER_TYPE_COMPUTE,
     DM_BUFFER_TYPE_UNKNOWN
 } dm_buffer_type;
 
-typedef enum dm_buffer_usage
+typedef enum dm_buffer_usage_t
 {
     DM_BUFFER_USAGE_DEFAULT,
     DM_BUFFER_USAGE_STATIC,
@@ -462,11 +518,18 @@ typedef enum dm_buffer_usage
     DM_BUFFER_USAGE_UNKNOWN
 } dm_buffer_usage;
 
-typedef enum dm_buffer_cpu_access
+typedef enum dm_buffer_cpu_access_t
 {
     DM_BUFFER_CPU_WRITE,
     DM_BUFFER_CPU_READ
 } dm_buffer_cpu_access;
+
+typedef enum dm_compute_buffer_type_t
+{
+    DM_COMPUTE_BUFFER_TYPE_INPUT,
+    DM_COMPUTE_BUFFER_TYPE_OUTPUT,
+    DM_COMPUTE_BUFFER_TYPE_UNKNOWN
+} dm_compute_buffer_type;
 
 typedef enum dm_shader_type_t
 {
@@ -595,7 +658,8 @@ typedef enum dm_uniform_stage_t
     DM_UNIFORM_STAGE_UNKNOWN
 } dm_uniform_stage;
 
-typedef uint32_t dm_render_handle;
+typedef uint32_t         dm_render_handle;
+typedef dm_render_handle dm_compute_handle;
 
 #define DM_RENDER_HANDLE_INVALID UINT_MAX
 #define DM_BUFFER_INVALID        DM_RENDER_HANDLE_INVALID
@@ -659,6 +723,14 @@ typedef struct dm_shader_desc_t
     dm_render_handle vb[2];
     uint32_t         vb_count;
 } dm_shader_desc;
+
+typedef struct dm_compute_shader_desc_t
+{
+    char     path[512];
+#ifdef DM_METAL
+    char     function[512];
+#endif
+} dm_compute_shader_desc;
 
 typedef enum dm_load_operation_t
 {
@@ -973,14 +1045,14 @@ IMGUI
 *******/
 typedef struct dm_imgui_vertex_t
 {
-    float   pos[2];
-    float   tex_coords[2];
-    uint8_t color[4];
+    float pos[2];
+    float tex_coords[2];
+    float color[4];
 } dm_imgui_vertex;
 
 typedef struct dm_imgui_uni_t
 {
-    float proj[4 * 4];
+    dm_mat4 proj;
 } dm_imgui_uni;
 
 typedef uint16_t dm_nk_element_t;
@@ -1092,7 +1164,8 @@ float dm_log2f(float x);
 bool  dm_isnan(float x);
 float dm_clamp(float x, float min, float max);
 
-#include "dm_math.h"
+float dm_rad_to_deg(float radians);
+float dm_deg_to_rad(float degrees);
 
 // general input
 bool dm_input_is_key_pressed(dm_key_code key, dm_context* context);
@@ -1147,7 +1220,6 @@ void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list);
 
 // threads
 uint32_t dm_get_available_processor_count(dm_context* context);
-bool     dm_threads_create(void* (*thread_func)(void*), void* args, size_t args_size, uint32_t num_threads, dm_context* context);
 
 bool dm_threadpool_create(const char* tag, uint32_t num_threads, dm_threadpool* threadpool);
 void dm_threadpool_destroy(dm_threadpool* threadpool);
@@ -1171,10 +1243,13 @@ bool dm_renderer_create_static_vertex_buffer(void* data, size_t data_size, size_
 bool dm_renderer_create_dynamic_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context);
+
 bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context);
 bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context);
+
 bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context);
 
 #define DM_MAKE_VERTEX_ATTRIB(NAME, STRUCT, MEMBER, CLASS, DATA_T, COUNT, INDEX, NORMALIZED) { .name=NAME, .data_t=DATA_T, .attrib_class=CLASS, .stride=sizeof(STRUCT), .offset=offsetof(STRUCT, MEMBER), .count=COUNT, .index=INDEX, .normalized=NORMALIZED}
@@ -1207,6 +1282,17 @@ void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, 
 void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 void dm_render_command_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_context* context);
 void dm_render_command_map_callback(dm_render_handle handle, void (*callback)(dm_context*), dm_context* context);
+
+// compute commands
+bool dm_compute_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_context* context);
+bool dm_compute_create_buffer(size_t data_size, size_t elem_size, dm_compute_buffer_type type, dm_compute_handle* handle, dm_context* context);
+bool dm_compute_create_uniform(size_t data_size, dm_compute_handle* handle, dm_context* context);
+
+bool  dm_compute_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_context* context);
+bool  dm_compute_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
+void* dm_compute_command_get_buffer_data(dm_compute_handle handle, dm_context* context);
+bool  dm_compute_command_bind_shader(dm_compute_handle handle, dm_context* context);
+bool  dm_compute_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps, dm_context* context);
 
 // ecs
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
@@ -1399,5 +1485,7 @@ bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_
     
     return dm_ecs_entity_has_component_multiple_via_index(entity_index, component_mask, context);
 }
+
+#include "dm_math.h"
 
 #endif //DM_H

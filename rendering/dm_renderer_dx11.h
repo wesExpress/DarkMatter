@@ -3,6 +3,8 @@
 
 #include "dm.h"
 
+#ifdef DM_DIRECTX
+
 #define COBJMACROS
 #include <d3d11_1.h>
 #include <dxgi.h>
@@ -14,12 +16,31 @@ typedef struct dm_dx11_buffer_t
     size_t stride;
 } dm_dx11_buffer;
 
+typedef struct dm_dx11_compute_buffer_t
+{
+    ID3D11Buffer*              buffer;
+    ID3D11Buffer*              output_buffer;
+    
+    union
+    {
+        ID3D11ShaderResourceView*  resource_view;
+        ID3D11UnorderedAccessView* access_view;
+    };
+    
+    dm_compute_buffer_type type;
+} dm_dx11_compute_buffer;
+
 typedef struct dm_dx11_shader_t
 {
     ID3D11VertexShader* vertex_shader;
 	ID3D11PixelShader*  pixel_shader;
 	ID3D11InputLayout*  input_layout;
 } dm_dx11_shader;
+
+typedef struct dm_dx11_compute_shader_t
+{
+    ID3D11ComputeShader* shader;
+} dm_dx11_compute_shader;
 
 typedef struct dm_dx11_texture_t
 {
@@ -28,6 +49,9 @@ typedef struct dm_dx11_texture_t
     
     // staging texture
     ID3D11Texture2D* staging;
+    
+    uint32_t width, height;
+    bool is_dynamic;
 } dm_dx11_texture;
 
 typedef struct dm_dx11_framebuffer_t
@@ -82,13 +106,15 @@ typedef struct dm_dx11_renderer
     HWND hwnd;
 	HINSTANCE h_instance;
     
-    dm_dx11_buffer      buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_shader      shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_texture     textures[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_framebuffer framebuffers[DM_RENDERER_MAX_RESOURCE_COUNT];
-    dm_dx11_pipeline    pipelines[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_buffer         buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_compute_buffer compute_buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_shader         shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_compute_shader compute_shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_texture        textures[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_framebuffer    framebuffers[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_pipeline       pipelines[DM_RENDERER_MAX_RESOURCE_COUNT];
     
-    uint32_t buffer_count, shader_count, texture_count, framebuffer_count, pipeline_count;
+    uint32_t buffer_count, compute_buffer_count, shader_count, compute_count, texture_count, framebuffer_count, pipeline_count;
     
     uint32_t active_pipeline, active_shader;
     
@@ -98,3 +124,5 @@ typedef struct dm_dx11_renderer
 } dm_dx11_renderer;
 
 #endif //DM_RENDERER_DX11_H
+
+#endif

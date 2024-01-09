@@ -4,19 +4,19 @@
 #ifndef DM_SIMD_ARM
 
 DM_INLINE
-dm_mm256_int dm_mm256_cast_float_to_int(dm_mm256_float mm)
+dm_simd256_int dm_simd256_cast_float_to_int(dm_simd256_float mm)
 {
     return _mm256_castps_si256(mm);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_cast_int_to_float(dm_mm256_int mm)
+dm_simd256_float dm_simd256_cast_int_to_float(dm_simd256_int mm)
 {
     return _mm256_castsi256_ps(mm);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_load_ps(const float* d)
+dm_simd256_float dm_simd256_load_float(const float* d)
 {
 #ifdef DM_PLATFORM_LINUX
     return _mm256_loadu_ps(d);
@@ -26,19 +26,19 @@ dm_mm256_float dm_mm256_load_ps(const float* d)
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_set1_ps(const float d)
+dm_simd256_float dm_simd256_set1_float(const float d)
 {
     return _mm256_set1_ps(d);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_set_ps(float h, float g, float f, float e, float d, float c, float b, float a)
+dm_simd256_float dm_simd256_set_float(float h, float g, float f, float e, float d, float c, float b, float a)
 {
     return _mm256_set_ps(h,g,f,e,d,c,b,a);
 }
 
 DM_INLINE
-void dm_mm256_store_ps(float* d, dm_mm256_float mm)
+void dm_simd256_store_float(float* d, dm_simd256_float mm)
 {
 #ifdef DM_PLATFORM_LINUX
     _mm256_storeu_ps(d, mm);
@@ -48,68 +48,68 @@ void dm_mm256_store_ps(float* d, dm_mm256_float mm)
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_add_ps(dm_mm256_float left, dm_mm256_float right)
+dm_simd256_float dm_simd256_add_float(dm_simd256_float left, dm_simd256_float right)
 {
     return _mm256_add_ps(left, right);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_sub_ps(dm_mm256_float left, dm_mm256_float right)
+dm_simd256_float dm_simd256_sub_float(dm_simd256_float left, dm_simd256_float right)
 {
     return _mm256_sub_ps(left, right);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_mul_ps(dm_mm256_float left, dm_mm256_float right)
+dm_simd256_float dm_simd256_mul_float(dm_simd256_float left, dm_simd256_float right)
 {
     return _mm256_mul_ps(left, right);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_div_ps(dm_mm256_float left, dm_mm256_float right)
+dm_simd256_float dm_simd256_div_float(dm_simd256_float left, dm_simd256_float right)
 {
     return _mm256_div_ps(left, right);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_sqrt_ps(dm_mm256_float mm)
+dm_simd256_float dm_simd256_sqrt_float(dm_simd256_float mm)
 {
     return _mm256_sqrt_ps(mm);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_hadd_ps(dm_mm256_float left, dm_mm256_float right)
+dm_simd256_float dm_simd256_hadd_float(dm_simd256_float left, dm_simd256_float right)
 {
     return _mm256_hadd_ps(left, right);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_fmadd_ps(dm_mm256_float a, dm_mm256_float b, dm_mm256_float c)
+dm_simd256_float dm_simd256_fmadd_float(dm_simd256_float a, dm_simd256_float b, dm_simd256_float c)
 {
     return _mm256_fmadd_ps(a, b, c);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_max_ps(dm_mm256_float a, dm_mm256_float b)
+dm_simd256_float dm_simd256_max_float(dm_simd256_float a, dm_simd256_float b)
 {
     return _mm256_max_ps(a, b);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_min_ps(dm_mm256_float a, dm_mm256_float b)
+dm_simd256_float dm_simd256_min_float(dm_simd256_float a, dm_simd256_float b)
 {
     return _mm256_min_ps(a, b);
 }
 
 DM_INLINE
-float dm_mm256_extract_float(dm_mm256_float mm)
+float dm_simd256_extract_float(dm_simd256_float mm)
 {
     return _mm256_cvtss_f32(mm);
 }
 
 // https://stackoverflow.com/questions/13219146/how-to-sum-m256-horizontally
 DM_INLINE
-float dm_mm256_sum_elements(dm_mm256_float mm)
+float dm_simd256_sum_elements(dm_simd256_float mm)
 {
     // hiQuad = ( x7, x6, x5, x4 )
     const __m128 hiQuad = _mm256_extractf128_ps(mm, 1);
@@ -133,7 +133,7 @@ float dm_mm256_sum_elements(dm_mm256_float mm)
 }
 
 DM_INLINE
-float dm_mm256_mul_elements(dm_mm256_float mm)
+float dm_simd256_mul_elements(dm_simd256_float mm)
 {
     // hiQuad = ( x7, x6, x5, x4 )
     const __m128 hiQuad = _mm256_extractf128_ps(mm, 1);
@@ -157,25 +157,25 @@ float dm_mm256_mul_elements(dm_mm256_float mm)
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_gt_ps(dm_mm256_float left, dm_mm256_float right)
+dm_simd256_float dm_simd256_gt_float(dm_simd256_float left, dm_simd256_float right)
 {
     return _mm256_cmp_ps(left, right, _CMP_GT_OQ);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_geq_ps(dm_mm256_float left, dm_mm256_float right)
+dm_simd256_float dm_simd256_geq_float(dm_simd256_float left, dm_simd256_float right)
 {
     return _mm256_cmp_ps(left, right, _CMP_GE_OQ);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_lt_ps(dm_mm256_float left, dm_mm256_float right)
+dm_simd256_float dm_simd256_lt_float(dm_simd256_float left, dm_simd256_float right)
 {
     return _mm256_cmp_ps(left, right, _CMP_LT_OQ);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_leq_ps(dm_mm256_float left, dm_mm256_float right)
+dm_simd256_float dm_simd256_leq_float(dm_simd256_float left, dm_simd256_float right)
 {
     return _mm256_cmp_ps(left, right, _CMP_LE_OQ);
 }
@@ -183,77 +183,77 @@ dm_mm256_float dm_mm256_leq_ps(dm_mm256_float left, dm_mm256_float right)
 // any non-zero
 // https://stackoverflow.com/questions/28923766/intel-simd-how-can-i-check-if-an-m256-contains-any-non-zero-values
 DM_INLINE
-int dm_mm256_any_non_zero(dm_mm256_float mm)
+int dm_simd256_any_non_zero(dm_simd256_float mm)
 {
-    dm_mm256_float vcmp = _mm256_cmp_ps(mm, _mm256_set1_ps(0), _CMP_EQ_OQ);
+    dm_simd256_float vcmp = _mm256_cmp_ps(mm, _mm256_set1_ps(0), _CMP_EQ_OQ);
     int mask = _mm256_movemask_ps(vcmp);
     return (mask != 0xff);
 }
 
 DM_INLINE
-int dm_mm256_any_zero(dm_mm256_float mm)
+int dm_simd256_any_zero(dm_simd256_float mm)
 {
-    dm_mm256_float vcmp = _mm256_cmp_ps(mm, _mm256_set1_ps(0), _CMP_EQ_OQ);
+    dm_simd256_float vcmp = _mm256_cmp_ps(mm, _mm256_set1_ps(0), _CMP_EQ_OQ);
     int mask = _mm256_movemask_ps(vcmp);
     return (mask != 0);
 }
 
 DM_INLINE
-dm_mm256_float dm_mm256_and_ps(dm_mm256_float left, dm_mm256_float right)
+dm_simd256_float dm_simd256_and_float(dm_simd256_float left, dm_simd256_float right)
 {
     return _mm256_and_ps(left, right);
 }
 
 DM_INLINE
-dm_mm256_int dm_mm256_load_i(int* d)
+dm_simd256_int dm_simd256_load_i(int* d)
 {
-    return _mm256_load_si256((dm_mm256_int*)d);
+    return _mm256_load_si256((dm_simd256_int*)d);
 }
 
 DM_INLINE
-dm_mm256_int dm_mm256_set1_i(int d)
+dm_simd256_int dm_simd256_set1_i(int d)
 {
     return _mm256_set1_epi32(d);
 }
 
 DM_INLINE
-void dm_mm256_store_i(int* i, dm_mm256_int mm)
+void dm_simd256_store_i(int* i, dm_simd256_int mm)
 {
-    _mm256_store_si256((dm_mm256_int*)i, mm);
+    _mm256_store_si256((dm_simd256_int*)i, mm);
 }
 
 DM_INLINE
-dm_mm256_int dm_mm256_add_i(dm_mm256_int left, dm_mm256_int right)
+dm_simd256_int dm_simd256_add_i(dm_simd256_int left, dm_simd256_int right)
 {
     return _mm256_add_epi32(left, right);
 }
 
 DM_INLINE
-dm_mm256_int dm_mm256_sub_i(dm_mm256_int left, dm_mm256_int right)
+dm_simd256_int dm_simd256_sub_i(dm_simd256_int left, dm_simd256_int right)
 {
     return _mm256_sub_epi32(left, right);
 }
 
 DM_INLINE
-dm_mm256_int dm_mm256_mul_i(dm_mm256_int left, dm_mm256_int right)
+dm_simd256_int dm_simd256_mul_i(dm_simd256_int left, dm_simd256_int right)
 {
     return _mm256_mul_epi32(left, right);
 }
 
 DM_INLINE
-dm_mm256_int dm_mm256_hadd_i(dm_mm256_int left, dm_mm256_int right)
+dm_simd256_int dm_simd256_hadd_i(dm_simd256_int left, dm_simd256_int right)
 {
     return _mm256_hadd_epi32(left, right);
 }
 
 DM_INLINE
-dm_mm256_int dm_mm256_shiftl_1(dm_mm256_int mm)
+dm_simd256_int dm_simd256_shiftl_1(dm_simd256_int mm)
 {
     return _mm256_slli_si256(mm, sizeof(int));
 }
 
 DM_INLINE
-dm_mm256_int dm_mm256_shiftr_1(dm_mm256_int mm)
+dm_simd256_int dm_simd256_shiftr_1(dm_simd256_int mm)
 {
     return _mm256_bsrli_epi128(mm, sizeof(int));
 }
