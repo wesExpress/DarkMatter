@@ -16,6 +16,19 @@ typedef struct dm_dx11_buffer_t
     size_t stride;
 } dm_dx11_buffer;
 
+typedef struct dm_dx11_compute_buffer_t
+{
+    ID3D11Buffer*              buffer;
+    
+    union
+    {
+        ID3D11ShaderResourceView*  resource_view;
+        ID3D11UnorderedAccessView* access_view;
+    };
+    
+    dm_compute_buffer_type type;
+} dm_dx11_compute_buffer;
+
 typedef struct dm_dx11_shader_t
 {
     ID3D11VertexShader* vertex_shader;
@@ -26,14 +39,6 @@ typedef struct dm_dx11_shader_t
 typedef struct dm_dx11_compute_shader_t
 {
     ID3D11ComputeShader* shader;
-    
-    ID3D11Buffer*        input_buffer;
-    size_t               input_buffer_stride;
-    
-    ID3D11Buffer*        output_buffer;
-    
-    ID3D11Buffer*        constant_buffer;
-    size_t               cb_stride;
 } dm_dx11_compute_shader;
 
 typedef struct dm_dx11_texture_t
@@ -101,13 +106,14 @@ typedef struct dm_dx11_renderer
 	HINSTANCE h_instance;
     
     dm_dx11_buffer         buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
+    dm_dx11_compute_buffer compute_buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
     dm_dx11_shader         shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
     dm_dx11_compute_shader compute_shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
     dm_dx11_texture        textures[DM_RENDERER_MAX_RESOURCE_COUNT];
     dm_dx11_framebuffer    framebuffers[DM_RENDERER_MAX_RESOURCE_COUNT];
     dm_dx11_pipeline       pipelines[DM_RENDERER_MAX_RESOURCE_COUNT];
     
-    uint32_t buffer_count, shader_count, compute_count, texture_count, framebuffer_count, pipeline_count;
+    uint32_t buffer_count, compute_buffer_count, shader_count, compute_count, texture_count, framebuffer_count, pipeline_count;
     
     uint32_t active_pipeline, active_shader;
     

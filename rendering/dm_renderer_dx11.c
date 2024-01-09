@@ -826,9 +826,6 @@ bool dm_compute_backend_create_shader(dm_compute_shader_desc desc, dm_render_han
     dm_memzero(&b_desc, sizeof(b_desc));
 #endif
     
-    
-    // constant buffer
-    
     // finally copy over
     dm_memcpy(dx11_renderer->compute_shaders + dx11_renderer->compute_count, &shader, sizeof(dm_dx11_compute_shader));
     *handle = dx11_renderer->compute_count++;
@@ -842,41 +839,71 @@ void dm_renderer_backend_destroy_compute_shader(dm_render_handle handle, dm_rend
     
     if(handle > dx11_renderer->compute_count) { DM_LOG_FATAL("Trying to destroy invalid DirectX compute shader"); return; }
     
-    DM_DX11_RELEASE(dx11_renderer->compute_shaders[handle].input_buffer);
     DM_DX11_RELEASE(dx11_renderer->compute_shaders[handle].shader);
 }
 
-bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_renderer* renderer)
+bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_buffer_type type, dm_compute_handle* handle, dm_renderer* renderer)
 {
+    DM_DX11_GET_RENDERER;
+    
+    HRESULT hr;
+    
+    dm_dx11_compute_buffer internal_buffer = { 0 };
+    
+    D3D11_BUFFER_DESC b_desc = { 0 };
+    
+    b_desc.ByteWidth           = data_size;
+    b_desc.BindFlags           = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+    b_desc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+    b_desc.StructureByteStride = elem_size;
+    
+    if(type==DM_COMPUTE_BUFFER_TYPE_OUTPUT)
+    {
+        b_desc.Usage          = D3D11_USAGE_DYNAMIC;
+        b_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+    }
+    
+    hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &internal_buffer.buffer);
+    if(hr!=S_OK) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
+    
+    switch(type)
+    {
+        case DM_COMPUTE_BUFFER_TYPE_INPUT:
+        {
+            D3D11_SHADER_RESOURCE_VIEW_DESC desc_view = { 0 };
+            desc_view.ViewDimension         = D3D11_SRV_DIMENSION_BUFFEREX;
+            desc_view.Format                = DXGI_FORMAT_UNKNOWN;
+            desc_view.BufferEx.NumElements  = data_size / elem_size;
+            
+            hr = ID3D11Device_CreateShaderResourceView(dx11_renderer->device, (ID3D11Resource*)internal_buffer.buffer, &desc_view, &internal_buffer.resource_view);
+            if(hr!=S_OK) { DM_LOG_FATAL("Could not create DX11 compute buffer shader view"); return false; }
+        } break;
+        
+        case DM_COMPUTE_BUFFER_TYPE_OUTPUT:
+        {
+            D3D11_UNORDERED_ACCESS_VIEW_DESC desc_view = { 0 };
+            desc_view.ViewDimension        = D3D11_UAV_DIMENSION_BUFFER;
+            desc_view.Format               = DXGI_FORMAT_UNKNOWN;
+            desc_view.Buffer.NumElements   = data_size / elem_size;
+            
+            hr = ID3D11Device_CreateUnorderedAccessView(dx11_renderer->device, (ID3D11Resource*)internal_buffer.buffer, &desc_view, &internal_buffer.access_view);
+            if(hr!=S_OK) { DM_LOG_FATAL("Could not create DX11 compute buffer shader view"); return false; }
+        } break;
+        
+        default:
+        DM_LOG_FATAL("Unknown compute buffer type");
+        return false;
+    }
+    
+    internal_buffer.type = type;
+    
+    dm_memcpy(dx11_renderer->compute_buffers + dx11_renderer->compute_buffer_count, &internal_buffer, sizeof(internal_buffer));
+    dx11_renderer->compute_buffer_count++;
+    
     return true;
 }
 
 bool dm_compute_backend_create_uniform(size_t data_size, dm_compute_handle* handle, dm_renderer* renderer)
-{
-    return true;
-}
-
-bool dm_compute_backend_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_renderer* renderer)
-{
-    return true;
-}
-
-bool dm_compute_backend_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer)
-{
-    return true;
-}
-
-void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_renderer* renderer)
-{
-    return NULL;
-}
-
-bool dm_compute_backend_command_bind_shader(dm_compute_handle handle, dm_renderer* renderer)
-{
-    return true;
-}
-
-bool dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps,dm_renderer* renderer)
 {
     return true;
 }
@@ -1563,6 +1590,92 @@ void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t right, 
     scissor.bottom = bottom;
     
     ID3D11DeviceContext_RSSetScissorRects(context, 1, &scissor);
+}
+
+
+bool dm_compute_backend_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    if(handle > dx11_renderer->compute_buffer_count) { DM_LOG_FATAL("Trying to bind invalid DX11 compute buffer"); return false; }
+    
+    dm_dx11_compute_buffer* internal_buffer = &dx11_renderer->compute_buffers[handle];
+    
+    switch(internal_buffer->type)
+    {
+        case DM_COMPUTE_BUFFER_TYPE_INPUT:
+        ID3D11DeviceContext_CSSetShaderResources(dx11_renderer->context, slot, 1, &internal_buffer->resource_view);
+        break;
+        
+        case DM_COMPUTE_BUFFER_TYPE_OUTPUT:
+        ID3D11DeviceContext_CSSetUnorderedAccessViews(dx11_renderer->context, slot, 1, &internal_buffer->access_view, NULL);
+        break;
+        
+        default:
+        DM_LOG_FATAL("Unknown compute buffer type! Shouldn't be here...");
+        return false;
+    }
+    
+    return true;
+}
+
+bool dm_compute_backend_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    if(handle > dx11_renderer->compute_buffer_count) { DM_LOG_FATAL("Trying to bind invalid DX11 compute buffer"); return false; }
+    
+    dm_dx11_compute_buffer* internal_buffer = &dx11_renderer->compute_buffers[handle];
+    
+    //return dm_dx11_update_resource(internal_buffer->buffer, data, data_size, dx11_renderer);
+    ID3D11DeviceContext_UpdateSubresource(dx11_renderer->context, (ID3D11Resource*)internal_buffer->buffer, 0, NULL, data, 0, 0);
+    
+    return true;
+}
+
+void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    HRESULT hr;
+    
+    if(handle > dx11_renderer->compute_buffer_count) { DM_LOG_FATAL("Trying to bind invalid DX11 compute buffer"); return false; }
+    
+    dm_dx11_compute_buffer* internal_buffer = &dx11_renderer->compute_buffers[handle];
+    
+    D3D11_MAPPED_SUBRESOURCE msr;
+    ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
+    
+    hr = ID3D11DeviceContext_Map(dx11_renderer->context, (ID3D11Resource*)internal_buffer->buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11DeviceContext_Map failed!"); return false; }
+    
+    void* result = msr.pData;
+    
+    ID3D11DeviceContext_Unmap(dx11_renderer->context, (ID3D11Resource*)internal_buffer->buffer, 0);
+    
+    return result;
+}
+
+bool dm_compute_backend_command_bind_shader(dm_compute_handle handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    if(handle > dx11_renderer->compute_count) { DM_LOG_FATAL("Trying to bind invalid DX11 compute shader"); return false; }
+    
+    dm_dx11_compute_shader* internal_shader = &dx11_renderer->compute_shaders[handle];
+    
+    ID3D11DeviceContext_CSSetShader(dx11_renderer->context, internal_shader->shader, NULL, 0);
+    
+    return true;
+}
+
+bool dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps,dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    ID3D11DeviceContext_Dispatch(dx11_renderer->context, x_size, y_size, z_size);
+    
+    return true;
 }
 
 /*****************

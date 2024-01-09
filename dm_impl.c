@@ -519,7 +519,7 @@ void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* 
 {
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSE_MOVE;
-
+    
     e->coords[0] = mouse_x;
     e->coords[1] = mouse_y;
 }
@@ -631,7 +631,7 @@ extern void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t 
 
 // compute
 extern bool  dm_compute_backend_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
-extern bool  dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_renderer* renderer);
+extern bool  dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_buffer_type type, dm_compute_handle* handle, dm_renderer* renderer);
 extern bool  dm_compute_backend_create_uniform(size_t data_size, dm_compute_handle* handle, dm_renderer* renderer);
 
 extern bool  dm_compute_backend_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_renderer* renderer);
@@ -714,9 +714,9 @@ bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, size_
     return dm_renderer_create_buffer(desc, data, handle, context);
 }
 
-bool dm_compute_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_context* context)
+bool dm_compute_create_buffer(size_t data_size, size_t elem_size, dm_compute_buffer_type type, dm_compute_handle* handle, dm_context* context)
 {
-    if(dm_compute_backend_create_buffer(data_size, elem_size, handle, &context->renderer)) return true;
+    if(dm_compute_backend_create_buffer(data_size, elem_size, type, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Could not create compute buffer");
     return false;

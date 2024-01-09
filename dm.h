@@ -502,7 +502,7 @@ RENDERING
 #define DM_DEFAULT_MAX_FPS 60.0f
 
 // render enums
-typedef enum dm_buffer_type
+typedef enum dm_buffer_type_t
 {
 	DM_BUFFER_TYPE_VERTEX,
 	DM_BUFFER_TYPE_INDEX,
@@ -510,7 +510,7 @@ typedef enum dm_buffer_type
     DM_BUFFER_TYPE_UNKNOWN
 } dm_buffer_type;
 
-typedef enum dm_buffer_usage
+typedef enum dm_buffer_usage_t
 {
     DM_BUFFER_USAGE_DEFAULT,
     DM_BUFFER_USAGE_STATIC,
@@ -518,11 +518,18 @@ typedef enum dm_buffer_usage
     DM_BUFFER_USAGE_UNKNOWN
 } dm_buffer_usage;
 
-typedef enum dm_buffer_cpu_access
+typedef enum dm_buffer_cpu_access_t
 {
     DM_BUFFER_CPU_WRITE,
     DM_BUFFER_CPU_READ
 } dm_buffer_cpu_access;
+
+typedef enum dm_compute_buffer_type_t
+{
+    DM_COMPUTE_BUFFER_TYPE_INPUT,
+    DM_COMPUTE_BUFFER_TYPE_OUTPUT,
+    DM_COMPUTE_BUFFER_TYPE_UNKNOWN
+} dm_compute_buffer_type;
 
 typedef enum dm_shader_type_t
 {
@@ -1278,7 +1285,7 @@ void dm_render_command_map_callback(dm_render_handle handle, void (*callback)(dm
 
 // compute commands
 bool dm_compute_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_context* context);
-bool dm_compute_create_buffer(size_t data_size, size_t elem_size, dm_compute_handle* handle, dm_context* context);
+bool dm_compute_create_buffer(size_t data_size, size_t elem_size, dm_compute_buffer_type type, dm_compute_handle* handle, dm_context* context);
 bool dm_compute_create_uniform(size_t data_size, dm_compute_handle* handle, dm_context* context);
 
 bool  dm_compute_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_context* context);
