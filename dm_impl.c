@@ -638,7 +638,7 @@ extern bool  dm_compute_backend_command_bind_buffer(dm_compute_handle handle, ui
 extern bool  dm_compute_backend_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
 extern void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_renderer* renderer);
 extern bool  dm_compute_backend_command_bind_shader(dm_compute_handle handle, dm_renderer* renderer);
-extern bool  dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps,dm_renderer* renderer);
+extern bool  dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps, dm_renderer* renderer);
 
 // renderer
 bool dm_renderer_init(dm_context* context)
@@ -2045,10 +2045,9 @@ dm_context* dm_init(dm_context_init_packet init_packet)
         return NULL;
     }
     
-    context->renderer.width = init_packet.window_width;
+    context->renderer.width  = init_packet.window_width;
     context->renderer.height = init_packet.window_height;
-    
-    context->renderer.vsync = true;
+    context->renderer.vsync  = init_packet.vsync;
     
     // ecs
     dm_ecs_init(context);
@@ -2383,6 +2382,8 @@ int main(int argc, char** argv)
     
     if(!dm_application_init(context)) 
     {
+        DM_LOG_FATAL("Application update failed");
+        
         dm_shutdown(context);
         getchar();
         return DM_EXIT_CODE_INIT_FAIL;
@@ -2394,13 +2395,22 @@ int main(int argc, char** argv)
         
         // updating
         if(!dm_update_begin(context)) break;
-        if(!dm_application_update(context)) break;
+        if(!dm_application_update(context))
+        {
+            DM_LOG_FATAL("Application update failed");
+            break;
+        }
         if(!dm_update_end(context)) break;
         
         // rendering
         if(dm_renderer_begin_frame(context))
         {
-            if(!dm_application_render(context)) break;
+            if(!dm_application_render(context))
+            {
+                DM_LOG_FATAL("Application render failed");
+                
+                break;
+            }
             if(!dm_renderer_end_frame(context)) break;
         }
         

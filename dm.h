@@ -1097,6 +1097,7 @@ typedef struct dm_context_init_packet_t
     uint32_t window_width, window_height;
     char     window_title[512];
     char     asset_folder[512];
+    bool     vsync;
 } dm_context_init_packet;
 
 typedef struct dm_context_t
