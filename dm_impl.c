@@ -1174,8 +1174,9 @@ bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* 
     }
     
     // get indices
-    *indices = dm_alloc(primitive.indices->buffer_view->size);
-    dm_memcpy(*indices, (char*)primitive.indices->buffer_view->buffer->data + primitive.indices->buffer_view->offset, primitive.indices->buffer_view->size);
+    size_t indices_size = primitive.indices->buffer_view->size;
+    *indices = dm_alloc(indices_size);
+    dm_memcpy(*indices, (char*)primitive.indices->buffer_view->buffer->data + primitive.indices->buffer_view->offset, indices_size);
     
     *vertex_count = count;
     *index_count = primitive.indices->buffer_view->size / sizeof(uint16_t);
@@ -2382,7 +2383,7 @@ int main(int argc, char** argv)
     
     if(!dm_application_init(context)) 
     {
-        DM_LOG_FATAL("Application update failed");
+        DM_LOG_FATAL("Application init failed");
         
         dm_shutdown(context);
         getchar();
