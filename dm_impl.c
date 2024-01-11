@@ -20,6 +20,8 @@
 #define CGLTF_IMPLEMENTATION
 #include "cgltf/cgltf.h"
 
+//#define DM_MATH_TESTS
+
 /*********
 BYTE POOL
 ***********/
