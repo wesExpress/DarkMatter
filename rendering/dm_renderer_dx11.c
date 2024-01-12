@@ -1696,7 +1696,28 @@ bool dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint3
 {
     DM_DX11_GET_RENDERER;
     
+    HRESULT hr;
+    
+    ID3D11Query* p_query;
+    
+    D3D11_QUERY_DESC p_desc = { 0 };
+    p_desc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+    
+    hr = ID3D11Device_CreateQuery(dx11_renderer->device, &p_desc, &p_query);
+    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateQuery failed"); return false; }
+    
+    ID3D11DeviceContext_Begin(dx11_renderer->context, (ID3D11Asynchronous*)p_query);
     ID3D11DeviceContext_Dispatch(dx11_renderer->context, x_size, y_size, z_size);
+    ID3D11DeviceContext_End(dx11_renderer->context, (ID3D11Asynchronous*)p_query);
+    
+    float t=0;
+    
+    while(true)
+    {
+        hr = ID3D11DeviceContext_GetData(dx11_renderer->context, (ID3D11Asynchronous*)p_query, &t,sizeof(t),0);
+        
+        break;
+    }
     
     return true;
 }
