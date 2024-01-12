@@ -1020,7 +1020,7 @@ void dm_mat_scale(const dm_mat4 mat, const dm_vec3 scale, dm_mat4 out)
     dm_vec3_scale(mat[0], scale[0], out[0]);
     dm_vec3_scale(mat[1], scale[1], out[1]);
     dm_vec3_scale(mat[2], scale[2], out[2]);
-    dm_memcpy(out[3], mat[3], sizeof(float) * 3);
+    dm_memcpy(out[3], mat[3], sizeof(float) * 4);
 }
 
 DM_INLINE
@@ -1052,9 +1052,23 @@ void dm_mat_translate_make(const dm_vec3 translation, dm_mat4 out)
 DM_INLINE
 void dm_mat_translate(const dm_mat4 mat, const dm_vec3 translation, dm_mat4 out)
 {
-    out[3][0] += translation[0];
-    out[3][1] += translation[1];
-    out[3][2] += translation[2];
+#if 0
+    out[3][0] = dm_vec3_add_scalar(mat[0], translation[0]);
+    out[3][1] = translation[1];
+    out[3][2] = translation[2];
+#else
+    dm_memcpy(out, mat, sizeof(dm_mat4));
+    
+    dm_vec3 d;
+    dm_vec3_scale(mat[0], translation[0], d);
+    dm_vec3_add_vec3(out[3], d, out[3]);
+    
+    dm_vec3_scale(mat[1], translation[1], d);
+    dm_vec3_add_vec3(out[3], d, out[3]);
+    
+    dm_vec3_scale(mat[2], translation[2], d);
+    dm_vec3_add_vec3(out[3], d, out[3]);
+#endif
 }
 
 DM_INLINE
