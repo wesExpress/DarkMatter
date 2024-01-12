@@ -277,7 +277,7 @@ void dm_vec3_refract(const dm_vec3 vec, const dm_vec3 n, const float e, dm_vec3 
 #else
     float vec_length = dm_vec3_mag(vec);
     float c = -dm_vec3_dot(vec, n) / vec_length;
-
+    
     float aux = vec_length * (e * c - dm_sqrtf(1 - e * e * (1 - c * c)));
     dm_vec3 nv, nn;
     dm_vec3_scale(vec, e, nv);
@@ -780,32 +780,25 @@ void dm_mat4_transpose(const dm_mat4 mat, dm_mat4 out)
 DM_INLINE
 void dm_mat4_mul_mat4(const dm_mat4 left, const dm_mat4 right, dm_mat4 out)
 {
-    dm_mat4 right_t;
-    dm_mat4_transpose(right, right_t);
+    out[0][0] = left[0][0] * right[0][0] + left[0][1] * right[1][0] + left[0][2] * right[2][0] + left[0][3] * right[3][0];
+    out[0][1] = left[0][0] * right[0][1] + left[0][1] * right[1][1] + left[0][2] * right[2][1] + left[0][3] * right[3][1];
+    out[0][2] = left[0][0] * right[0][2] + left[0][1] * right[1][2] + left[0][2] * right[2][2] + left[0][3] * right[3][2];
+    out[0][3] = left[0][0] * right[0][3] + left[0][1] * right[1][3] + left[0][2] * right[2][3] + left[0][3] * right[3][3];
     
-    dm_simd_float row_1, row_2, row_3, row_4;
-    dm_simd_float left_r, right_r;
+    out[1][0] = left[1][0] * right[0][0] + left[1][1] * right[1][0] + left[1][2] * right[2][0] + left[1][3] * right[3][0];
+    out[1][1] = left[1][0] * right[0][1] + left[1][1] * right[1][1] + left[1][2] * right[2][1] + left[1][3] * right[3][1];
+    out[1][2] = left[1][0] * right[0][2] + left[1][1] * right[1][2] + left[1][2] * right[2][2] + left[1][3] * right[3][2];
+    out[1][3] = left[1][0] * right[0][3] + left[1][1] * right[1][3] + left[1][2] * right[2][3] + left[1][3] * right[3][3];
     
-    left_r  = dm_simd_load_float(left[0]);
-    right_r = dm_simd_load_float(right_t[0]);
-    row_1   = dm_simd_mul_float(left_r, right_r);
+    out[2][0] = left[2][0] * right[0][0] + left[2][1] * right[1][0] + left[2][2] * right[2][0] + left[2][3] * right[3][0];
+    out[2][1] = left[2][0] * right[0][1] + left[2][1] * right[1][1] + left[2][2] * right[2][1] + left[2][3] * right[3][1];
+    out[2][2] = left[2][0] * right[0][2] + left[2][1] * right[1][2] + left[2][2] * right[2][2] + left[2][3] * right[3][2];
+    out[2][3] = left[2][0] * right[0][3] + left[2][1] * right[1][3] + left[2][2] * right[2][3] + left[2][3] * right[3][3];
     
-    left_r  = dm_simd_load_float(left[1]);
-    right_r = dm_simd_load_float(right_t[1]);
-    row_2   = dm_simd_mul_float(left_r, right_r);
-    
-    left_r  = dm_simd_load_float(left[2]);
-    right_r = dm_simd_load_float(right_t[2]);
-    row_3   = dm_simd_mul_float(left_r, right_r);
-    
-    left_r  = dm_simd_load_float(left[3]);
-    right_r = dm_simd_load_float(right_t[3]);
-    row_4   = dm_simd_mul_float(left_r, right_r);
-    
-    dm_simd_store_float(out[0], row_1);
-    dm_simd_store_float(out[1], row_2);
-    dm_simd_store_float(out[2], row_3);
-    dm_simd_store_float(out[3], row_4);
+    out[3][0] = left[3][0] * right[0][0] + left[3][1] * right[1][0] + left[3][2] * right[2][0] + left[3][3] * right[3][0];
+    out[3][1] = left[3][0] * right[0][1] + left[3][1] * right[1][1] + left[3][2] * right[2][1] + left[3][3] * right[3][1];
+    out[3][2] = left[3][0] * right[0][2] + left[3][1] * right[1][2] + left[3][2] * right[2][2] + left[3][3] * right[3][2];
+    out[3][3] = left[3][0] * right[0][3] + left[3][1] * right[1][3] + left[3][2] * right[2][3] + left[3][3] * right[3][3];
 }
 
 DM_INLINE

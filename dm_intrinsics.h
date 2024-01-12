@@ -219,7 +219,7 @@ DM_INLINE
 float dm_simd_dot_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
-    dm_simd_float dp = _mm_dp_ps(left,right, 0x7F);
+    dm_simd_float dp = _mm_dp_ps(left,right, 0xFF);
     return dm_simd_extract_float(dp);
 #elif defined(DM_SIMD_ARM)
     dm_simd_float v = dm_simd_mul_float(left, right);

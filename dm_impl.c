@@ -2470,9 +2470,14 @@ void dm_vec4_tests()
     const dm_vec4 v3 = { 0.1f,0.1f,0.1f,0.1f };
     const dm_vec4 v4 = { -0.1f,-0.1f,-0.1f,-0.1f };
     
-    DM_MATH_ASSERT(dm_vec4_dot(v1,v2)==8, "Vec4 dot product failed");
-    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(dm_vec4_dot(v2,v3),0.8f), "Vec4 dot product failed");
-    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(dm_vec4_dot(v3,v4),-0.04f), "Vec4 dot product failed");
+    float t = dm_vec4_dot(v1,v2);
+    DM_MATH_ASSERT(t==8, "Vec4 dot product failed");
+    
+    t = dm_vec4_dot(v2,v3);
+    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(t,0.8f), "Vec4 dot product failed");
+    
+    t = dm_vec4_dot(v3,v4);
+    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(t,-0.04f), "Vec4 dot product failed");
     
     dm_vec4 result;
     dm_vec4_sub_vec4(v1,v2, result);

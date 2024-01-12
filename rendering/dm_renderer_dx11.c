@@ -710,7 +710,7 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
     
     ID3DBlob* blob;
     hr = D3DReadFileToBlob(ws, &blob); 
-    if(hr!=S_OK) { DM_LOG_FATAL("D3DReadFileToBlob failed!"); return false; }
+    if(hr!=S_OK) { DM_LOG_FATAL("D3DReadFileToBlob failed! (vertex shader)"); return false; }
     
     hr = ID3D11Device_CreateVertexShader(device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &internal_shader.vertex_shader);
     if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateVertexShader failed!"); return false; }
@@ -759,7 +759,7 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
     swprintf(ws, 100, L"%hs", shader_desc.pixel);
     
     hr = D3DReadFileToBlob(ws, &blob);
-    if(hr!=S_OK) { DM_LOG_FATAL("D3DReadFileToBlob failed!"); return false; }
+    if(hr!=S_OK) { DM_LOG_FATAL("D3DReadFileToBlob failed! (fragment shader)"); return false; }
     
     hr = ID3D11Device_CreatePixelShader(device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &internal_shader.pixel_shader);
     if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreatePixelShader failed!"); return false; }
