@@ -1239,6 +1239,8 @@ float dm_random_float_range(float start, float end,dm_context* context);
 double dm_random_double(dm_context* context);
 double dm_random_double_range(double start, double end, dm_context* context);
 
+float dm_random_float_normal(float mu, float sigma, dm_context* context);
+
 // rendering
 bool dm_renderer_create_static_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_dynamic_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context);

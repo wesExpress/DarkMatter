@@ -295,6 +295,20 @@ float dm_random_float(dm_context* context)
     return genrand_float32_full(&context->random);
 }
 
+#define DM_NORMAL_ITERS 5
+float dm_random_float_normal(float mu, float sigma, dm_context* context)
+{
+    const float u1 = dm_random_float(context);
+    const float u2 = dm_random_float(context);
+     
+    const float mag = sigma * dm_sqrtf(-2.0 * dm_logf(u1));
+    const float z0  = mag * dm_cos(DM_MATH_2PI * u2) + mu;
+    const float z1  = mag * dm_sin(DM_MATH_2PI * u2) + mu;
+    
+    return dm_random_float(context) > 0.5f ? z0 : z1;
+}
+
+
 float dm_random_float_range(float start, float end, dm_context* context)
 {
     float range = end - start;

@@ -1163,11 +1163,11 @@ void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num
     switch(index_buffer->elem_size)
     {
         case 2:
-            [metal_renderer->command_encoder drawIndexedPrimitives:metal_renderer->active_primitive indexCount:num_indices indexType:MTLIndexTypeUInt16 indexBuffer:index_buffer->buffer indexBufferOffset:index_offset*index_buffer->elem_size];
+            [metal_renderer->command_encoder drawIndexedPrimitives:metal_renderer->active_primitive indexCount:num_indices indexType:MTLIndexTypeUInt16 indexBuffer:index_buffer->buffer indexBufferOffset:index_offset*index_buffer->elem_size instanceCount:num_insts];
             break;
             
         case 4:
-            [metal_renderer->command_encoder drawIndexedPrimitives:metal_renderer->active_primitive indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:index_buffer->buffer indexBufferOffset:index_offset*index_buffer->elem_size];
+            [metal_renderer->command_encoder drawIndexedPrimitives:metal_renderer->active_primitive indexCount:num_indices indexType:MTLIndexTypeUInt32 indexBuffer:index_buffer->buffer indexBufferOffset:index_offset*index_buffer->elem_size instanceCount:num_insts];
             break;
     }
 }
