@@ -671,4 +671,9 @@ uint32_t dm_get_available_processor_count(dm_context* context)
     return [[NSProcessInfo processInfo] processorCount];
 }
 
+void dm_platform_sleep(float ms, dm_context* context)
+{
+    sleep((uint32_t)ms / 1000);
+}
+
 #endif
