@@ -133,7 +133,7 @@ double dm_platform_get_time(dm_platform_data* platform_data)
 	return time.QuadPart * w32_data->clock_freq;
 }
 
-void dm_platform_sleep(uint64_t t)
+void dm_platform_sleep(uint64_t t, dm_context* context)
 {
     Sleep(t);
 }

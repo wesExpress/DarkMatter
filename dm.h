@@ -1242,7 +1242,7 @@ double dm_random_double_range(double start, double end, dm_context* context);
 float dm_random_float_normal(float mu, float sigma, dm_context* context);
 
 // platform
-void dm_platform_sleep(float ms, dm_context* context);
+void dm_platform_sleep(uint64_t ms, dm_context* context);
 
 // rendering
 bool dm_renderer_create_static_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context);
