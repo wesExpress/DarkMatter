@@ -1250,16 +1250,16 @@ bool dm_compute_backend_command_bind_shader(dm_compute_handle handle, dm_rendere
     return true;
 }
 
-bool dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps, dm_renderer* renderer)
+bool dm_compute_backend_command_dispatch(uint32_t threads_per_group_x, uint32_t threads_per_group_y, uint32_t threads_per_group_z, uint32_t thread_group_count_x, uint32_t thread_group_count_y, uint32_t thread_group_count_z, dm_renderer* renderer)
 {
     DM_METAL_GET_RENDERER;
     
     NSInteger max_grp = metal_renderer->compute_shaders[metal_renderer->active_compute_shader].compute_pipeline.maxTotalThreadsPerThreadgroup;
     
-    MTLSize grid_size = MTLSizeMake(x_size, y_size, z_size);
-    MTLSize group_size = MTLSizeMake(x_thread_grps, y_thread_grps, z_thread_grps);
+    MTLSize grid_size  = MTLSizeMake(threads_per_group_x, threads_per_group_y, threads_per_group_z);
+    MTLSize group_size = MTLSizeMake(thread_group_count_x, thread_group_count_y, thread_group_count_z);
     
-    [metal_renderer->compute_command_encoder dispatchThreads:grid_size threadsPerThreadgroup:group_size];
+    [metal_renderer->compute_command_encoder dispatchThreadgroups:grid_size threadsPerThreadgroup:group_size];
     
     [metal_renderer->compute_command_encoder endEncoding];
     [metal_renderer->compute_command_buffer commit];

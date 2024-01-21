@@ -654,7 +654,7 @@ extern bool  dm_compute_backend_command_bind_buffer(dm_compute_handle handle, ui
 extern bool  dm_compute_backend_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
 extern void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_renderer* renderer);
 extern bool  dm_compute_backend_command_bind_shader(dm_compute_handle handle, dm_renderer* renderer);
-extern bool  dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps, dm_renderer* renderer);
+extern bool  dm_compute_backend_command_dispatch(uint32_t threads_per_group_x, uint32_t threads_per_group_y, uint32_t threads_per_group_z, uint32_t thread_group_count_x, uint32_t thread_group_count_y, uint32_t thread_group_count_z, dm_renderer* renderer);
 
 // renderer
 bool dm_renderer_init(dm_context* context)
@@ -918,9 +918,9 @@ bool dm_compute_command_bind_shader(dm_compute_handle handle, dm_context* contex
     return false;
 }
 
-bool dm_compute_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps, dm_context* context)
+bool dm_compute_command_dispatch(uint32_t threads_per_group_x, uint32_t threads_per_group_y, uint32_t threads_per_group_z, uint32_t thread_group_count_x, uint32_t thread_group_count_y, uint32_t thread_group_count_z, dm_context* context)
 {
-    if(dm_compute_backend_command_dispatch(x_size, y_size, z_size, x_thread_grps, y_thread_grps, z_thread_grps, &context->renderer)) return true;
+    if(dm_compute_backend_command_dispatch(threads_per_group_x, threads_per_group_y, threads_per_group_z, thread_group_count_x, thread_group_count_y, thread_group_count_z, &context->renderer)) return true;
     
     DM_LOG_FATAL("Compute dispatch failed");
     return false;

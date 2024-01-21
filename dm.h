@@ -1284,7 +1284,7 @@ bool  dm_compute_command_bind_buffer(dm_compute_handle handle, uint32_t offset, 
 bool  dm_compute_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
 void* dm_compute_command_get_buffer_data(dm_compute_handle handle, dm_context* context);
 bool  dm_compute_command_bind_shader(dm_compute_handle handle, dm_context* context);
-bool  dm_compute_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps, dm_context* context);
+bool  dm_compute_command_dispatch(uint32_t threads_per_group_x, uint32_t threads_per_group_y, uint32_t threads_per_group_z, uint32_t thread_group_count_x, uint32_t thread_group_count_y, uint32_t thread_group_count_z, dm_context* context);
 
 // ecs
 dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);

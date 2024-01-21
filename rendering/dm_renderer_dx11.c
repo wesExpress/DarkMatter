@@ -1676,7 +1676,7 @@ bool dm_compute_backend_command_bind_shader(dm_compute_handle handle, dm_rendere
     return true;
 }
 
-bool dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint32_t z_size, uint32_t x_thread_grps, uint32_t y_thread_grps, uint32_t z_thread_grps,dm_renderer* renderer)
+bool dm_compute_backend_command_dispatch(uint32_t threads_per_group_x, uint32_t threads_per_group_y, uint32_t threads_per_group_z, uint32_t thread_group_count_x, uint32_t thread_group_count_y, uint32_t thread_group_count_z, dm_renderer* renderer)
 {
     DM_DX11_GET_RENDERER;
     
@@ -1702,7 +1702,7 @@ bool dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint3
     ID3D11DeviceContext_Begin(dx11_renderer->context, (ID3D11Asynchronous*)p_query);
     ID3D11DeviceContext_End(dx11_renderer->context, (ID3D11Asynchronous*)q_start);
     
-    ID3D11DeviceContext_Dispatch(dx11_renderer->context, x_size, y_size, z_size);
+    ID3D11DeviceContext_Dispatch(dx11_renderer->context, thread_group_count_x, thread_group_count_y, thread_group_count_z);
     
     ID3D11DeviceContext_End(dx11_renderer->context, (ID3D11Asynchronous*)q_end);
     ID3D11DeviceContext_End(dx11_renderer->context, (ID3D11Asynchronous*)p_query);
