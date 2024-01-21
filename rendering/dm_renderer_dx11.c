@@ -18,6 +18,7 @@ const char* dm_dx11_decode_severity(D3D11_MESSAGE_SEVERITY severity);
 /*********************
  DX11 ENUM CONVERSIONS
 ***********************/
+DM_INLINE
 D3D11_USAGE dm_buffer_usage_to_dx11(dm_buffer_usage usage)
 {
 	switch (usage)
@@ -32,6 +33,7 @@ D3D11_USAGE dm_buffer_usage_to_dx11(dm_buffer_usage usage)
 	}
 }
 
+DM_INLINE
 D3D11_BIND_FLAG dm_buffer_type_to_dx11(dm_buffer_type type)
 {
 	switch (type)
@@ -45,6 +47,7 @@ D3D11_BIND_FLAG dm_buffer_type_to_dx11(dm_buffer_type type)
 	}
 }
 
+DM_INLINE
 D3D11_CPU_ACCESS_FLAG dm_buffer_cpu_access_to_dx11(dm_buffer_cpu_access access)
 {
 	switch (access)
@@ -58,6 +61,7 @@ D3D11_CPU_ACCESS_FLAG dm_buffer_cpu_access_to_dx11(dm_buffer_cpu_access access)
 	}
 }
 
+DM_INLINE
 DXGI_FORMAT dm_vertex_t_to_dx11_format(dm_vertex_attrib_desc desc)
 {
 	switch (desc.data_t)
@@ -151,6 +155,7 @@ DXGI_FORMAT dm_vertex_t_to_dx11_format(dm_vertex_attrib_desc desc)
 	}
 }
 
+DM_INLINE
 D3D11_INPUT_CLASSIFICATION dm_vertex_class_to_dx11_class(dm_vertex_attrib_class dm_class)
 {
 	switch (dm_class)
@@ -164,6 +169,7 @@ D3D11_INPUT_CLASSIFICATION dm_vertex_class_to_dx11_class(dm_vertex_attrib_class 
 	}
 }
 
+DM_INLINE
 D3D11_CULL_MODE dm_cull_to_dx11_cull(dm_cull_mode dm_mode)
 {
 	switch (dm_mode)
@@ -179,6 +185,7 @@ D3D11_CULL_MODE dm_cull_to_dx11_cull(dm_cull_mode dm_mode)
 	}
 }
 
+DM_INLINE
 D3D11_PRIMITIVE_TOPOLOGY dm_toplogy_to_dx11_topology(dm_primitive_topology dm_top)
 {
 	switch (dm_top)
@@ -195,7 +202,8 @@ D3D11_PRIMITIVE_TOPOLOGY dm_toplogy_to_dx11_topology(dm_primitive_topology dm_to
 	}
 }
 
-dm_comp_to_directx_comp(dm_comparison dm_comp)
+DM_INLINE
+D3D11_COMPARISON_FUNC dm_comp_to_directx_comp(dm_comparison dm_comp)
 {
 	switch (dm_comp)
 	{
@@ -214,21 +222,7 @@ dm_comp_to_directx_comp(dm_comparison dm_comp)
 	}
 }
 
-/*
-DXGI_FORMAT dm_image_fmt_to_directx_fmt(dm_texture_format dm_fmt)
-{
-	switch (dm_fmt)
-	{
-        case DM_TEXTURE_FORMAT_RGB: 
-        case DM_TEXTURE_FORMAT_RGBA: return DXGI_FORMAT_R8G8B8A8_UNORM;
-        
-        default:
-		DM_LOG_FATAL("Unknown texture format!");
-		return DXGI_FORMAT_UNKNOWN;
-	}
-}
-*/
-
+DM_INLINE
 D3D11_FILTER dm_image_filter_to_dx11_filter(dm_filter filter)
 {
 	switch (filter)
@@ -242,6 +236,7 @@ D3D11_FILTER dm_image_filter_to_dx11_filter(dm_filter filter)
 	}
 }
 
+DM_INLINE
 D3D11_TEXTURE_ADDRESS_MODE dm_texture_mode_to_dx11_mode(dm_texture_mode dm_mode)
 {
 	switch (dm_mode)
@@ -258,6 +253,7 @@ D3D11_TEXTURE_ADDRESS_MODE dm_texture_mode_to_dx11_mode(dm_texture_mode dm_mode)
 	}
 }
 
+DM_INLINE
 D3D11_BLEND dm_blend_func_to_dx11_func(dm_blend_func func)
 {
     switch(func)
@@ -283,6 +279,7 @@ D3D11_BLEND dm_blend_func_to_dx11_func(dm_blend_func func)
     }
 }
 
+DM_INLINE
 D3D11_BLEND_OP dm_blend_eq_to_dx11_op(dm_blend_equation eq)
 {
     switch(eq)
@@ -338,7 +335,7 @@ bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_rende
     {
         hr = ID3D11Device_CreateBuffer(device, &buffer_desc, 0, &internal_buffer.buffer);
     }
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateBuffer failed"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateBuffer failed"); return false; }
     
     internal_buffer.type = type;
     internal_buffer.stride = desc.elem_size;
@@ -375,7 +372,7 @@ bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_
     
     dm_dx11_buffer internal_uniform = { 0 };
     hr = ID3D11Device_CreateBuffer(device, &uni_desc, 0, &internal_uniform.buffer);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateBuffer failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateBuffer failed!"); return false; }
     
     dm_memcpy(dx11_renderer->buffers + dx11_renderer->buffer_count, &internal_uniform, sizeof(dm_dx11_buffer));
     *handle = dx11_renderer->buffer_count++;
@@ -417,9 +414,7 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
     D3D11_SUBRESOURCE_DATA init_data = { data, sizeof(uint32_t) * width, 0 };
     
 	hr = ID3D11Device_CreateTexture2D(dx11_renderer->device, &tex_desc, &init_data, &internal_texture.texture);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
-    
-	//dx11_renderer->context->lpVtbl->UpdateSubresource(dx11_renderer->context, (ID3D11Resource*)internal_texture.texture, 0, NULL, data, width * 4, 0);
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
     
     // shader resource view
 	D3D11_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
@@ -429,7 +424,7 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
     view_desc.Texture2D.MipLevels = tex_desc.MipLevels;
     
 	hr = ID3D11Device_CreateShaderResourceView(dx11_renderer->device, (ID3D11Resource*)internal_texture.texture, &view_desc, &internal_texture.view);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateShaderResourceView failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateShaderResourceView failed!"); return false; }
     
 	ID3D11DeviceContext_GenerateMips(dx11_renderer->context, internal_texture.view);
     
@@ -438,20 +433,6 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
     tex_desc.Usage = D3D11_USAGE_STAGING;
     tex_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
     tex_desc.MiscFlags = 0;
-    
-    //hr = ID3D11Device_CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture.staging);
-    //if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
-    
-    /*
-        D3D11_MAPPED_SUBRESOURCE msr;
-        ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
-        
-        DX11_ERROR_CHECK(dx11_renderer.context->lpVtbl->Map(dx11_renderer.context, (ID3D11Resource*)internal_texture.staging, 0, D3D11_MAP_WRITE, 0, &msr), "ID3D11DeviceContext::Map failed!");
-        dm_memcpy(msr.pData, data, width * height * sizeof(uint32_t));
-        dx11_renderer.context->lpVtbl->Unmap(dx11_renderer.context, (ID3D11Resource*)internal_texture.staging, 0);
-        
-        dx11_renderer.context->lpVtbl->CopyResource(dx11_renderer.context, (ID3D11Resource*)internal_texture.texture, (ID3D11Resource*)internal_texture.staging);
-        */
     
     dm_memcpy(dx11_renderer->textures + dx11_renderer->texture_count, &internal_texture, sizeof(dm_dx11_texture));
     *handle = dx11_renderer->texture_count++;
@@ -483,7 +464,7 @@ bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height,
     D3D11_SUBRESOURCE_DATA init_data = { data, sizeof(uint32_t) * width, 0 };
     
 	hr = ID3D11Device_CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture.texture);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
     
     // shader resource view
 	D3D11_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
@@ -492,7 +473,7 @@ bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height,
     view_desc.Texture2D.MipLevels = tex_desc.MipLevels;
     
 	hr = ID3D11Device_CreateShaderResourceView(dx11_renderer->device, (ID3D11Resource*)internal_texture.texture, &view_desc, &internal_texture.view);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateShaderResourceView failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateShaderResourceView failed!"); return false; }
     
 	ID3D11DeviceContext_GenerateMips(dx11_renderer->context, internal_texture.view);
     
@@ -552,7 +533,7 @@ bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle
         blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
         
         hr = ID3D11Device_CreateBlendState(device, &blend_desc, &internal_pipeline.blend_state);
-        if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateBlendState failed!"); return false; }
+        if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateBlendState failed!"); return false; }
 	}
 	
     D3D11_DEPTH_STENCIL_DESC depth_stencil_desc = { 0 };
@@ -578,7 +559,7 @@ bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle
 	if(desc.depth || desc.stencil) 
     {
         hr = ID3D11Device_CreateDepthStencilState(device, &depth_stencil_desc, &internal_pipeline.depth_stencil_state);
-        if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateDepthStencilState failed!"); return false; }
+        if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateDepthStencilState failed!"); return false; }
     }
     
     // rasterizer
@@ -622,9 +603,9 @@ bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle
     }
     
     hr = ID3D11Device_CreateRasterizerState(device, &rd, &internal_pipeline.rasterizer_state);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateRasterizerState failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateRasterizerState failed!"); return false; }
     hr = ID3D11Device_CreateRasterizerState(device, &wireframe_rd, &internal_pipeline.wireframe_state);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateRasterizerState failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateRasterizerState failed!"); return false; }
     
     // topology
     internal_pipeline.default_topology = dm_toplogy_to_dx11_topology(desc.primitive_topology);
@@ -646,7 +627,7 @@ bool dm_renderer_backend_create_pipeline(dm_pipeline_desc desc, dm_render_handle
     if (filter != D3D11_FILTER_MIN_LINEAR_MAG_MIP_POINT) sample_desc.MaxLOD = D3D11_FLOAT32_MAX;
     
     hr = ID3D11Device_CreateSamplerState(device, &sample_desc, &internal_pipeline.sample_state);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateSamplerState failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateSamplerState failed!"); return false; }
     
     dm_memcpy(dx11_renderer->pipelines + dx11_renderer->pipeline_count, &internal_pipeline, sizeof(dm_dx11_pipeline));
     *handle = dx11_renderer->pipeline_count++;
@@ -708,12 +689,13 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
     wchar_t ws[100];
     swprintf(ws, 100, L"%hs", shader_desc.vertex);
     
-    ID3DBlob* blob;
+    ID3DBlob* blob = NULL;
     hr = D3DReadFileToBlob(ws, &blob); 
-    if(hr!=S_OK) { DM_LOG_FATAL("D3DReadFileToBlob failed! (vertex shader)"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr) || !blob) { DM_LOG_FATAL("D3DReadFileToBlob failed! (vertex shader)"); return false; }
     
-    hr = ID3D11Device_CreateVertexShader(device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &internal_shader.vertex_shader);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateVertexShader failed!"); return false; }
+    
+    hr = ID3D11Device_CreateVertexShader(device, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), NULL, &internal_shader.vertex_shader);
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateVertexShader failed!"); return false; }
     
     // input layout
     D3D11_INPUT_ELEMENT_DESC* desc = dm_alloc(num_attribs * 4 * sizeof(D3D11_INPUT_ELEMENT_DESC));
@@ -750,8 +732,8 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
         }	
     }
     
-    hr = ID3D11Device_CreateInputLayout(device, desc, (UINT)count, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), &internal_shader.input_layout);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateInputLayout failed!"); return false; }
+    hr = ID3D11Device_CreateInputLayout(device, desc, (UINT)count, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), &internal_shader.input_layout);
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateInputLayout failed!"); return false; }
     
     dm_free(desc);
     
@@ -759,10 +741,10 @@ bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, 
     swprintf(ws, 100, L"%hs", shader_desc.pixel);
     
     hr = D3DReadFileToBlob(ws, &blob);
-    if(hr!=S_OK) { DM_LOG_FATAL("D3DReadFileToBlob failed! (fragment shader)"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("D3DReadFileToBlob failed! (fragment shader)"); return false; }
     
-    hr = ID3D11Device_CreatePixelShader(device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &internal_shader.pixel_shader);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreatePixelShader failed!"); return false; }
+    hr = ID3D11Device_CreatePixelShader(device, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), NULL, &internal_shader.pixel_shader);
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreatePixelShader failed!"); return false; }
     
     DM_DX11_RELEASE(blob);
     
@@ -802,29 +784,12 @@ bool dm_compute_backend_create_shader(dm_compute_shader_desc desc, dm_render_han
     ID3DBlob* blob = NULL;
     
     hr = D3DReadFileToBlob(ws, &blob);
+    if (!dm_platform_win32_decode_hresult(hr) || !blob) { DM_LOG_FATAL("D3DReadFileToBlob failed with file: %s", desc.path); return false; }
     
-    hr = ID3D11Device_CreateComputeShader(dx11_renderer->device, blob->lpVtbl->GetBufferPointer(blob), blob->lpVtbl->GetBufferSize(blob), NULL, &shader.shader);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateComputeShader failed"); return false; }
+    hr = ID3D11Device_CreateComputeShader(dx11_renderer->device, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), NULL, &shader.shader);
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateComputeShader failed"); DM_DX11_RELEASE(blob); return false; }
     
     DM_DX11_RELEASE(blob);
-    
-#if 0 
-    // input buffer
-    D3D11_BUFFER_DESC b_desc = { 0 };
-    
-    b_desc.ByteWidth           = desc.input_stride * desc.max_input_count;
-    b_desc.Usage               = D3D11_USAGE_DYNAMIC;
-    b_desc.CPUAccessFlags      = D3D11_CPU_ACCESS_WRITE;
-    b_desc.BindFlags           = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-    b_desc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
-    b_desc.StructureByteStride = desc.input_stride;
-    
-    //hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &shader.input_buffer);
-    //if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateBuffer failed"); return false; }
-    
-    // output buffer
-    dm_memzero(&b_desc, sizeof(b_desc));
-#endif
     
     // finally copy over
     dm_memcpy(dx11_renderer->compute_shaders + dx11_renderer->compute_count, &shader, sizeof(dm_dx11_compute_shader));
@@ -852,7 +817,7 @@ bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_com
     
     switch(type)
     {
-        case DM_COMPUTE_BUFFER_TYPE_INPUT:
+        case DM_COMPUTE_BUFFER_TYPE_READ_ONLY:
         {
             D3D11_BUFFER_DESC b_desc   = { 0 };
             b_desc.ByteWidth           = data_size;
@@ -863,7 +828,7 @@ bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_com
             b_desc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
             
             hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &internal_buffer.buffer);
-            if(hr!=S_OK) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
+            if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
             
             
             b_desc.Usage             = D3D11_USAGE_STAGING;
@@ -871,7 +836,7 @@ bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_com
             b_desc.BindFlags         = 0;
             
             hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &internal_buffer.output_buffer);
-            if(hr!=S_OK) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
+            if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
             
             
             D3D11_SHADER_RESOURCE_VIEW_DESC desc_view = { 0 };
@@ -880,10 +845,10 @@ bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_com
             desc_view.BufferEx.NumElements  = data_size / elem_size;
             
             hr = ID3D11Device_CreateShaderResourceView(dx11_renderer->device, (ID3D11Resource*)internal_buffer.buffer, &desc_view, &internal_buffer.resource_view);
-            if(hr!=S_OK) { DM_LOG_FATAL("Could not create DX11 compute buffer shader view"); return false; }
+            if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("Could not create DX11 compute buffer shader view"); return false; }
         } break;
         
-        case DM_COMPUTE_BUFFER_TYPE_OUTPUT:
+        case DM_COMPUTE_BUFFER_TYPE_READ_WRITE:
         {
             D3D11_BUFFER_DESC b_desc   = { 0 };
             b_desc.ByteWidth           = data_size;
@@ -893,14 +858,14 @@ bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_com
             b_desc.MiscFlags           = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
             
             hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &internal_buffer.buffer);
-            if(hr!=S_OK) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
+            if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
             
             b_desc.Usage             = D3D11_USAGE_STAGING;
             b_desc.CPUAccessFlags    = D3D11_CPU_ACCESS_READ;
             b_desc.BindFlags         = 0;
             
             hr = ID3D11Device_CreateBuffer(dx11_renderer->device, &b_desc, 0, &internal_buffer.output_buffer);
-            if(hr!=S_OK) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
+            if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("Could not DX11 create compute buffer"); return false; }
             
             
             D3D11_UNORDERED_ACCESS_VIEW_DESC desc_view = { 0 };
@@ -909,7 +874,7 @@ bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_com
             desc_view.Buffer.NumElements   = data_size / elem_size;
             
             hr = ID3D11Device_CreateUnorderedAccessView(dx11_renderer->device, (ID3D11Resource*)internal_buffer.buffer, &desc_view, &internal_buffer.access_view);
-            if(hr!=S_OK) { DM_LOG_FATAL("Could not create DX11 compute buffer shader view"); return false; }
+            if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("Could not create DX11 compute buffer shader view"); return false; }
         } break;
         
         default:
@@ -923,6 +888,19 @@ bool dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_com
     *handle = dx11_renderer->compute_buffer_count++;
     
     return true;
+}
+
+void dm_compute_backend_destroy_buffer(dm_compute_handle handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    if(handle > dx11_renderer->compute_buffer_count) { DM_LOG_ERROR("Trying to destroy invalid DX11 compute buffer"); return; }
+    
+    dm_dx11_compute_buffer* internal_buffer = &dx11_renderer->compute_buffers[handle];
+    
+    DM_DX11_RELEASE(internal_buffer->buffer);
+    DM_DX11_RELEASE(internal_buffer->output_buffer);
+    DM_DX11_RELEASE(internal_buffer->access_view);
 }
 
 bool dm_compute_backend_create_uniform(size_t data_size, dm_compute_handle* handle, dm_renderer* renderer)
@@ -957,17 +935,17 @@ bool dm_dx11_create_device(dm_dx11_renderer* dx11_renderer)
     // create the device and immediate context
     hr = D3D11CreateDevice(NULL, D3D_DRIVER_TYPE_HARDWARE, NULL, flags, NULL, 0, D3D11_SDK_VERSION,
                            &dx11_renderer->device, &feature_level, &dx11_renderer->context);
-    if(hr!=S_OK) { DM_LOG_FATAL("D3D11CreateDevice failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("D3D11CreateDevice failed!"); return false; }
     if(feature_level != D3D_FEATURE_LEVEL_11_0) { DM_LOG_FATAL("Direct3D Feature Level 11 unsupported!"); return false; }
     
     UINT msaa_quality;
     hr = ID3D11Device_CheckMultisampleQualityLevels(dx11_renderer->device, DXGI_FORMAT_R8G8B8A8_UNORM, 4, &msaa_quality);
-    if(hr!=S_OK) { DM_LOG_FATAL("D3D11Device_CheckMultisampleQualityLevels failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("D3D11Device_CheckMultisampleQualityLevels failed!"); return false; }
     
     // if in debug, create the debugger to query live objects
 #if DM_DEBUG
     hr = ID3D11Device_QueryInterface(dx11_renderer->device, &IID_ID3D11Debug, (void**)&(dx11_renderer->debugger));
-    if(hr!=S_OK) { DM_LOG_FATAL("D3D11Device_QueryInterface failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("D3D11Device_QueryInterface failed!"); return false; }
 #endif
     
     return true;
@@ -1022,19 +1000,19 @@ bool dm_dx11_create_swapchain(dm_dx11_renderer* dx11_renderer)
     // obtain factory
     IDXGIDevice* dxgi_device = NULL;
     hr = IDXGIAdapter_QueryInterface(device, &IID_IDXGIDevice, &dxgi_device);
-    if(hr!=S_OK) { DM_LOG_FATAL("D3D11Device::QueryInterface failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("D3D11Device::QueryInterface failed!"); return false; }
     
     IDXGIAdapter* dxgi_adapter = NULL;
     hr = IDXGIAdapter_GetParent(dxgi_device, &IID_IDXGIAdapter, (void**)&dxgi_adapter);
-    if(hr!=S_OK) { DM_LOG_FATAL("IDXGIDevice::GetParent failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("IDXGIDevice::GetParent failed!"); return false; }
     
     IDXGIFactory* dxgi_factory = NULL;
     hr = IDXGIAdapter_GetParent(dxgi_adapter, &IID_IDXGIFactory, (void**)&dxgi_factory);
-    if(hr!=S_OK) { DM_LOG_FATAL("IDXGIAdapter_GetParent failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("IDXGIAdapter_GetParent failed!"); return false; }
     
     // create the swap chain
     hr = IDXGIFactory_CreateSwapChain(dxgi_factory, (IUnknown*)device, &desc, &dx11_renderer->swap_chain);
-    if(hr!=S_OK) { DM_LOG_FATAL("IDXGIFactory_CreateSwapChain failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("IDXGIFactory_CreateSwapChain failed!"); return false; }
     
     // release pack animal directx objects
     DM_DX11_RELEASE(dxgi_device);
@@ -1068,9 +1046,9 @@ bool dm_dx11_create_depth_stencil(dm_dx11_renderer* dx11_renderer)
     desc.BindFlags = D3D11_BIND_DEPTH_STENCIL;
     
     hr = ID3D11Device_CreateTexture2D(device, &desc, NULL, &dx11_renderer->depth_stencil_back_buffer);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
     hr = ID3D11Device_CreateDepthStencilView(device, (ID3D11Resource*)dx11_renderer->depth_stencil_back_buffer, 0, &dx11_renderer->depth_stencil_view);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateDepthStencilView failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateDepthStencilView failed!"); return false; }
     
     return true;
 }
@@ -1088,7 +1066,7 @@ bool dm_dx11_create_rendertarget(dm_dx11_renderer* dx11_renderer)
     IDXGISwapChain* swap_chain = dx11_renderer->swap_chain;
     
     hr = IDXGISwapChain_GetBuffer(swap_chain, 0, &IID_ID3D11Texture2D, (void**)&(ID3D11Resource*)dx11_renderer->render_back_buffer);
-    if(hr!=S_OK) { DM_LOG_FATAL("IDXGISwapChain_GetBuffer failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("IDXGISwapChain_GetBuffer failed!"); return false; }
     ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource*)dx11_renderer->render_back_buffer, NULL, &dx11_renderer->render_view);
     return true;
 }
@@ -1104,7 +1082,7 @@ bool dm_dx11_update_resource(void* resource, void* data, size_t data_size, dm_dx
     ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
     
     hr = ID3D11DeviceContext_Map(dx11_renderer->context, (ID3D11Resource*)resource, 0, D3D11_MAP_WRITE_DISCARD, 0, &msr);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11DeviceContext_Map failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11DeviceContext_Map failed!"); return false; }
     
     dm_memcpy(msr.pData, data, data_size);
     ID3D11DeviceContext_Unmap(dx11_renderer->context, (ID3D11Resource*)resource, 0);
@@ -1147,6 +1125,11 @@ void dm_renderer_backend_shutdown(dm_context* context)
     for(uint32_t i=0; i<dx11_renderer->buffer_count; i++)
     {
         dm_renderer_backend_destroy_buffer(i, &context->renderer);
+    }
+    
+    for(uint32_t i=0; i<dx11_renderer->compute_buffer_count; i++)
+    {
+        dm_compute_backend_destroy_buffer(i, &context->renderer);
     }
     
     // shaders
@@ -1244,7 +1227,8 @@ bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* re
     ID3D11Device* device = dx11_renderer->device;
     ID3D11DeviceContext* context = dx11_renderer->context;
     IDXGISwapChain* swap_chain   = dx11_renderer->swap_chain;
-    context->lpVtbl->OMSetRenderTargets(context, 0,0,0);
+    
+    ID3D11DeviceContext_OMSetRenderTargets(context, 0,0,0);
     
     DM_DX11_RELEASE(dx11_renderer->render_view);
     DM_DX11_RELEASE(dx11_renderer->render_back_buffer);
@@ -1252,13 +1236,13 @@ bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* re
     DM_DX11_RELEASE(dx11_renderer->depth_stencil_back_buffer);
     
     hr = IDXGISwapChain_ResizeBuffers(swap_chain, 0,width,height,DXGI_FORMAT_UNKNOWN,0);
-    if(hr!=S_OK) { DM_LOG_FATAL("IDXGISwapChain::ResizeBuffers failed"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("IDXGISwapChain::ResizeBuffers failed"); return false; }
     
     hr = IDXGISwapChain_GetBuffer(swap_chain, 0, &IID_ID3D11Texture2D, &dx11_renderer->render_back_buffer);
-    if(hr!=S_OK) { DM_LOG_FATAL("IDXGISwapChain::GetBuffer failed"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("IDXGISwapChain::GetBuffer failed"); return false; }
     
     hr = ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource*)dx11_renderer->render_back_buffer, NULL, &dx11_renderer->render_view);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device::CreateRenderTargetView failed"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device::CreateRenderTargetView failed"); return false; }
     
     if(!dm_dx11_create_depth_stencil(dx11_renderer)) return false;
     
@@ -1488,7 +1472,7 @@ bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t 
         D3D11_SUBRESOURCE_DATA init_data = { data, sizeof(uint32_t) * width, 0 };
         
         hr = ID3D11Device_CreateTexture2D(dx11_renderer->device, &tex_desc, NULL, &internal_texture->texture);
-        if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
+        if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed!"); return false; }
         
         // shader resource view
         D3D11_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
@@ -1497,7 +1481,7 @@ bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t 
         view_desc.Texture2D.MipLevels = tex_desc.MipLevels;
         
         hr = ID3D11Device_CreateShaderResourceView(dx11_renderer->device, (ID3D11Resource*)internal_texture->texture, &view_desc, &internal_texture->view);
-        if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateShaderResourceView failed!"); return false; }
+        if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateShaderResourceView failed!"); return false; }
         
         ID3D11DeviceContext_GenerateMips(dx11_renderer->context, internal_texture->view);
     }
@@ -1625,12 +1609,12 @@ bool dm_compute_backend_command_bind_buffer(dm_compute_handle handle, uint32_t o
     
     switch(internal_buffer->type)
     {
-        case DM_COMPUTE_BUFFER_TYPE_INPUT:
+        case DM_COMPUTE_BUFFER_TYPE_READ_ONLY:
         ID3D11DeviceContext_CSSetShaderResources(dx11_renderer->context, slot, 1, &internal_buffer->resource_view);
         break;
         
-        case DM_COMPUTE_BUFFER_TYPE_OUTPUT:
-        ID3D11DeviceContext_CSSetUnorderedAccessViews(dx11_renderer->context, 0, 1, &internal_buffer->access_view, NULL);
+        case DM_COMPUTE_BUFFER_TYPE_READ_WRITE:
+        ID3D11DeviceContext_CSSetUnorderedAccessViews(dx11_renderer->context, slot, 1, &internal_buffer->access_view, NULL);
         break;
         
         default:
@@ -1670,7 +1654,7 @@ void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_re
     ZeroMemory(&msr, sizeof(D3D11_MAPPED_SUBRESOURCE));
     
     hr = ID3D11DeviceContext_Map(dx11_renderer->context, (ID3D11Resource*)internal_buffer->output_buffer, 0, D3D11_MAP_READ, 0, &msr);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11DeviceContext_Map failed!"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11DeviceContext_Map failed!"); return false; }
     
     void* result = msr.pData;
     
@@ -1699,25 +1683,40 @@ bool dm_compute_backend_command_dispatch(uint32_t x_size, uint32_t y_size, uint3
     HRESULT hr;
     
     ID3D11Query* p_query;
+    ID3D11Query* q_start;
+    ID3D11Query* q_end;
     
     D3D11_QUERY_DESC p_desc = { 0 };
     p_desc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
     
     hr = ID3D11Device_CreateQuery(dx11_renderer->device, &p_desc, &p_query);
-    if(hr!=S_OK) { DM_LOG_FATAL("ID3D11Device_CreateQuery failed"); return false; }
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateQuery failed"); return false; }
+    
+    p_desc.Query = D3D11_QUERY_TIMESTAMP;
+    hr = ID3D11Device_CreateQuery(dx11_renderer->device, &p_desc, &q_start);
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateQuery failed"); return false; }
+    hr = ID3D11Device_CreateQuery(dx11_renderer->device, &p_desc, &q_end);
+    if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateQuery failed"); return false; }
+    
     
     ID3D11DeviceContext_Begin(dx11_renderer->context, (ID3D11Asynchronous*)p_query);
+    ID3D11DeviceContext_End(dx11_renderer->context, (ID3D11Asynchronous*)q_start);
+    
     ID3D11DeviceContext_Dispatch(dx11_renderer->context, x_size, y_size, z_size);
+    
+    ID3D11DeviceContext_End(dx11_renderer->context, (ID3D11Asynchronous*)q_end);
     ID3D11DeviceContext_End(dx11_renderer->context, (ID3D11Asynchronous*)p_query);
     
-    float t=0;
+    UINT64 start, end;
+    D3D11_QUERY_DATA_TIMESTAMP_DISJOINT q_freq;
     
-    while(true)
-    {
-        hr = ID3D11DeviceContext_GetData(dx11_renderer->context, (ID3D11Asynchronous*)p_query, &t,sizeof(t),0);
-        
-        break;
-    }
+    while(ID3D11DeviceContext_GetData(dx11_renderer->context, (ID3D11Asynchronous*)q_start, &start, sizeof(UINT64), 0)){};
+    while(ID3D11DeviceContext_GetData(dx11_renderer->context, (ID3D11Asynchronous*)q_end, &end, sizeof(UINT64), 0)){};
+    while(ID3D11DeviceContext_GetData(dx11_renderer->context, (ID3D11Asynchronous*)p_query, &q_freq, sizeof(D3D11_QUERY_DATA_TIMESTAMP_DISJOINT), 0)){};
+    
+    DM_DX11_RELEASE(p_query);
+    DM_DX11_RELEASE(q_start);
+    DM_DX11_RELEASE(q_end);
     
     return true;
 }
@@ -1734,7 +1733,7 @@ bool dm_dx11_print_errors(dm_dx11_renderer* dx11_renderer)
     hr = ID3D11Device_QueryInterface(dx11_renderer->device, &IID_ID3D11InfoQueue, (void**)&info_queue);
     if (hr != S_OK) { DM_LOG_ERROR("ID3D11Device::QueryInterface failed!"); return false; }
     
-    UINT64 message_count = info_queue->lpVtbl->GetNumStoredMessages(info_queue);
+    UINT64 message_count = ID3D11InfoQueue_GetNumStoredMessages(info_queue);
     
     for (UINT64 i = 0; i < message_count; i++)
     {

@@ -2393,7 +2393,7 @@ int main(int argc, char** argv)
     dm_context* context = dm_init(init_packet);
     if(!context) 
     {
-        getchar();
+        int r = getchar();
         return DM_EXIT_CODE_INIT_FAIL;
     }
     
@@ -2402,7 +2402,7 @@ int main(int argc, char** argv)
         DM_LOG_FATAL("Application init failed");
         
         dm_shutdown(context);
-        getchar();
+        int r = getchar();
         return DM_EXIT_CODE_INIT_FAIL;
     }
     
@@ -2437,7 +2437,7 @@ int main(int argc, char** argv)
     dm_application_shutdown(context);
     dm_shutdown(context);
     
-    getchar();
+    int r = getchar();
     
     return DM_EXIT_CODE_SUCCESS;
 }

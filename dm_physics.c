@@ -26,6 +26,7 @@
 #endif
 
 // 3d support funcs
+DM_INLINE
 void dm_physics_support_func_sphere(const float pos[3], const float cen[3], const float internals[6], const float dir[3], float support[3])
 {
     const float radius = internals[0];
@@ -41,6 +42,7 @@ void dm_physics_support_func_sphere(const float pos[3], const float cen[3], cons
     DM_VEC3_COPY(support, sup);
 }
 
+DM_INLINE
 void dm_physics_support_func_box(const float pos[3], const float rot[4], const float cen[3], const float internals[6], const float dir[3], float support[3])
 {
     float inv_rot[4] = { 0 };
@@ -343,6 +345,7 @@ bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float c
     return false;
 }
 
+DM_INLINE
 void dm_triangle_normal(float triangle[3][3], float normal[3])
 {
     float ab[3], ac[3];
@@ -688,6 +691,7 @@ bool dm_physics_point_in_plane(float point[3], dm_plane plane)
     return t < -DM_PHYSICS_TEST_EPSILON;
 }
 
+DM_INLINE
 void dm_physics_plane_edge_intersect(dm_plane plane, float start[3], float end[3], float out[3])
 {
     float ab[3];
@@ -790,7 +794,7 @@ void dm_physics_init_constraint(float vec[3], float r_a[3], float r_b[3], float 
 
 void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], const float normal[3], const float depth, const float pos[2][3], const float rot[2][4], const float vel[2][3], const float w[2][3], dm_contact_manifold* manifold)
 {
-    if(manifold->point_count>DM_PHYSICS_MAX_MANIFOLDS) return;
+    if(manifold->point_count>=DM_PHYSICS_MAX_MANIFOLDS) return;
     
     DM_QUAT_COPY(manifold->orientation_a, rot[0]);
     DM_QUAT_COPY(manifold->orientation_b, rot[1]);

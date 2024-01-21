@@ -17,12 +17,8 @@ desired as creating an OpenGL context is
 depreciated
 **********************************************/
 #ifdef __APPLE__
-#ifdef DM_OPENGL
-#define DM_PLATFORM_GLFW
-#else
 #define DM_PLATFORM_APPLE
 #define DM_METAL
-#endif
 #define DM_INLINE __attribute__((always_inline)) inline
 
 #elif defined(__WIN32__) || defined(_WIN32) || defined(WIN32)
@@ -38,16 +34,6 @@ depreciated
 #else
 #define DM_PLATFORM_GLFW
 #define DM_INLINE
-#endif
-
-// opengl on mac is limited to 4.1
-#ifdef DM_OPENGL
-#define DM_OPENGL_MAJOR 4
-#ifdef DM_PLATFORM_APPLE
-#define DM_OPENGL_MINOR 1
-#else
-#define DM_OPENGL_MINOR 6
-#endif
 #endif
 
 /*********
@@ -134,13 +120,12 @@ MATH
 #define DM_MATH_1024_INV            0.0009765625f
 
 // math macros
-#define DM_MAX(X, Y) (X > Y ? X : Y)
-#define DM_MIN(X, Y) (X < Y ? X : Y)
-#define DM_SIGN(X) ((0 < X) - (X < 0))
-#define DM_SIGNF(X) (float)((0 < X) - (X < 0))
+#define DM_MAX(X, Y)          (X > Y ? X : Y)
+#define DM_MIN(X, Y)          (X < Y ? X : Y)
+#define DM_SIGN(X)            ((0 < X) - (X < 0))
+#define DM_SIGNF(X)           (float)((0 < X) - (X < 0))
 #define DM_CLAMP(X, MIN, MAX) DM_MIN(DM_MAX(X, MIN), MAX)
-#define DM_BIT_SHIFT(X) (1 << X)
-
+#define DM_BIT_SHIFT(X)       (1 << X)
 
 /**********
 MATH TYPES
@@ -196,7 +181,7 @@ typedef __m128i dm_simd_int;
 // neon does not support 256bit registers
 typedef float32x4_t dm_simd_float;
 
-typedef int32x4_t dm_simd_int;
+typedef int32x4_t   dm_simd_int;
 #endif
 
 #define DM_SIMD_FLOAT_N    4
@@ -526,8 +511,9 @@ typedef enum dm_buffer_cpu_access_t
 
 typedef enum dm_compute_buffer_type_t
 {
-    DM_COMPUTE_BUFFER_TYPE_INPUT,
-    DM_COMPUTE_BUFFER_TYPE_OUTPUT,
+    DM_COMPUTE_BUFFER_TYPE_READ_ONLY,
+    DM_COMPUTE_BUFFER_TYPE_WRITE_ONLY,
+    DM_COMPUTE_BUFFER_TYPE_READ_WRITE,
     DM_COMPUTE_BUFFER_TYPE_UNKNOWN
 } dm_compute_buffer_type;
 

@@ -53,6 +53,8 @@ typedef struct dm_internal_w32_data_t
 #endif
 } dm_internal_w32_data;
 
+bool dm_platform_win32_decode_hresult(HRESULT hr);
+
 #endif
 
 #endif //DM_PLATFORM_WIN32_H
