@@ -239,6 +239,14 @@ void dm_vec3_sign(const dm_vec3 vec, dm_vec3 out)
 }
 
 DM_INLINE
+void dm_vec3_fabs(const dm_vec3 vec, dm_vec3 out)
+{
+    out[0] = dm_fabs(vec[0]);
+    out[1] = dm_fabs(vec[1]);
+    out[2] = dm_fabs(vec[2]);
+}
+
+DM_INLINE
 void dm_vec3_reflect(const dm_vec3 vec, const dm_vec3 normal, dm_vec3 out)
 {
     float s;
