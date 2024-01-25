@@ -1699,20 +1699,20 @@ bool dm_compute_backend_command_dispatch(uint32_t threads_per_group_x, uint32_t 
     if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateQuery failed"); return false; }
     
     
-    ID3D11DeviceContext_Begin(dx11_renderer->context, (ID3D11Asynchronous*)p_query);
+    //ID3D11DeviceContext_Begin(dx11_renderer->context, (ID3D11Asynchronous*)p_query);
     ID3D11DeviceContext_End(dx11_renderer->context, (ID3D11Asynchronous*)q_start);
     
     ID3D11DeviceContext_Dispatch(dx11_renderer->context, thread_group_count_x, thread_group_count_y, thread_group_count_z);
     
     ID3D11DeviceContext_End(dx11_renderer->context, (ID3D11Asynchronous*)q_end);
-    ID3D11DeviceContext_End(dx11_renderer->context, (ID3D11Asynchronous*)p_query);
+    //ID3D11DeviceContext_End(dx11_renderer->context, (ID3D11Asynchronous*)p_query);
     
     UINT64 start, end;
     D3D11_QUERY_DATA_TIMESTAMP_DISJOINT q_freq;
     
     while(ID3D11DeviceContext_GetData(dx11_renderer->context, (ID3D11Asynchronous*)q_start, &start, sizeof(UINT64), 0)){};
     while(ID3D11DeviceContext_GetData(dx11_renderer->context, (ID3D11Asynchronous*)q_end, &end, sizeof(UINT64), 0)){};
-    while(ID3D11DeviceContext_GetData(dx11_renderer->context, (ID3D11Asynchronous*)p_query, &q_freq, sizeof(D3D11_QUERY_DATA_TIMESTAMP_DISJOINT), 0)){};
+    //while(ID3D11DeviceContext_GetData(dx11_renderer->context, (ID3D11Asynchronous*)p_query, &q_freq, sizeof(D3D11_QUERY_DATA_TIMESTAMP_DISJOINT), 0)){};
     
     DM_DX11_RELEASE(p_query);
     DM_DX11_RELEASE(q_start);
