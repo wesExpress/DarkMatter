@@ -231,6 +231,30 @@ bool dm_vec3_equals_vec3(const dm_vec3 left, const dm_vec3 right)
 }
 
 DM_INLINE
+bool dm_vec3_lt_vec3(const dm_vec3 left, const dm_vec3 right)
+{
+    return (left[0]<right[0]) && (left[1]<right[1]) && (left[2]<right[2]);
+}
+
+DM_INLINE
+bool dm_vec3_leq_vec3(const dm_vec3 left, const dm_vec3 right)
+{
+    return (left[0]<=right[0]) && (left[1]<=right[1]) && (left[2]<=right[2]);
+}
+
+DM_INLINE
+bool dm_vec3_gt_vec3(const dm_vec3 left, const dm_vec3 right)
+{
+    return (left[0]>right[0]) && (left[1]>right[1]) && (left[2]>right[2]);
+}
+
+DM_INLINE
+bool dm_vec3_geq_vec3(const dm_vec3 left, const dm_vec3 right)
+{
+    return (left[0]>=right[0]) && (left[1]>=right[1]) && (left[2]>=right[2]);
+}
+
+DM_INLINE
 void dm_vec3_sign(const dm_vec3 vec, dm_vec3 out)
 {
     out[0] = DM_SIGNF(vec[0]);
@@ -1025,9 +1049,10 @@ void dm_mat_scale_make(const dm_vec3 scale, dm_mat4 out)
 DM_INLINE
 void dm_mat_scale(const dm_mat4 mat, const dm_vec3 scale, dm_mat4 out)
 {
-    dm_vec3_scale(mat[0], scale[0], out[0]);
-    dm_vec3_scale(mat[1], scale[1], out[1]);
-    dm_vec3_scale(mat[2], scale[2], out[2]);
+    dm_vec4_scale(mat[0], scale[0], out[0]);
+    dm_vec4_scale(mat[1], scale[1], out[1]);
+    dm_vec4_scale(mat[2], scale[2], out[2]);
+    dm_vec4_scale(mat[3], scale[3], out[3]);
     dm_memcpy(out[3], mat[3], sizeof(float) * 4);
 }
 
@@ -1060,23 +1085,11 @@ void dm_mat_translate_make(const dm_vec3 translation, dm_mat4 out)
 DM_INLINE
 void dm_mat_translate(const dm_mat4 mat, const dm_vec3 translation, dm_mat4 out)
 {
-#if 0
-    out[3][0] = dm_vec3_add_scalar(mat[0], translation[0]);
-    out[3][1] = translation[1];
-    out[3][2] = translation[2];
-#else
     dm_memcpy(out, mat, sizeof(dm_mat4));
     
-    dm_vec3 d;
-    dm_vec3_scale(mat[0], translation[0], d);
-    dm_vec3_add_vec3(out[3], d, out[3]);
-    
-    dm_vec3_scale(mat[1], translation[1], d);
-    dm_vec3_add_vec3(out[3], d, out[3]);
-    
-    dm_vec3_scale(mat[2], translation[2], d);
-    dm_vec3_add_vec3(out[3], d, out[3]);
-#endif
+    out[3][0] += translation[0];
+    out[3][1] += translation[1];
+    out[3][2] += translation[2];
 }
 
 DM_INLINE
