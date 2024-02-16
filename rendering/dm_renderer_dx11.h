@@ -3,7 +3,7 @@
 
 #include "dm.h"
 
-#ifdef DM_DIRECTX
+#ifdef DM_DIRECTX11
 
 #define COBJMACROS
 #include <d3d11_1.h>
@@ -82,6 +82,16 @@ typedef struct dm_dx11_pipeline_t
     bool wireframe, blend, depth, stencil;
 } dm_dx11_pipeline;
 
+typedef struct dm_dx11_renderpass_t
+{
+    dm_renderpass_desc      desc;
+    
+    ID3D11RenderTargetView* color_view;
+    ID3D11Texture2D*        color_target;
+    ID3D11DepthStencilView* depth_stencil_view;
+    ID3D11Texture2D*        depth_stencil_target;
+} dm_dx11_renderpass;
+
 // directx renderer
 typedef enum dm_dx11_resource_t
 {
@@ -106,6 +116,11 @@ typedef struct dm_dx11_renderer
     HWND hwnd;
 	HINSTANCE h_instance;
     
+    uint32_t buffer_count, compute_buffer_count, shader_count, compute_count;
+    uint32_t texture_count, framebuffer_count, pipeline_count, renderpass_count;
+    
+    dm_render_handle active_pipeline, active_shader, active_renderpass;
+    
     dm_dx11_buffer         buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
     dm_dx11_compute_buffer compute_buffers[DM_RENDERER_MAX_RESOURCE_COUNT];
     dm_dx11_shader         shaders[DM_RENDERER_MAX_RESOURCE_COUNT];
@@ -113,10 +128,7 @@ typedef struct dm_dx11_renderer
     dm_dx11_texture        textures[DM_RENDERER_MAX_RESOURCE_COUNT];
     dm_dx11_framebuffer    framebuffers[DM_RENDERER_MAX_RESOURCE_COUNT];
     dm_dx11_pipeline       pipelines[DM_RENDERER_MAX_RESOURCE_COUNT];
-    
-    uint32_t buffer_count, compute_buffer_count, shader_count, compute_count, texture_count, framebuffer_count, pipeline_count;
-    
-    uint32_t active_pipeline, active_shader;
+    dm_dx11_renderpass     renderpasses[DM_RENDERER_MAX_RESOURCE_COUNT];
     
 #ifdef DM_DEBUG
     ID3D11Debug* debugger;
