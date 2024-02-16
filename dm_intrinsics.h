@@ -100,6 +100,12 @@ dm_simd_float dm_simd_div_float(dm_simd_float left, dm_simd_float right)
 }
 
 DM_INLINE
+dm_simd_float dm_simd_inv_float(dm_simd_float v)
+{
+    return dm_simd_div_float(dm_simd_set1_float(1.f), v);
+}
+
+DM_INLINE
 dm_simd_float dm_simd_sqrt_float(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
@@ -330,20 +336,21 @@ dm_simd_float dm_simd_leq_float(dm_simd_float left, dm_simd_float right)
 #endif
 }
 
-#if 0
 DM_INLINE
-int dm_simd_any_non_zero(dm_simd_float mm)
+dm_simd_float dm_simd_eq_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
-    dm_simd_float vcmp = _mm_cmp_ps(mm, _mm_set1_ps(0), _CMP_EQ_OQ);
-    int mask = _mm_movemask_ps(vcmp);
-    return (mask != 0xff);
-#elif defined(DM_SIMD_ARM)
-    uint32x2_t tmp = vorr_u32(vget_low_u32(mm), vget_high_u32(mm));
-    return vget_lane_u32(vpmax_u32(tmp, tmp), 0);
+    return _mm_cmpeq_ps(left, right);
 #endif
 }
+
+DM_INLINE
+dm_simd_float dm_simd_neq_float(dm_simd_float left, dm_simd_float right)
+{
+#ifdef DM_SIMD_X86
+    return _mm_cmpneq_ps(left, right);
 #endif
+}
 
 DM_INLINE
 int dm_simd_any_zero(dm_simd_float mm)
@@ -374,7 +381,7 @@ dm_simd_float dm_simd_and_float(dm_simd_float left, dm_simd_float right)
  int
 */
 DM_INLINE
-dm_simd_int dm_simd_load_i(int* d)
+dm_simd_int dm_simd_load_i(const int* d)
 {
 #ifdef DM_SIMD_X86
     return _mm_load_si128((dm_simd_int*)d);
@@ -384,7 +391,7 @@ dm_simd_int dm_simd_load_i(int* d)
 }
 
 DM_INLINE
-dm_simd_int dm_simd_set1_i(int d)
+dm_simd_int dm_simd_set1_i(const int d)
 {
 #ifdef DM_SIMD_X86
     return _mm_set1_epi32(d);
@@ -456,6 +463,22 @@ dm_simd_int dm_simd_blendv_i(dm_simd_int left, dm_simd_int right, dm_simd_int ma
     return _mm_blendv_epi8(left, right, mask);
 #elif defined(DM_SIMD_ARM)
     return vbslq_u32(left, right, mask);
+#endif
+}
+
+DM_INLINE
+dm_simd_int dm_simd_eq_i(dm_simd_int left, dm_simd_int right)
+{
+#ifdef DM_SIMD_X86
+    return _mm_cmpeq_epi32(left, right);
+#endif
+}
+
+DM_INLINE
+dm_simd_int dm_simd_neq_i(dm_simd_int left, dm_simd_int right)
+{
+#ifdef DM_SIMD_X86
+    return _mm_andnot_si128(_mm_cmpeq_epi32(left, right), _mm_set1_epi8(-1));
 #endif
 }
 

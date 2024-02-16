@@ -23,9 +23,9 @@ depreciated
 
 #elif defined(__WIN32__) || defined(_WIN32) || defined(WIN32)
 #define DM_PLATFORM_WIN32
-#if !defined(DM_OPENGL) && !defined(DM_VULKAN)
-#define DM_DIRECTX
-#endif
+//#if !defined(DM_OPENGL) && !defined(DM_VULKAN)
+//#define DM_DIRECTX
+//#endif
 #define DM_INLINE __forceinline
 
 #elif __linux__ || __gnu_linux__
@@ -747,16 +747,12 @@ typedef struct dm_renderpass_desc_t
     dm_load_operation  color_load_op;
     dm_store_operation color_store_op;
     
-    dm_load_operation  color_stencil_load_op;
-    dm_store_operation color_stencil_store_op;
-    
-    dm_load_operation  depth_load_op;
-    dm_store_operation depth_store_op;
-    
     dm_load_operation  depth_stencil_load_op;
     dm_store_operation depth_stencil_store_op;
     
     dm_renderpass_flag flags;
+    
+    float clear_r, clear_g, clear_b, clear_a;
 } dm_renderpass_desc;
 
 typedef enum dm_mesh_vertex_attrib_t
@@ -806,6 +802,8 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_BIND_DEFAULT_FRAMEBUFFER,
     DM_RENDER_COMMAND_BIND_FRAMEBUFFER,
     DM_RENDER_COMMAND_BIND_FRAMEBUFFER_TEXTURE,
+    DM_RENDER_COMMAND_BEGIN_RENDERPASS,
+    DM_RENDER_COMMAND_END_RENDERPASS,
     DM_RENDER_COMMAND_DRAW_ARRAYS,
     DM_RENDER_COMMAND_DRAW_INDEXED,
     DM_RENDER_COMMAND_DRAW_INSTANCED,
@@ -1242,6 +1240,7 @@ bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_h
 bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_context* context);
 
 bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context);
 
@@ -1269,12 +1268,14 @@ void dm_render_command_update_texture(dm_render_handle handle, uint32_t width, u
 void dm_render_command_bind_default_framebuffer(dm_context* context);
 //void dm_render_command_bind_framebuffer(dm_render_handle handle, dm_context* context);
 //void dm_render_command_bind_framebuffer_texture(dm_render_handle handle, uint32_t slot, dm_context* context);
+void dm_render_command_begin_renderpass(dm_render_handle handle, dm_context* conext);
+void dm_render_command_end_renderpass(dm_render_handle handle, dm_context* conext);
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_context* context);
 void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);
 void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_context* context);
 void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 void dm_render_command_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_context* context);
-void dm_render_command_map_callback(dm_render_handle handle, void (*callback)(dm_context*), dm_context* context);
+//void dm_render_command_map_callback(dm_render_handle handle, void (*callback)(dm_context*), dm_context* context);
 
 // compute commands
 bool dm_compute_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_context* context);

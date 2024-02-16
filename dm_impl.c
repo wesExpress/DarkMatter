@@ -300,7 +300,7 @@ float dm_random_float_normal(float mu, float sigma, dm_context* context)
 {
     const float u1 = dm_random_float(context);
     const float u2 = dm_random_float(context);
-     
+    
     const float mag = sigma * dm_sqrtf(-2.0 * dm_logf(u1));
     const float z0  = mag * dm_cos(DM_MATH_2PI * u2) + mu;
     const float z1  = mag * dm_sin(DM_MATH_2PI * u2) + mu;
@@ -624,6 +624,7 @@ extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage sta
 extern bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 
 extern void dm_render_command_backend_clear(float r, float g, float b, float a, dm_renderer* renderer);
 extern void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer);
@@ -639,11 +640,12 @@ extern bool dm_render_command_backend_update_texture(dm_render_handle handle, ui
 extern bool dm_render_command_backend_bind_default_framebuffer(dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_framebuffer(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_framebuffer_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
+extern bool dm_render_command_backend_begin_renderpass(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_end_renderpass(dm_render_handle handle, dm_renderer* renderer);
 extern void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count, dm_renderer* renderer);
 extern void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
 extern void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer);
 extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer);
-extern void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_renderer* renderer);
 
 // compute
 extern bool  dm_compute_backend_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
@@ -806,6 +808,14 @@ bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_
 void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context)
 {
     return dm_renderer_backend_get_internal_texture_ptr(handle, &context->renderer);
+}
+
+bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_context* context)
+{
+    if(dm_renderer_backend_create_renderpass(desc, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create renderpass");
+    return false;
 }
 
 bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context)
@@ -1461,6 +1471,30 @@ void dm_render_command_bind_framebuffer_texture(dm_render_handle handle, uint32_
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
+void dm_render_command_begin_renderpass(dm_render_handle handle, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BEGIN_RENDER_PASS;
+    
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_end_renderpass(dm_render_handle handle, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_END_RENDER_PASS;
+    
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_context* context)
 {
     if(DM_TOO_MANY_COMMANDS) return;
@@ -1536,6 +1570,8 @@ bool dm_renderer_submit_commands(dm_context* context)
     dm_timer t = { 0 };
     dm_timer_start(&t, context);
     
+    dm_renderer* renderer = &context->renderer;
+    
     for(uint32_t i=0; i<context->renderer.command_manager.command_count; i++)
     {
         dm_render_command command = context->renderer.command_manager.commands[i];
@@ -1549,7 +1585,7 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_BYTE_POOL_POP(command.params, float, g);
                 DM_BYTE_POOL_POP(command.params, float, r);
                 
-                dm_render_command_backend_clear(r, g, b, a, &context->renderer);
+                dm_render_command_backend_clear(r, g, b, a, renderer);
             } break;
             
             case DM_RENDER_COMMAND_SET_VIEWPORT:
@@ -1557,28 +1593,34 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_BYTE_POOL_POP(command.params, uint32_t, height);
                 DM_BYTE_POOL_POP(command.params, uint32_t, width);
                 
-                dm_render_command_backend_set_viewport(width, height, &context->renderer);
+                dm_render_command_backend_set_viewport(width, height, renderer);
             } break;
             
             case DM_RENDER_COMMAND_SET_TOPOLOGY:
             {
                 DM_BYTE_POOL_POP(command.params, dm_primitive_topology, topology);
                 
-                if(!dm_render_command_backend_set_primitive_topology(topology, &context->renderer)) { DM_LOG_FATAL("Set topology failed"); return false; }
+                if(dm_render_command_backend_set_primitive_topology(topology, renderer)) continue;
+                DM_LOG_FATAL("Set topology failed"); 
+                return false;
             } break;
             
             case DM_RENDER_COMMAND_BIND_SHADER:
             {
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
                 
-                if(!dm_render_command_backend_bind_shader(handle, &context->renderer)) { DM_LOG_FATAL("Bind shader failed"); return false; }
+                if(dm_render_command_backend_bind_shader(handle, renderer)) continue;
+                DM_LOG_FATAL("Bind shader failed"); 
+                return false;
             } break;
             
             case DM_RENDER_COMMAND_BIND_PIPELINE:
             {
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
                 
-                if(!dm_render_command_backend_bind_pipeline(handle, &context->renderer)) { DM_LOG_FATAL("Bind pipeline failed"); return false; }
+                if(dm_render_command_backend_bind_pipeline(handle, renderer)) continue;
+                DM_LOG_FATAL("Bind pipeline failed"); 
+                return false;
             } break;
             
             case DM_RENDER_COMMAND_BIND_BUFFER:
@@ -1586,7 +1628,9 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_BYTE_POOL_POP(command.params, uint32_t, slot);
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
                 
-                if(!dm_render_command_backend_bind_buffer(handle, slot, &context->renderer)) { DM_LOG_FATAL("Bind buffer failed"); return false; }
+                if(dm_render_command_backend_bind_buffer(handle, slot, renderer)) continue;
+                DM_LOG_FATAL("Bind buffer failed"); 
+                return false;
             } break;
             case DM_RENDER_COMMAND_UPDATE_BUFFER:
             {
@@ -1595,7 +1639,9 @@ bool dm_renderer_submit_commands(dm_context* context)
                 void* data = __dm_byte_pool_pop(&command.params, data_size);
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
                 
-                if(!dm_render_command_backend_update_buffer(handle, data, data_size, offset, &context->renderer)) { DM_LOG_FATAL("Update buffer failed"); return false; }
+                if(dm_render_command_backend_update_buffer(handle, data, data_size, offset, renderer)) continue;
+                DM_LOG_FATAL("Update buffer failed"); 
+                return false;
             } break;
             
             case DM_RENDER_COMMAND_BIND_UNIFORM:
@@ -1605,7 +1651,9 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_BYTE_POOL_POP(command.params, uint32_t, slot);
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, uniform_handle);
                 
-                if(!dm_render_command_backend_bind_uniform(uniform_handle, stage, slot, offset, &context->renderer)) { DM_LOG_FATAL("Bind uniform failed"); return false; }
+                if(dm_render_command_backend_bind_uniform(uniform_handle, stage, slot, offset, renderer)) continue;
+                DM_LOG_FATAL("Bind uniform failed"); 
+                return false;
             } break;
             case DM_RENDER_COMMAND_UPDATE_UNIFORM:
             {
@@ -1613,7 +1661,9 @@ bool dm_renderer_submit_commands(dm_context* context)
                 void* data = __dm_byte_pool_pop(&command.params, data_size);
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, uniform_handle);
                 
-                if(!dm_render_command_backend_update_uniform(uniform_handle, data, data_size, &context->renderer)) { DM_LOG_FATAL("Update uniform failed"); return false; }
+                if(dm_render_command_backend_update_uniform(uniform_handle, data, data_size, renderer)) continue;
+                DM_LOG_FATAL("Update uniform failed"); 
+                return false;
             } break;
             
             case DM_RENDER_COMMAND_BIND_TEXTURE:
@@ -1621,7 +1671,10 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_BYTE_POOL_POP(command.params, uint32_t, slot);
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
                 
-                if(!dm_render_command_backend_bind_texture(handle, slot, &context->renderer)) { DM_LOG_FATAL("Bind texture failed"); return false; }
+                if(dm_render_command_backend_bind_texture(handle, slot, &context->renderer)) continue; 
+                
+                DM_LOG_FATAL("Bind texture failed"); 
+                return false;
             } break;
             case DM_RENDER_COMMAND_UPDATE_TEXTURE:
             {
@@ -1631,25 +1684,55 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_BYTE_POOL_POP(command.params, uint32_t, width);
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
                 
-                if(!dm_render_command_backend_update_texture(handle, width, height, data, data_size, &context->renderer)) { DM_LOG_FATAL("Update texture failed"); return false; }
+                if(dm_render_command_backend_update_texture(handle, width, height, data, data_size, renderer)) continue;
+                DM_LOG_FATAL("Update texture failed"); 
+                return false;
             } break;
             
             case DM_RENDER_COMMAND_BIND_DEFAULT_FRAMEBUFFER:
             {
-                if(!dm_render_command_backend_bind_default_framebuffer(&context->renderer)) { DM_LOG_FATAL("Bind default framebuffer failed"); return false; } 
+                if(dm_render_command_backend_bind_default_framebuffer(renderer)) continue;
+                
+                DM_LOG_FATAL("Bind default framebuffer failed"); 
+                return false;
             } break;
             case DM_RENDER_COMMAND_BIND_FRAMEBUFFER:
             {
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
                 
-                if(!dm_render_command_backend_bind_framebuffer(handle, &context->renderer)) { DM_LOG_FATAL("Bind framebuffer failed"); return false; }
+                if(dm_render_command_backend_bind_framebuffer(handle, renderer)) continue; 
+                
+                DM_LOG_FATAL("Bind framebuffer failed"); 
+                return false;
             } break;
             case DM_RENDER_COMMAND_BIND_FRAMEBUFFER_TEXTURE:
             {
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
                 DM_BYTE_POOL_POP(command.params, uint32_t, slot);
                 
-                if(!dm_render_command_backend_bind_framebuffer_texture(handle, slot, &context->renderer)) { DM_LOG_FATAL("Bind framebuffer texture failed"); return false; }
+                if(dm_render_command_backend_bind_framebuffer_texture(handle, slot, renderer)) continue;
+                
+                DM_LOG_FATAL("Bind framebuffer texture failed"); 
+                return false; 
+            } break;
+            
+            case DM_RENDER_COMMAND_BEGIN_RENDER_PASS:
+            {
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                
+                if(dm_render_command_backend_begin_renderpass(handle, renderer)) continue;
+                
+                DM_LOG_FATAL("Begin renderpass failed");
+                return false;
+            } break;
+            case DM_RENDER_COMMAND_END_RENDER_PASS:
+            {
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                
+                if(dm_render_command_backend_end_renderpass(handle, renderer)) continue;
+                
+                DM_LOG_FATAL("End renderpass failed");
+                return false;
             } break;
             
             case DM_RENDER_COMMAND_DRAW_ARRAYS:
@@ -1657,7 +1740,7 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_BYTE_POOL_POP(command.params, uint32_t, count);
                 DM_BYTE_POOL_POP(command.params, uint32_t, start);
                 
-                dm_render_command_backend_draw_arrays(start, count, &context->renderer);
+                dm_render_command_backend_draw_arrays(start, count, renderer);
             } break;
             case DM_RENDER_COMMAND_DRAW_INDEXED:
             {
@@ -1665,7 +1748,7 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_BYTE_POOL_POP(command.params, uint32_t, index_offset);
                 DM_BYTE_POOL_POP(command.params, uint32_t, num_indices);
                 
-                dm_render_command_backend_draw_indexed(num_indices, index_offset, vertex_offset, &context->renderer);
+                dm_render_command_backend_draw_indexed(num_indices, index_offset, vertex_offset, renderer);
             } break;
             case DM_RENDER_COMMAND_DRAW_INSTANCED:
             {
@@ -1675,24 +1758,14 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_BYTE_POOL_POP(command.params, uint32_t, num_insts);
                 DM_BYTE_POOL_POP(command.params, uint32_t, num_indices);
                 
-                dm_render_command_backend_draw_instanced(num_indices, num_insts, index_offset, vertex_offset, inst_offset, &context->renderer);
+                dm_render_command_backend_draw_instanced(num_indices, num_insts, index_offset, vertex_offset, inst_offset, renderer);
             } break;
             
             case DM_RENDER_COMMAND_TOGGLE_WIREFRAME:
             {
                 DM_BYTE_POOL_POP(command.params, bool, wireframe);
                 
-                dm_render_command_backend_toggle_wireframe(wireframe, &context->renderer);
-            } break;
-            
-            case DM_RENDER_COMMAND_SET_SCISSOR_RECTS:
-            {
-                DM_BYTE_POOL_POP(command.params, uint32_t, bottom);
-                DM_BYTE_POOL_POP(command.params, uint32_t, top);
-                DM_BYTE_POOL_POP(command.params, uint32_t, right);
-                DM_BYTE_POOL_POP(command.params, uint32_t, left);
-                
-                dm_render_command_backend_set_scissor_rects(left, right, top, bottom, &context->renderer);
+                dm_render_command_backend_toggle_wireframe(wireframe, renderer);
             } break;
             
             default:
