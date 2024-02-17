@@ -2151,7 +2151,7 @@ dm_context* dm_init(dm_context_init_packet init_packet)
     context->flags |= DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
     
     // nuklear
-    if(!dm_imgui_init(context)) return false;
+    //if(!dm_imgui_init(context)) return false;
     
     return context;
 }
@@ -2163,7 +2163,7 @@ void dm_shutdown(dm_context* context)
         if(context->renderer.command_manager.commands[i].params.data) dm_free(context->renderer.command_manager.commands[i].params.data);
     }
     
-    dm_imgui_shutdown(context);
+    //dm_imgui_shutdown(context);
     
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
@@ -2175,7 +2175,7 @@ void dm_shutdown(dm_context* context)
 // also pass through nuklear inputs
 void dm_poll_events(dm_context* context)
 {
-    dm_imgui_input_begin(context);
+    //dm_imgui_input_begin(context);
     
     for(uint32_t i=0; i<context->platform_data.event_list.num; i++)
     {
@@ -2236,10 +2236,10 @@ void dm_poll_events(dm_context* context)
             break;
         }
         
-        dm_imgui_input_event(e, context);
+        //dm_imgui_input_event(e, context);
     }
     
-    dm_imgui_input_end(context);
+    //dm_imgui_input_end(context);
 }
 
 void dm_start(dm_context* context)
@@ -2308,7 +2308,7 @@ bool dm_renderer_end_frame(dm_context* context)
     if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_RENDER_END, context)) return false;
     
     // imgui
-    dm_imgui_render(context);
+    //dm_imgui_render(context);
     
     // command submission
     if(!dm_renderer_submit_commands(context)) 
