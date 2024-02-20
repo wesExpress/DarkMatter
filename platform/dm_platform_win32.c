@@ -148,7 +148,7 @@ void dm_platform_shutdown(dm_platform_data* platform_data)
 		w32_data->hwnd = 0;
 	}
     
-    dm_free(platform_data->internal_data);
+    dm_free(&platform_data->internal_data);
 }
 
 bool dm_platform_pump_events(dm_platform_data* platform_data)
@@ -447,7 +447,7 @@ void* dm_win32_thread_start_func(void* args)
         if(task) 
         {
             task->func(task->args);
-            dm_free(task);
+            dm_free(&task);
         }
         
         // decrement thread working counter
@@ -530,7 +530,7 @@ void dm_platform_clipboard_paste(void (*callback)(char*,int,void*), void* edit)
     
     callback(utf8, utf8size, edit);
     //nk_textedit_paste(edit, utf8, utf8size);
-    dm_free(utf8);
+    dm_free(&utf8);
     
     GlobalUnlock(mem);
     CloseClipboard();
@@ -590,6 +590,10 @@ bool dm_platform_win32_decode_hresult(HRESULT hr)
         
         case E_UNEXPECTED:
         DM_LOG_ERROR("Unexpected failure");
+        break;
+        
+        case 0x80070002:
+        DM_LOG_ERROR("File not found");
         break;
         
         default:

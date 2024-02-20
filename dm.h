@@ -23,14 +23,12 @@ depreciated
 
 #elif defined(__WIN32__) || defined(_WIN32) || defined(WIN32)
 #define DM_PLATFORM_WIN32
-//#if !defined(DM_OPENGL) && !defined(DM_VULKAN)
-//#define DM_DIRECTX
-//#endif
 #define DM_INLINE __forceinline
 
 #elif __linux__ || __gnu_linux__
 #define DM_PLATFORM_LINUX
 #define DM_INLINE __always_inline
+
 #else
 #define DM_PLATFORM_GLFW
 #define DM_INLINE
@@ -699,6 +697,10 @@ typedef struct dm_pipeline_desc_t
     dm_primitive_topology primitive_topology;
     bool                  blend, depth, stencil, scissor, wireframe;
     float                 min_lod, max_lod;
+    
+    char vertex_shader[512];
+    char pixel_shader[512];
+    char master_shader[512];
 } dm_pipeline_desc;
 
 typedef struct dm_shader_desc_t
@@ -1118,7 +1120,7 @@ FUNC DECLARATIONS
 void* dm_alloc(size_t size);
 void* dm_calloc(size_t count, size_t size);
 void* dm_realloc(void* block, size_t size);
-void  dm_free(void* block);
+void  dm_free(void** block);
 void* dm_memset(void* dest, int value, size_t size);
 void* dm_memzero(void* block, size_t size);
 void* dm_memcpy(void* dest, const void* src, size_t size);
@@ -1235,7 +1237,8 @@ bool dm_renderer_create_dynamic_vertex_buffer(void* data, size_t data_size, size
 bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context);
 
-bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context);
+//bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context);
+bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_vertex_attrib_desc* attribs, uint32_t attrib_count, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context);

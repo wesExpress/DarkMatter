@@ -222,10 +222,10 @@ void* dm_realloc(void* block, size_t size)
     return block;
 }
 
-void dm_free(void* block)
+void dm_free(void** block)
 {
-    free(block);
-    block = NULL;
+    free(*block);
+    *block = NULL;
 }
 
 void* dm_memset(void* dest, int value, size_t size)
@@ -614,7 +614,7 @@ extern bool dm_renderer_backend_init(dm_context* context);
 extern void dm_renderer_backend_shutdown(dm_context* context);
 extern bool dm_renderer_backend_begin_frame(dm_renderer* renderer);
 extern bool dm_renderer_backend_end_frame(dm_context* context);
-extern void dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer);
+extern bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer);
 
 extern void* dm_renderer_backend_get_internal_texture_ptr(dm_render_handle handle, dm_renderer* renderer);
 
@@ -622,6 +622,7 @@ extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, d
 extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
 
 extern bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_pipeline(dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attribs, uint32_t attrib_count, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_renderer* renderer);
@@ -745,6 +746,14 @@ bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipel
     if(dm_renderer_backend_create_shader_and_pipeline(shader_desc, pipe_desc, attrib_descs, attrib_count, shader_handle, pipe_handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Creating shader and pipeline failed");
+    return false;
+}
+
+bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_vertex_attrib_desc* attribs, uint32_t attrib_count, dm_render_handle* handle, dm_context* context)
+{
+    if(dm_renderer_backend_create_pipeline(desc, attribs, attrib_count, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Creating pipeline failed");
     return false;
 }
 
@@ -873,9 +882,9 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
         return false; 
     }
     
-    dm_free(alpha_bitmap);
-    dm_free(bitmap);
-    dm_free(buffer);
+    dm_free(&alpha_bitmap);
+    dm_free(&bitmap);
+    dm_free(&buffer);
     
     dm_memcpy(context->renderer.fonts + context->renderer.font_count, &font, sizeof(dm_font));
     *handle = context->renderer.font_count++;
@@ -989,7 +998,7 @@ bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* a
         break;
         
         default:
-        dm_free(*vertices);
+        dm_free(vertices);
         fast_obj_destroy(m);
         return false;
     }
@@ -1241,7 +1250,7 @@ void __dm_renderer_submit_render_command(dm_render_command* command, dm_render_c
     c->type = command->type;
     c->params.size = command->params.size;
     
-    dm_free(command->params.data);
+    //dm_free(command->params.data);
 }
 #define DM_SUBMIT_RENDER_COMMAND(COMMAND) __dm_renderer_submit_render_command(&COMMAND, &context->renderer.command_manager)
 #define DM_SUBMIT_RENDER_COMMAND_MANAGER(COMMAND, MANAGER) __dm_renderer_submit_render_command(&COMMAND, &MANAGER)
@@ -1821,7 +1830,7 @@ void dm_ecs_shutdown(dm_context* context)
     
     for(i=0; i<ecs_manager->num_registered_components; i++)
     {
-        dm_free(ecs_manager->components[i].data);
+        dm_free(&ecs_manager->components[i].data);
     }
     
     dm_ecs_system* system = NULL;
@@ -1833,7 +1842,9 @@ void dm_ecs_shutdown(dm_context* context)
             
             system->shutdown_func((void*)system,(void*)context);
             
-            if(system->system_data) dm_free(system->system_data);
+            if(!system->system_data) continue;
+            
+            dm_free(system->system_data);
         }
     }
 }
@@ -2124,14 +2135,14 @@ dm_context* dm_init(dm_context_init_packet init_packet)
     
     if(!dm_platform_init(init_packet.window_x, init_packet.window_y, context))
     {
-        dm_free(context);
+        dm_free(&context);
         return NULL;
     }
     
     if(!dm_renderer_init(context))
     {
         dm_platform_shutdown(&context->platform_data);
-        dm_free(context);
+        dm_free(&context);
         return NULL;
     }
     
@@ -2160,7 +2171,9 @@ void dm_shutdown(dm_context* context)
 {
     for(uint32_t i=0; i<DM_MAX_RENDER_COMMANDS; i++)
     {
-        if(context->renderer.command_manager.commands[i].params.data) dm_free(context->renderer.command_manager.commands[i].params.data);
+        if(!context->renderer.command_manager.commands[i].params.data) continue; 
+        
+        dm_free(&context->renderer.command_manager.commands[i].params.data);
     }
     
     //dm_imgui_shutdown(context);
@@ -2169,7 +2182,7 @@ void dm_shutdown(dm_context* context)
     dm_platform_shutdown(&context->platform_data);
     dm_ecs_shutdown(context);
     
-    dm_free(context);
+    dm_free(&context);
 }
 
 // also pass through nuklear inputs
@@ -2228,7 +2241,12 @@ void dm_poll_events(dm_context* context)
             context->renderer.width = e.new_rect[0];
             context->renderer.height = e.new_rect[1];
             
-            dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer);
+            if(!dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer))
+            {
+                DM_LOG_FATAL("Resize failed");
+                context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+                return;
+            }
             break;
             
             case DM_EVENT_UNKNOWN:
