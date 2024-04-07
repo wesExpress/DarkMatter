@@ -33,10 +33,10 @@ bool dm_imgui_init(dm_context* context)
     pipeline_desc.winding_order      = DM_WINDING_CLOCK;
     pipeline_desc.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
     
-    pipeline_desc.depth = true;
+    pipeline_desc.flags = DM_PIPELINE_FLAG_BLEND | DM_PIPELINE_FLAG_DEPTH;
+    
     pipeline_desc.depth_comp = DM_COMPARISON_ALWAYS;
     
-    pipeline_desc.blend = true;
     pipeline_desc.blend_eq           = DM_BLEND_EQUATION_ADD;
     pipeline_desc.blend_src_f        = DM_BLEND_FUNC_SRC_ALPHA;
     pipeline_desc.blend_dest_f       = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
@@ -346,7 +346,7 @@ void dm_imgui_render(dm_context* context)
     //if(imgui_nk_ctx->cmds.calls==0) return;
     
     dm_render_command_bind_shader(imgui_ctx->shader, context);
-    dm_render_command_bind_pipeline(imgui_ctx->pipe, context);
+    dm_render_command_bind_pipeline(false, imgui_ctx->pipe, context);
     
     struct nk_convert_config config = { 0 };
     NK_STORAGE const struct nk_draw_vertex_layout_element vertex_layout[] = {

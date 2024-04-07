@@ -23,14 +23,12 @@ depreciated
 
 #elif defined(__WIN32__) || defined(_WIN32) || defined(WIN32)
 #define DM_PLATFORM_WIN32
-#if !defined(DM_OPENGL) && !defined(DM_VULKAN)
-#define DM_DIRECTX
-#endif
 #define DM_INLINE __forceinline
 
 #elif __linux__ || __gnu_linux__
 #define DM_PLATFORM_LINUX
 #define DM_INLINE __always_inline
+
 #else
 #define DM_PLATFORM_GLFW
 #define DM_INLINE
@@ -75,15 +73,6 @@ INCLUDES
 #else
 #include <arm_neon.h>
 #endif
-
-#define NK_INCLUDE_FIXED_TYPES
-#define NK_INCLUDE_STANDARD_IO
-#define NK_INCLUDE_STANDARD_VARARGS
-#define NK_INCLUDE_DEFAULT_ALLOCATOR
-#define NK_INCLUDE_VERTEX_BUFFER_OUTPUT
-#define NK_INCLUDE_FONT_BAKING
-#define NK_INCLUDE_DEFAULT_FONT
-#include "Nuklear/nuklear.h"
 
 /*****
 TYPES
@@ -654,22 +643,33 @@ typedef dm_render_handle dm_compute_handle;
 #define DM_SHADER_INVALID        DM_RENDER_HANDLE_INVALID
 #define DM_PIPELINE_INVALID      DM_RENDER_HANDLE_INVALID
 
-typedef struct dm_buffer_desc_t
+typedef enum dm_vertex_buffer_type_t
 {
-    dm_buffer_type type;
-    dm_buffer_usage usage;
-    dm_buffer_cpu_access cpu_access;
-    size_t elem_size;
-    size_t buffer_size;
-} dm_buffer_desc;
+    DM_VERTEX_BUFFER_TYPE_VERTEX,
+    DM_VERTEX_BUFFER_TYPE_INSTANCE,
+    DM_VERTEX_BUFFER_TYPE_UNKNOWN
+} dm_vertex_buffer_type;
 
-typedef struct dm_uniform_t
+typedef struct dm_vertex_buffer_desc_t
 {
-    size_t           size;
-    dm_uniform_stage stage;
-    dm_render_handle internal_index;
-    char             name[512];
-} dm_uniform;
+    dm_vertex_buffer_type type;
+    size_t size, stride, count;
+    const void* data;
+} dm_vertex_buffer_desc;
+
+typedef enum dm_index_buffer_data_t
+{
+    DM_INDEX_BUFFER_DATA_UINT16,
+    DM_INDEX_BUFFER_DATA_UINT32,
+    DM_INDEX_BUFFER_UNKNOWN
+} dm_index_buffer_data;
+
+typedef struct dm_index_buffer_desc_t
+{
+    dm_index_buffer_data data_type;
+    size_t size, count;
+    const void* data;
+} dm_index_buffer_desc;
 
 typedef struct dm_vertex_attrib_desc_t
 {
@@ -683,6 +683,16 @@ typedef struct dm_vertex_attrib_desc_t
     size_t                 index;
 } dm_vertex_attrib_desc;
 
+typedef enum dm_pipeline_flag_t
+{
+    DM_PIPELINE_FLAG_BLEND     = 1 << 0,
+    DM_PIPELINE_FLAG_DEPTH     = 1 << 1,
+    DM_PIPELINE_FLAG_STENCIL   = 1 << 2,
+    DM_PIPELINE_FLAG_SCISSOR   = 1 << 3,
+    DM_PIPELINE_FLAG_WIREFRAME = 1 << 4
+} dm_pipeline_flag;
+
+#define DM_PIPELINE_MAX_CBS 5
 typedef struct dm_pipeline_desc_t
 {
     dm_cull_mode          cull_mode;
@@ -695,10 +705,24 @@ typedef struct dm_pipeline_desc_t
     
     dm_filter             sampler_filter;
     dm_texture_mode       u_mode, v_mode, w_mode;
+    dm_pipeline_flag      flags;
     dm_comparison         blend_comp, depth_comp, stencil_comp, sampler_comp;
+    
     dm_primitive_topology primitive_topology;
-    bool                  blend, depth, stencil, scissor, wireframe;
     float                 min_lod, max_lod;
+    
+    dm_vertex_attrib_desc* attribs;
+    uint32_t               attrib_count;
+    
+    dm_render_handle cbs[DM_PIPELINE_MAX_CBS];
+    size_t           cb_sizes[DM_PIPELINE_MAX_CBS];
+    uint32_t         cb_count;
+    
+    void*  vertex_shader_data;
+    size_t vertex_shader_size;
+    
+    void*  pixel_shader_data;
+    size_t pixel_shader_size;
 } dm_pipeline_desc;
 
 typedef struct dm_shader_desc_t
@@ -734,31 +758,108 @@ typedef enum dm_store_operation_t
     DM_STORE_OPERATION_UNKNOWN
 } dm_store_operation;
 
-typedef enum dm_renderpass_flag_t
-{
-    DM_RENDERPASS_FLAG_COLOR   = 1 << 0,
-    DM_RENDERPASS_FLAG_DEPTH   = 1 << 1,
-    DM_RENDERPASS_FLAG_STENCIL = 1 << 2,
-    DM_RENDERPASS_FLAG_UNKNOWN = 1 << 3
-} dm_renderpass_flag;
-
 typedef struct dm_renderpass_desc_t
 {
-    dm_load_operation  color_load_op;
-    dm_store_operation color_store_op;
+    float top, bottom;
+    float left, right;
     
-    dm_load_operation  color_stencil_load_op;
-    dm_store_operation color_stencil_store_op;
-    
-    dm_load_operation  depth_load_op;
-    dm_store_operation depth_store_op;
-    
-    dm_load_operation  depth_stencil_load_op;
-    dm_store_operation depth_stencil_store_op;
-    
-    dm_renderpass_flag flags;
+    float depth_min, depth_max;
 } dm_renderpass_desc;
 
+// raytracing
+typedef enum dm_blas_geometry_type_t
+{
+    DM_BLAS_GEOMETRY_TYPE_TRIANGLES,
+    DM_BLAS_GEOMETRY_TYPE_UNKNOWN
+} dm_blas_geometry_type;
+
+typedef enum dm_blas_geometry_flag_t
+{
+    DM_BLAS_GEOMETRY_FLAG_OPAQUE,
+    DM_BLAS_GEOMETRY_FLAG_UNKNOWN
+} dm_blas_geometry_flag;
+
+typedef struct dm_blas_desc_t
+{
+    dm_render_handle vertex_buffer, index_buffer;
+    uint32_t vertex_count, index_count;
+    size_t   vertex_size, index_size;
+    
+    dm_blas_geometry_type geom_type;
+    dm_blas_geometry_flag geom_flag;
+} dm_blas_desc;
+
+#define DM_MAX_BLAS 100
+typedef struct dm_tlas_desc_t
+{
+    dm_render_handle mesh_instance[DM_MAX_BLAS];
+    uint32_t         instance_count;
+} dm_tlas_desc;
+
+typedef struct dm_acceleration_structure_desc_t
+{
+    dm_blas_desc blas_descs[DM_MAX_BLAS];
+    uint32_t     blas_count;
+    
+    dm_tlas_desc tlas_desc;
+} dm_acceleration_structure_desc;
+
+typedef enum dm_raytracing_root_signature_type_t
+{
+    DM_RAYTRACING_ROOT_SIGNATURE_TYPE_UAV,
+    DM_RAYTRACING_ROOT_SIGNATURE_TYPE_SRV,
+    DM_RAYTRACING_ROOT_SIGNATURE_TYPE_CBV,
+    DM_RAYTRACING_ROOT_SIGNATURE_TYPE_UNKNOWN
+} dm_raytracing_root_signature_type;
+
+// raytracing pipeline
+typedef enum dm_raytracing_pipeline_resource_type_t
+{
+    DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_OUTPUT_TEXTURE,
+    DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_TEXTURE,
+    DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_BUFFER,          // acceleration structures, vertex buffers
+    DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_CONSTANT_BUFFER,
+    DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_UNKOWN
+} dm_raytracing_pipeline_resource_type;
+
+#define DM_RAYTRACING_PIPELINE_MAX_RESOURCE_MEMBER_COUNT 5
+typedef struct dm_raytracing_pipeline_resource_t
+{
+    dm_raytracing_pipeline_resource_type type;
+    dm_render_handle                     handles[DM_RAYTRACING_PIPELINE_MAX_RESOURCE_MEMBER_COUNT];
+    size_t                               sizes[DM_RAYTRACING_PIPELINE_MAX_RESOURCE_MEMBER_COUNT];
+    uint32_t                             is_as[DM_RAYTRACING_PIPELINE_MAX_RESOURCE_MEMBER_COUNT];
+    uint32_t                             count;
+} dm_raytracing_pipeline_resource;
+
+typedef struct dm_raytracing_hitgroup_desc_t
+{
+    char name[512];
+    char closest_hit[512];
+    char miss[512];
+} dm_raytracing_hitgroup_desc;
+
+#define DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS 2
+typedef struct dm_raytracing_pipeline_desc_t
+{
+    char raygen[512];
+    
+    dm_raytracing_hitgroup_desc hit_groups[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
+    uint32_t                    hit_group_count;
+    
+    void*  shader_data;
+    size_t shader_data_size;
+    
+    dm_raytracing_pipeline_resource resources[DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_UNKOWN];
+    uint32_t                        resource_count;
+    
+    dm_render_handle as;
+    
+    size_t   payload_size;
+    uint32_t max_recursion;
+} dm_raytracing_pipeline_desc;
+
+// model loading
 typedef enum dm_mesh_vertex_attrib_t
 {
     DM_MESH_VERTEX_ATTRIB_POSITION,
@@ -774,6 +875,7 @@ typedef enum dm_mesh_index_type_t
     DM_MESH_INDEX_TYPE_UNKNOWN
 } dm_mesh_index_type;
 
+// font
 typedef struct dm_bakedchar
 {
     uint16_t x0, x1, y0, y1;
@@ -787,30 +889,39 @@ typedef struct dm_font_t
     dm_render_handle texture_index;
 } dm_font;
 
+// commands
 typedef enum dm_render_command_type_t
 {
-    DM_RENDER_COMMAND_SET_TOPOLOGY,
-    DM_RENDER_COMMAND_BEGIN_RENDER_PASS,
-    DM_RENDER_COMMAND_END_RENDER_PASS,
-    DM_RENDER_COMMAND_SET_VIEWPORT,
-    DM_RENDER_COMMAND_CLEAR,
-    DM_RENDER_COMMAND_BIND_SHADER,
+    DM_RENDER_COMMAND_BEGIN_RENDERPASS,
+    DM_RENDER_COMMAND_END_RENDERPASS,
+    
     DM_RENDER_COMMAND_BIND_PIPELINE,
-    DM_RENDER_COMMAND_BIND_BUFFER,
-    DM_RENDER_COMMAND_BIND_UNIFORM,
-    DM_RENDER_COMMAND_UPDATE_BUFFER,
-    DM_RENDER_COMMAND_UPDATE_UNIFORM,
+    
+    DM_RENDER_COMMAND_BIND_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_BIND_INDEX_BUFFER,
     DM_RENDER_COMMAND_BIND_TEXTURE,
-    DM_RENDER_COMMAND_UNBIND_TEXTURE,
+    
+    DM_RENDER_COMMAND_UPDATE_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_UPDATE_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_UPDATE_TEXTURE,
-    DM_RENDER_COMMAND_BIND_DEFAULT_FRAMEBUFFER,
-    DM_RENDER_COMMAND_BIND_FRAMEBUFFER,
-    DM_RENDER_COMMAND_BIND_FRAMEBUFFER_TEXTURE,
+    
     DM_RENDER_COMMAND_DRAW_ARRAYS,
     DM_RENDER_COMMAND_DRAW_INDEXED,
     DM_RENDER_COMMAND_DRAW_INSTANCED,
+    
+    // misc
+    DM_RENDER_COMMAND_SET_TOPOLOGY,
     DM_RENDER_COMMAND_TOGGLE_WIREFRAME,
-    DM_RENDER_COMMAND_SET_SCISSOR_RECTS,
+    
+#ifdef DM_RAYTRACING
+    DM_RENDER_COMMAND_BIND_RAYTRACING_PIPELINE,
+    
+    DM_RENDER_COMMAND_BIND_ACCELERATION_STRUCTURE,
+    DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_INSTANCE,
+    DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_TLAS,
+    
+    DM_RENDER_COMMAND_DISPATCH_RAYS,
+#endif
     DM_RENDER_COMMAND_UNKNOWN
 } dm_render_command_type;
 
@@ -844,90 +955,6 @@ typedef struct dm_renderer_t
     
     void* internal_renderer;
 } dm_renderer;
-
-/***
-ECS
-*****/
-#ifndef DM_ECS_MAX_ENTITIES
-#define DM_ECS_MAX_ENTITIES 1024
-#endif
-
-#ifdef DM_ECS_MORE_COMPONENTS
-typedef uint64_t dm_ecs_id;
-#define DM_ECS_MAX 64
-#define DM_ECS_INVALID_ID ULONG_MAX
-#else
-typedef uint32_t dm_ecs_id;
-#define DM_ECS_MAX 32
-#define DM_ECS_INVALID_ID UINT_MAX
-#endif
-
-#ifdef DM_ECS_MORE_COMPONENT_MEMBERS
-#define DM_ECS_MAX_COMPONENT_MEMBER_NUM 64
-#else
-#define DM_ECS_MAX_COMPONENT_MEMBER_NUM 32
-#endif
-
-typedef uint32_t dm_entity;
-#define DM_ECS_INVALID_ENTITY UINT_MAX
-
-typedef enum dm_ecs_system_timing_t
-{
-    DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN,
-    DM_ECS_SYSTEM_TIMING_UPDATE_END,
-    DM_ECS_SYSTEM_TIMING_RENDER_BEGIN,
-    DM_ECS_SYSTEM_TIMING_RENDER_END,
-    DM_ECS_SYSTEM_TIMING_UNKNOWN
-} dm_ecs_system_timing;
-
-typedef struct dm_ecs_system_t
-{
-    uint32_t  component_count;
-    dm_ecs_id component_mask;
-    dm_ecs_id component_ids[DM_ECS_MAX];
-    
-    uint32_t entity_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
-    uint32_t entity_count;
-    
-    bool (*run_func)(void*,void*);
-    void (*shutdown_func)(void*,void*);
-    void (*insert_func)(const uint32_t,void*,void*);
-    
-    void* system_data;
-} dm_ecs_system;
-
-typedef struct dm_ecs_component_t
-{
-    size_t   size;
-    uint32_t entity_count, tombstone_count;
-    uint32_t tombstones[DM_ECS_MAX_ENTITIES];
-    void*    data;
-} dm_ecs_component;
-
-typedef enum dm_ecs_flags_t
-{
-    DM_ECS_FLAG_REINSERT_ENTITIES = 1 << 0
-} dm_ecs_flag;
-
-typedef struct dm_ecs_manager_t
-{
-    // entities: indexed via hashing
-    dm_entity entities[DM_ECS_MAX_ENTITIES];
-    uint32_t  entity_component_indices[DM_ECS_MAX_ENTITIES][DM_ECS_MAX];
-    dm_ecs_id entity_component_masks[DM_ECS_MAX_ENTITIES];
-    
-    uint32_t  entity_count;
-    
-    dm_ecs_flag flags;
-    
-    // components
-    dm_ecs_component components[DM_ECS_MAX];
-    uint32_t         num_registered_components;
-    
-    // systems
-    dm_ecs_system systems[DM_ECS_SYSTEM_TIMING_UNKNOWN][DM_ECS_MAX];
-    uint32_t      num_registered_systems[DM_ECS_SYSTEM_TIMING_UNKNOWN];
-} dm_ecs_manager;
 
 /*******
 PHYSICS
@@ -1027,54 +1054,6 @@ typedef enum dm_collision_shape_t
     DM_COLLISION_SHAPE_UNKNOWN
 } dm_collision_shape;
 
-/*****
-IMGUI 
-*******/
-typedef struct dm_imgui_vertex_t
-{
-    float pos[2];
-    float tex_coords[2];
-    float color[4];
-} dm_imgui_vertex;
-
-typedef struct dm_imgui_uni_t
-{
-    dm_mat4 proj;
-} dm_imgui_uni;
-
-typedef uint16_t dm_nk_element_t;
-
-#define DM_IMGUI_MAX_VERTICES 512 * 1024
-#define DM_IMGUI_MAX_INDICES  128 * 1024
-
-#define DM_IMGUI_VERTEX_LEN DM_IMGUI_MAX_VERTICES / sizeof(dm_imgui_vertex)
-#define DM_IMGUI_INDEX_LEN  DM_IMGUI_MAX_INDICES / sizeof(dm_nk_element_t)
-
-typedef struct dm_imgui_nuklear_context_t
-{
-    struct nk_context ctx;
-    struct nk_font_atlas atlas;
-    struct nk_buffer cmds;
-    
-    dm_imgui_vertex vertices[DM_IMGUI_VERTEX_LEN];
-    dm_nk_element_t indices[DM_IMGUI_INDEX_LEN];
-    
-    struct nk_draw_null_texture tex_null;
-    uint32_t max_vertex_buffer;
-    uint32_t max_index_buffer;
-} dm_imgui_nuklear_context;
-
-typedef struct dm_imgui_context_t
-{
-    dm_render_handle vb, ib, uni;
-    dm_render_handle pipe, shader;
-    dm_render_handle font_texture;
-    dm_render_handle font;
-    
-    // nuklear context
-    dm_imgui_nuklear_context internal_context;
-} dm_imgui_context;
-
 /******************
 DARKMATTER CONTEXT
 ********************/
@@ -1092,14 +1071,11 @@ typedef struct dm_context_t
     dm_platform_data   platform_data;
     dm_input_state     input_states[2];
     dm_renderer        renderer;
-    dm_ecs_manager     ecs_manager;
     
     double             start, end, delta;
     mt19937            random;
     mt19937_64         random_64;
     uint32_t           flags;
-    
-    dm_imgui_context imgui_context;
     
     // application
     void*              app_data;
@@ -1120,7 +1096,7 @@ FUNC DECLARATIONS
 void* dm_alloc(size_t size);
 void* dm_calloc(size_t count, size_t size);
 void* dm_realloc(void* block, size_t size);
-void  dm_free(void* block);
+void  dm_free(void** block);
 void* dm_memset(void* dest, int value, size_t size);
 void* dm_memzero(void* block, size_t size);
 void* dm_memcpy(void* dest, const void* src, size_t size);
@@ -1232,73 +1208,39 @@ float dm_random_float_normal(float mu, float sigma, dm_context* context);
 void dm_platform_sleep(uint64_t ms, dm_context* context);
 
 // rendering
-bool dm_renderer_create_static_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_dynamic_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_index_buffer(const dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_constant_buffer(const void* data, size_t data_size, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_context* context);
 
-bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context);
-bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context);
-
-bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context);
-
-#define DM_MAKE_VERTEX_ATTRIB(NAME, STRUCT, MEMBER, CLASS, DATA_T, COUNT, INDEX, NORMALIZED) { .name=NAME, .data_t=DATA_T, .attrib_class=CLASS, .stride=sizeof(STRUCT), .offset=offsetof(STRUCT, MEMBER), .count=COUNT, .index=INDEX, .normalized=NORMALIZED}
-
-dm_pipeline_desc dm_renderer_default_pipeline();
-
-void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context);
-
-bool dm_renderer_load_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, dm_mesh_index_type index_type, float** vertices, void** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context);
+#ifdef DM_RAYTRACING
+bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
+#endif
 
 // render commands
-void dm_render_command_clear(float r, float g, float b, float a, dm_context* context);
-void dm_render_command_set_viewport(uint32_t width, uint32_t height, dm_context* context);
-void dm_render_command_set_default_viewport(dm_context* context);
 void dm_render_command_set_primitive_topology(dm_primitive_topology topology, dm_context* context);
-void dm_render_command_bind_shader(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_pipeline(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_buffer(dm_render_handle handle, uint32_t slot, dm_context* context);
-void dm_render_command_bind_uniform(dm_render_handle uniform_handle, uint32_t slot, dm_uniform_stage stage, uint32_t offset, dm_context* context);
-void dm_render_command_update_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
-void dm_render_command_update_uniform(dm_render_handle uniform_handle, void* data, size_t data_size, dm_context* context);
 void dm_render_command_bind_texture(dm_render_handle handle, uint32_t slot, dm_context* context);
+void dm_render_command_update_vertex_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
 void dm_render_command_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_context* context);
-void dm_render_command_bind_default_framebuffer(dm_context* context);
-//void dm_render_command_bind_framebuffer(dm_render_handle handle, dm_context* context);
-//void dm_render_command_bind_framebuffer_texture(dm_render_handle handle, uint32_t slot, dm_context* context);
+void dm_render_command_update_constant_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
+void dm_render_command_begin_renderpass(dm_render_handle handle, dm_context* conext);
+void dm_render_command_end_renderpass(dm_render_handle handle, dm_context* conext);
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_context* context);
 void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);
-void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_context* context);
+void dm_render_command_draw_instanced(uint32_t index_count, uint32_t vertex_count, uint32_t inst_count, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_context* context);
 void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
-void dm_render_command_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_context* context);
-void dm_render_command_map_callback(dm_render_handle handle, void (*callback)(dm_context*), dm_context* context);
 
-// compute commands
-bool dm_compute_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_context* context);
-bool dm_compute_create_buffer(size_t data_size, size_t elem_size, dm_compute_buffer_type type, dm_compute_handle* handle, dm_context* context);
-bool dm_compute_create_uniform(size_t data_size, dm_compute_handle* handle, dm_context* context);
-
-bool  dm_compute_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_context* context);
-bool  dm_compute_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
-void* dm_compute_command_get_buffer_data(dm_compute_handle handle, dm_context* context);
-bool  dm_compute_command_bind_shader(dm_compute_handle handle, dm_context* context);
-bool  dm_compute_command_dispatch(uint32_t threads_per_group_x, uint32_t threads_per_group_y, uint32_t threads_per_group_z, uint32_t thread_group_count_x, uint32_t thread_group_count_y, uint32_t thread_group_count_z, dm_context* context);
-
-// ecs
-dm_ecs_id dm_ecs_register_component(size_t component_block_size, dm_context* context);
-dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing, bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), void (*insert_func)(uint32_t,void*,void*), dm_context* context);
-
-dm_entity dm_ecs_entity_create(dm_context* context);
-void      dm_ecs_entity_destroy(dm_entity entity, dm_context* context);
-
-void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context);
-void  dm_ecs_get_component_insert_index(dm_ecs_id component_id, uint32_t* index, dm_context* context);
-void  dm_ecs_entity_add_component(dm_entity entity, dm_ecs_id component_id, dm_context* context);
-void  dm_ecs_entity_remove_component(dm_entity entity, dm_ecs_id component_id, dm_context* context);
-void  dm_ecs_entity_remove_component_via_index(uint32_t entity_index, dm_ecs_id component_id, dm_context* context);
+#ifdef DM_RAYTRACING
+void dm_render_command_bind_acceleration_structure(dm_render_handle handle, uint32_t slot, dm_context* context);
+void dm_render_command_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size,  dm_context* context);
+void dm_render_command_update_acceleration_structure_tlas(dm_render_handle handle, dm_context* context);
+void dm_render_command_bind_raytracing_pipeline(dm_render_handle handle, dm_context* context);
+void dm_render_command_raytracing_pipeline_dispatch_rays(dm_render_handle handle, dm_context* context);
+#endif
 
 // physics
 bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);
@@ -1330,8 +1272,6 @@ uint32_t __dm_get_screen_height(dm_context* context);
 #define DM_SCREEN_HEIGHT(CONTEXT) __dm_get_screen_height(context)
 
 #define DM_ARRAY_LEN(ARRAY) sizeof(ARRAY) / sizeof(ARRAY[0])
-
-void dm_grow_dyn_array(void** array, uint32_t count, uint32_t* capacity, size_t elem_size, float load_factor, uint32_t resize_factor);
 
 void dm_qsort(void* array, size_t count, size_t elem_size, int (compar)(const void* a, const void* b));
 #ifdef DM_LINUX
@@ -1409,75 +1349,6 @@ uint32_t dm_hash_reduce(uint32_t x, uint32_t n)
     return ((uint64_t)x * (uint64_t)n) >> 32;
 }
 
-DM_INLINE
-uint32_t dm_ecs_entity_get_index(dm_entity entity, dm_context* context)
-{
-    //const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
-    const uint32_t index = entity % DM_ECS_MAX_ENTITIES;
-    dm_entity* entities = context->ecs_manager.entities;
-    
-    if(entities[index]==entity) return index;
-    
-    uint32_t runner = index + 1;
-    if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
-    
-    while(runner != index)
-    {
-        if(entities[runner]==entity) return runner;
-        
-        runner++;
-        if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
-    }
-    
-    DM_LOG_FATAL("Could not find entity index, should not be here...");
-    return DM_ECS_INVALID_ENTITY;
-}
-
-DM_INLINE
-uint32_t dm_ecs_entity_get_component_index(dm_entity entity, dm_ecs_id component_id, dm_context* context)
-{
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==DM_ECS_INVALID_ENTITY) return DM_ECS_INVALID_ENTITY;
-    
-    return context->ecs_manager.entity_component_indices[entity_index][component_id];
-}
-
-DM_INLINE
-bool dm_ecs_entity_has_component_via_index(uint32_t index, dm_ecs_id component_id, dm_context* context)
-{
-    return context->ecs_manager.entity_component_masks[index] & DM_BIT_SHIFT(component_id);
-}
-
-DM_INLINE
-bool dm_ecs_entity_has_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
-{
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==DM_ECS_INVALID_ENTITY) return false;
-    
-    return dm_ecs_entity_has_component_via_index(entity_index, component_id, context);
-}
-
-DM_INLINE
-bool dm_ecs_entity_has_component_multiple_via_index(uint32_t index, dm_ecs_id component_mask, dm_context* context)
-{
-    dm_ecs_id entity_mask = context->ecs_manager.entity_component_masks[index];
-    
-    // NAND entity mask with opposite of component mask
-    dm_ecs_id result = ~(entity_mask & ~component_mask);
-    // XOR with opposite of entity mask
-    result ^= ~entity_mask;
-    // success only if this equals the component mask
-    return (result == component_mask);
-}
-
-DM_INLINE
-bool dm_ecs_entity_has_component_multiple(dm_entity entity, dm_ecs_id component_mask, dm_context* context)
-{
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(entity_index==DM_ECS_INVALID_ENTITY) return false;
-    
-    return dm_ecs_entity_has_component_multiple_via_index(entity_index, component_mask, context);
-}
 
 #include "dm_math.h"
 

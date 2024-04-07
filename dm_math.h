@@ -452,10 +452,23 @@ void dm_quat_sub_quat(const dm_quat left, const dm_quat right, dm_quat out)
 DM_INLINE
 void dm_quat_mul_quat(const dm_quat left, const dm_quat right, dm_quat out)
 {
-    out[0] = (left[3] * right[0]) + (left[0] * right[3]) + (left[1] * right[2]) - (left[2] * right[1]);
-    out[1] = (left[3] * right[1]) - (left[0] * right[2]) + (left[1] * right[3]) + (left[2] * right[0]);
-    out[2] = (left[3] * right[2]) + (left[0] * right[1]) - (left[1] * right[0]) + (left[2] * right[3]);
-    out[3] = (left[3] * right[3]) - (left[0] * right[0]) - (left[1] * right[1]) - (left[2] * right[2]);
+    //
+    const float l0 = left[0];
+    const float l1 = left[1];
+    const float l2 = left[2];
+    const float l3 = left[3];
+    
+    //
+    const float r0 = right[0];
+    const float r1 = right[1];
+    const float r2 = right[2];
+    const float r3 = right[3];
+    
+    //
+    out[0] = (l3 * r0) + (l0 * r3) + (l1 * r2) - (l2 * r1);
+    out[1] = (l3 * r1) - (l0 * r2) + (l1 * r3) + (l2 * r0);
+    out[2] = (l3 * r2) + (l0 * r1) - (l1 * r0) + (l2 * r3);
+    out[3] = (l3 * r3) - (l0 * r0) - (l1 * r1) - (l2 * r2);
 }
 
 DM_INLINE
@@ -467,9 +480,19 @@ void dm_quat_cross(const dm_quat left, const dm_quat right, dm_quat out)
 DM_INLINE
 void dm_vec3_mul_quat(const dm_vec3 v, const dm_quat q, dm_quat out)
 {
-    dm_quat vq;
-    dm_quat_from_vec3(v, vq);
-    dm_quat_mul_quat(vq, q, out);
+    const float v0 = v[0];
+    const float v1 = v[1];
+    const float v2 = v[2];
+    
+    const float q0 = q[0];
+    const float q1 = q[1];
+    const float q2 = q[2];
+    const float q3 = q[3];
+    
+    out[0] =  (v0 * q3) + (v1 * q2) - (v2 * q1);
+    out[1] = -(v0 * q2) + (v1 * q3) + (v2 * q0);
+    out[2] =  (v0 * q1) - (v1 * q0) + (v2 * q3);
+    out[3] = -(v0 * q0) - (v1 * q1) - (v2 * q2);
 }
 
 DM_INLINE
@@ -740,15 +763,15 @@ void dm_mat3_rotate_from_quat(const dm_quat quat, dm_mat3 out)
     float zw = quat[2] * quat[3];
     
     out[0][0] = 1 - 2 * (yy + zz);
-    out[0][1] = 2 * (xy + zw);
-    out[0][2] = 2 * (xz - yw);
+    out[0][1] = 2 * (xy - zw);
+    out[0][2] = 2 * (xz + yw);
     
-    out[1][0] = 2 * (xy - zw);
+    out[1][0] = 2 * (xy + zw);
     out[1][1] = 1 - 2 * (xx + zz);
-    out[1][2] = 2 * (yz + xw);
+    out[1][2] = 2 * (yz - xw);
     
-    out[2][0] = 2 * (xz + yw);
-    out[2][1] = 2 * (yz - xw);
+    out[2][0] = 2 * (xz - yw);
+    out[2][1] = 2 * (yz + xw);
     out[2][2] = 1 - 2 * (xx + yy);
 }
 
@@ -812,25 +835,68 @@ void dm_mat4_transpose(const dm_mat4 mat, dm_mat4 out)
 DM_INLINE
 void dm_mat4_mul_mat4(const dm_mat4 left, const dm_mat4 right, dm_mat4 out)
 {
-    out[0][0] = left[0][0] * right[0][0] + left[0][1] * right[1][0] + left[0][2] * right[2][0] + left[0][3] * right[3][0];
-    out[0][1] = left[0][0] * right[0][1] + left[0][1] * right[1][1] + left[0][2] * right[2][1] + left[0][3] * right[3][1];
-    out[0][2] = left[0][0] * right[0][2] + left[0][1] * right[1][2] + left[0][2] * right[2][2] + left[0][3] * right[3][2];
-    out[0][3] = left[0][0] * right[0][3] + left[0][1] * right[1][3] + left[0][2] * right[2][3] + left[0][3] * right[3][3];
+    //
+    const float l00 = left[0][0];
+    const float l01 = left[0][1];
+    const float l02 = left[0][2];
+    const float l03 = left[0][3];
     
-    out[1][0] = left[1][0] * right[0][0] + left[1][1] * right[1][0] + left[1][2] * right[2][0] + left[1][3] * right[3][0];
-    out[1][1] = left[1][0] * right[0][1] + left[1][1] * right[1][1] + left[1][2] * right[2][1] + left[1][3] * right[3][1];
-    out[1][2] = left[1][0] * right[0][2] + left[1][1] * right[1][2] + left[1][2] * right[2][2] + left[1][3] * right[3][2];
-    out[1][3] = left[1][0] * right[0][3] + left[1][1] * right[1][3] + left[1][2] * right[2][3] + left[1][3] * right[3][3];
+    const float l10 = left[1][0];
+    const float l11 = left[1][1];
+    const float l12 = left[1][2];
+    const float l13 = left[1][3];
     
-    out[2][0] = left[2][0] * right[0][0] + left[2][1] * right[1][0] + left[2][2] * right[2][0] + left[2][3] * right[3][0];
-    out[2][1] = left[2][0] * right[0][1] + left[2][1] * right[1][1] + left[2][2] * right[2][1] + left[2][3] * right[3][1];
-    out[2][2] = left[2][0] * right[0][2] + left[2][1] * right[1][2] + left[2][2] * right[2][2] + left[2][3] * right[3][2];
-    out[2][3] = left[2][0] * right[0][3] + left[2][1] * right[1][3] + left[2][2] * right[2][3] + left[2][3] * right[3][3];
+    const float l20 = left[2][0];
+    const float l21 = left[2][1];
+    const float l22 = left[2][2];
+    const float l23 = left[2][3];
     
-    out[3][0] = left[3][0] * right[0][0] + left[3][1] * right[1][0] + left[3][2] * right[2][0] + left[3][3] * right[3][0];
-    out[3][1] = left[3][0] * right[0][1] + left[3][1] * right[1][1] + left[3][2] * right[2][1] + left[3][3] * right[3][1];
-    out[3][2] = left[3][0] * right[0][2] + left[3][1] * right[1][2] + left[3][2] * right[2][2] + left[3][3] * right[3][2];
-    out[3][3] = left[3][0] * right[0][3] + left[3][1] * right[1][3] + left[3][2] * right[2][3] + left[3][3] * right[3][3];
+    const float l30 = left[3][0];
+    const float l31 = left[3][1];
+    const float l32 = left[3][2];
+    const float l33 = left[3][3];
+    
+    //
+    const float r00 = right[0][0];
+    const float r01 = right[0][1];
+    const float r02 = right[0][2];
+    const float r03 = right[0][3];
+    
+    const float r10 = right[1][0];
+    const float r11 = right[1][1];
+    const float r12 = right[1][2];
+    const float r13 = right[1][3];
+    
+    const float r20 = right[2][0];
+    const float r21 = right[2][1];
+    const float r22 = right[2][2];
+    const float r23 = right[2][3];
+    
+    const float r30 = right[3][0];
+    const float r31 = right[3][1];
+    const float r32 = right[3][2];
+    const float r33 = right[3][3];
+    
+    //
+    out[0][0] = (l00 * r00) + (l01 * r10) + (l02 * r20) + (l03 * r30);
+    out[0][1] = (l00 * r01) + (l01 * r11) + (l02 * r21) + (l03 * r31);
+    out[0][2] = (l00 * r02) + (l01 * r12) + (l02 * r22) + (l03 * r32);
+    out[0][3] = (l00 * r03) + (l01 * r13) + (l02 * r23) + (l03 * r33);
+    
+    out[1][0] = (l10 * r00) + (l11 * r10) + (l12 * r20) + (l13 * r30);
+    out[1][1] = (l10 * r01) + (l11 * r11) + (l12 * r21) + (l13 * r31);
+    out[1][2] = (l10 * r02) + (l11 * r12) + (l12 * r22) + (l13 * r32);
+    out[1][3] = (l10 * r03) + (l11 * r13) + (l12 * r23) + (l13 * r33);
+    
+    out[2][0] = (l20 * r00) + (l21 * r10) + (l22 * r20) + (l23 * r30);
+    out[2][1] = (l20 * r01) + (l21 * r11) + (l22 * r21) + (l23 * r31);
+    out[2][2] = (l20 * r02) + (l21 * r12) + (l22 * r22) + (l23 * r32);
+    out[2][3] = (l20 * r03) + (l21 * r13) + (l22 * r23) + (l23 * r33);
+    
+    out[3][0] = (l30 * r00) + (l31 * r10) + (l32 * r20) + (l33 * r30);
+    out[3][1] = (l30 * r01) + (l31 * r11) + (l32 * r21) + (l33 * r31);
+    out[3][2] = (l30 * r02) + (l31 * r12) + (l32 * r22) + (l33 * r32);
+    out[3][3] = (l30 * r03) + (l31 * r13) + (l32 * r23) + (l33 * r33);
 }
 
 DM_INLINE
@@ -1052,7 +1118,7 @@ void dm_mat_scale(const dm_mat4 mat, const dm_vec3 scale, dm_mat4 out)
     dm_vec4_scale(mat[0], scale[0], out[0]);
     dm_vec4_scale(mat[1], scale[1], out[1]);
     dm_vec4_scale(mat[2], scale[2], out[2]);
-    dm_vec4_scale(mat[3], scale[3], out[3]);
+    //dm_vec4_scale(mat[3], scale[3], out[3]);
     dm_memcpy(out[3], mat[3], sizeof(float) * 4);
 }
 
@@ -1150,8 +1216,8 @@ void dm_mat_view(const dm_vec3 view_origin, const dm_vec3 target, const dm_vec3 
 DM_INLINE
 void dm_mat_perspective(float fov, float aspect_ratio, float n, float f, dm_mat4 out)
 {
-	float t  = 1.0f / dm_tan(fov * 0.5f);
-	float fn = 1.0f / (n - f);
+	const float t  = 1.0f / dm_tan(fov * 0.5f);
+	const float fn = 1.0f / (n - f);
 	
     dm_memzero(out, DM_MAT4_SIZE);
     

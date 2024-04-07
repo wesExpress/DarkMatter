@@ -1,6 +1,6 @@
 #include "dm_renderer_dx11.h"
 
-#ifdef DM_DIRECTX
+#ifdef DM_DIRECTX11
 #include "platform/dm_platform_win32.h"
 
 #ifdef DM_DEBUG
@@ -908,6 +908,74 @@ bool dm_compute_backend_create_uniform(size_t data_size, dm_compute_handle* hand
     return true;
 }
 
+/**********
+RENDERPASS
+************/
+bool dm_renderer_backend_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    HRESULT hr;
+    
+    dm_dx11_renderpass internal_pass = { 0 };
+    
+    ID3D11Device* device        = dx11_renderer->device;
+    IDXGISwapChain* swap_chain = dx11_renderer->swap_chain;
+    
+    if(desc.flags && DM_RENDERPASS_FLAG_COLOR)
+    {
+        hr = IDXGISwapChain_GetBuffer(swap_chain, 0, &IID_ID3D11Texture2D, (void**)&(ID3D11Resource*)internal_pass.color_target);
+        if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("IDXGISwapChain_GetBuffer failed"); return false; }
+        
+        ID3D11Device_CreateRenderTargetView(device, (ID3D11Resource*)internal_pass.color_target, NULL, &internal_pass.color_view);
+    }
+    
+    if(desc.flags && DM_RENDERPASS_FLAG_DEPTH)
+    {
+        RECT client_rect = { 0 };
+        GetClientRect(dx11_renderer->hwnd, &client_rect);
+        
+        D3D11_TEXTURE2D_DESC tex_desc = { 0 };
+        tex_desc.Width            = client_rect.right;
+        tex_desc.Height           = client_rect.bottom;
+        tex_desc.MipLevels        = 1;
+        tex_desc.ArraySize        = 1;
+        tex_desc.Format           = DXGI_FORMAT_D24_UNORM_S8_UINT;
+        tex_desc.SampleDesc.Count = 1;
+        tex_desc.Usage            = D3D11_USAGE_DEFAULT;
+        tex_desc.BindFlags        = D3D11_BIND_DEPTH_STENCIL;
+        
+        hr = ID3D11Device_CreateTexture2D(device, &tex_desc, NULL, &internal_pass.depth_stencil_target);
+        if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateTexture2D failed"); return false; }
+        hr = ID3D11Device_CreateDepthStencilView(device, (ID3D11Resource*)internal_pass.depth_stencil_target, 0, &internal_pass.depth_stencil_view);
+        if(!dm_platform_win32_decode_hresult(hr)) { DM_LOG_FATAL("ID3D11Device_CreateDepthStencilView failed"); return false; }
+    }
+    
+    dm_memcpy(dx11_renderer->renderpasses + dx11_renderer->renderpass_count, &internal_pass, sizeof(internal_pass));
+    dx11_renderer->renderpass_count++;
+    
+    return true;
+}
+
+void dm_renderer_backend_destroy_renderpass(dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    if(handle > dx11_renderer->renderpass_count) { DM_LOG_ERROR("Trying to destroy invalid DX11 renderpass");  return; }
+    
+    dm_dx11_renderpass* internal_pass = &dx11_renderer->renderpasses[handle];
+    
+    if(internal_pass->desc.flags && DM_RENDERPASS_FLAG_COLOR)
+    {
+        DM_DX11_RELEASE(internal_pass->color_view);
+        DM_DX11_RELEASE(internal_pass->color_target);
+    }
+    if(internal_pass->desc.flags && DM_RENDERPASS_FLAG_DEPTH || internal_pass->desc.flags && DM_RENDERPASS_FLAG_STENCIL)
+    {
+        DM_DX11_RELEASE(internal_pass->depth_stencil_view);
+        DM_DX11_RELEASE(internal_pass->depth_stencil_target);
+    }
+}
+
 /******
 DEVICE
 ********/
@@ -1209,9 +1277,9 @@ bool dm_renderer_backend_end_frame(dm_context* context)
         return false;
     }
     
-    dx11_renderer->active_pipeline = DM_DX11_INVALID_RESOURCE;
-    dx11_renderer->active_shader   = DM_DX11_INVALID_RESOURCE;
-    
+    dx11_renderer->active_pipeline   = DM_DX11_INVALID_RESOURCE;
+    dx11_renderer->active_shader     = DM_DX11_INVALID_RESOURCE;
+    dx11_renderer->active_renderpass = DM_DX11_INVALID_RESOURCE;
 #ifdef DM_DEBUG
     dm_dx11_print_errors(dx11_renderer);
 #endif
@@ -1546,6 +1614,76 @@ bool dm_render_command_backend_bind_framebuffer_texture(dm_render_handle handle,
     
     ID3D11DeviceContext_PSSetShaderResources(context, slot, 1, &internal_framebuffer.shader_view);
     
+    return true;
+}
+
+bool dm_render_command_backend_begin_renderpass(dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_DX11_GET_RENDERER;
+    
+    if(handle > dx11_renderer->renderpass_count) { DM_LOG_FATAL("Trying to begin invalid DirectX11 renderpass"); return false; }
+    
+    ID3D11DeviceContext* context =          dx11_renderer->context;
+    ID3D11RenderTargetView* color_view = NULL;
+    ID3D11DepthStencilView* depth_stencil_view = NULL;
+    
+    dm_dx11_renderpass* internal_pass = &dx11_renderer->renderpasses[handle];
+    
+    dx11_renderer->active_renderpass = handle;
+    
+    if(internal_pass->desc.flags && DM_RENDERPASS_FLAG_COLOR)
+    {
+        switch(internal_pass->desc.color_load_op)
+        {
+            case DM_LOAD_OPERATION_CLEAR:
+            {
+                color_view = internal_pass->color_view;
+                
+                float c[] = { 
+                    internal_pass->desc.clear_r,
+                    internal_pass->desc.clear_g,
+                    internal_pass->desc.clear_b,
+                    internal_pass->desc.clear_a 
+                };
+                
+                ID3D11DeviceContext_ClearRenderTargetView(context, color_view, c);
+            } break;
+            
+            case DM_LOAD_OPERATION_LOAD:
+            {
+                if(dx11_renderer->active_renderpass==DM_DX11_INVALID_RESOURCE)
+                {
+                    DM_LOG_FATAL("Trying to load render target when there is no previous DX11 renderpass");
+                    return false;
+                }
+                
+                dm_dx11_renderpass* active_pass = &dx11_renderer->renderpasses[dx11_renderer->active_renderpass];
+                
+                color_view = active_pass->color_view;
+            } break;
+            
+            default:
+            DM_LOG_FATAL("Unknown renderpass load operation");
+            return false;
+        }
+    }
+    if(internal_pass->desc.flags && DM_RENDERPASS_FLAG_DEPTH)
+    {
+        depth_stencil_view = internal_pass->depth_stencil_view;
+        
+        if(internal_pass->desc.depth_stencil_load_op==DM_LOAD_OPERATION_CLEAR)
+        {
+            ID3D11DeviceContext_ClearDepthStencilView(context, depth_stencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
+        }
+    }
+    
+    if(color_view) ID3D11DeviceContext_OMSetRenderTargets(context, 1u, &color_view, depth_stencil_view);
+    
+    return true;
+}
+
+bool dm_render_command_backend_end_renderpass(dm_render_handle handle, dm_renderer* renderer)
+{
     return true;
 }
 

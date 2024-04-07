@@ -148,7 +148,7 @@ void dm_platform_shutdown(dm_platform_data* platform_data)
 		w32_data->hwnd = 0;
 	}
     
-    dm_free(platform_data->internal_data);
+    dm_free(&platform_data->internal_data);
 }
 
 bool dm_platform_pump_events(dm_platform_data* platform_data)
@@ -447,7 +447,7 @@ void* dm_win32_thread_start_func(void* args)
         if(task) 
         {
             task->func(task->args);
-            dm_free(task);
+            dm_free(&task);
         }
         
         // decrement thread working counter
@@ -530,7 +530,7 @@ void dm_platform_clipboard_paste(void (*callback)(char*,int,void*), void* edit)
     
     callback(utf8, utf8size, edit);
     //nk_textedit_paste(edit, utf8, utf8size);
-    dm_free(utf8);
+    dm_free(&utf8);
     
     GlobalUnlock(mem);
     CloseClipboard();
@@ -547,55 +547,60 @@ uint32_t dm_get_available_processor_count(dm_context* context)
 bool dm_platform_win32_decode_hresult(HRESULT hr)
 {
     if (hr == S_OK) return true;
-
+    
     DM_LOG_ERROR("Hresult failed with:");
-
+    
     switch (hr)
     {
-    case E_ABORT: 
+        case E_ABORT: 
         DM_LOG_ERROR("Operation aborted");
         break;
-
-    case E_ACCESSDENIED:
+        
+        case E_ACCESSDENIED:
         DM_LOG_ERROR("General access denied error");
         break;
-
-    case E_FAIL:
+        
+        case E_FAIL:
         DM_LOG_ERROR("Unspecified failure");
         break;
-
-    case E_HANDLE:
+        
+        case E_HANDLE:
         DM_LOG_ERROR("Handle that is not valid");
         break;
-
-    case E_INVALIDARG:
+        
+        case E_INVALIDARG:
         DM_LOG_ERROR("One or more arguments are not valid");
         break;
-
-    case E_NOINTERFACE:
+        
+        case E_NOINTERFACE:
         DM_LOG_ERROR("No such interface supported");
         break;
-
-    case E_NOTIMPL:
+        
+        case E_NOTIMPL:
         DM_LOG_ERROR("Not implemented");
         break;
-
-    case E_OUTOFMEMORY:
+        
+        case E_OUTOFMEMORY:
         DM_LOG_ERROR("Failed to allocate necessary memory");
         break;
-
-    case E_POINTER:
+        
+        case E_POINTER:
         DM_LOG_ERROR("Pointer that is not valid");
         break;
-
-    case E_UNEXPECTED:
+        
+        case E_UNEXPECTED:
         DM_LOG_ERROR("Unexpected failure");
         break;
-
-    default:
+        
+        case 0x80070002:
+        DM_LOG_ERROR("File not found");
+        break;
+        
+        default:
+        DM_LOG_ERROR("Unknown error: %u", hr);
         break;
     }
-
+    
     return false;
 }
 
