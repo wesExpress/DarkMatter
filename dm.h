@@ -766,7 +766,8 @@ typedef struct dm_renderpass_desc_t
     float depth_min, depth_max;
 } dm_renderpass_desc;
 
-// raytracing
+#ifdef DM_RAYTRACING
+// raytracing acceleration structure
 typedef enum dm_blas_geometry_type_t
 {
     DM_BLAS_GEOMETRY_TYPE_TRIANGLES,
@@ -781,83 +782,147 @@ typedef enum dm_blas_geometry_flag_t
 
 typedef struct dm_blas_desc_t
 {
-    dm_render_handle vertex_buffer, index_buffer;
-    uint32_t vertex_count, index_count;
-    size_t   vertex_size, index_size;
-    
     dm_blas_geometry_type geom_type;
     dm_blas_geometry_flag geom_flag;
+    
+    dm_render_handle vertex_buffer;
+    dm_render_handle index_buffer;
+    
+    uint32_t         vertex_count, index_count;
+    size_t           vertex_size, index_size;
+    size_t           vertex_offset, index_offset;
 } dm_blas_desc;
 
+typedef enum dm_tlas_buffer_type_t
+{
+    DM_TLAS_BUFFER_TYPE_PER_BLAS,
+    DM_TLAS_BUFFER_TYPE_SINGLE,
+    DM_TLAS_BUFFER_TYPE_UNKNOWN
+} dm_tlas_buffer_type;
+
 #define DM_MAX_BLAS 100
+#define DM_TLAS_MAS_INSTANCE_COUNT 1000
 typedef struct dm_tlas_desc_t
 {
-    dm_render_handle mesh_instance[DM_MAX_BLAS];
-    uint32_t         instance_count;
+    uint32_t mesh_instance[DM_TLAS_MAS_INSTANCE_COUNT];
+    uint32_t instance_count;
 } dm_tlas_desc;
 
 typedef struct dm_acceleration_structure_desc_t
 {
+    dm_tlas_buffer_type buffer_type;
+    
     dm_blas_desc blas_descs[DM_MAX_BLAS];
     uint32_t     blas_count;
     
     dm_tlas_desc tlas_desc;
 } dm_acceleration_structure_desc;
 
-typedef enum dm_raytracing_root_signature_type_t
-{
-    DM_RAYTRACING_ROOT_SIGNATURE_TYPE_UAV,
-    DM_RAYTRACING_ROOT_SIGNATURE_TYPE_SRV,
-    DM_RAYTRACING_ROOT_SIGNATURE_TYPE_CBV,
-    DM_RAYTRACING_ROOT_SIGNATURE_TYPE_UNKNOWN
-} dm_raytracing_root_signature_type;
-
 // raytracing pipeline
 typedef enum dm_raytracing_pipeline_resource_type_t
 {
     DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_OUTPUT_TEXTURE,
-    DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_TEXTURE,
-    DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_BUFFER,          // acceleration structures, vertex buffers
+    DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_ACCELERATION_STRUCTURE,
+    DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_VERTEX_BUFFER,
+    DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_INDEX_BUFFER,
     DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_CONSTANT_BUFFER,
     DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_UNKOWN
 } dm_raytracing_pipeline_resource_type;
 
-#define DM_RAYTRACING_PIPELINE_MAX_RESOURCE_MEMBER_COUNT 5
+typedef struct dm_raytracing_pipeline_resource_acceleration_structure_t
+{
+    dm_render_handle handle;
+} dm_raytracing_pipeline_resource_acceleration_structure;
+
+typedef struct dm_raytracing_pipeline_resource_buffer_t
+{
+    size_t           size, stride, num_elements;
+    dm_render_handle handle;
+} dm_raytracing_pipeline_resource_buffer;
+
+typedef struct dm_raytracing_pipeline_resource_constant_buffer_t
+{
+    size_t size;
+    dm_render_handle handle;
+} dm_raytracing_pipeline_resource_constant_buffer;
+
 typedef struct dm_raytracing_pipeline_resource_t
 {
     dm_raytracing_pipeline_resource_type type;
-    dm_render_handle                     handles[DM_RAYTRACING_PIPELINE_MAX_RESOURCE_MEMBER_COUNT];
-    size_t                               sizes[DM_RAYTRACING_PIPELINE_MAX_RESOURCE_MEMBER_COUNT];
-    uint32_t                             is_as[DM_RAYTRACING_PIPELINE_MAX_RESOURCE_MEMBER_COUNT];
-    uint32_t                             count;
+    
+    union
+    {
+        dm_raytracing_pipeline_resource_acceleration_structure acceleration_structure;
+        dm_raytracing_pipeline_resource_buffer                 buffer;
+        dm_raytracing_pipeline_resource_constant_buffer        constant_buffer;
+    };
 } dm_raytracing_pipeline_resource;
 
-typedef struct dm_raytracing_hitgroup_desc_t
+typedef enum dm_raytracing_pipeline_resource_group_type_t
 {
-    char name[512];
-    char closest_hit[512];
-    char miss[512];
-} dm_raytracing_hitgroup_desc;
+    DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_OUTPUT_TEXTURE,
+    DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_BUFFERS,
+    DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_CONSTANT_BUFFERS,
+    DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_UNKNOWN
+} dm_raytracing_pipeline_resource_group_type;
 
-#define DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS 2
+#define DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_MAX_MEMBERS 5
+typedef struct dm_raytracing_pipeline_resource_group_t
+{
+    dm_raytracing_pipeline_resource_group_type type;
+    
+    dm_raytracing_pipeline_resource resources[DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_MAX_MEMBERS];
+    uint32_t                        count;
+} dm_raytracing_pipeline_resource_group;
+
+typedef enum dm_raytracing_pipeline_hit_group_geometry_type_t
+{
+    DM_RAYTRACING_PIPELINE_HIT_GROUP_GEOMETRY_TYPE_TRIANGLES,
+    DM_RAYTRACING_PIPELINE_HIT_GROUP_GEOMETRY_TYPE_PROCEDURAL,
+    DM_RAYTRACING_PIPELINE_HIT_GROUP_GEOMETRY_TYPE_UNKNOWN,
+} dm_raytracing_pipeline_hit_group_geometry_type;
+
+typedef enum dm_raytracing_pipeline_hit_group_flag_t
+{
+    DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_ANY_HIT       = 1 << 0,
+    DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_CLOSEST_HIT   = 1 << 1,
+    DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION  = 1 << 2,
+    DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_UNKNOWN       = 1 << 3
+} dm_raytracing_pipeline_hit_group_flag;
+
+typedef struct dm_raytracing_pipeline_hit_group_desc_t
+{
+    dm_raytracing_pipeline_hit_group_geometry_type geom_type;
+    dm_raytracing_pipeline_hit_group_flag          flags;
+    
+    char name[512];
+    char any_hit[512];
+    char closest_hit[512];
+    char intersection[512];
+} dm_raytracing_pipeline_hit_group_desc;
+
+#define DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS      2
+#define DM_RAYTRACING_PIPELINE_MAX_RESOURCE_GROUPS 4
 typedef struct dm_raytracing_pipeline_desc_t
 {
     char raygen[512];
+    char     miss[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS][512];
+    uint32_t miss_count;
     
-    dm_raytracing_hitgroup_desc hit_groups[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
-    uint32_t                    hit_group_count;
+    dm_raytracing_pipeline_hit_group_desc hit_groups[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
+    uint32_t                              hit_group_count;
     
     void*  shader_data;
     size_t shader_data_size;
     
-    dm_raytracing_pipeline_resource resources[DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_UNKOWN];
-    uint32_t                        resource_count;
+    dm_raytracing_pipeline_resource_group resource_groups[DM_RAYTRACING_PIPELINE_MAX_RESOURCE_GROUPS];
+    uint32_t                              resource_group_count;
     
-    dm_render_handle as;
-    
+    uint32_t max_instance_count;
     size_t   payload_size;
     uint32_t max_recursion;
 } dm_raytracing_pipeline_desc;
+#endif
 
 // model loading
 typedef enum dm_mesh_vertex_attrib_t
@@ -916,12 +981,12 @@ typedef enum dm_render_command_type_t
 #ifdef DM_RAYTRACING
     DM_RENDER_COMMAND_BIND_RAYTRACING_PIPELINE,
     
-    DM_RENDER_COMMAND_BIND_ACCELERATION_STRUCTURE,
     DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_INSTANCE,
     DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_TLAS,
     
     DM_RENDER_COMMAND_DISPATCH_RAYS,
 #endif
+    
     DM_RENDER_COMMAND_UNKNOWN
 } dm_render_command_type;
 
@@ -1191,16 +1256,16 @@ void dm_threadpool_submit_task(dm_thread_task* task, dm_threadpool* threadpool);
 void dm_threadpool_wait_for_completion(dm_threadpool* threadpool);
 
 // random
-int dm_random_int(dm_context* context);
-int dm_random_int_range(int start, int end, dm_context* context);
+int      dm_random_int(dm_context* context);
+int      dm_random_int_range(int start, int end, dm_context* context);
 uint32_t dm_random_uint32(dm_context* context);
 uint32_t dm_random_uint32_range(uint32_t start, uint32_t end, dm_context* context);
 uint64_t dm_random_uint64(dm_context* context);
 uint64_t dm_random_uint64_range(uint64_t start, uint64_t end, dm_context* context);
-float dm_random_float(dm_context* context);
-float dm_random_float_range(float start, float end,dm_context* context);
-double dm_random_double(dm_context* context);
-double dm_random_double_range(double start, double end, dm_context* context);
+float    dm_random_float(dm_context* context);
+float    dm_random_float_range(float start, float end,dm_context* context);
+double   dm_random_double(dm_context* context);
+double   dm_random_double_range(double start, double end, dm_context* context);
 
 float dm_random_float_normal(float mu, float sigma, dm_context* context);
 
@@ -1217,6 +1282,23 @@ bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* ha
 #ifdef DM_RAYTRACING
 bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
+
+uint32_t dm_renderer_raytracing_pipeline_add_output_texture_resource_group(dm_raytracing_pipeline_desc* desc);
+uint32_t dm_renderer_raytracing_pipeline_add_buffer_resource_group(dm_raytracing_pipeline_desc* desc);
+uint32_t dm_renderer_raytracing_pipeline_add_constant_buffer_resource_group(dm_raytracing_pipeline_desc* desc);
+
+void dm_renderer_raytracing_pipeline_add_output_texture(const uint32_t group_index, dm_raytracing_pipeline_desc* desc);
+void dm_renderer_raytracing_pipeline_add_acceleration_structure(const dm_render_handle as_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc);
+void dm_renderer_raytracing_pipeline_add_vertex_buffer(const size_t stride, const uint32_t count, const dm_render_handle buffer_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc);
+void dm_renderer_raytracing_pipeline_add_index_buffer(const size_t elem_size, const uint32_t count, const dm_render_handle buffer_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc);
+void dm_renderer_raytracing_pipeline_add_constant_buffer(const size_t size, const dm_render_handle buffer_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc);
+
+uint32_t dm_renderer_raytracing_pipeline_add_miss(const char* name, dm_raytracing_pipeline_desc* desc);
+uint32_t dm_renderer_raytracing_pipeline_add_triangles_hit_group(const char* name, dm_raytracing_pipeline_desc* desc);
+uint32_t dm_renderer_raytracing_pipeline_add_procedural_hit_group(const char* name, dm_raytracing_pipeline_desc* desc);
+void     dm_renderer_raytracing_pipeline_hit_group_add_any_hit(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
+void     dm_renderer_raytracing_pipeline_hit_group_add_closest_hit(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
+void     dm_renderer_raytracing_pipeline_hit_group_add_intersection(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
 #endif
 
 // render commands
@@ -1235,7 +1317,6 @@ void dm_render_command_draw_instanced(uint32_t index_count, uint32_t vertex_coun
 void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 
 #ifdef DM_RAYTRACING
-void dm_render_command_bind_acceleration_structure(dm_render_handle handle, uint32_t slot, dm_context* context);
 void dm_render_command_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size,  dm_context* context);
 void dm_render_command_update_acceleration_structure_tlas(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_raytracing_pipeline(dm_render_handle handle, dm_context* context);
@@ -1280,75 +1361,22 @@ void dm_qsrot_p(void* array, size_t count, size_t elem_size, int (compar)(const 
 void dm_qsrot_p(void* array, size_t count, size_t elem_size, int (compar)(void* c, const void* a, const void* b), void* d);
 #endif
 
+void dm_assert(bool condition);
+void dm_assert_msg(bool condition, const char* message);
+
 // timer
 void   dm_timer_start(dm_timer* timer, dm_context* context);
 void   dm_timer_restart(dm_timer* timer, dm_context* context);
 double dm_timer_elapsed(dm_timer* timer, dm_context* context);
 double dm_timer_elapsed_ms(dm_timer* timer, dm_context* context);
 
-/*****************
-INLINED FUNCTIONS
-*******************/
-DM_INLINE
-dm_hash64 dm_hash_fnv1a(const char* key)
-{
-    dm_hash64 hash = 14695981039346656037UL;
-	for (int i = 0; key[i]; i++)
-	{
-		hash ^= key[i];
-		hash *= 1099511628211;
-	}
-    
-	return hash;
-}
-
-// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
-DM_INLINE
-dm_hash dm_hash_32bit(uint32_t key)
-{
-    dm_hash hash = ((key >> 16) ^ key)   * 0x119de1f3;
-    hash         = ((hash >> 16) ^ hash) * 0x119de1f3;
-    hash         = (hash >> 16) ^ hash;
-    
-    return hash;
-}
-
-// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
-DM_INLINE
-dm_hash64 dm_hash_64bit(uint64_t key)
-{
-	dm_hash64 hash = (key ^ (key >> 30))   * UINT64_C(0xbf58476d1ce4e5b9);
-	hash           = (hash ^ (hash >> 27)) * UINT64_C(0x94d049bb133111eb);
-	hash           = hash ^ (hash >> 31);
-    
-	return hash;
-}
-
-// http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
-DM_INLINE
-dm_hash dm_hash_int_pair(int x, int y)
-{
-    if(y < x) return ( y << 16 ) + x;
-    
-    return (x << 16) + y;
-}
-
-// https://stackoverflow.com/questions/682438/hash-function-providing-unique-uint-from-an-integer-coordinate-pair
-DM_INLINE
-dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y)
-{
-    if(y < x) return ( (uint64_t)y << 32 ) ^ x;
-    
-    return ((uint64_t)x << 32) ^ y;
-}
-
-// alternative to modulo: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
-DM_INLINE
-uint32_t dm_hash_reduce(uint32_t x, uint32_t n)
-{
-    return ((uint64_t)x * (uint64_t)n) >> 32;
-}
-
+// hash
+dm_hash64 dm_hash_fnv1a(const char* key);
+dm_hash   dm_hash_32bit(uint32_t key);
+dm_hash64 dm_hash_64bit(uint64_t key);
+dm_hash   dm_hash_int_pair(int x, int y);
+dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y);
+uint32_t  dm_hash_reduce(uint32_t x, uint32_t n);
 
 #include "dm_math.h"
 

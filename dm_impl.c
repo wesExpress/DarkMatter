@@ -697,6 +697,132 @@ bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm
     DM_LOG_FATAL("Creating raytracing pipeline failed");
     return false;
 }
+
+uint32_t dm_renderer_raytracing_pipeline_add_resource_group(dm_raytracing_pipeline_resource_group_type type, dm_raytracing_pipeline_desc* desc)
+{
+    desc->resource_groups[desc->resource_group_count].type = type;
+    return desc->resource_group_count++;
+}
+
+uint32_t dm_renderer_raytracing_pipeline_add_output_texture_resource_group(dm_raytracing_pipeline_desc* desc)
+{
+    return dm_renderer_raytracing_pipeline_add_resource_group(DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_OUTPUT_TEXTURE, desc);
+}
+
+uint32_t dm_renderer_raytracing_pipeline_add_buffer_resource_group(dm_raytracing_pipeline_desc* desc)
+{
+    return dm_renderer_raytracing_pipeline_add_resource_group(DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_BUFFERS, desc);
+}
+
+uint32_t dm_renderer_raytracing_pipeline_add_constant_buffer_resource_group(dm_raytracing_pipeline_desc* desc)
+{
+    return dm_renderer_raytracing_pipeline_add_resource_group(DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_CONSTANT_BUFFERS, desc);
+}
+
+void dm_renderer_raytracing_pipeline_add_output_texture(const uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    const uint32_t index = desc->resource_groups[group_index].count;
+    
+    desc->resource_groups[group_index].resources[index].type = DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_OUTPUT_TEXTURE;
+    
+    desc->resource_groups[group_index].count++;
+}
+
+void dm_renderer_raytracing_pipeline_add_acceleration_structure(const dm_render_handle as_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    const uint32_t index = desc->resource_groups[group_index].count;
+    
+    desc->resource_groups[group_index].resources[index].type = DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_ACCELERATION_STRUCTURE;
+    desc->resource_groups[group_index].resources[index].acceleration_structure.handle = as_handle;
+    
+    desc->resource_groups[group_index].count++;
+}
+
+void dm_renderer_raytracing_pipeline_add_vertex_buffer(const size_t stride, const uint32_t count, const dm_render_handle buffer_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    const uint32_t index = desc->resource_groups[group_index].count;
+    
+    desc->resource_groups[group_index].resources[index].type = DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_VERTEX_BUFFER;
+    desc->resource_groups[group_index].resources[index].buffer.size         = stride * count;
+    desc->resource_groups[group_index].resources[index].buffer.num_elements = count;
+    desc->resource_groups[group_index].resources[index].buffer.stride       = stride;
+    desc->resource_groups[group_index].resources[index].buffer.handle       = buffer_handle;
+    
+    desc->resource_groups[group_index].count++;
+}
+
+void dm_renderer_raytracing_pipeline_add_index_buffer(const size_t elem_size, const uint32_t count, const dm_render_handle buffer_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    const uint32_t index = desc->resource_groups[group_index].count;
+    
+    desc->resource_groups[group_index].resources[index].type                = DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_INDEX_BUFFER;
+    desc->resource_groups[group_index].resources[index].buffer.size         = elem_size * count;
+    desc->resource_groups[group_index].resources[index].buffer.num_elements = count;
+    desc->resource_groups[group_index].resources[index].buffer.handle       = buffer_handle;
+    
+    desc->resource_groups[group_index].count++;
+}
+
+void dm_renderer_raytracing_pipeline_add_constant_buffer(const size_t size, const dm_render_handle buffer_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    const uint32_t index = desc->resource_groups[group_index].count;
+    
+    desc->resource_groups[group_index].resources[index].type = DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_CONSTANT_BUFFER;
+    desc->resource_groups[group_index].resources[index].constant_buffer.size = size;
+    desc->resource_groups[group_index].resources[index].constant_buffer.handle = buffer_handle;
+    
+    desc->resource_groups[group_index].count++;
+}
+
+// miss
+uint32_t dm_renderer_raytracing_pipeline_add_miss(const char* name, dm_raytracing_pipeline_desc* desc)
+{
+    const uint32_t miss_group = desc->miss_count;
+    
+    strcpy(desc->miss[miss_group], name);
+    
+    return desc->miss_count++;
+}
+
+// hit groups
+uint32_t dm_renderer_raytracing_pipeline_add_hit_group(const char* name, const dm_raytracing_pipeline_hit_group_geometry_type geom_type, dm_raytracing_pipeline_desc* desc)
+{
+    const uint32_t group_index = desc->hit_group_count;
+    
+    strcpy(desc->hit_groups[group_index].name, name);
+    desc->hit_groups[group_index].geom_type = geom_type;
+    
+    return desc->hit_group_count++;
+}
+
+uint32_t dm_renderer_raytracing_pipeline_add_triangles_hit_group(const char* name, dm_raytracing_pipeline_desc* desc)
+{
+    return dm_renderer_raytracing_pipeline_add_hit_group(name, DM_RAYTRACING_PIPELINE_HIT_GROUP_GEOMETRY_TYPE_TRIANGLES, desc);
+}
+
+uint32_t dm_renderer_raytracing_pipeline_add_procedural_hit_group(const char* name, dm_raytracing_pipeline_desc* desc)
+{
+    return dm_renderer_raytracing_pipeline_add_hit_group(name, DM_RAYTRACING_PIPELINE_HIT_GROUP_GEOMETRY_TYPE_PROCEDURAL, desc);
+}
+
+void dm_renderer_raytracing_pipeline_hit_group_add_any_hit(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    strcpy(desc->hit_groups[group_index].any_hit, shader);
+    desc->hit_groups[group_index].flags |= DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_ANY_HIT;
+}
+
+void dm_renderer_raytracing_pipeline_hit_group_add_closest_hit(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    strcpy(desc->hit_groups[group_index].closest_hit, shader);
+    desc->hit_groups[group_index].flags |= DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_CLOSEST_HIT;
+}
+
+void dm_renderer_raytracing_pipeline_hit_group_add_intersection(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    strcpy(desc->hit_groups[group_index].intersection, shader);
+    desc->hit_groups[group_index].flags |= DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION;
+}
+
 #endif
 
 /***************
@@ -719,7 +845,6 @@ extern bool dm_render_command_backend_set_primitive_topology(dm_primitive_topolo
 extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer);
 
 #ifdef DM_RAYTRACING
-extern bool dm_render_command_backend_bind_acceleration_structure(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_acceleration_structure_tlas(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle handle, dm_renderer* renderer);
@@ -943,19 +1068,6 @@ void dm_render_command_bind_raytracing_pipeline(dm_render_handle handle, dm_cont
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
-void dm_render_command_bind_acceleration_structure(dm_render_handle handle, uint32_t slot, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_BIND_ACCELERATION_STRUCTURE;
-    
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    DM_BYTE_POOL_INSERT(command.params, slot);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
 void dm_render_command_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size, dm_context* context)
 {
     if(DM_TOO_MANY_COMMANDS) return;
@@ -1146,16 +1258,6 @@ bool dm_renderer_submit_commands(dm_context* context)
             
 #ifdef DM_RAYTRACING
             // acceleration structure
-            case DM_RENDER_COMMAND_BIND_ACCELERATION_STRUCTURE:
-            {
-                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
-                
-                if(dm_render_command_backend_bind_acceleration_structure(handle, slot, renderer)) continue;
-                
-                DM_LOG_FATAL("Bind acceleration structure failed");
-                return false;
-            } break;
             case DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_INSTANCE:
             {
                 DM_BYTE_POOL_POP(command.params, size_t, data_size);
@@ -1513,6 +1615,19 @@ void dm_qsrot_p(void* array, size_t count, size_t elem_size, int (compar)(void* 
 }
 #endif
 
+void dm_assert(bool condition)
+{
+    assert(condition);
+}
+
+void dm_assert_msg(bool condition, const char* message)
+{
+    if(condition) return;
+    
+    DM_LOG_FATAL("%s", message);
+    assert(false);
+}
+
 /*****
 TIMER
 *******/
@@ -1534,6 +1649,63 @@ double dm_timer_elapsed(dm_timer* timer, dm_context* context)
 double dm_timer_elapsed_ms(dm_timer* timer, dm_context* context)
 {
     return dm_timer_elapsed(timer, context) * 1000;
+}
+
+/****
+HASH
+******/
+dm_hash64 dm_hash_fnv1a(const char* key)
+{
+    dm_hash64 hash = 14695981039346656037UL;
+	for (int i = 0; key[i]; i++)
+	{
+		hash ^= key[i];
+		hash *= 1099511628211;
+	}
+    
+	return hash;
+}
+
+// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+dm_hash dm_hash_32bit(uint32_t key)
+{
+    dm_hash hash = ((key >> 16) ^ key)   * 0x119de1f3;
+    hash         = ((hash >> 16) ^ hash) * 0x119de1f3;
+    hash         = (hash >> 16) ^ hash;
+    
+    return hash;
+}
+
+// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+dm_hash64 dm_hash_64bit(uint64_t key)
+{
+	dm_hash64 hash = (key ^ (key >> 30))   * UINT64_C(0xbf58476d1ce4e5b9);
+	hash           = (hash ^ (hash >> 27)) * UINT64_C(0x94d049bb133111eb);
+	hash           = hash ^ (hash >> 31);
+    
+	return hash;
+}
+
+// http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
+dm_hash dm_hash_int_pair(int x, int y)
+{
+    if(y < x) return ( y << 16 ) + x;
+    
+    return (x << 16) + y;
+}
+
+// https://stackoverflow.com/questions/682438/hash-function-providing-unique-uint-from-an-integer-coordinate-pair
+dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y)
+{
+    if(y < x) return ( (uint64_t)y << 32 ) ^ x;
+    
+    return ((uint64_t)x << 32) ^ y;
+}
+
+// alternative to modulo: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+uint32_t dm_hash_reduce(uint32_t x, uint32_t n)
+{
+    return ((uint64_t)x * (uint64_t)n) >> 32;
 }
 
 /*********

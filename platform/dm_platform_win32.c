@@ -596,6 +596,10 @@ bool dm_platform_win32_decode_hresult(HRESULT hr)
         DM_LOG_ERROR("File not found");
         break;
         
+        case 2289696773:
+        DM_LOG_ERROR("DXGI Error: Device removed: Device hung");
+        break;
+        
         default:
         DM_LOG_ERROR("Unknown error: %u", hr);
         break;
