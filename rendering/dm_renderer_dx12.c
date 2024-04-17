@@ -35,21 +35,52 @@ typedef struct dm_dx12_pipeline_t
     uint32_t cbv_heap_offset, tex_offset;
 } dm_dx12_pipeline;
 
+typedef enum dm_dx12_resource_type_t
+{
+    DM_DX12_RESOURCE_TYPE_VERTEX_BUFFER,
+    DM_DX12_RESOURCE_TYPE_INDEX_BUFFER,
+    DM_DX12_RESOURCE_TYPE_CONSTANT_BUFFER,
+    DM_DX12_RESOURCE_TYPE_TEXTURE,
+} dm_dx12_resource_type;
+
+typedef struct dm_dx12_resource_t
+{
+    dm_dx12_resource_type type;
+    size_t heap_offset;
+    
+    union
+    {
+        ID3D12Resource* buffer[DM_DX12_NUM_FRAMES];
+        ID3D12Resource* textures[DM_DX12_NUM_FRAMES]; 
+    };
+    
+    void* mapped_address;
+} dm_dx12_resource;
+
 typedef struct dm_dx12_vertex_buffer_t
 {
     ID3D12Resource* buffer[DM_DX12_NUM_FRAMES];
+    size_t          heap_offset;
 } dm_dx12_vertex_buffer;
 
 typedef struct dm_dx12_index_buffer_t
 {
     ID3D12Resource* buffer;
+    size_t          heap_offset;
 } dm_dx12_index_buffer;
 
 typedef struct dm_dx12_constant_buffer_t
 {
     ID3D12Resource* buffer[DM_DX12_NUM_FRAMES];
     void*           mapped_address[DM_DX12_NUM_FRAMES];
+    size_t          heap_offset;
 } dm_dx12_constant_buffer;
+
+typedef struct dm_dx12_texture_t
+{
+    ID3D12Resource* texture[DM_DX12_NUM_FRAMES];
+    size_t          heap_offset;
+} dm_dx12_texture;
 
 #ifdef DM_RAYTRACING
 typedef struct dm_dx12_blas_t
@@ -77,6 +108,8 @@ typedef struct dm_dx12_acceleration_structure_t
     
     dm_dx12_blas blas[DM_DX12_MAX_BLAS];
     uint32_t     blas_count;
+    
+    size_t heap_offset;
 } dm_dx12_acceleration_structure;
 
 #define DM_DX12_RAYTRACE_NUM_SHADER_IDS 3
@@ -86,15 +119,15 @@ typedef struct dm_dx12_raytracing_pipeline_t
     ID3D12RootSignature* root_signature;
     
     ID3D12StateObject*   state_object;
-    ID3D12Resource*      shader_ids;
+    ID3D12Resource*      shader_table[DM_DX12_NUM_FRAMES];
     
-    ID3D12Resource* output_image[DM_DX12_NUM_FRAMES];
-    
-    uint32_t miss_count, hit_group_count, max_instance_count;
+    uint32_t miss_count, hit_group_count, instance_count, max_instance_count;
     
     uint32_t descriptor_heap_offset;
     
     uint32_t output_width, output_height;
+    
+    size_t shader_max_size;
 } dm_dx12_raytracing_pipeline;
 
 #define DM_DX12_MAX_ACCELERATION_STRUCTURES 10
@@ -110,9 +143,10 @@ typedef struct dm_dx12_raytracing_pipeline_t
 #define DM_DX12_DESCRIPTOR_HEAP_CBV_OFFSET DM_DX12_DESCRIPTOR_HEAP_MAX_SRV
 #define DM_DX12_DESCRIPTOR_HEAP_UAV_OFFSET DM_DX12_DESCRIPTOR_HEAP_CBV_OFFSET + DM_DX12_DESCRIPTOR_HEAP_MAX_CBV
 
-#define DM_DX12_MAX_PASSES   10
-#define DM_DX12_MAX_PIPES    10
-#define DM_DX12_MAX_BUFFERS 100
+#define DM_DX12_MAX_RESOURCES 100
+#define DM_DX12_MAX_PASSES     10
+#define DM_DX12_MAX_PIPES      10
+#define DM_DX12_MAX_BUFFERS   100
 typedef struct dm_dx12_renderer_t
 {
     ID3D12Device5*        device;
@@ -135,16 +169,20 @@ typedef struct dm_dx12_renderer_t
     uint64_t     frame_fence_values[DM_DX12_NUM_FRAMES];
     
     uint32_t current_frame_index, descriptor_heap_offset;
-    uint32_t pass_count, pipe_count, vb_count, ib_count, cb_count;
+    uint32_t pass_count, pipe_count, vb_count, ib_count, cb_count, texture_count, resource_count;
     
     dm_dx12_renderpass      passes[DM_DX12_MAX_PASSES];
     dm_dx12_pipeline        pipes[DM_DX12_MAX_PIPES];
     dm_dx12_vertex_buffer   vertex_buffers[DM_DX12_MAX_BUFFERS];
     dm_dx12_index_buffer    index_buffers[DM_DX12_MAX_BUFFERS];
     dm_dx12_constant_buffer constant_buffers[DM_DX12_MAX_BUFFERS];
+    dm_dx12_texture         textures[DM_DX12_MAX_RESOURCES];
+    
+    dm_dx12_resource resources[DM_DX12_MAX_RESOURCES];
     
 #ifdef DM_RAYTRACING
     uint32_t as_count, raytracing_pipes_count;
+    
     dm_dx12_acceleration_structure accel_structs[DM_DX12_MAX_ACCELERATION_STRUCTURES];
     dm_dx12_raytracing_pipeline    raytracing_pipelines[DM_DX12_MAX_RAYTRACING_PIPELINES];
 #endif
@@ -1119,6 +1157,8 @@ bool dm_renderer_backend_create_vertex_buffer(const dm_vertex_buffer_desc desc, 
     D3D12_RESOURCE_DESC buffer_desc = DM_DX12_BASIC_BUFFER_DESC;
     buffer_desc.Width = desc.size;
     
+    internal_buffer.heap_offset = dx12_renderer->descriptor_heap_offset;
+    
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
         hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_buffer.buffer[i]);
@@ -1129,24 +1169,40 @@ bool dm_renderer_backend_create_vertex_buffer(const dm_vertex_buffer_desc desc, 
             return false;
         }
         
-        if(desc.data)
+        D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
+        view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
+        view_desc.Format                     = DXGI_FORMAT_UNKNOWN;
+        view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        view_desc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_NONE;
+        view_desc.Buffer.StructureByteStride = desc.stride;
+        view_desc.Buffer.NumElements         = desc.count;
+        
+        ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[i];
+        D3D12_CPU_DESCRIPTOR_HANDLE view_handle = { 0 };
+        ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &view_handle);
+        view_handle.ptr += internal_buffer.heap_offset;
+        
+        ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, internal_buffer.buffer[i], &view_desc, view_handle);
+        
+        if(!desc.data) continue;
+        
+        void* ptr = NULL;
+        
+        ID3D12Resource_Map(internal_buffer.buffer[i], 0, NULL, &ptr);
+        if(!dm_platform_win32_decode_hresult(hr))
         {
-            void* ptr = NULL;
-            
-            ID3D12Resource_Map(internal_buffer.buffer[i], 0, NULL, &ptr);
-            if(!dm_platform_win32_decode_hresult(hr))
-            {
-                DM_LOG_FATAL("ID3D12Resource_Map failed");
-                ID3D12Resource_Release(internal_buffer.buffer[i]);
-                return false;
-            }
-            
-            dm_memcpy(ptr, desc.data, desc.size);
-            ID3D12Resource_Unmap(internal_buffer.buffer[i], 0, NULL);
+            DM_LOG_FATAL("ID3D12Resource_Map failed");
+            ID3D12Resource_Release(internal_buffer.buffer[i]);
+            return false;
         }
         
-        if(desc.data) dm_dx12_flush(dx12_renderer);
+        dm_memcpy(ptr, desc.data, desc.size);
+        ID3D12Resource_Unmap(internal_buffer.buffer[i], 0, NULL);
+        
+        dm_dx12_flush(dx12_renderer);
     }
+    
+    dx12_renderer->descriptor_heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
     
     //
     dm_memcpy(dx12_renderer->vertex_buffers + dx12_renderer->vb_count, &internal_buffer, sizeof(internal_buffer));
@@ -1172,6 +1228,28 @@ bool dm_renderer_backend_create_index_buffer(const dm_index_buffer_desc desc, dm
         DM_LOG_FATAL("Creating DirectX12 buffer failed");
         return false;
     }
+    
+    internal_buffer.heap_offset = dx12_renderer->descriptor_heap_offset;
+    
+    D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
+    view_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+    view_desc.Format = DXGI_FORMAT_UNKNOWN;
+    view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    view_desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+    view_desc.Buffer.StructureByteStride = desc.data_type==DM_INDEX_BUFFER_DATA_UINT32 ? sizeof(uint32_t) : sizeof(uint16_t);
+    view_desc.Buffer.NumElements = desc.count;
+    
+    for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
+    {
+        D3D12_CPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
+        ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[i];
+        ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &heap_handle);
+        heap_handle.ptr += internal_buffer.heap_offset;
+        
+        ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, internal_buffer.buffer, &view_desc, heap_handle);
+    }
+    
+    dx12_renderer->descriptor_heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
     
     assert(desc.data);
     {
@@ -1220,6 +1298,8 @@ bool dm_renderer_backend_create_constant_buffer(const void* data, size_t data_si
     
     dm_dx12_constant_buffer internal_buffer = { 0 };
     
+    internal_buffer.heap_offset = dx12_renderer->descriptor_heap_offset;
+    
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
         D3D12_RESOURCE_DESC desc = DM_DX12_BASIC_BUFFER_DESC;
@@ -1239,10 +1319,23 @@ bool dm_renderer_backend_create_constant_buffer(const void* data, size_t data_si
             return false;
         }
         
+        D3D12_CONSTANT_BUFFER_VIEW_DESC view_desc = { 0 };
+        view_desc.BufferLocation = ID3D12Resource_GetGPUVirtualAddress(internal_buffer.buffer[i]);
+        view_desc.SizeInBytes    = desc.Width;
+        
+        ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[i];
+        D3D12_CPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
+        ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &heap_handle);
+        heap_handle.ptr += internal_buffer.heap_offset;
+        
+        ID3D12Device5_CreateConstantBufferView(dx12_renderer->device, &view_desc, heap_handle);
+        
         if(!data) continue;
         
         dm_memcpy(internal_buffer.mapped_address[i], data, data_size);
     }
+    
+    dx12_renderer->descriptor_heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
     
     //
     dm_memcpy(dx12_renderer->constant_buffers + dx12_renderer->cb_count, &internal_buffer, sizeof(internal_buffer));
@@ -1507,6 +1600,111 @@ bool dm_renderer_backend_create_renderpass(dm_renderpass_desc desc, dm_render_ha
     return true;
 }
 
+bool dm_renderer_backend_create_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+    
+    dm_dx12_texture internal_texture = { 0 };
+    
+    D3D12_RESOURCE_DESC desc = { 0 };
+    desc.DepthOrArraySize = 1;
+    desc.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+    desc.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.Flags            = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    desc.Width            = width;
+    desc.Height           = height;
+    desc.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
+    desc.MipLevels        = 1;
+    desc.SampleDesc.Count = 1;
+    
+    internal_texture.heap_offset = dx12_renderer->descriptor_heap_offset;
+    
+    for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
+    {
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_COPY_SOURCE, NULL, &IID_ID3D12Resource, &internal_texture.texture[i]);
+        if(!dm_platform_win32_decode_hresult(hr))
+        {
+            DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
+            return false;
+        }
+        
+        D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
+        view_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        view_desc.Format        = DXGI_FORMAT_R8G8B8A8_UNORM;
+        
+        ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[i];
+        D3D12_CPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
+        ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &heap_handle);
+        heap_handle.ptr += internal_texture.heap_offset;
+        
+        ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, internal_texture.texture[i], NULL, &view_desc, heap_handle);
+        
+        dm_dx12_flush(dx12_renderer);
+    }
+    
+    dx12_renderer->descriptor_heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
+    
+    //
+    dm_memcpy(dx12_renderer->textures + dx12_renderer->texture_count, &internal_texture, sizeof(internal_texture));
+    *handle = dx12_renderer->texture_count++;
+    
+    return true;
+}
+
+bool dm_renderer_backend_resize_texutre(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+    
+    if(handle>=dx12_renderer->texture_count || dx12_renderer->texture_count==0)
+    {
+        DM_LOG_FATAL("Trying to update invalid DirectX12 texture");
+        return false;
+    }
+    
+    dm_dx12_texture* internal_texture = &dx12_renderer->textures[handle];
+    
+    for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
+    {
+        ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[i];
+        
+        ID3D12Resource_Release(internal_texture->texture[i]);
+        
+        D3D12_RESOURCE_DESC image_desc = { 0 };
+        image_desc.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
+        image_desc.Width            = width;
+        image_desc.Height           = height;
+        image_desc.DepthOrArraySize = 1;
+        image_desc.MipLevels        = 1;
+        image_desc.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
+        image_desc.SampleDesc.Count = 1;
+        image_desc.Flags            = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &image_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &internal_texture->texture[i]);
+        
+        D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
+        view_desc.Format        = DXGI_FORMAT_R8G8B8A8_UNORM;
+        view_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        
+        D3D12_CPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
+        ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &heap_handle);
+        heap_handle.ptr += internal_texture->heap_offset;
+        
+        ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, internal_texture->texture[i], NULL, &view_desc, heap_handle);
+    }
+    
+    return true;
+}
+
+void dm_dx12_destroy_texture(dm_dx12_texture* texture)
+{
+    for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
+    {
+        ID3D12Resource_Release(texture->texture[i]);
+    }
+}
+
 #ifdef DM_RAYTRACING
 // acceleration structure
 DM_INLINE
@@ -1592,13 +1790,6 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
                         geom_desc.Triangles.IndexFormat = index_size;
                         geom_desc.Triangles.IndexCount  = blas_desc.index_count;
                         geom_desc.Triangles.IndexBuffer = ID3D12Resource_GetGPUVirtualAddress(index_buffer);
-                        
-                        if(as_desc.buffer_type==DM_TLAS_BUFFER_TYPE_SINGLE)
-                        {
-                            const size_t index_offset = sizeof(uint32_t) * blas_desc.index_offset;
-                            (char*)geom_desc.Triangles.IndexBuffer += index_offset;
-                        }
-                        
                     }
                 } break;
                 
@@ -1707,7 +1898,7 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
                     if(i==0) continue;
                     
                     // TODO: this needs to be fixed so that the accel struct knows how many hit groups there are
-                    internal_as.tlas.instance_data[i][j].InstanceContributionToHitGroupIndex = 2 * j + 2;
+                    internal_as.tlas.instance_data[i][j].InstanceContributionToHitGroupIndex = 2 * j;
                 }
             }
         }
@@ -1747,6 +1938,8 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
             }
         }
         
+        internal_as.heap_offset = dx12_renderer->descriptor_heap_offset;
+        
         // result
         {
             for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
@@ -1762,8 +1955,24 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
                     DM_LOG_FATAL("Could not create result buffer for TLAS");
                     return false;
                 }
+                
+                ID3D12Resource* result_buffer = internal_as.tlas.result_buffer[i];
+                
+                D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
+                view_desc.ViewDimension                            = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+                view_desc.Shader4ComponentMapping                  = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                view_desc.RaytracingAccelerationStructure.Location = ID3D12Resource_GetGPUVirtualAddress(result_buffer);
+                
+                ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[i];
+                D3D12_CPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
+                ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &heap_handle);
+                heap_handle.ptr += internal_as.heap_offset;
+                
+                ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, NULL, &view_desc, heap_handle);
             }
         }
+        
+        dx12_renderer->descriptor_heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
         
         const uint32_t current_frame_index = dx12_renderer->current_frame_index;
         ID3D12CommandAllocator* command_allocator = dx12_renderer->command_allocator[current_frame_index];
@@ -1771,9 +1980,12 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
         
         for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
         {
+            ID3D12Resource* result_buffer  = internal_as.tlas.result_buffer[i];
+            ID3D12Resource* scratch_buffer = internal_as.tlas.scratch_buffer[i];
+            
             D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build_desc = { 0 };
-            build_desc.DestAccelerationStructureData    = ID3D12Resource_GetGPUVirtualAddress(internal_as.tlas.result_buffer[i]);
-            build_desc.ScratchAccelerationStructureData = ID3D12Resource_GetGPUVirtualAddress(internal_as.tlas.scratch_buffer[i]);
+            build_desc.DestAccelerationStructureData    = ID3D12Resource_GetGPUVirtualAddress(result_buffer);
+            build_desc.ScratchAccelerationStructureData = ID3D12Resource_GetGPUVirtualAddress(scratch_buffer);
             build_desc.Inputs                           = inputs[i];
             
             
@@ -1832,7 +2044,7 @@ void dm_dx12_renderer_destroy_acceleration_structure(dm_dx12_acceleration_struct
 
 // raytracing pipeline
 DM_INLINE
-bool dm_dx12_raytracing_pipeline_shader_binding_table_add(const char* name, void** data, ID3D12StateObjectProperties* props)
+bool dm_dx12_raytracing_pipeline_sbt_add_entry(const char* name, void** data, const size_t offset, ID3D12StateObjectProperties* props)
 {
     wchar_t ws[100];
     void*   id = NULL;
@@ -1846,7 +2058,7 @@ bool dm_dx12_raytracing_pipeline_shader_binding_table_add(const char* name, void
     }
     
     dm_memcpy(*data, id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
-    *data = (char*)(*data) + D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+    *data = (char*)(*data) + offset;
     
     id = NULL;
     
@@ -1860,51 +2072,80 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     
     dm_dx12_raytracing_pipeline internal_pipe = { 0 };
     
-    // root signature
+    ID3DBlob* blob = NULL;
+    ID3DBlob* error_blob = NULL;
+    
+    uint32_t uav_base_index = 0;
+    uint32_t srv_base_index = 0;
+    uint32_t cbv_base_index = 0;
+    
+    // global root signature
     {
-        D3D12_ROOT_PARAMETER params = { 0 };
+        D3D12_ROOT_SIGNATURE_DESC global_root_desc     = { 0 };
+        D3D12_DESCRIPTOR_RANGE    global_ranges[3] = { 0 };
+        D3D12_ROOT_PARAMETER      global_root_params   = { 0 };
         
-        D3D12_DESCRIPTOR_RANGE ranges[3] = { 0 };
+        int global_uav_index = -1;
+        int global_srv_index = -1;
+        int global_cbv_index = -1;
+        uint32_t global_num_descriptor_ranges = 0;
+        uint32_t global_offset = 0;
         
-        for(uint32_t i=0; i<desc.resource_group_count; i++)
+        for(uint32_t i=0; i<desc.global_param_count; i++)
         {
-            dm_raytracing_pipeline_resource_group resource_group = desc.resource_groups[i];
-            
-            switch(resource_group.type)
+            switch(desc.global_params[i])
             {
-                case DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_OUTPUT_TEXTURE:
-                ranges[i].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-                break;
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_OUTPUT_TEXTURE:
+                {
+                    if(global_uav_index==-1) 
+                    {
+                        global_uav_index = global_num_descriptor_ranges++;
+                        global_ranges[global_uav_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+                        global_ranges[global_uav_index].BaseShaderRegister = uav_base_index;
+                    }
+                    global_ranges[global_uav_index].NumDescriptors++;
+                    global_ranges[global_uav_index].OffsetInDescriptorsFromTableStart = global_offset++;
+                    uav_base_index++;
+                } break;
                 
-                case DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_BUFFERS:
-                ranges[i].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                break;
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_ACCELERATION_STRUCTURE:
+                {
+                    if(global_srv_index==-1) 
+                    {
+                        global_srv_index = global_num_descriptor_ranges++;
+                        global_ranges[global_srv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                        global_ranges[global_srv_index].BaseShaderRegister = srv_base_index;
+                    }
+                    global_ranges[global_srv_index].NumDescriptors++;
+                    global_ranges[global_srv_index].OffsetInDescriptorsFromTableStart = global_offset++;
+                    srv_base_index++;
+                } break;
                 
-                case DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_CONSTANT_BUFFERS:
-                ranges[i].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-                break;
-                
-                default:
-                DM_LOG_FATAL("Unknown or unsupported raytracing pipeline resource type for DirectX12");
-                return false;
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER:
+                {
+                    if(global_cbv_index==-1) 
+                    {
+                        global_cbv_index = global_num_descriptor_ranges++;
+                        global_ranges[global_cbv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+                        global_ranges[global_cbv_index].BaseShaderRegister = cbv_base_index;
+                    }
+                    global_ranges[global_cbv_index].NumDescriptors++;
+                    global_ranges[global_cbv_index].OffsetInDescriptorsFromTableStart = global_offset++;
+                    uav_base_index++;
+                } break;
             }
-            
-            ranges[i].NumDescriptors                    = resource_group.count;
-            ranges[i].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
         }
         
-        params.ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        params.DescriptorTable.NumDescriptorRanges = desc.resource_group_count;
-        params.DescriptorTable.pDescriptorRanges   = ranges;
+        global_root_params.ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        global_root_params.DescriptorTable.NumDescriptorRanges = global_num_descriptor_ranges;
+        global_root_params.DescriptorTable.pDescriptorRanges   = global_ranges;
         
-        // create the root signature
-        D3D12_ROOT_SIGNATURE_DESC root_desc = { 0 };
-        root_desc.NumParameters = 1;
-        root_desc.pParameters   = &params;
+        global_root_desc.NumParameters = 1;
+        global_root_desc.pParameters   = &global_root_params;
         
-        ID3DBlob* blob = NULL;
-        ID3DBlob* error_blob = NULL;
-        hr = D3D12SerializeRootSignature(&root_desc, D3D_ROOT_SIGNATURE_VERSION_1_0, &blob, &error_blob);
+        hr = D3D12SerializeRootSignature(&global_root_desc, D3D_ROOT_SIGNATURE_VERSION_1_0, &blob, &error_blob);
         if (!dm_platform_win32_decode_hresult(hr))
         {
             DM_LOG_FATAL("D3D12SerializeRootSignature failed");
@@ -1923,7 +2164,6 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
             return false;
         }
         
-        ID3D10Blob_Release(blob);
     }
     
     // PSO
@@ -1937,8 +2177,106 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         internal_pipe.hit_group_count = desc.hit_group_count;
         internal_pipe.miss_count      = desc.miss_count;
         
+        // raygen
+        D3D12_ROOT_SIGNATURE_DESC raygen_root_desc   = { 0 };
+        D3D12_DESCRIPTOR_RANGE    raygen_ranges[3]   = { 0 };
+        D3D12_ROOT_PARAMETER      raygen_root_params = { 0 };
+        
+        ID3D12RootSignature* raygen_root_signature = { 0 };
+        
+        int raygen_uav_index = -1;
+        int raygen_srv_index = -1;
+        int raygen_cbv_index = -1;
+        uint32_t raygen_num_descriptor_ranges = 0;
+        uint32_t raygen_offset = 0;
+        
+        for(uint32_t i=0; i<desc.raygen_param_count; i++)
+        {
+            switch(desc.raygen_params[i])
+            {
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_OUTPUT_TEXTURE:
+                {
+                    if(raygen_uav_index==-1) 
+                    {
+                        raygen_uav_index = raygen_num_descriptor_ranges++;
+                        raygen_ranges[raygen_uav_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+                        raygen_ranges[raygen_uav_index].BaseShaderRegister = uav_base_index;
+                    }
+                    raygen_ranges[raygen_uav_index].NumDescriptors++;
+                    raygen_ranges[raygen_uav_index].OffsetInDescriptorsFromTableStart = raygen_offset++;
+                    uav_base_index++;
+                } break;
+                
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_ACCELERATION_STRUCTURE:
+                {
+                    if(raygen_srv_index==-1) 
+                    {
+                        raygen_srv_index = raygen_num_descriptor_ranges++;
+                        raygen_ranges[raygen_srv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                        raygen_ranges[raygen_srv_index].BaseShaderRegister = srv_base_index;
+                    }
+                    raygen_ranges[raygen_srv_index].NumDescriptors++;
+                    raygen_ranges[raygen_srv_index].OffsetInDescriptorsFromTableStart = raygen_offset++;
+                    srv_base_index++;
+                } break;
+                
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER:
+                {
+                    if(raygen_cbv_index==-1) 
+                    {
+                        raygen_cbv_index = raygen_num_descriptor_ranges++;
+                        raygen_ranges[raygen_cbv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+                        raygen_ranges[raygen_cbv_index].BaseShaderRegister = cbv_base_index;
+                    }
+                    raygen_ranges[raygen_cbv_index].NumDescriptors++;
+                    raygen_ranges[raygen_cbv_index].OffsetInDescriptorsFromTableStart = raygen_offset++;
+                    cbv_base_index++;
+                } break;
+                
+                default:
+                DM_LOG_FATAL("Unknown or unsupported shader parameter type for DirectX12 raygen shader");
+                return false;
+            }
+        }
+        
+        raygen_root_params.ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        raygen_root_params.DescriptorTable.NumDescriptorRanges = raygen_num_descriptor_ranges;
+        raygen_root_params.DescriptorTable.pDescriptorRanges   = raygen_ranges;
+        
+        raygen_root_desc.NumParameters = 1;
+        raygen_root_desc.pParameters   = &raygen_root_params;
+        raygen_root_desc.Flags         = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
+        
+        hr = D3D12SerializeRootSignature(&raygen_root_desc, D3D_ROOT_SIGNATURE_VERSION_1_0, &blob, &error_blob);
+        if(!dm_platform_win32_decode_hresult(hr))
+        {
+            DM_LOG_FATAL("D3D12SerializeRootSignature failed");
+            if(error_blob)
+            {
+                DM_LOG_FATAL("%s", (char*)ID3D10Blob_GetBufferPointer(error_blob));
+            }
+            return false;
+        }
+        
+        hr = ID3D12Device5_CreateRootSignature(dx12_renderer->device, 0, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), &IID_ID3D12RootSignature, &raygen_root_signature);
+        if(!dm_platform_win32_decode_hresult(hr))
+        {
+            DM_LOG_FATAL("ID3D12Device5_CreateRootSignature failed");
+            DM_LOG_FATAL("Could not create root signature for raygen");
+            return false;
+        }
+        
+        // hit groups
         D3D12_HIT_GROUP_DESC hit_groups[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
-        wchar_t exports[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS][1 + DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_UNKNOWN][100];
+        wchar_t exports[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS][DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_UNKNOWN][100];
+        
+        D3D12_ROOT_SIGNATURE_DESC hit_group_root_desc[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS]   = { 0 };
+        D3D12_DESCRIPTOR_RANGE    hit_group_ranges[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS][2]   = { 0 };
+        D3D12_ROOT_PARAMETER      hit_group_root_params[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
+        
+        ID3D12RootSignature* hit_group_root_signatures[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
         
         for(uint32_t i=0; i<desc.hit_group_count; i++)
         {
@@ -1983,6 +2321,82 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
                 DM_LOG_FATAL("Unknown hit group geometry type");
                 return false;
             }
+            
+            // local root signature
+            if(desc.hit_groups[i].param_count==0) continue;
+            
+            int hit_group_srv_index = -1;
+            int hit_group_cbv_index = -1;
+            uint32_t hit_group_num_descriptor_ranges = 0;
+            uint32_t hit_group_offset = 0;
+            
+            hit_group_ranges[i][0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+            hit_group_ranges[i][1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+            
+            for(uint32_t j=0; j<desc.hit_groups[i].param_count; j++)
+            {
+                switch(desc.hit_groups[i].params[j])
+                {
+                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER:
+                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER:
+                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_ACCELERATION_STRUCTURE:
+                    {
+                        if(hit_group_srv_index==-1) 
+                        {
+                            hit_group_srv_index = hit_group_num_descriptor_ranges++;
+                            hit_group_ranges[i][hit_group_srv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                            hit_group_ranges[i][hit_group_srv_index].BaseShaderRegister = srv_base_index;
+                        }
+                        hit_group_ranges[i][hit_group_srv_index].NumDescriptors++;
+                        hit_group_ranges[i][hit_group_srv_index].OffsetInDescriptorsFromTableStart = hit_group_offset++;
+                        srv_base_index++;
+                    } break;
+                    
+                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER:
+                    {
+                        if(hit_group_cbv_index==-1) 
+                        {
+                            hit_group_cbv_index = hit_group_num_descriptor_ranges++;
+                            hit_group_ranges[i][hit_group_cbv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+                            hit_group_ranges[i][hit_group_cbv_index].BaseShaderRegister = cbv_base_index;
+                        }
+                        hit_group_ranges[i][hit_group_cbv_index].NumDescriptors++;
+                        hit_group_ranges[i][hit_group_cbv_index].OffsetInDescriptorsFromTableStart = hit_group_offset++;
+                        cbv_base_index++;
+                    } break;
+                    
+                    default:
+                    DM_LOG_FATAL("Unknown or unsupported shader param for DirectX12 hit group");
+                    return false;
+                }
+            }
+            
+            hit_group_root_params[i].ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            hit_group_root_params[i].DescriptorTable.NumDescriptorRanges = hit_group_num_descriptor_ranges;
+            hit_group_root_params[i].DescriptorTable.pDescriptorRanges   = hit_group_ranges[i];
+            
+            hit_group_root_desc[i].NumParameters = 1;
+            hit_group_root_desc[i].pParameters   = &hit_group_root_params[i];
+            hit_group_root_desc[i].Flags         = D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE;
+            
+            hr = D3D12SerializeRootSignature(&hit_group_root_desc[i], D3D_ROOT_SIGNATURE_VERSION_1_0, &blob, &error_blob);
+            if(!dm_platform_win32_decode_hresult(hr))
+            {
+                DM_LOG_FATAL("D3D12SerializeRootSignature failed");
+                if(error_blob)
+                {
+                    DM_LOG_FATAL("%s", (char*)ID3D10Blob_GetBufferPointer(error_blob));
+                }
+                return false;
+            }
+            
+            hr = ID3D12Device5_CreateRootSignature(dx12_renderer->device, 0, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), &IID_ID3D12RootSignature, &hit_group_root_signatures[i]);
+            if(!dm_platform_win32_decode_hresult(hr))
+            {
+                DM_LOG_FATAL("ID3D12Device5_CreateRootSignature failed");
+                DM_LOG_FATAL("Could not create root signature for hit group: %u", i);
+                return false;
+            }
         }
         
         D3D12_RAYTRACING_SHADER_CONFIG shader_config = { 0 };
@@ -1994,23 +2408,60 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         D3D12_RAYTRACING_PIPELINE_CONFIG pipe_config = { 0 };
         pipe_config.MaxTraceRecursionDepth = desc.max_recursion;
         
-        D3D12_STATE_SUBOBJECT subobjects[8 + DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
+        // have: 
+        //    -4 objects from: library, shader config, pipeline config, global sig
+        //    -local signature for raygen
+        //    -root association for raygen
+        //    -MAX_HIT_GROUPS of hit groups
+        //    -MAX_HIT_GROUPS of local signatures for hit groups
+        //    -MAX_HIT_GROUPS of root associations for hit groups
+        D3D12_STATE_SUBOBJECT subobjects[4 + 1 + 1 + 3 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
         
+        WCHAR* ws_raygen = dm_alloc(sizeof(WCHAR) * strlen(desc.raygen));
+        WCHAR* ws_hit[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
         uint32_t sub_obj_index = 0;
+        
         {
             subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
             subobjects[sub_obj_index++].pDesc = &lib;
+            
+            subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
+            subobjects[sub_obj_index++].pDesc = &raygen_root_signature;
+            
+            D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION raygen_assoc = { 0 };
+            raygen_assoc.NumExports = 1;
+            swprintf(ws_raygen, 100, L"%hs", desc.raygen);
+            raygen_assoc.pExports = &ws_raygen;
+            raygen_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
+            
+            subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
+            subobjects[sub_obj_index++].pDesc = &raygen_assoc;
             
             for(uint32_t i=0; i<desc.hit_group_count; i++)
             {
                 subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
                 subobjects[sub_obj_index++].pDesc = &hit_groups[i];
+                
+                if(desc.hit_groups[i].param_count==0) continue;
+                
+                subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
+                subobjects[sub_obj_index++].pDesc = &hit_group_root_signatures[i];
+                
+                D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION hit_assoc = { 0 };
+                hit_assoc.NumExports = 1;
+                ws_hit[i] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].name));
+                swprintf(ws_hit[i], 100, L"%s", exports[i][0]);
+                hit_assoc.pExports = &ws_hit[i];
+                hit_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
+                
+                subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
+                subobjects[sub_obj_index++].pDesc = &hit_assoc;
             }
             
             subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
             subobjects[sub_obj_index++].pDesc = &shader_config;
             
-            subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE;;
+            subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE;
             subobjects[sub_obj_index++].pDesc = &global_sig;
             
             subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
@@ -2029,239 +2480,86 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
             DM_LOG_FATAL("Could not create raytracing pipeline state object");
             return false;
         }
+        
+        dm_free(&ws_raygen);
+        for(uint32_t i=0; i<desc.hit_group_count; i++)
+        {
+            if(ws_hit[i]) dm_free(&ws_hit[i]);
+        }
     }
     
     // shader table
     {
         internal_pipe.max_instance_count = desc.max_instance_count;
+        internal_pipe.shader_max_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+        uint32_t max_param_count = 0;
+        
+        max_param_count = desc.global_param_count > max_param_count ? desc.global_param_count : max_param_count;
+        
+        for(uint32_t i=0; i<desc.hit_group_count; i++)
+        {
+            if(desc.hit_groups[i].param_count > max_param_count) max_param_count = desc.hit_groups[i].param_count;
+        }
+        
+        internal_pipe.shader_max_size *= max_param_count;
+        internal_pipe.shader_max_size = ((internal_pipe.shader_max_size + D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT - 1) / D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT) * D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
         
         const uint32_t shader_table_count = 1 + internal_pipe.miss_count + internal_pipe.hit_group_count * desc.max_instance_count;
         
         D3D12_RESOURCE_DESC id_desc = DM_DX12_BASIC_BUFFER_DESC;
-        id_desc.Width = shader_table_count * D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+        id_desc.Width = shader_table_count * internal_pipe.shader_max_size;
         
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &id_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_pipe.shader_ids);
-        if(!dm_platform_win32_decode_hresult(hr))
+        for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
         {
-            DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
-            DM_LOG_FATAL("Could not create raytracing pipeline shader ids");
-            return false;
-        }
-        
-        ID3D12StateObjectProperties* props;
-        ID3D12StateObject_QueryInterface(internal_pipe.state_object, &IID_ID3D12StateObjectProperties, &props);
-        
-        void* data = NULL;
-        
-        hr = ID3D12Resource_Map(internal_pipe.shader_ids, 0, NULL, &data);
-        if(!dm_platform_win32_decode_hresult(hr))
-        {
-            DM_LOG_FATAL("ID3D12Resource_Map failed");
-            return false;
-        }
-        
-        // raygen shader
-        if(!dm_dx12_raytracing_pipeline_shader_binding_table_add(desc.raygen, &data, props)) return false;
-        
-        // miss shaders
-        for(uint32_t i=0; i<desc.miss_count; i++)
-        {
-            if(!dm_dx12_raytracing_pipeline_shader_binding_table_add(desc.miss[i], &data, props)) return false;
-        }
-        
-        // hit groups
-        for(uint32_t j=0; j<desc.max_instance_count; j++)
-        {
-            for(uint32_t i=0; i<desc.hit_group_count; i++)
+            hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &id_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_pipe.shader_table[i]);
+            if(!dm_platform_win32_decode_hresult(hr))
             {
-                if(!dm_dx12_raytracing_pipeline_shader_binding_table_add(desc.hit_groups[i].name, &data, props)) return false;
+                DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
+                DM_LOG_FATAL("Could not create raytracing pipeline shader ids");
+                return false;
             }
+            
+            ID3D12StateObjectProperties* props;
+            ID3D12StateObject_QueryInterface(internal_pipe.state_object, &IID_ID3D12StateObjectProperties, &props);
+            
+            void* data = NULL;
+            
+            hr = ID3D12Resource_Map(internal_pipe.shader_table[i], 0, NULL, &data);
+            if(!dm_platform_win32_decode_hresult(hr))
+            {
+                DM_LOG_FATAL("ID3D12Resource_Map failed");
+                return false;
+            }
+            
+            // raygen shader
+            if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.raygen, &data, internal_pipe.shader_max_size, props)) return false;
+            
+            // miss shaders
+            for(uint32_t i=0; i<desc.miss_count; i++)
+            {
+                if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.miss[i], &data, internal_pipe.shader_max_size, props)) return false;
+            }
+            
+            // hit groups
+            for(uint32_t j=0; j<desc.max_instance_count; j++)
+            {
+                for(uint32_t k=0; k<desc.hit_group_count; k++)
+                {
+                    if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.hit_groups[k].name, &data, internal_pipe.shader_max_size, props)) return false;
+                }
+            }
+            
+            data = NULL;
+            
+            ID3D12Resource_Unmap(internal_pipe.shader_table[i], 0, NULL);
+            
+            ID3D12StateObjectProperties_Release(props);
         }
-        
-        data = NULL;
-        
-        ID3D12Resource_Unmap(internal_pipe.shader_ids, 0, NULL);
-        
-        ID3D12StateObjectProperties_Release(props);
     }
     
     // resource creation and view creation
     internal_pipe.descriptor_heap_offset = dx12_renderer->descriptor_heap_offset;
     uint32_t heap_offset = 0;
-    
-    {
-        for(uint32_t i=0; i<desc.resource_group_count; i++)
-        {
-            dm_raytracing_pipeline_resource_group resource_group = desc.resource_groups[i];
-            dx12_renderer->descriptor_heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav * resource_group.count;
-            
-            switch(resource_group.type)
-            {
-                case DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_OUTPUT_TEXTURE:
-                {
-                    if(resource_group.count!=1)
-                    {
-                        DM_LOG_FATAL("Multiple DirectX12 raytracing output textures not supported");
-                        return false;
-                    }
-                    
-                    D3D12_RESOURCE_DESC image_desc = { 0 };
-                    image_desc.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-                    image_desc.Width            = renderer->width;
-                    image_desc.Height           = renderer->height;
-                    image_desc.DepthOrArraySize = 1;
-                    image_desc.MipLevels        = 1;
-                    image_desc.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
-                    image_desc.SampleDesc.Count = 1;
-                    image_desc.Flags            = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-                    
-                    for(uint32_t k=0; k<DM_DX12_NUM_FRAMES; k++)
-                    {
-                        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &image_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &internal_pipe.output_image[k]);
-                        if(!dm_platform_win32_decode_hresult(hr))
-                        {
-                            DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
-                            DM_LOG_FATAL("Could not create raytracing pipeline output image");
-                            return false;
-                        }
-                        
-                        ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[k];
-                        
-                        D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
-                        view_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-                        
-                        D3D12_CPU_DESCRIPTOR_HANDLE uav_handle = { 0 };
-                        ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &uav_handle);
-                        uav_handle.ptr += internal_pipe.descriptor_heap_offset + heap_offset;
-                        
-                        ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, internal_pipe.output_image[k], NULL, &view_desc, uav_handle);
-                    }
-                    
-                    heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
-                } break;
-                
-                case DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_BUFFERS:
-                {
-                    for(uint32_t j=0; j<resource_group.count; j++)
-                    {
-                        dm_raytracing_pipeline_resource resource = resource_group.resources[j];
-                        
-                        switch(resource.type)
-                        {
-                            case DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_ACCELERATION_STRUCTURE:
-                            {
-                                dm_dx12_acceleration_structure* as = &dx12_renderer->accel_structs[resource.acceleration_structure.handle];
-                                
-                                for(uint32_t k=0; k<DM_DX12_NUM_FRAMES; k++)
-                                {
-                                    D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
-                                    view_desc.Format                  = DXGI_FORMAT_UNKNOWN;
-                                    view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                                    view_desc.Buffer.Flags            = D3D12_BUFFER_SRV_FLAG_NONE;
-                                    view_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-                                    view_desc.RaytracingAccelerationStructure.Location = ID3D12Resource_GetGPUVirtualAddress(as->tlas.result_buffer[k]);
-                                    
-                                    ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[k];
-                                    
-                                    D3D12_CPU_DESCRIPTOR_HANDLE srv_handle = { 0 };
-                                    ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &srv_handle);
-                                    srv_handle.ptr += internal_pipe.descriptor_heap_offset + heap_offset;
-                                    
-                                    ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, NULL, &view_desc, srv_handle);
-                                }
-                            } break;
-                            
-                            case DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_VERTEX_BUFFER:
-                            {
-                                ID3D12Resource* buffer = NULL;
-                                
-                                for(uint32_t k=0; k<DM_DX12_NUM_FRAMES; k++)
-                                {
-                                    buffer = dx12_renderer->vertex_buffers[resource.buffer.handle].buffer[k];
-                                    
-                                    D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
-                                    view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                                    view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
-                                    view_desc.Buffer.NumElements         = resource.buffer.num_elements;
-                                    view_desc.Format                     = DXGI_FORMAT_UNKNOWN;
-                                    view_desc.Buffer.StructureByteStride = resource.buffer.stride;
-                                    view_desc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_NONE;
-                                    
-                                    ID3D12DescriptorHeap* heap           = dx12_renderer->resource_descriptor_heap[k];
-                                    
-                                    D3D12_CPU_DESCRIPTOR_HANDLE srv_handle = { 0 };
-                                    ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &srv_handle);
-                                    srv_handle.ptr += internal_pipe.descriptor_heap_offset + heap_offset;
-                                    
-                                    ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, buffer, &view_desc, srv_handle);
-                                }
-                            } break;
-                            
-                            case DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_INDEX_BUFFER:
-                            {
-                                ID3D12Resource* buffer = NULL;
-                                
-                                for(uint32_t k=0; k<DM_DX12_NUM_FRAMES; k++)
-                                {
-                                    buffer = dx12_renderer->index_buffers[resource.buffer.handle].buffer;
-                                    
-                                    D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
-                                    view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-                                    view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
-                                    view_desc.Buffer.NumElements         = resource.buffer.num_elements;
-                                    view_desc.Format                     = DXGI_FORMAT_R32_TYPELESS;
-                                    view_desc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_RAW;
-                                    
-                                    ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[k];
-                                    
-                                    D3D12_CPU_DESCRIPTOR_HANDLE srv_handle = { 0 };
-                                    ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &srv_handle);
-                                    srv_handle.ptr += internal_pipe.descriptor_heap_offset + heap_offset;
-                                    
-                                    ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, buffer, &view_desc, srv_handle);
-                                } break;
-                            } break;
-                        }
-                        
-                        heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
-                    }
-                } break;
-                
-                case DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_CONSTANT_BUFFERS:
-                {
-                    dm_dx12_constant_buffer* cb = NULL;
-                    
-                    // for each resource
-                    for(uint32_t j=0; j<resource_group.count; j++)
-                    {
-                        dm_raytracing_pipeline_resource resource = resource_group.resources[j];
-                        
-                        cb = &dx12_renderer->constant_buffers[resource.constant_buffer.handle];
-                        
-                        const size_t buffer_size = (255 + resource.constant_buffer.size) & ~255;
-                        
-                        // for each frame
-                        for(uint32_t k=0; k<DM_DX12_NUM_FRAMES; k++)
-                        {
-                            D3D12_CONSTANT_BUFFER_VIEW_DESC cbv_desc = { 0 };
-                            cbv_desc.BufferLocation = ID3D12Resource_GetGPUVirtualAddress(cb->buffer[k]);
-                            cbv_desc.SizeInBytes    = buffer_size;
-                            
-                            ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[k];
-                            
-                            D3D12_CPU_DESCRIPTOR_HANDLE cbv_handle = { 0 };
-                            ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &cbv_handle);
-                            cbv_handle.ptr += internal_pipe.descriptor_heap_offset + heap_offset;
-                            
-                            ID3D12Device5_CreateConstantBufferView(dx12_renderer->device, &cbv_desc, cbv_handle);
-                        }
-                        
-                        heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
-                    }
-                } break;
-            }
-        }
-    }
     
     //
     dm_memcpy(dx12_renderer->raytracing_pipelines + dx12_renderer->raytracing_pipes_count, &internal_pipe, sizeof(internal_pipe));
@@ -2274,10 +2572,9 @@ void dm_dx12_renderer_destroy_raytracing_pipeline(dm_dx12_raytracing_pipeline* p
 {
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
-        ID3D12Resource_Release(pipe->output_image[i]);
+        ID3D12Resource_Release(pipe->shader_table[i]);
     }
     
-    ID3D12Resource_Release(pipe->shader_ids);
     ID3D12StateObject_Release(pipe->state_object);
     ID3D12RootSignature_Release(pipe->root_signature);
 }
@@ -2567,6 +2864,150 @@ bool dm_render_command_backend_update_acceleration_structure_tlas(dm_render_hand
     return true;
 }
 
+bool dm_render_command_backend_add_global_param(dm_raytracing_pipeline_shader_param type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
+{
+    return true;
+}
+
+bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_param type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+    
+    size_t heap_offset;
+    
+    const uint32_t current_frame_index  = dx12_renderer->current_frame_index;
+    
+    switch(type)
+    {
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER:
+        heap_offset = dx12_renderer->vertex_buffers[handle].heap_offset;
+        break;
+        
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER:
+        heap_offset = dx12_renderer->index_buffers[handle].heap_offset;
+        break;
+        
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER:
+        heap_offset = dx12_renderer->constant_buffers[handle].heap_offset;
+        break;
+        
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_OUTPUT_TEXTURE:
+        heap_offset = dx12_renderer->textures[handle].heap_offset;
+        break;
+        
+        default:
+        DM_LOG_FATAL("Unknown or unsupported shader parameter type for DirectX12 raygen shader");
+        return false;
+    }
+    
+    dm_dx12_raytracing_pipeline* pipe = &dx12_renderer->raytracing_pipelines[pipe_handle];
+    ID3D12DescriptorHeap* heap        = dx12_renderer->resource_descriptor_heap[current_frame_index];
+    
+    if(pipe->instance_count>=pipe->max_instance_count)
+    {
+        DM_LOG_FATAL("Trying to draw too many instances, when max instance count was set as: %u", pipe->max_instance_count);
+    }
+    
+    // map onto shader table
+    void* data = NULL;
+    hr = ID3D12Resource_Map(pipe->shader_table[current_frame_index], 0, NULL, (void**)&data);
+    if(!dm_platform_win32_decode_hresult(hr))
+    {
+        DM_LOG_FATAL("ID3D12Resource_Map failed");
+        DM_LOG_FATAL("Mapping to DirectX12 raytracing pipeline shader table failed");
+        return false;
+    }
+    
+    (char*)data += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+    
+    if((uint64_t)data % 8 != 0)
+    {
+        DM_LOG_FATAL("Something went wrong with indexding into the shader binding table");
+        return false;
+    }
+    
+    D3D12_GPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
+    ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(heap, &heap_handle);
+    
+    *(uint64_t*)data = heap_handle.ptr + heap_offset;
+    
+    data = NULL;
+    
+    pipe->instance_count++;
+    
+    return true;
+}
+
+bool dm_render_command_backend_add_hit_group_param(dm_raytracing_pipeline_shader_param type, uint32_t hit_group, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+    
+    if(hit_group>=DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS)
+    {
+        DM_LOG_FATAL("Invalid raytracing hitgroup index %u when max amount is %u", hit_group, DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS);
+        return false;
+    }
+    
+    size_t heap_offset;
+    
+    const uint32_t current_frame_index  = dx12_renderer->current_frame_index;
+    
+    switch(type)
+    {
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER:
+        heap_offset = dx12_renderer->vertex_buffers[handle].heap_offset;
+        break;
+        
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER:
+        heap_offset = dx12_renderer->index_buffers[handle].heap_offset;
+        break;
+        
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER:
+        heap_offset = dx12_renderer->constant_buffers[handle].heap_offset;
+        break;
+        
+        default:
+        DM_LOG_FATAL("Unknown or unsupported shader parameter type for DirectX12 hit group");
+        return false;
+    }
+    
+    dm_dx12_raytracing_pipeline* pipe = &dx12_renderer->raytracing_pipelines[pipe_handle];
+    ID3D12DescriptorHeap* heap        = dx12_renderer->resource_descriptor_heap[current_frame_index];
+    
+    // map onto shader table
+    void* data = NULL;
+    hr = ID3D12Resource_Map(pipe->shader_table[current_frame_index], 0, NULL, (void**)&data);
+    if(!dm_platform_win32_decode_hresult(hr))
+    {
+        DM_LOG_FATAL("ID3D12Resource_Map failed");
+        DM_LOG_FATAL("Mapping to DirectX12 raytracing pipeline shader table failed");
+        return false;
+    }
+    
+    // skip raygen, skip miss, offset by instance count, offset into correct hit group
+    const size_t offset = 1 + pipe->miss_count + pipe->instance_count * pipe->hit_group_count + hit_group + slot * 8;
+    (char*)data += offset * pipe->shader_max_size + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+    
+    if((uint64_t)data % 8 != 0)
+    {
+        DM_LOG_FATAL("Something went wrong with indexding into the shader binding table");
+        return false;
+    }
+    
+    D3D12_GPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
+    ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(heap, &heap_handle);
+    
+    *(uint64_t*)data = heap_handle.ptr + heap_offset;
+    
+    data = NULL;
+    
+    pipe->instance_count++;
+    
+    return true;
+}
+
 bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
@@ -2583,48 +3024,6 @@ bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle handle,
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
     ID3D12GraphicsCommandList4* command_list    = dx12_renderer->command_list[current_frame_index];
     ID3D12DescriptorHeap*       descriptor_heap = dx12_renderer->resource_descriptor_heap[current_frame_index];
-    
-    // resize output buffer
-    if(internal_pipe->output_width!=renderer->width || internal_pipe->output_height!=renderer->height)
-    {
-        for(uint32_t k=0; k<DM_DX12_NUM_FRAMES; k++)
-        {
-            ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[k];
-            
-            ID3D12Resource_Release(internal_pipe->output_image[k]);
-            
-            D3D12_RESOURCE_DESC image_desc = { 0 };
-            image_desc.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-            image_desc.Width            = renderer->width;
-            image_desc.Height           = renderer->height;
-            image_desc.DepthOrArraySize = 1;
-            image_desc.MipLevels        = 1;
-            image_desc.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
-            image_desc.SampleDesc.Count = 1;
-            image_desc.Flags            = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-            
-            hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &image_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &internal_pipe->output_image[k]);
-            if(!dm_platform_win32_decode_hresult(hr))
-            {
-                DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
-                DM_LOG_FATAL("Could not create raytracing pipeline output image");
-                return false;
-            }
-            
-            internal_pipe->output_width  = renderer->width;
-            internal_pipe->output_height = renderer->height;
-            
-            D3D12_UNORDERED_ACCESS_VIEW_DESC desc = { 0 };
-            desc.Format        = DXGI_FORMAT_R8G8B8A8_UNORM;
-            desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-            
-            // output is first, so we don't need to offset
-            D3D12_CPU_DESCRIPTOR_HANDLE descriptor_handle = { 0 };
-            ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &descriptor_handle);
-            
-            ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, internal_pipe->output_image[k], NULL, &desc, descriptor_handle);
-        }
-    }
     
     // state, root sig
     {
@@ -2645,7 +3044,7 @@ bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle handle,
     return true;
 }
 
-bool dm_render_command_backend_dispatch_rays(dm_render_handle handle, dm_renderer* renderer)
+bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
@@ -2661,12 +3060,9 @@ bool dm_render_command_backend_dispatch_rays(dm_render_handle handle, dm_rendere
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
     ID3D12GraphicsCommandList4* command_list  = dx12_renderer->command_list[current_frame_index];
     
-    D3D12_RESOURCE_DESC render_target_desc = { 0 };
-    ID3D12Resource_GetDesc(internal_pipe->output_image[current_frame_index], &render_target_desc);
-    
     const size_t shader_size  = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
     
-    const D3D12_GPU_VIRTUAL_ADDRESS start_address = ID3D12Resource_GetGPUVirtualAddress(internal_pipe->shader_ids);
+    const D3D12_GPU_VIRTUAL_ADDRESS start_address = ID3D12Resource_GetGPUVirtualAddress(internal_pipe->shader_table[current_frame_index]);
     
     D3D12_DISPATCH_RAYS_DESC desc = { 0 };
     desc.RayGenerationShaderRecord.StartAddress = start_address;
@@ -2680,14 +3076,34 @@ bool dm_render_command_backend_dispatch_rays(dm_render_handle handle, dm_rendere
     desc.HitGroupTable.SizeInBytes   = shader_size * internal_pipe->hit_group_count * internal_pipe->max_instance_count;
     desc.HitGroupTable.StrideInBytes = shader_size;
     
-    desc.Width  = render_target_desc.Width;
-    desc.Height = render_target_desc.Height;
+    desc.Width  = width;
+    desc.Height = height;
     desc.Depth  = 1;
     
     ID3D12GraphicsCommandList4_DispatchRays(command_list, &desc);
+    internal_pipe->instance_count = 0;
+    
+    return true;
+}
+
+bool dm_render_command_backend_copy_texture_to_screen(dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+    
+    if(handle>=dx12_renderer->texture_count || dx12_renderer->texture_count==0)
+    {
+        DM_LOG_FATAL("Trying to copy invalid DirectX12 texture");
+        return false;
+    }
+    
+    dm_dx12_texture* internal_texture = &dx12_renderer->textures[handle];
+    
+    const uint32_t current_frame_index = dx12_renderer->current_frame_index;
+    ID3D12GraphicsCommandList4* command_list  = dx12_renderer->command_list[current_frame_index];
     
     ID3D12Resource* back_buffer   = dx12_renderer->render_target[dx12_renderer->current_frame_index];
-    ID3D12Resource* render_target = internal_pipe->output_image[current_frame_index];
+    ID3D12Resource* render_target = internal_texture->texture[current_frame_index];
     
     // barriers
     {
@@ -2734,6 +3150,7 @@ bool dm_render_command_backend_dispatch_rays(dm_render_handle handle, dm_rendere
     
     return true;
 }
+
 #endif // dm_raytracing
 
 #endif

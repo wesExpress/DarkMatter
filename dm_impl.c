@@ -635,6 +635,8 @@ extern bool dm_renderer_backend_create_index_buffer(const dm_index_buffer_desc d
 extern bool dm_renderer_backend_create_constant_buffer(const void* data, size_t data_size, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_resize_texutre(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer);
 
 #ifdef DM_RAYTRACING
 extern bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_render_handle* handle, dm_renderer* renderer);
@@ -681,6 +683,22 @@ bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* ha
     return false;
 }
 
+bool dm_renderer_create_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle* handle, dm_context* context)
+{
+    if(dm_renderer_backend_create_texture(data, width, height, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create texture");
+    return false;
+}
+
+bool dm_renderer_resize_texutre(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context)
+{
+    if(dm_renderer_backend_resize_texutre(data, width, height, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Resizing texture failed");
+    return false;
+}
+
 #ifdef DM_RAYTRACING
 bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_render_handle* handle, dm_context* context)
 {
@@ -690,88 +708,13 @@ bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc de
     return false;
 }
 
+// rt pipeline
 bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_render_handle* handle, dm_context* context)
 {
     if(dm_renderer_backend_create_raytracing_pipeline(desc, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Creating raytracing pipeline failed");
     return false;
-}
-
-uint32_t dm_renderer_raytracing_pipeline_add_resource_group(dm_raytracing_pipeline_resource_group_type type, dm_raytracing_pipeline_desc* desc)
-{
-    desc->resource_groups[desc->resource_group_count].type = type;
-    return desc->resource_group_count++;
-}
-
-uint32_t dm_renderer_raytracing_pipeline_add_output_texture_resource_group(dm_raytracing_pipeline_desc* desc)
-{
-    return dm_renderer_raytracing_pipeline_add_resource_group(DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_OUTPUT_TEXTURE, desc);
-}
-
-uint32_t dm_renderer_raytracing_pipeline_add_buffer_resource_group(dm_raytracing_pipeline_desc* desc)
-{
-    return dm_renderer_raytracing_pipeline_add_resource_group(DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_BUFFERS, desc);
-}
-
-uint32_t dm_renderer_raytracing_pipeline_add_constant_buffer_resource_group(dm_raytracing_pipeline_desc* desc)
-{
-    return dm_renderer_raytracing_pipeline_add_resource_group(DM_RAYTRACING_PIPELINE_RESOURCE_GROUP_TYPE_CONSTANT_BUFFERS, desc);
-}
-
-void dm_renderer_raytracing_pipeline_add_output_texture(const uint32_t group_index, dm_raytracing_pipeline_desc* desc)
-{
-    const uint32_t index = desc->resource_groups[group_index].count;
-    
-    desc->resource_groups[group_index].resources[index].type = DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_OUTPUT_TEXTURE;
-    
-    desc->resource_groups[group_index].count++;
-}
-
-void dm_renderer_raytracing_pipeline_add_acceleration_structure(const dm_render_handle as_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc)
-{
-    const uint32_t index = desc->resource_groups[group_index].count;
-    
-    desc->resource_groups[group_index].resources[index].type = DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_ACCELERATION_STRUCTURE;
-    desc->resource_groups[group_index].resources[index].acceleration_structure.handle = as_handle;
-    
-    desc->resource_groups[group_index].count++;
-}
-
-void dm_renderer_raytracing_pipeline_add_vertex_buffer(const size_t stride, const uint32_t count, const dm_render_handle buffer_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc)
-{
-    const uint32_t index = desc->resource_groups[group_index].count;
-    
-    desc->resource_groups[group_index].resources[index].type = DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_VERTEX_BUFFER;
-    desc->resource_groups[group_index].resources[index].buffer.size         = stride * count;
-    desc->resource_groups[group_index].resources[index].buffer.num_elements = count;
-    desc->resource_groups[group_index].resources[index].buffer.stride       = stride;
-    desc->resource_groups[group_index].resources[index].buffer.handle       = buffer_handle;
-    
-    desc->resource_groups[group_index].count++;
-}
-
-void dm_renderer_raytracing_pipeline_add_index_buffer(const size_t elem_size, const uint32_t count, const dm_render_handle buffer_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc)
-{
-    const uint32_t index = desc->resource_groups[group_index].count;
-    
-    desc->resource_groups[group_index].resources[index].type                = DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_INDEX_BUFFER;
-    desc->resource_groups[group_index].resources[index].buffer.size         = elem_size * count;
-    desc->resource_groups[group_index].resources[index].buffer.num_elements = count;
-    desc->resource_groups[group_index].resources[index].buffer.handle       = buffer_handle;
-    
-    desc->resource_groups[group_index].count++;
-}
-
-void dm_renderer_raytracing_pipeline_add_constant_buffer(const size_t size, const dm_render_handle buffer_handle, const uint32_t group_index, dm_raytracing_pipeline_desc* desc)
-{
-    const uint32_t index = desc->resource_groups[group_index].count;
-    
-    desc->resource_groups[group_index].resources[index].type = DM_RAYTRACING_PIPELINE_RESOURCE_TYPE_CONSTANT_BUFFER;
-    desc->resource_groups[group_index].resources[index].constant_buffer.size = size;
-    desc->resource_groups[group_index].resources[index].constant_buffer.handle = buffer_handle;
-    
-    desc->resource_groups[group_index].count++;
 }
 
 // miss
@@ -782,6 +725,67 @@ uint32_t dm_renderer_raytracing_pipeline_add_miss(const char* name, dm_raytracin
     strcpy(desc->miss[miss_group], name);
     
     return desc->miss_count++;
+}
+
+// shader params
+void dm_renderer_raytracing_pipeline_global_add_vertex_buffer_param(dm_raytracing_pipeline_desc* desc)
+{
+    desc->global_params[desc->global_param_count] = DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER;
+    desc->global_param_count++;
+}
+
+void dm_renderer_raytracing_pipeline_global_add_index_buffer_param(dm_raytracing_pipeline_desc* desc)
+{
+    desc->global_params[desc->global_param_count] = DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER;
+    desc->global_param_count++;
+}
+
+void dm_renderer_raytracing_pipeline_global_add_constant_buffer_param(dm_raytracing_pipeline_desc* desc)
+{
+    desc->global_params[desc->global_param_count] = DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER;
+    desc->global_param_count++;
+}
+
+void dm_renderer_raytracing_pipeline_global_add_acceleration_structure_param(dm_raytracing_pipeline_desc* desc)
+{
+    desc->global_params[desc->global_param_count] = DM_RAYTRACING_PIPELINE_SHADER_PARAM_ACCELERATION_STRUCTURE;
+    desc->global_param_count++;
+}
+
+void dm_renderer_raytracing_pipeline_global_add_output_texture_param(dm_raytracing_pipeline_desc* desc)
+{
+    desc->global_params[desc->global_param_count] = DM_RAYTRACING_PIPELINE_SHADER_PARAM_OUTPUT_TEXTURE;
+    desc->global_param_count++;
+}
+
+void dm_renderer_raytracing_pipeline_raygen_add_vertex_buffer_param(dm_raytracing_pipeline_desc* desc)
+{
+    desc->raygen_params[desc->raygen_param_count] = DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER;
+    desc->raygen_param_count++;
+}
+
+void dm_renderer_raytracing_pipeline_raygen_add_index_buffer_param(dm_raytracing_pipeline_desc* desc)
+{
+    desc->raygen_params[desc->raygen_param_count] = DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER;
+    desc->raygen_param_count++;
+}
+
+void dm_renderer_raytracing_pipeline_raygen_add_constant_buffer_param(dm_raytracing_pipeline_desc* desc)
+{
+    desc->raygen_params[desc->raygen_param_count] = DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER;
+    desc->raygen_param_count++;
+}
+
+void dm_renderer_raytracing_pipeline_raygen_add_acceleration_structure_param(dm_raytracing_pipeline_desc* desc)
+{
+    desc->raygen_params[desc->raygen_param_count] = DM_RAYTRACING_PIPELINE_SHADER_PARAM_ACCELERATION_STRUCTURE;
+    desc->raygen_param_count++;
+}
+
+void dm_renderer_raytracing_pipeline_raygen_add_output_texture_param(dm_raytracing_pipeline_desc* desc)
+{
+    desc->raygen_params[desc->raygen_param_count] = DM_RAYTRACING_PIPELINE_SHADER_PARAM_OUTPUT_TEXTURE;
+    desc->raygen_param_count++;
 }
 
 // hit groups
@@ -823,6 +827,35 @@ void dm_renderer_raytracing_pipeline_hit_group_add_intersection(const char* shad
     desc->hit_groups[group_index].flags |= DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION;
 }
 
+void dm_renderer_raytracing_pipeline_hit_group_add_param(dm_raytracing_pipeline_shader_param param, uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    const uint32_t param_index = desc->hit_groups[group_index].param_count;
+    
+    desc->hit_groups[group_index].params[param_index] = param;
+    
+    desc->hit_groups[group_index].param_count++;
+}
+
+void dm_renderer_raytracing_pipeline_hit_group_add_vertex_buffer_param(uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    dm_renderer_raytracing_pipeline_hit_group_add_param(DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER, group_index, desc);
+}
+
+void dm_renderer_raytracing_pipeline_hit_group_add_index_buffer_param(uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    dm_renderer_raytracing_pipeline_hit_group_add_param(DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER, group_index, desc);
+}
+
+void dm_renderer_raytracing_pipeline_hit_group_add_constant_buffer_param(uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    dm_renderer_raytracing_pipeline_hit_group_add_param(DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER,  group_index, desc);
+}
+
+void dm_renderer_raytracing_pipeline_hit_group_add_acceleration_structure_param( uint32_t group_index, dm_raytracing_pipeline_desc* desc)
+{
+    dm_renderer_raytracing_pipeline_hit_group_add_param(DM_RAYTRACING_PIPELINE_SHADER_PARAM_ACCELERATION_STRUCTURE, group_index, desc);
+}
+
 #endif
 
 /***************
@@ -847,8 +880,14 @@ extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_render
 #ifdef DM_RAYTRACING
 extern bool dm_render_command_backend_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_acceleration_structure_tlas(dm_render_handle handle, dm_renderer* renderer);
+
+extern bool dm_render_command_backend_add_global_param(dm_raytracing_pipeline_shader_param type, uint32_t slot, dm_render_handle vb_handle, dm_render_handle pipe_handle,  dm_renderer* renderer);
+extern bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_param type, uint32_t slot, dm_render_handle vb_handle, dm_render_handle pipe_handle,  dm_renderer* renderer);
+extern bool dm_render_command_backend_add_hit_group_param(dm_raytracing_pipeline_shader_param type, uint32_t slot, uint32_t hit_group, dm_render_handle vb_handle, dm_render_handle pipe_handle,  dm_renderer* renderer);
+
 extern bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_raytracing_pipeline_dispatch_rays(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_raytracing_pipeline_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_copy_texture_to_screen(dm_render_handle handle, dm_renderer* renderer);
 #endif
 
 void __dm_renderer_submit_render_command(dm_render_command* command, dm_render_command_manager* manager)
@@ -1095,12 +1134,72 @@ void dm_render_command_update_acceleration_structure_tlas(dm_render_handle handl
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
-void dm_render_command_dispatch_rays(dm_render_handle handle, dm_context* context)
+void dm_render_command_add_global_param(dm_raytracing_pipeline_shader_param type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_ADD_GLOBAL_PARAM;
+    
+    DM_BYTE_POOL_INSERT(command.params, type);
+    DM_BYTE_POOL_INSERT(command.params, slot);
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    DM_BYTE_POOL_INSERT(command.params, pipe_handle);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_add_raygen_param(dm_raytracing_pipeline_shader_param type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_ADD_RAYGEN_PARAM;
+    
+    DM_BYTE_POOL_INSERT(command.params, type);
+    DM_BYTE_POOL_INSERT(command.params, slot);
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    DM_BYTE_POOL_INSERT(command.params, pipe_handle);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_add_hit_group_param(dm_raytracing_pipeline_shader_param type, uint32_t slot, uint32_t hit_group, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_ADD_HIT_GROUP_PARAM;
+    
+    DM_BYTE_POOL_INSERT(command.params, type);
+    DM_BYTE_POOL_INSERT(command.params, slot);
+    DM_BYTE_POOL_INSERT(command.params, hit_group);
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    DM_BYTE_POOL_INSERT(command.params, pipe_handle);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context)
 {
     if(DM_TOO_MANY_COMMANDS) return;
     
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_DISPATCH_RAYS;
+    
+    DM_BYTE_POOL_INSERT(command.params, width);
+    DM_BYTE_POOL_INSERT(command.params, height);
+    DM_BYTE_POOL_INSERT(command.params, handle);
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_copy_texture_to_screen(dm_render_handle handle, dm_context* context)
+{
+    if(DM_TOO_MANY_COMMANDS) return;
+    
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_COPY_TEXTURE_TO_SCREEN;
     
     DM_BYTE_POOL_INSERT(command.params, handle);
     
@@ -1279,6 +1378,45 @@ bool dm_renderer_submit_commands(dm_context* context)
                 return false;
             } break;
             
+            // shader table parameters
+            case DM_RENDER_COMMAND_ADD_GLOBAL_PARAM:
+            {
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, pipe_handle);
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
+                DM_BYTE_POOL_POP(command.params, dm_raytracing_pipeline_shader_param, type);
+                
+                if(dm_render_command_backend_add_global_param(type, slot, handle, pipe_handle, renderer)) continue;
+                
+                DM_LOG_FATAL("Add hit group instance vertex buffer failed");
+                return false;
+            } break;
+            case DM_RENDER_COMMAND_ADD_RAYGEN_PARAM:
+            {
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, pipe_handle);
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
+                DM_BYTE_POOL_POP(command.params, dm_raytracing_pipeline_shader_param, type);
+                
+                if(dm_render_command_backend_add_raygen_param(type, slot, handle, pipe_handle, renderer)) continue;
+                
+                DM_LOG_FATAL("Add hit group instance vertex buffer failed");
+                return false;
+            } break;
+            case DM_RENDER_COMMAND_ADD_HIT_GROUP_PARAM:
+            {
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, pipe_handle);
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                DM_BYTE_POOL_POP(command.params, uint32_t, hit_group);
+                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
+                DM_BYTE_POOL_POP(command.params, dm_raytracing_pipeline_shader_param, type);
+                
+                if(dm_render_command_backend_add_hit_group_param(type, slot, hit_group, handle, pipe_handle, renderer)) continue;
+                
+                DM_LOG_FATAL("Add hit group instance vertex buffer failed");
+                return false;
+            } break;
+            
             // raytacing pipeline
             case DM_RENDER_COMMAND_BIND_RAYTRACING_PIPELINE:
             {
@@ -1294,8 +1432,21 @@ bool dm_renderer_submit_commands(dm_context* context)
             case DM_RENDER_COMMAND_DISPATCH_RAYS:
             {
                 DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                DM_BYTE_POOL_POP(command.params, uint32_t, height);
+                DM_BYTE_POOL_POP(command.params, uint32_t, width);
                 
-                if(dm_render_command_backend_dispatch_rays(handle, renderer)) continue;
+                if(dm_render_command_backend_dispatch_rays(width, height, handle, renderer)) continue;
+                
+                DM_LOG_FATAL("Dispatch rays failed");
+                return false;
+            } break;
+            
+            // copy texture to screen
+            case DM_RENDER_COMMAND_COPY_TEXTURE_TO_SCREEN:
+            {
+                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                
+                if(dm_render_command_backend_copy_texture_to_screen(handle, renderer)) continue;
                 
                 DM_LOG_FATAL("Dispatch rays failed");
                 return false;
