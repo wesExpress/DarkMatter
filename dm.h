@@ -840,7 +840,7 @@ typedef enum dm_raytracing_pipeline_shader_param_type_t
 typedef struct dm_rt_pipeline_shader_params_t
 {
     dm_raytracing_pipeline_shader_param_type types[DM_RAYTRACING_PIPELINE_SHADER_MAX_PARAMS];
-    uint32_t                                 slots[DM_RAYTRACING_PIPELINE_SHADER_MAX_PARAMS];
+    uint32_t                                 registers[DM_RAYTRACING_PIPELINE_SHADER_MAX_PARAMS];
     uint32_t                                 count;
 } dm_rt_pipeline_shader_params;
 
@@ -1264,21 +1264,21 @@ void dm_renderer_raytracing_pipeline_global_add_constant_buffer_param(dm_raytrac
 void dm_renderer_raytracing_pipeline_global_add_acceleration_structure_param(dm_raytracing_pipeline_desc* desc);
 void dm_renderer_raytracing_pipeline_global_add_output_texture_param(dm_raytracing_pipeline_desc* desc);
 
-void dm_renderer_raytracing_pipeline_raygen_add_vertex_buffer_param(uint32_t slot, dm_raytracing_pipeline_desc* desc);
-void dm_renderer_raytracing_pipeline_raygen_add_index_buffer_param(uint32_t slot, dm_raytracing_pipeline_desc* desc);
-void dm_renderer_raytracing_pipeline_raygen_add_constant_buffer_param(uint32_t slot, dm_raytracing_pipeline_desc* desc);
-void dm_renderer_raytracing_pipeline_raygen_add_acceleration_structure_param(uint32_t slot, dm_raytracing_pipeline_desc* desc);
-void dm_renderer_raytracing_pipeline_raygen_add_output_texture_param(uint32_t slot, dm_raytracing_pipeline_desc* desc);
+void dm_renderer_raytracing_pipeline_raygen_add_vertex_buffer_param(uint32_t shader_register, dm_raytracing_pipeline_desc* desc);
+void dm_renderer_raytracing_pipeline_raygen_add_index_buffer_param(uint32_t shader_register, dm_raytracing_pipeline_desc* desc);
+void dm_renderer_raytracing_pipeline_raygen_add_constant_buffer_param(uint32_t shader_register, dm_raytracing_pipeline_desc* desc);
+void dm_renderer_raytracing_pipeline_raygen_add_acceleration_structure_param(uint32_t shader_register, dm_raytracing_pipeline_desc* desc);
+void dm_renderer_raytracing_pipeline_raygen_add_output_texture_param(uint32_t shader_register, dm_raytracing_pipeline_desc* desc);
 
 // hit group
 void     dm_renderer_raytracing_pipeline_hit_group_add_any_hit(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
 void     dm_renderer_raytracing_pipeline_hit_group_add_closest_hit(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
 void     dm_renderer_raytracing_pipeline_hit_group_add_intersection(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
 
-void     dm_renderer_raytracing_pipeline_hit_group_add_vertex_buffer_param(uint32_t slot, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
-void     dm_renderer_raytracing_pipeline_hit_group_add_index_buffer_param(uint32_t slot, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
-void     dm_renderer_raytracing_pipeline_hit_group_add_constant_buffer_param(uint32_t slot, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
-void     dm_renderer_raytracing_pipeline_hit_group_add_acceleration_structure_param(uint32_t slot, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
+void     dm_renderer_raytracing_pipeline_hit_group_add_vertex_buffer_param(uint32_t shader_register, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
+void     dm_renderer_raytracing_pipeline_hit_group_add_index_buffer_param(uint32_t shader_register, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
+void     dm_renderer_raytracing_pipeline_hit_group_add_constant_buffer_param(uint32_t shader_register, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
+void     dm_renderer_raytracing_pipeline_hit_group_add_acceleration_structure_param(uint32_t shader_register, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
 
 #endif
 
@@ -1303,7 +1303,7 @@ void dm_render_command_update_acceleration_structure_tlas(dm_render_handle handl
 
 void dm_render_command_add_global_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context);
 void dm_render_command_add_raygen_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context);
-void dm_render_command_add_hit_group_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, uint32_t hit_group, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context);
+void dm_render_command_add_hit_group_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, uint32_t hit_group, uint32_t instance, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context);
 
 void dm_render_command_bind_raytracing_pipeline(dm_render_handle handle, dm_context* context);
 void dm_render_command_raytracing_pipeline_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context);
