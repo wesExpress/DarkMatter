@@ -213,6 +213,7 @@ void dm_dx12_renderer_destroy_pipe(dm_dx12_pipeline* pipe);
 void dm_dx12_renderer_destroy_vertex_buffer(dm_dx12_vertex_buffer* buffer);
 void dm_dx12_renderer_destroy_index_buffer(dm_dx12_index_buffer* buffer);
 void dm_dx12_renderer_destroy_constant_buffer(dm_dx12_constant_buffer* buffer);
+void dm_dx12_renderer_destroy_texture(dm_dx12_texture* texture);
 
 #ifdef DM_RAYTRACING
 void dm_dx12_renderer_destroy_acceleration_structure(dm_dx12_acceleration_structure* as);
@@ -888,6 +889,11 @@ void dm_renderer_backend_shutdown(dm_context* context)
         dm_dx12_renderer_destroy_constant_buffer(&dx12_renderer->constant_buffers[i]);
     }
     
+    for(uint32_t i=0; i<dx12_renderer->texture_count; i++)
+    {
+        dm_dx12_renderer_destroy_texture(&dx12_renderer->textures[i]);
+    }
+    
 #ifdef DM_RAYTRACING
     for(uint32_t i=0; i<dx12_renderer->as_count; i++)
     {
@@ -985,7 +991,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
         ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(dx12_renderer->depth_stencil_descriptor_heap, &depth_descriptor_handle);
         
         
-        static const FLOAT clear_color[] = { 0,0,0,1 };
+        static const FLOAT clear_color[] = { 0,1,0,1 };
         ID3D12GraphicsCommandList4_ClearRenderTargetView(command_list, rtv_descriptor_handle, clear_color, 0, NULL);
         ID3D12GraphicsCommandList4_ClearDepthStencilView(command_list, depth_descriptor_handle, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0,0,NULL);
         ID3D12GraphicsCommandList4_OMSetRenderTargets(command_list, 1, &rtv_descriptor_handle, FALSE, &depth_descriptor_handle);
@@ -1697,7 +1703,7 @@ bool dm_renderer_backend_resize_texutre(const void* data, uint32_t width, uint32
     return true;
 }
 
-void dm_dx12_destroy_texture(dm_dx12_texture* texture)
+void dm_dx12_renderer_destroy_texture(dm_dx12_texture* texture)
 {
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
@@ -2075,10 +2081,6 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     ID3DBlob* blob = NULL;
     ID3DBlob* error_blob = NULL;
     
-    uint32_t uav_base_index = 0;
-    uint32_t srv_base_index = 0;
-    uint32_t cbv_base_index = 0;
-    
     // global root signature
     {
         D3D12_ROOT_SIGNATURE_DESC global_root_desc     = { 0 };
@@ -2091,59 +2093,59 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         uint32_t global_num_descriptor_ranges = 0;
         uint32_t global_offset = 0;
         
-        for(uint32_t i=0; i<desc.global_param_count; i++)
+        for(uint32_t i=0; i<desc.global_params.count; i++)
         {
-            switch(desc.global_params[i])
+            switch(desc.global_params.types[i])
             {
-                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_OUTPUT_TEXTURE:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_OUTPUT_TEXTURE:
                 {
                     if(global_uav_index==-1) 
                     {
                         global_uav_index = global_num_descriptor_ranges++;
                         global_ranges[global_uav_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-                        global_ranges[global_uav_index].BaseShaderRegister = uav_base_index;
+                        global_ranges[global_uav_index].BaseShaderRegister = desc.global_params.slots[i];
                     }
                     global_ranges[global_uav_index].NumDescriptors++;
                     global_ranges[global_uav_index].OffsetInDescriptorsFromTableStart = global_offset++;
-                    uav_base_index++;
                 } break;
                 
-                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER:
-                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER:
-                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_ACCELERATION_STRUCTURE:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_BUFFER:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_INDEX_BUFFER:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_ACCELERATION_STRUCTURE:
                 {
                     if(global_srv_index==-1) 
                     {
                         global_srv_index = global_num_descriptor_ranges++;
                         global_ranges[global_srv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                        global_ranges[global_srv_index].BaseShaderRegister = srv_base_index;
+                        global_ranges[global_srv_index].BaseShaderRegister = desc.global_params.slots[i];
                     }
                     global_ranges[global_srv_index].NumDescriptors++;
                     global_ranges[global_srv_index].OffsetInDescriptorsFromTableStart = global_offset++;
-                    srv_base_index++;
                 } break;
                 
-                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_CONSTANT_BUFFER:
                 {
                     if(global_cbv_index==-1) 
                     {
                         global_cbv_index = global_num_descriptor_ranges++;
                         global_ranges[global_cbv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-                        global_ranges[global_cbv_index].BaseShaderRegister = cbv_base_index;
+                        global_ranges[global_cbv_index].BaseShaderRegister = desc.global_params.slots[i];
                     }
                     global_ranges[global_cbv_index].NumDescriptors++;
                     global_ranges[global_cbv_index].OffsetInDescriptorsFromTableStart = global_offset++;
-                    uav_base_index++;
                 } break;
             }
         }
         
-        global_root_params.ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        global_root_params.DescriptorTable.NumDescriptorRanges = global_num_descriptor_ranges;
-        global_root_params.DescriptorTable.pDescriptorRanges   = global_ranges;
-        
-        global_root_desc.NumParameters = 1;
-        global_root_desc.pParameters   = &global_root_params;
+        if(global_num_descriptor_ranges>0)
+        {
+            global_root_params.ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+            global_root_params.DescriptorTable.NumDescriptorRanges = global_num_descriptor_ranges;
+            global_root_params.DescriptorTable.pDescriptorRanges   = global_ranges;
+            
+            global_root_desc.NumParameters = 1;
+            global_root_desc.pParameters   = &global_root_params;
+        }
         
         hr = D3D12SerializeRootSignature(&global_root_desc, D3D_ROOT_SIGNATURE_VERSION_1_0, &blob, &error_blob);
         if (!dm_platform_win32_decode_hresult(hr))
@@ -2190,49 +2192,49 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         uint32_t raygen_num_descriptor_ranges = 0;
         uint32_t raygen_offset = 0;
         
-        for(uint32_t i=0; i<desc.raygen_param_count; i++)
+        for(uint32_t i=0; i<desc.raygen_params.count; i++)
         {
-            switch(desc.raygen_params[i])
+            switch(desc.raygen_params.types[i])
             {
-                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_OUTPUT_TEXTURE:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_OUTPUT_TEXTURE:
                 {
                     if(raygen_uav_index==-1) 
                     {
                         raygen_uav_index = raygen_num_descriptor_ranges++;
                         raygen_ranges[raygen_uav_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-                        raygen_ranges[raygen_uav_index].BaseShaderRegister = uav_base_index;
+                        raygen_ranges[raygen_uav_index].BaseShaderRegister = desc.raygen_params.slots[i];
+                        raygen_ranges[raygen_uav_index].OffsetInDescriptorsFromTableStart = raygen_offset;
                     }
                     raygen_ranges[raygen_uav_index].NumDescriptors++;
-                    raygen_ranges[raygen_uav_index].OffsetInDescriptorsFromTableStart = raygen_offset++;
-                    uav_base_index++;
+                    raygen_offset++;
                 } break;
                 
-                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER:
-                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER:
-                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_ACCELERATION_STRUCTURE:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_BUFFER:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_INDEX_BUFFER:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_ACCELERATION_STRUCTURE:
                 {
                     if(raygen_srv_index==-1) 
                     {
                         raygen_srv_index = raygen_num_descriptor_ranges++;
                         raygen_ranges[raygen_srv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                        raygen_ranges[raygen_srv_index].BaseShaderRegister = srv_base_index;
+                        raygen_ranges[raygen_srv_index].BaseShaderRegister = desc.raygen_params.slots[i];
+                        raygen_ranges[raygen_srv_index].OffsetInDescriptorsFromTableStart = raygen_offset;
                     }
                     raygen_ranges[raygen_srv_index].NumDescriptors++;
-                    raygen_ranges[raygen_srv_index].OffsetInDescriptorsFromTableStart = raygen_offset++;
-                    srv_base_index++;
+                    raygen_offset++;
                 } break;
                 
-                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER:
+                case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_CONSTANT_BUFFER:
                 {
                     if(raygen_cbv_index==-1) 
                     {
                         raygen_cbv_index = raygen_num_descriptor_ranges++;
                         raygen_ranges[raygen_cbv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-                        raygen_ranges[raygen_cbv_index].BaseShaderRegister = cbv_base_index;
+                        raygen_ranges[raygen_cbv_index].BaseShaderRegister = desc.raygen_params.slots[i];
+                        raygen_ranges[raygen_cbv_index].OffsetInDescriptorsFromTableStart = raygen_offset;
                     }
                     raygen_ranges[raygen_cbv_index].NumDescriptors++;
-                    raygen_ranges[raygen_cbv_index].OffsetInDescriptorsFromTableStart = raygen_offset++;
-                    cbv_base_index++;
+                    raygen_offset++;
                 } break;
                 
                 default:
@@ -2323,46 +2325,43 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
             }
             
             // local root signature
-            if(desc.hit_groups[i].param_count==0) continue;
+            if(desc.hit_groups[i].params.count==0) continue;
             
             int hit_group_srv_index = -1;
             int hit_group_cbv_index = -1;
             uint32_t hit_group_num_descriptor_ranges = 0;
             uint32_t hit_group_offset = 0;
             
-            hit_group_ranges[i][0].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-            hit_group_ranges[i][1].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-            
-            for(uint32_t j=0; j<desc.hit_groups[i].param_count; j++)
+            for(uint32_t j=0; j<desc.hit_groups[i].params.count; j++)
             {
-                switch(desc.hit_groups[i].params[j])
+                switch(desc.hit_groups[i].params.types[j])
                 {
-                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER:
-                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER:
-                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_ACCELERATION_STRUCTURE:
+                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_BUFFER:
+                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_INDEX_BUFFER:
+                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_ACCELERATION_STRUCTURE:
                     {
                         if(hit_group_srv_index==-1) 
                         {
                             hit_group_srv_index = hit_group_num_descriptor_ranges++;
                             hit_group_ranges[i][hit_group_srv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                            hit_group_ranges[i][hit_group_srv_index].BaseShaderRegister = srv_base_index;
+                            hit_group_ranges[i][hit_group_srv_index].BaseShaderRegister = desc.hit_groups[i].params.slots[j];
+                            hit_group_ranges[i][hit_group_srv_index].OffsetInDescriptorsFromTableStart = hit_group_offset;
                         }
                         hit_group_ranges[i][hit_group_srv_index].NumDescriptors++;
-                        hit_group_ranges[i][hit_group_srv_index].OffsetInDescriptorsFromTableStart = hit_group_offset++;
-                        srv_base_index++;
+                        hit_group_offset++;
                     } break;
                     
-                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER:
+                    case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_CONSTANT_BUFFER:
                     {
                         if(hit_group_cbv_index==-1) 
                         {
                             hit_group_cbv_index = hit_group_num_descriptor_ranges++;
                             hit_group_ranges[i][hit_group_cbv_index].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-                            hit_group_ranges[i][hit_group_cbv_index].BaseShaderRegister = cbv_base_index;
+                            hit_group_ranges[i][hit_group_cbv_index].BaseShaderRegister = desc.hit_groups[i].params.slots[j];
+                            hit_group_ranges[i][hit_group_cbv_index].OffsetInDescriptorsFromTableStart = hit_group_offset;
                         }
                         hit_group_ranges[i][hit_group_cbv_index].NumDescriptors++;
-                        hit_group_ranges[i][hit_group_cbv_index].OffsetInDescriptorsFromTableStart = hit_group_offset++;
-                        cbv_base_index++;
+                        hit_group_offset++;
                     } break;
                     
                     default:
@@ -2442,7 +2441,7 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
                 subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
                 subobjects[sub_obj_index++].pDesc = &hit_groups[i];
                 
-                if(desc.hit_groups[i].param_count==0) continue;
+                if(desc.hit_groups[i].params.count==0) continue;
                 
                 subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
                 subobjects[sub_obj_index++].pDesc = &hit_group_root_signatures[i];
@@ -2482,10 +2481,15 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         }
         
         dm_free(&ws_raygen);
+        ID3D12RootSignature_Release(raygen_root_signature);
         for(uint32_t i=0; i<desc.hit_group_count; i++)
         {
-            if(ws_hit[i]) dm_free(&ws_hit[i]);
+            if(!ws_hit[i]) continue;
+            
+            dm_free(&ws_hit[i]);
+            ID3D12RootSignature_Release(hit_group_root_signatures[i]);
         }
+        
     }
     
     // shader table
@@ -2494,11 +2498,11 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         internal_pipe.shader_max_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
         uint32_t max_param_count = 0;
         
-        max_param_count = desc.global_param_count > max_param_count ? desc.global_param_count : max_param_count;
+        max_param_count = desc.global_params.count > max_param_count ? desc.global_params.count : max_param_count;
         
         for(uint32_t i=0; i<desc.hit_group_count; i++)
         {
-            if(desc.hit_groups[i].param_count > max_param_count) max_param_count = desc.hit_groups[i].param_count;
+            if(desc.hit_groups[i].params.count > max_param_count) max_param_count = desc.hit_groups[i].params.count;
         }
         
         internal_pipe.shader_max_size *= max_param_count;
@@ -2864,12 +2868,12 @@ bool dm_render_command_backend_update_acceleration_structure_tlas(dm_render_hand
     return true;
 }
 
-bool dm_render_command_backend_add_global_param(dm_raytracing_pipeline_shader_param type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
+bool dm_render_command_backend_add_global_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
 {
     return true;
 }
 
-bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_param type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
+bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
@@ -2880,20 +2884,24 @@ bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_pa
     
     switch(type)
     {
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER:
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_BUFFER:
         heap_offset = dx12_renderer->vertex_buffers[handle].heap_offset;
         break;
         
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER:
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_INDEX_BUFFER:
         heap_offset = dx12_renderer->index_buffers[handle].heap_offset;
         break;
         
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER:
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_CONSTANT_BUFFER:
         heap_offset = dx12_renderer->constant_buffers[handle].heap_offset;
         break;
         
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_OUTPUT_TEXTURE:
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_OUTPUT_TEXTURE:
         heap_offset = dx12_renderer->textures[handle].heap_offset;
+        break;
+        
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_ACCELERATION_STRUCTURE:
+        heap_offset = dx12_renderer->accel_structs[handle].heap_offset;
         break;
         
         default:
@@ -2919,7 +2927,7 @@ bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_pa
         return false;
     }
     
-    (char*)data += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+    (char*)data += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + slot * sizeof(D3D12_GPU_VIRTUAL_ADDRESS);
     
     if((uint64_t)data % 8 != 0)
     {
@@ -2939,7 +2947,7 @@ bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_pa
     return true;
 }
 
-bool dm_render_command_backend_add_hit_group_param(dm_raytracing_pipeline_shader_param type, uint32_t hit_group, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
+bool dm_render_command_backend_add_hit_group_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, uint32_t hit_group, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
@@ -2956,16 +2964,20 @@ bool dm_render_command_backend_add_hit_group_param(dm_raytracing_pipeline_shader
     
     switch(type)
     {
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_VERTEX_BUFFER:
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_BUFFER:
         heap_offset = dx12_renderer->vertex_buffers[handle].heap_offset;
         break;
         
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_INDEX_BUFFER:
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_INDEX_BUFFER:
         heap_offset = dx12_renderer->index_buffers[handle].heap_offset;
         break;
         
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_CONSTANT_BUFFER:
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_CONSTANT_BUFFER:
         heap_offset = dx12_renderer->constant_buffers[handle].heap_offset;
+        break;
+        
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_ACCELERATION_STRUCTURE:
+        heap_offset = dx12_renderer->accel_structs[handle].heap_offset;
         break;
         
         default:
@@ -2987,7 +2999,7 @@ bool dm_render_command_backend_add_hit_group_param(dm_raytracing_pipeline_shader
     }
     
     // skip raygen, skip miss, offset by instance count, offset into correct hit group
-    const size_t offset = 1 + pipe->miss_count + pipe->instance_count * pipe->hit_group_count + hit_group + slot * 8;
+    const size_t offset = 1 + pipe->miss_count + pipe->instance_count * pipe->hit_group_count + hit_group + slot * sizeof(D3D12_GPU_VIRTUAL_ADDRESS);
     (char*)data += offset * pipe->shader_max_size + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
     
     if((uint64_t)data % 8 != 0)
@@ -3038,7 +3050,7 @@ bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle handle,
     
     {
         descriptor_handle.ptr += heap_offset;
-        ID3D12GraphicsCommandList4_SetComputeRootDescriptorTable(command_list, 0, descriptor_handle);
+        //ID3D12GraphicsCommandList4_SetComputeRootDescriptorTable(command_list, 0, descriptor_handle);
     }
     
     return true;
@@ -3060,7 +3072,7 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
     ID3D12GraphicsCommandList4* command_list  = dx12_renderer->command_list[current_frame_index];
     
-    const size_t shader_size  = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+    const size_t shader_size = internal_pipe->shader_max_size;
     
     const D3D12_GPU_VIRTUAL_ADDRESS start_address = ID3D12Resource_GetGPUVirtualAddress(internal_pipe->shader_table[current_frame_index]);
     
