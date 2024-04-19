@@ -2422,22 +2422,28 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         //    -4 objects from: library, shader config, pipeline config, global sig
         //    -local signature for raygen
         //    -root association for raygen
+        //    -association for misses
         //    -MAX_HIT_GROUPS of hit groups
         //    -MAX_HIT_GROUPS of local signatures for hit groups
         //    -MAX_HIT_GROUPS of root associations for hit groups
-        D3D12_STATE_SUBOBJECT subobjects[4 + 1 + 1 + 3 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
+        D3D12_STATE_SUBOBJECT subobjects[4 + 1 + 1 + 1 + 3 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
         
         WCHAR* ws_raygen = dm_alloc(sizeof(WCHAR) * strlen(desc.raygen));
         WCHAR* ws_hit[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
+        WCHAR* ws_exports[1 + 2 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS * 3] = { 0 };
+        
         uint32_t sub_obj_index = 0;
         
         {
+            // library
             subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
             subobjects[sub_obj_index++].pDesc = &lib;
             
+            // raygen root sig
             subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
             subobjects[sub_obj_index++].pDesc = &raygen_root_signature;
             
+            // raygen assoc
             D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION raygen_assoc = { 0 };
             raygen_assoc.NumExports = 1;
             swprintf(ws_raygen, 100, L"%hs", desc.raygen);
@@ -2447,6 +2453,7 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
             subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
             subobjects[sub_obj_index++].pDesc = &raygen_assoc;
             
+            // hit groups
             for(uint32_t i=0; i<desc.hit_group_count; i++)
             {
                 subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
@@ -2468,12 +2475,56 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
                 subobjects[sub_obj_index++].pDesc = &hit_assoc;
             }
             
+            // shader config
             subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
             subobjects[sub_obj_index++].pDesc = &shader_config;
             
+            // config assoc
+            uint32_t export_index = 0;
+            
+            ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.raygen));
+            swprintf(ws_exports[export_index++], 100, L"%hs", desc.raygen);
+            
+            for(uint32_t i=0; i<desc.miss_count; i++)
+            {
+                ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.miss[i]));
+                swprintf(ws_exports[export_index++], 100, L"%hs", desc.miss[i]);
+            }
+            
+            for(uint32_t i=0; i<desc.hit_group_count; i++)
+            {
+                if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_ANY_HIT)
+                {
+                    ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].any_hit));
+                    swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].any_hit);
+                }
+                
+                if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_CLOSEST_HIT)
+                {
+                    ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].closest_hit));
+                    swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].closest_hit);
+                }
+                
+                if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION)
+                {
+                    ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].intersection));
+                    swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].intersection);
+                }
+            }
+            
+            D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION export_assoc = { 0 };
+            export_assoc.NumExports = export_index;
+            export_assoc.pExports   = ws_exports;
+            export_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
+            
+            subobjects[sub_obj_index].Type  = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
+            subobjects[sub_obj_index++].pDesc = &export_assoc;
+            
+            // global root sig
             subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE;
             subobjects[sub_obj_index++].pDesc = &global_sig;
             
+            // pipeline config
             subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
             subobjects[sub_obj_index++].pDesc = &pipe_config;
         }
@@ -2493,6 +2544,12 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         
         dm_free(&ws_raygen);
         ID3D12RootSignature_Release(raygen_root_signature);
+        
+        for(uint32_t i=0; i<1 + 2 * 3 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS; i++)
+        {
+            if(ws_exports[i]) dm_free(&ws_exports[i]);
+        }
+        
         for(uint32_t i=0; i<desc.hit_group_count; i++)
         {
             if(!ws_hit[i]) continue;
@@ -2951,7 +3008,6 @@ bool dm_dx12_add_sbt_param(dm_raytracing_pipeline_shader_param_type type, uint32
     }
     
     uint8_t* param_ptr = pipe->sbt.mapped_address[current_frame_index] + offset;
-    D3D12_GPU_VIRTUAL_ADDRESS test[10] = { 0 };
     
     D3D12_GPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
     ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(heap, &heap_handle);
@@ -2959,9 +3015,7 @@ bool dm_dx12_add_sbt_param(dm_raytracing_pipeline_shader_param_type type, uint32
     
     // write the heap ptr of this resource in the correct slot
     // slot indicates which param we are inserting, NOT the register
-    *(uint64_t*)(param_ptr + slot * sizeof(D3D12_GPU_VIRTUAL_ADDRESS)) = heap_handle.ptr;
-    
-    dm_memcpy(test, param_ptr, sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * 10);
+    *(D3D12_GPU_VIRTUAL_ADDRESS*)(param_ptr + slot * sizeof(D3D12_GPU_VIRTUAL_ADDRESS)) = heap_handle.ptr;
     
     param_ptr = NULL;
     
