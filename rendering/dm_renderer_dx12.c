@@ -112,22 +112,26 @@ typedef struct dm_dx12_acceleration_structure_t
     size_t heap_offset;
 } dm_dx12_acceleration_structure;
 
-#define DM_DX12_RAYTRACE_NUM_SHADER_IDS 3
+typedef struct dm_dx12_rt_shader_binding_table_t
+{
+    ID3D12Resource* table[DM_DX12_NUM_FRAMES];
+    uint8_t*        mapped_address[DM_DX12_NUM_FRAMES];
+    
+    uint32_t record_count, miss_count, hit_group_count, max_instance_count;
+    size_t   record_size;
+    bool     mapped;
+} dm_dx12_rt_shader_binding_table;
 
 typedef struct dm_dx12_raytracing_pipeline_t
 {
     ID3D12RootSignature* root_signature;
     
     ID3D12StateObject*   state_object;
-    ID3D12Resource*      shader_table[DM_DX12_NUM_FRAMES];
+    //ID3D12Resource*      shader_table[DM_DX12_NUM_FRAMES];
     
-    uint32_t miss_count, hit_group_count, max_instance_count;
+    dm_dx12_rt_shader_binding_table sbt;
     
     uint32_t descriptor_heap_offset;
-    
-    uint32_t output_width, output_height;
-    
-    size_t shader_max_size;
 } dm_dx12_raytracing_pipeline;
 
 #define DM_DX12_MAX_ACCELERATION_STRUCTURES 10
@@ -1899,6 +1903,7 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
                     return false;
                 }
                 
+                uint32_t i_offset = 0;
                 for(uint32_t j=0; j<internal_as.tlas.instance_count; j++)
                 {
                     uint32_t blas_index         = as_desc.tlas_desc.mesh_instance[j];
@@ -1906,12 +1911,11 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
                     
                     internal_as.tlas.instance_data[i][j].InstanceID   = j;
                     internal_as.tlas.instance_data[i][j].InstanceMask = 1;
-                    //internal_as.tlas.instance_data[i][j].Flags = D3D12_RAYTRACING_INSTANCE_FLAG_FORCE_NON_OPAQUE;
                     internal_as.tlas.instance_data[i][j].AccelerationStructure = ID3D12Resource_GetGPUVirtualAddress(blas_buffer);
-                    if(i==0) continue;
                     
                     // TODO: this needs to be fixed so that the accel struct knows how many hit groups there are
-                    //internal_as.tlas.instance_data[i][j].InstanceContributionToHitGroupIndex = 2 * j;
+                    internal_as.tlas.instance_data[i][j].InstanceContributionToHitGroupIndex = i_offset;
+                    i_offset += 2;
                 }
             }
         }
@@ -2001,7 +2005,6 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
             build_desc.DestAccelerationStructureData    = ID3D12Resource_GetGPUVirtualAddress(result_buffer);
             build_desc.ScratchAccelerationStructureData = ID3D12Resource_GetGPUVirtualAddress(scratch_buffer);
             build_desc.Inputs                           = inputs[i];
-            
             
             ID3D12CommandAllocator_Reset(command_allocator);
             ID3D12GraphicsCommandList4_Reset(command_list, command_allocator, NULL);
@@ -2184,8 +2187,8 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         
         assert(desc.hit_group_count<=DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS);
         
-        internal_pipe.hit_group_count = desc.hit_group_count;
-        internal_pipe.miss_count      = desc.miss_count;
+        internal_pipe.sbt.hit_group_count = desc.hit_group_count;
+        internal_pipe.sbt.miss_count      = desc.miss_count;
         
         // raygen
         D3D12_ROOT_SIGNATURE_DESC raygen_root_desc   = { 0 };
@@ -2502,9 +2505,9 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     
     // shader table
     {
-        internal_pipe.max_instance_count = desc.max_instance_count;
-        internal_pipe.shader_max_size = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-#if 0
+        internal_pipe.sbt.max_instance_count = desc.max_instance_count;
+        size_t record_size                   = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+        
         uint32_t max_param_count = 0;
         
         max_param_count = desc.global_params.count > max_param_count ? desc.global_params.count : max_param_count;
@@ -2515,20 +2518,22 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
             if(desc.hit_groups[i].params.count > max_param_count) max_param_count = desc.hit_groups[i].params.count;
         }
         
-        internal_pipe.shader_max_size *= max_param_count;
-#endif
+        record_size += sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * max_param_count;
+        
         static const align = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
-        internal_pipe.shader_max_size = align;
+        //internal_pipe.shader_table_entry_size = align;
+        size_t remainder = record_size % align;
+        internal_pipe.sbt.record_size = remainder ? record_size + (align - remainder) : record_size;
         
         // 1 raygen, (miss count) misses, (hit group count * max instances) hit groups
-        const uint32_t shader_table_count = 1 + internal_pipe.miss_count + internal_pipe.hit_group_count * desc.max_instance_count;
+        const uint32_t shader_table_count = 1 + desc.miss_count + desc.hit_group_count * desc.max_instance_count;
         
-        D3D12_RESOURCE_DESC id_desc = DM_DX12_BASIC_BUFFER_DESC;
-        id_desc.Width = shader_table_count * internal_pipe.shader_max_size;
+        D3D12_RESOURCE_DESC sbt_desc = DM_DX12_BASIC_BUFFER_DESC;
+        sbt_desc.Width = shader_table_count * internal_pipe.sbt.record_size;
         
         for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
         {
-            hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &id_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_pipe.shader_table[i]);
+            hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &sbt_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_pipe.sbt.table[i]);
             if(!dm_platform_win32_decode_hresult(hr))
             {
                 DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
@@ -2540,21 +2545,23 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
             ID3D12StateObject_QueryInterface(internal_pipe.state_object, &IID_ID3D12StateObjectProperties, &props);
             
             uint8_t* data = NULL;
-            
-            hr = ID3D12Resource_Map(internal_pipe.shader_table[i], 0, NULL, &data);
+            uint8_t* ref  = NULL;
+            hr = ID3D12Resource_Map(internal_pipe.sbt.table[i], 0, NULL, &data);
             if(!dm_platform_win32_decode_hresult(hr))
             {
                 DM_LOG_FATAL("ID3D12Resource_Map failed");
                 return false;
             }
             
+            ref = data;
+            
             // raygen shader
-            if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.raygen, &data, internal_pipe.shader_max_size, props)) return false;
+            if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.raygen, &data, internal_pipe.sbt.record_size, props)) return false;
             
             // miss shaders
             for(uint32_t i=0; i<desc.miss_count; i++)
             {
-                if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.miss[i], &data, internal_pipe.shader_max_size, props)) return false;
+                if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.miss[i], &data, internal_pipe.sbt.record_size, props)) return false;
             }
             
             // hit groups
@@ -2562,13 +2569,18 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
             {
                 for(uint32_t k=0; k<desc.hit_group_count; k++)
                 {
-                    if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.hit_groups[k].name, &data, internal_pipe.shader_max_size, props)) return false;
+                    if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.hit_groups[k].name, &data, internal_pipe.sbt.record_size, props)) return false;
                 }
             }
             
-            data = NULL;
+            // sanity checks the above algorithms worked
+            assert(*data % internal_pipe.sbt.record_size == 0);
+            assert(data - ref == sbt_desc.Width);
             
-            ID3D12Resource_Unmap(internal_pipe.shader_table[i], 0, NULL);
+            data = NULL;
+            ref  = NULL;
+            
+            ID3D12Resource_Unmap(internal_pipe.sbt.table[i], 0, NULL);
             
             ID3D12StateObjectProperties_Release(props);
         }
@@ -2589,7 +2601,7 @@ void dm_dx12_renderer_destroy_raytracing_pipeline(dm_dx12_raytracing_pipeline* p
 {
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
-        ID3D12Resource_Release(pipe->shader_table[i]);
+        ID3D12Resource_Release(pipe->sbt.table[i]);
     }
     
     ID3D12StateObject_Release(pipe->state_object);
@@ -2886,13 +2898,12 @@ bool dm_render_command_backend_add_global_param(dm_raytracing_pipeline_shader_pa
     return true;
 }
 
-bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
+bool dm_dx12_add_sbt_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, size_t offset, dm_render_handle handle, dm_render_handle pipe_handle, dm_dx12_renderer* dx12_renderer)
+
 {
-    DM_DX12_GET_RENDERER;
     HRESULT hr;
     
     size_t heap_offset;
-    
     const uint32_t current_frame_index  = dx12_renderer->current_frame_index;
     
     switch(type)
@@ -2918,7 +2929,7 @@ bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_pa
         break;
         
         default:
-        DM_LOG_FATAL("Unknown or unsupported shader parameter type for DirectX12 raygen shader");
+        DM_LOG_FATAL("Unknown or unsupported shader parameter type for DirectX12 shader binding table");
         return false;
     }
     
@@ -2926,38 +2937,50 @@ bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_pa
     ID3D12DescriptorHeap* heap        = dx12_renderer->resource_descriptor_heap[current_frame_index];
     
     // map onto shader table
-    uint8_t* entry = NULL;
-    hr = ID3D12Resource_Map(pipe->shader_table[current_frame_index], 0, NULL, (void**)&entry);
-    if(!dm_platform_win32_decode_hresult(hr))
+    if(!pipe->sbt.mapped)
     {
-        DM_LOG_FATAL("ID3D12Resource_Map failed");
-        DM_LOG_FATAL("Mapping to DirectX12 raytracing pipeline shader table failed");
-        return false;
+        hr = ID3D12Resource_Map(pipe->sbt.table[current_frame_index], 0, NULL, (void**)&pipe->sbt.mapped_address[current_frame_index]);
+        if(!dm_platform_win32_decode_hresult(hr))
+        {
+            DM_LOG_FATAL("ID3D12Resource_Map failed");
+            DM_LOG_FATAL("Mapping to DirectX12 raytracing pipeline shader table failed");
+            return false;
+        }
+        
+        pipe->sbt.mapped = true;
     }
     
-    // params start after shader entry
-    const size_t offset = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-    uint8_t* param_ptr = entry + offset;
-    // slot indicates which param we are inserting, NOT the register
-    param_ptr += slot * sizeof(D3D12_GPU_VIRTUAL_ADDRESS);
+    uint8_t* param_ptr = pipe->sbt.mapped_address[current_frame_index] + offset;
+    D3D12_GPU_VIRTUAL_ADDRESS test[10] = { 0 };
     
     D3D12_GPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
     ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(heap, &heap_handle);
-    
-    // write the heap ptr of this resource in the correct spot
     heap_handle.ptr += heap_offset;
-    *(uint64_t*)param_ptr = heap_handle.ptr;
+    
+    // write the heap ptr of this resource in the correct slot
+    // slot indicates which param we are inserting, NOT the register
+    *(uint64_t*)(param_ptr + slot * sizeof(D3D12_GPU_VIRTUAL_ADDRESS)) = heap_handle.ptr;
+    
+    dm_memcpy(test, param_ptr, sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * 10);
     
     param_ptr = NULL;
-    entry     = NULL;
     
     return true;
+}
+
+bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    
+    // raygen parameters come right after raygen shader entry, which is first in sbt
+    const size_t offset = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+    
+    return dm_dx12_add_sbt_param(type, slot, offset, handle, pipe_handle, dx12_renderer);
 }
 
 bool dm_render_command_backend_add_hit_group_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, uint32_t hit_group, uint32_t instance, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
-    HRESULT hr;
     
     if(hit_group>=DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS)
     {
@@ -2965,69 +2988,19 @@ bool dm_render_command_backend_add_hit_group_param(dm_raytracing_pipeline_shader
         return false;
     }
     
-    size_t heap_offset;
+    const dm_dx12_raytracing_pipeline pipe = dx12_renderer->raytracing_pipelines[pipe_handle];
     
-    const uint32_t current_frame_index  = dx12_renderer->current_frame_index;
+    // shader count:
+    // - 1 for raygen
+    // - miss count
+    // - instance we are inserting * hit group count
+    // - actual hit group
+    const size_t shader_count = 1 + pipe.sbt.miss_count + instance * pipe.sbt.hit_group_count + hit_group;
     
-    switch(type)
-    {
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_BUFFER:
-        heap_offset = dx12_renderer->vertex_buffers[handle].heap_offset;
-        break;
-        
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_INDEX_BUFFER:
-        heap_offset = dx12_renderer->index_buffers[handle].heap_offset;
-        break;
-        
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_CONSTANT_BUFFER:
-        heap_offset = dx12_renderer->constant_buffers[handle].heap_offset;
-        break;
-        
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_ACCELERATION_STRUCTURE:
-        heap_offset = dx12_renderer->accel_structs[handle].heap_offset;
-        break;
-        
-        default:
-        DM_LOG_FATAL("Unknown or unsupported shader parameter type for DirectX12 hit group");
-        return false;
-    }
+    // we are shader count * record size in, plus the shader entry size
+    const size_t offset = pipe.sbt.record_size * shader_count + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
     
-    dm_dx12_raytracing_pipeline* pipe = &dx12_renderer->raytracing_pipelines[pipe_handle];
-    ID3D12DescriptorHeap* heap        = dx12_renderer->resource_descriptor_heap[current_frame_index];
-    
-    // map onto shader table
-    uint8_t* entry = NULL;
-    hr = ID3D12Resource_Map(pipe->shader_table[current_frame_index], 0, NULL, (void**)&entry);
-    if(!dm_platform_win32_decode_hresult(hr))
-    {
-        DM_LOG_FATAL("ID3D12Resource_Map failed");
-        DM_LOG_FATAL("Mapping to DirectX12 raytracing pipeline shader table failed");
-        return false;
-    }
-    
-    // params start after:
-    // -raygen
-    // miss shaders
-    // correct instance offset
-    // correct hit group
-    // hit group entry
-    const size_t shader_count = 1 + pipe->miss_count + instance * pipe->hit_group_count + hit_group;
-    const size_t offset = pipe->shader_max_size * shader_count + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-    uint8_t* param_ptr = entry + offset;
-    // slot indicates which param we are inserting, NOT the register
-    param_ptr += slot * sizeof(D3D12_GPU_VIRTUAL_ADDRESS);
-    
-    D3D12_GPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
-    ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(heap, &heap_handle);
-    
-    // write the heap ptr of this resource in the correct spot
-    heap_handle.ptr += heap_offset;
-    *(uint64_t*)param_ptr = heap_handle.ptr;
-    
-    param_ptr = NULL;
-    entry     = NULL;
-    
-    return true;
+    return dm_dx12_add_sbt_param(type, slot, offset, handle, pipe_handle, dx12_renderer);
 }
 
 bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle handle, dm_renderer* renderer)
@@ -3049,6 +3022,7 @@ bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle handle,
     
     // state
     ID3D12GraphicsCommandList4_SetPipelineState1(command_list, internal_pipe->state_object);
+    
     // global root signature
     ID3D12GraphicsCommandList4_SetComputeRootSignature(command_list, internal_pipe->root_signature);
     
@@ -3071,20 +3045,23 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
     ID3D12GraphicsCommandList4* command_list  = dx12_renderer->command_list[current_frame_index];
     
-    const size_t shader_size = internal_pipe->shader_max_size;
+    const size_t shader_size        = internal_pipe->sbt.record_size;
+    const size_t miss_count         = internal_pipe->sbt.miss_count;
+    const size_t hit_group_count    = internal_pipe->sbt.hit_group_count;
+    const size_t max_instance_count = internal_pipe->sbt.max_instance_count;
     
-    const D3D12_GPU_VIRTUAL_ADDRESS start_address = ID3D12Resource_GetGPUVirtualAddress(internal_pipe->shader_table[current_frame_index]);
+    const D3D12_GPU_VIRTUAL_ADDRESS start_address = ID3D12Resource_GetGPUVirtualAddress(internal_pipe->sbt.table[current_frame_index]);
     
     D3D12_DISPATCH_RAYS_DESC desc = { 0 };
     desc.RayGenerationShaderRecord.StartAddress = start_address;
     desc.RayGenerationShaderRecord.SizeInBytes  = shader_size;
     
     desc.MissShaderTable.StartAddress  = start_address + shader_size;
-    desc.MissShaderTable.SizeInBytes   = shader_size * internal_pipe->miss_count;
+    desc.MissShaderTable.SizeInBytes   = shader_size * miss_count;
     desc.MissShaderTable.StrideInBytes = shader_size;
     
-    desc.HitGroupTable.StartAddress  = start_address + shader_size + internal_pipe->miss_count * shader_size;
-    desc.HitGroupTable.SizeInBytes   = shader_size * internal_pipe->hit_group_count * internal_pipe->max_instance_count;
+    desc.HitGroupTable.StartAddress  = start_address + shader_size + miss_count * shader_size;
+    desc.HitGroupTable.SizeInBytes   = shader_size * hit_group_count * max_instance_count;
     desc.HitGroupTable.StrideInBytes = shader_size;
     
     desc.Width  = width;
@@ -3092,6 +3069,10 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
     desc.Depth  = 1;
     
     ID3D12GraphicsCommandList4_DispatchRays(command_list, &desc);
+    
+    assert(internal_pipe->sbt.mapped);
+    internal_pipe->sbt.mapped = false;
+    ID3D12Resource_Unmap(internal_pipe->sbt.table[current_frame_index], 0, NULL);
     
     return true;
 }
