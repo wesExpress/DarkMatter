@@ -1989,12 +1989,12 @@ void dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t shad
     if(*range_index == -1)
     {
         *range_index = (*range_count)++;
-        ranges[*range_index].RangeType          = type;
-        ranges[*range_index].BaseShaderRegister = shader_register;
+        ranges[*range_index].RangeType                         = type;
+        ranges[*range_index].BaseShaderRegister                = shader_register;
+        ranges[*range_index].OffsetInDescriptorsFromTableStart = (*table_offset)++;
     }
     
     ranges[*range_index].NumDescriptors++;
-    ranges[*range_index].OffsetInDescriptorsFromTableStart = (*table_offset)++;
 }
 
 DM_INLINE
