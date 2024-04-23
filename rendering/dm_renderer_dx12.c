@@ -552,6 +552,21 @@ bool dm_renderer_backend_init(dm_context* context)
         }
         
         ID3D12Debug_EnableDebugLayer(dx12_renderer->debug);
+        
+#if 0
+        ID3D12Debug1* debug_controller;
+        
+        hr = ID3D12Debug_QueryInterface(dx12_renderer->debug, &IID_ID3D12Debug1, &debug_controller);
+        if(!dm_platform_win32_decode_hresult(hr))
+        {
+            DM_LOG_FATAL("ID3D12Debug_QueryInterface failed");
+            return false;
+        }
+        
+        ID3D12Debug1_SetEnableGPUBasedValidation(debug_controller, true);
+        
+        ID3D12Debug1_Release(debug_controller);
+#endif
     }
 #endif
     
@@ -614,7 +629,7 @@ bool dm_renderer_backend_init(dm_context* context)
 #ifdef DM_DEBUG
     {
         ID3D12InfoQueue* info_queue;
-        hr = dx12_renderer->device->lpVtbl->QueryInterface(dx12_renderer->device, &IID_ID3D12InfoQueue, &info_queue);
+        hr = ID3D12Device5_QueryInterface(dx12_renderer->device, &IID_ID3D12InfoQueue, &info_queue);
         if(!dm_platform_win32_decode_hresult(hr))
         {
             DM_LOG_FATAL("IUnknown_QueryInterface failed");
@@ -629,8 +644,8 @@ bool dm_renderer_backend_init(dm_context* context)
         D3D12_MESSAGE_SEVERITY severities[] = { D3D12_MESSAGE_SEVERITY_INFO };
         D3D12_MESSAGE_ID       deny_ids[] = {
             D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,
-            D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,
-            D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,
+            //D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,
+            //D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,
         };
         
         D3D12_INFO_QUEUE_FILTER filter = { 0 };
@@ -1984,35 +1999,35 @@ void dm_dx12_renderer_destroy_acceleration_structure(dm_dx12_acceleration_struct
 
 // raytracing pipeline
 DM_INLINE
-void dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count, uint32_t* table_offset)
+void dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count)
 {
     if(*range_index == -1)
     {
         *range_index = (*range_count)++;
         ranges[*range_index].RangeType                         = type;
         ranges[*range_index].BaseShaderRegister                = shader_register;
-        ranges[*range_index].OffsetInDescriptorsFromTableStart = (*table_offset)++;
+        ranges[*range_index].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
     }
     
     ranges[*range_index].NumDescriptors++;
 }
 
 DM_INLINE
-void dm_dx12_rt_sbt_add_uav_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count, uint32_t* table_offset)
+void dm_dx12_rt_sbt_add_uav_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count)
 {
-    dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, shader_register, ranges, range_index, range_count, table_offset);
+    dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, shader_register, ranges, range_index, range_count);
 }
 
 DM_INLINE
-void dm_dx12_rt_sbt_add_srv_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count, uint32_t* table_offset)
+void dm_dx12_rt_sbt_add_srv_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count)
 {
-    dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, shader_register, ranges, range_index, range_count, table_offset);
+    dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, shader_register, ranges, range_index, range_count);
 }
 
 DM_INLINE
-void dm_dx12_rt_sbt_add_cbv_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count, uint32_t* table_offset)
+void dm_dx12_rt_sbt_add_cbv_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count)
 {
-    dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, shader_register, ranges, range_index, range_count, table_offset);
+    dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, shader_register, ranges, range_index, range_count);
 }
 
 DM_INLINE
@@ -2029,24 +2044,23 @@ bool dm_dx12_raytracing_pipeline_sbt_make_root_signature(uint32_t shader_stage, 
     int cbv_index = -1;
     
     uint32_t range_count  = 0;
-    uint32_t table_offset = 0;
     
     for(uint32_t i=0; i<params.count; i++)
     {
         switch(params.types[i])
         {
             case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_OUTPUT_TEXTURE:
-            dm_dx12_rt_sbt_add_uav_to_range(params.registers[i], ranges, &uav_index, &range_count, &table_offset);
+            dm_dx12_rt_sbt_add_uav_to_range(params.registers[i], ranges, &uav_index, &range_count);
             break;
             
             case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_BUFFER:
             case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_INDEX_BUFFER:
             case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_ACCELERATION_STRUCTURE:
-            dm_dx12_rt_sbt_add_srv_to_range(params.registers[i], ranges, &srv_index, &range_count, &table_offset);
+            dm_dx12_rt_sbt_add_srv_to_range(params.registers[i], ranges, &srv_index, &range_count);
             break;
             
             case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_CONSTANT_BUFFER:
-            dm_dx12_rt_sbt_add_cbv_to_range(params.registers[i], ranges, &cbv_index, &range_count, &table_offset);
+            dm_dx12_rt_sbt_add_cbv_to_range(params.registers[i], ranges, &cbv_index, &range_count);
             break;
             
             default:
@@ -2267,7 +2281,6 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
             
             D3D12_RAYTRACING_PIPELINE_CONFIG pipe_config = { 0 };
             pipe_config.MaxTraceRecursionDepth = desc.max_recursion;
-            
             
             subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
             subobjects[sub_obj_index++].pDesc = &shader_config;
@@ -2582,7 +2595,7 @@ bool dm_dx12_sbt_create_shader_view(dm_raytracing_pipeline_shader_param_type typ
         ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(heap, &heap_handle);
         heap_handle.ptr += dx12_renderer->descriptor_heap_offset;
         
-        *(D3D12_GPU_VIRTUAL_ADDRESS*)(sbt->mapped_address[i] + sbt_offset) = heap_handle.ptr;
+        *(uint64_t*)(sbt->mapped_address[i] + sbt_offset) = heap_handle.ptr;
     }
     
     heap = NULL;
@@ -3082,6 +3095,10 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
         
         dm_memcpy(addresses[i], data, sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * 3);
     }
+    
+    D3D12_GPU_DESCRIPTOR_HANDLE t = { 0 };
+    ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(dx12_renderer->resource_descriptor_heap[current_frame_index], &t);
+    
     
     // raygen
     desc.RayGenerationShaderRecord.StartAddress = start_address;
