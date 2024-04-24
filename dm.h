@@ -155,6 +155,8 @@ typedef DM_ALIGN(16) float dm_mat4[4][4];
 #define DM_MAT3_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT3_SIZE)
 #define DM_MAT4_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT4_SIZE)
 
+#define DM_ALIGN_BYTES(SIZE, ALIGNMENT) ((SIZE + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
+
 /****
 SIMD
 ******/
@@ -807,10 +809,12 @@ typedef struct dm_acceleration_structure_desc_t
     uint32_t     blas_count;
     
     dm_tlas_desc tlas_desc;
+    
+    uint8_t hit_group_count;
 } dm_acceleration_structure_desc;
 
 // raytracing pipeline
-#define DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS      2
+#define DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS      3 // primary, shadow, bounce
 typedef enum dm_raytracing_pipeline_hit_group_geometry_type_t
 {
     DM_RAYTRACING_PIPELINE_HIT_GROUP_GEOMETRY_TYPE_TRIANGLES,
@@ -832,7 +836,7 @@ typedef enum dm_raytracing_pipeline_shader_param_type_t
     DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_INDEX_BUFFER,
     DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_CONSTANT_BUFFER,
     DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_ACCELERATION_STRUCTURE,
-    DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_OUTPUT_TEXTURE,
+    DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_TEXTURE,
     DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_UNKNOWN
 } dm_raytracing_pipeline_shader_param_type;
 
@@ -868,7 +872,8 @@ typedef struct dm_raytracing_pipeline_desc_t
     
     dm_rt_pipeline_shader_params global_params;
     dm_rt_pipeline_shader_params raygen_params;
-    dm_rt_pipeline_shader_params miss_params;
+    
+    dm_rt_pipeline_shader_params miss_params[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
     
     dm_raytracing_pipeline_hit_group_desc hit_groups[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
     uint32_t                              hit_group_count;

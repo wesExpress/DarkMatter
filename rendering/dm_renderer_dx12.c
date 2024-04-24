@@ -142,13 +142,9 @@ typedef struct dm_dx12_raytracing_pipeline_t
 #endif
 
 // attempt at descriptor heap sizing / offsetting
-#define DM_DX12_DESCRIPTOR_HEAP_MAX_SRV 20
-#define DM_DX12_DESCRIPTOR_HEAP_MAX_CBV 10
-#define DM_DX12_DESCRIPTOR_HEAP_MAX_UAV 10
-
-#define DM_DX12_DESCRIPTOR_HEAP_SRV_OFFSET 0
-#define DM_DX12_DESCRIPTOR_HEAP_CBV_OFFSET DM_DX12_DESCRIPTOR_HEAP_MAX_SRV
-#define DM_DX12_DESCRIPTOR_HEAP_UAV_OFFSET DM_DX12_DESCRIPTOR_HEAP_CBV_OFFSET + DM_DX12_DESCRIPTOR_HEAP_MAX_CBV
+#define DM_DX12_DESCRIPTOR_HEAP_MAX_SRV 200
+#define DM_DX12_DESCRIPTOR_HEAP_MAX_CBV 100
+#define DM_DX12_DESCRIPTOR_HEAP_MAX_UAV 100
 
 #define DM_DX12_MAX_RESOURCES 100
 #define DM_DX12_MAX_PASSES     10
@@ -1608,7 +1604,6 @@ bool dm_renderer_backend_create_texture(const void* data, uint32_t width, uint32
     desc.Flags            = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     desc.Width            = width;
     desc.Height           = height;
-    //desc.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
     desc.MipLevels        = 1;
     desc.SampleDesc.Count = 1;
     
@@ -1872,7 +1867,7 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
                     
                     // TODO: this needs to be fixed so that the accel struct knows how many hit groups there are
                     internal_as.tlas.instance_data[i][j].InstanceContributionToHitGroupIndex = i_offset;
-                    i_offset += 2;
+                    i_offset += as_desc.hit_group_count;
                 }
             }
         }
@@ -2049,7 +2044,7 @@ bool dm_dx12_raytracing_pipeline_sbt_make_root_signature(uint32_t shader_stage, 
     {
         switch(params.types[i])
         {
-            case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_OUTPUT_TEXTURE:
+            case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_TEXTURE:
             dm_dx12_rt_sbt_add_uav_to_range(params.registers[i], ranges, &uav_index, &range_count);
             break;
             
@@ -2139,318 +2134,309 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     
     dm_dx12_raytracing_pipeline internal_pipe = { 0 };
     
-    ID3DBlob* blob = NULL;
-    ID3DBlob* error_blob = NULL;
+    assert(desc.hit_group_count<=DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS);
     
-    // PSO
+    internal_pipe.sbt.hit_group_count = desc.hit_group_count;
+    internal_pipe.sbt.miss_count      = desc.miss_count;
+    
+    // global root signature
+    if(!dm_dx12_raytracing_pipeline_sbt_make_root_signature(0, desc.global_params, &internal_pipe.sbt.global_root_signature, dx12_renderer->device)) return false;
+    
+    // raygen root signature
+    if(!dm_dx12_raytracing_pipeline_sbt_make_root_signature(1, desc.raygen_params, &internal_pipe.sbt.raygen_root_signature, dx12_renderer->device)) return false;
+    
+    // miss root signatures
+    for(uint32_t i=0; i<desc.miss_count; i++)
     {
-        D3D12_DXIL_LIBRARY_DESC lib = { 0 };
-        lib.DXILLibrary.pShaderBytecode = desc.shader_data;
-        lib.DXILLibrary.BytecodeLength  = desc.shader_data_size;
+        if(!dm_dx12_raytracing_pipeline_sbt_make_root_signature(2, desc.miss_params[i], &internal_pipe.sbt.miss_root_signatures[i], dx12_renderer->device)) return false;
+    }
+    
+    // hit groups
+    D3D12_HIT_GROUP_DESC hit_groups[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
+    wchar_t exports[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS][DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_UNKNOWN][100];
+    
+    for(uint32_t i=0; i<desc.hit_group_count; i++)
+    {
+        uint32_t export_index = 0;
         
-        assert(desc.hit_group_count<=DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS);
+        swprintf(exports[i][export_index], 100, L"%hs", desc.hit_groups[i].name);
+        hit_groups[i].HitGroupExport = exports[i][export_index];
+        export_index++;
         
-        internal_pipe.sbt.hit_group_count = desc.hit_group_count;
-        internal_pipe.sbt.miss_count      = desc.miss_count;
-        
-        // global root signature
-        if(!dm_dx12_raytracing_pipeline_sbt_make_root_signature(0, desc.global_params, &internal_pipe.sbt.global_root_signature, dx12_renderer->device)) return false;
-        
-        // raygen root signature
-        if(!dm_dx12_raytracing_pipeline_sbt_make_root_signature(1, desc.raygen_params, &internal_pipe.sbt.raygen_root_signature, dx12_renderer->device)) return false;
-        
-        // miss root signatures
-        for(uint32_t i=0; i<desc.miss_count; i++)
+        if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_ANY_HIT)
         {
-            if(!dm_dx12_raytracing_pipeline_sbt_make_root_signature(2, desc.miss_params, &internal_pipe.sbt.miss_root_signatures[i], dx12_renderer->device)) return false;
-        }
-        
-        // hit groups
-        D3D12_HIT_GROUP_DESC hit_groups[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
-        wchar_t exports[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS][DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_UNKNOWN][100];
-        
-        for(uint32_t i=0; i<desc.hit_group_count; i++)
-        {
-            uint32_t export_index = 0;
-            
-            swprintf(exports[i][export_index], 100, L"%hs", desc.hit_groups[i].name);
-            hit_groups[i].HitGroupExport = exports[i][export_index];
+            swprintf(exports[i][export_index], 100, L"%hs", desc.hit_groups[i].any_hit);
+            hit_groups[i].AnyHitShaderImport = exports[i][export_index];
             export_index++;
-            
-            if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_ANY_HIT)
-            {
-                swprintf(exports[i][export_index], 100, L"%hs", desc.hit_groups[i].any_hit);
-                hit_groups[i].AnyHitShaderImport = exports[i][export_index];
-                export_index++;
-            }
-            
-            if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_CLOSEST_HIT)
-            {
-                swprintf(exports[i][export_index], 100, L"%hs", desc.hit_groups[i].closest_hit);
-                hit_groups[i].ClosestHitShaderImport = exports[i][export_index];
-                export_index++;
-            }
-            
-            if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION)
-            {
-                swprintf(exports[i][export_index], 100, L"%hs", desc.hit_groups[i].intersection);
-                hit_groups[i].IntersectionShaderImport = exports[i][export_index];
-                export_index++;
-            }
-            
-            switch(desc.hit_groups[i].geom_type)
-            {
-                case DM_RAYTRACING_PIPELINE_HIT_GROUP_GEOMETRY_TYPE_TRIANGLES:
-                hit_groups[i].Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
-                break;
-                
-                case DM_RAYTRACING_PIPELINE_HIT_GROUP_GEOMETRY_TYPE_PROCEDURAL:
-                hit_groups[i].Type = D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE;
-                break;
-                
-                default:
-                DM_LOG_FATAL("Unknown hit group geometry type");
-                return false;
-            }
-            
-            // local root signature
-            if(!dm_dx12_raytracing_pipeline_sbt_make_root_signature(3, desc.hit_groups[i].params, &internal_pipe.sbt.hit_root_signatures[i], dx12_renderer->device)) return false;
         }
         
-        // have: 
-        //    -4 objects from: library, shader config, pipeline config, global sig
-        //    -local signature for raygen
-        //    -root association for raygen
-        //    -association for all shaders
-        //    -MAX_HIT_GROUPS of hit groups
-        //    -MAX_HIT_GROUPS of local signatures for hit groups
-        //    -MAX_HIT_GROUPS of root associations for hit groups
-        D3D12_STATE_SUBOBJECT subobjects[4 + 1 + 1 + 1 + 3 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
-        
-        WCHAR* ws_raygen = dm_alloc(sizeof(WCHAR) * strlen(desc.raygen));
-        WCHAR* ws_hit[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
-        WCHAR* ws_exports[1 + 2 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS * 3] = { 0 };
-        
-        uint32_t sub_obj_index = 0;
-        
+        if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_CLOSEST_HIT)
         {
-            // library
-            subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
-            subobjects[sub_obj_index++].pDesc = &lib;
-            
-            // raygen root sig
-            subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
-            subobjects[sub_obj_index++].pDesc = &internal_pipe.sbt.raygen_root_signature;
-            
-            // raygen assoc
-            D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION raygen_assoc = { 0 };
-            raygen_assoc.NumExports = 1;
-            swprintf(ws_raygen, 100, L"%hs", desc.raygen);
-            raygen_assoc.pExports = &ws_raygen;
-            raygen_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
-            
-            subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
-            subobjects[sub_obj_index++].pDesc = &raygen_assoc;
-            
-            // hit groups
-            for(uint32_t i=0; i<desc.hit_group_count; i++)
-            {
-                subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
-                subobjects[sub_obj_index++].pDesc = &hit_groups[i];
-                
-                if(desc.hit_groups[i].params.count==0) continue;
-                
-                subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
-                subobjects[sub_obj_index++].pDesc = &internal_pipe.sbt.hit_root_signatures[i];
-                
-                D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION hit_assoc = { 0 };
-                hit_assoc.NumExports = 1;
-                ws_hit[i] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].name));
-                swprintf(ws_hit[i], 100, L"%s", exports[i][0]);
-                hit_assoc.pExports = &ws_hit[i];
-                hit_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
-                
-                subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
-                subobjects[sub_obj_index++].pDesc = &hit_assoc;
-            }
-            
-            // shader config
-            D3D12_RAYTRACING_SHADER_CONFIG shader_config = { 0 };
-            shader_config.MaxPayloadSizeInBytes   = desc.payload_size;
-            shader_config.MaxAttributeSizeInBytes = sizeof(float) * 2;
-            
-            D3D12_RAYTRACING_PIPELINE_CONFIG pipe_config = { 0 };
-            pipe_config.MaxTraceRecursionDepth = desc.max_recursion;
-            
-            subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
-            subobjects[sub_obj_index++].pDesc = &shader_config;
-            
-            // config assoc
-            uint32_t export_index = 0;
-            
-            ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.raygen));
-            swprintf(ws_exports[export_index++], 100, L"%hs", desc.raygen);
-            
-            for(uint32_t i=0; i<desc.miss_count; i++)
-            {
-                ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.miss[i]));
-                swprintf(ws_exports[export_index++], 100, L"%hs", desc.miss[i]);
-            }
-            
-            for(uint32_t i=0; i<desc.hit_group_count; i++)
-            {
-                if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_ANY_HIT)
-                {
-                    ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].any_hit));
-                    swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].any_hit);
-                }
-                
-                if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_CLOSEST_HIT)
-                {
-                    ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].closest_hit));
-                    swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].closest_hit);
-                }
-                
-                if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION)
-                {
-                    ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].intersection));
-                    swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].intersection);
-                }
-            }
-            
-            D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION export_assoc = { 0 };
-            export_assoc.NumExports            = export_index;
-            export_assoc.pExports              = ws_exports;
-            export_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
-            
-            subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
-            subobjects[sub_obj_index++].pDesc = &export_assoc;
-            
-            // global root sig
-            D3D12_GLOBAL_ROOT_SIGNATURE global_sig = { 0 };
-            global_sig.pGlobalRootSignature        = internal_pipe.sbt.global_root_signature;
-            
-            subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE;
-            subobjects[sub_obj_index++].pDesc = &global_sig;
-            
-            // pipeline config
-            subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
-            subobjects[sub_obj_index++].pDesc = &pipe_config;
+            swprintf(exports[i][export_index], 100, L"%hs", desc.hit_groups[i].closest_hit);
+            hit_groups[i].ClosestHitShaderImport = exports[i][export_index];
+            export_index++;
         }
         
-        D3D12_STATE_OBJECT_DESC obj_desc = { 0 };
-        obj_desc.Type          = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
-        obj_desc.NumSubobjects = sub_obj_index;
-        obj_desc.pSubobjects   = subobjects;
-        
-        hr = ID3D12Device5_CreateStateObject(dx12_renderer->device, &obj_desc, &IID_ID3D12StateObject, &internal_pipe.state_object);
-        if(!dm_platform_win32_decode_hresult(hr))
+        if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION)
         {
-            DM_LOG_FATAL("ID3D12Device5_CreateStateObject failed");
-            DM_LOG_FATAL("Could not create raytracing pipeline state object");
+            swprintf(exports[i][export_index], 100, L"%hs", desc.hit_groups[i].intersection);
+            hit_groups[i].IntersectionShaderImport = exports[i][export_index];
+            export_index++;
+        }
+        
+        switch(desc.hit_groups[i].geom_type)
+        {
+            case DM_RAYTRACING_PIPELINE_HIT_GROUP_GEOMETRY_TYPE_TRIANGLES:
+            hit_groups[i].Type = D3D12_HIT_GROUP_TYPE_TRIANGLES;
+            break;
+            
+            case DM_RAYTRACING_PIPELINE_HIT_GROUP_GEOMETRY_TYPE_PROCEDURAL:
+            hit_groups[i].Type = D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE;
+            break;
+            
+            default:
+            DM_LOG_FATAL("Unknown hit group geometry type");
             return false;
         }
         
-        dm_free(&ws_raygen);
+        // local root signature
+        if(!dm_dx12_raytracing_pipeline_sbt_make_root_signature(3, desc.hit_groups[i].params, &internal_pipe.sbt.hit_root_signatures[i], dx12_renderer->device)) return false;
+    }
+    
+    // PSO
+    // have: 
+    //    -4 objects from: library, shader config, pipeline config, global sig
+    //    -local signature for raygen
+    //    -root association for raygen
+    //    -association for all shaders
+    //    -MAX_HIT_GROUPS of hit groups
+    //    -MAX_HIT_GROUPS of local signatures for hit groups
+    //    -MAX_HIT_GROUPS of root associations for hit groups
+    D3D12_STATE_SUBOBJECT subobjects[4 + 1 + 1 + 1 + 3 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
+    
+    WCHAR* ws_raygen = dm_alloc(sizeof(WCHAR) * strlen(desc.raygen));
+    WCHAR* ws_hit[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
+    WCHAR* ws_exports[1 + 2 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS * 3] = { 0 };
+    
+    uint32_t sub_obj_index = 0;
+    
+    // library
+    D3D12_DXIL_LIBRARY_DESC lib = { 0 };
+    lib.DXILLibrary.pShaderBytecode = desc.shader_data;
+    lib.DXILLibrary.BytecodeLength  = desc.shader_data_size;
+    
+    subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
+    subobjects[sub_obj_index++].pDesc = &lib;
+    
+    // raygen root sig
+    subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
+    subobjects[sub_obj_index++].pDesc = &internal_pipe.sbt.raygen_root_signature;
+    
+    // raygen assoc
+    D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION raygen_assoc = { 0 };
+    raygen_assoc.NumExports = 1;
+    swprintf(ws_raygen, 100, L"%hs", desc.raygen);
+    raygen_assoc.pExports = &ws_raygen;
+    raygen_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
+    
+    subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
+    subobjects[sub_obj_index++].pDesc = &raygen_assoc;
+    
+    // hit groups
+    D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION hit_assoc[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
+    
+    for(uint32_t i=0; i<desc.hit_group_count; i++)
+    {
+        subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
+        subobjects[sub_obj_index++].pDesc = &hit_groups[i];
         
-        for(uint32_t i=0; i<1 + 2 * 3 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS; i++)
+        if(desc.hit_groups[i].params.count==0) continue;
+        
+        subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
+        subobjects[sub_obj_index++].pDesc = &internal_pipe.sbt.hit_root_signatures[i];
+        
+        hit_assoc[i].NumExports = 1;
+        ws_hit[i] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].name));
+        swprintf(ws_hit[i], 100, L"%s", exports[i][0]);
+        hit_assoc[i].pExports = &ws_hit[i];
+        hit_assoc[i].pSubobjectToAssociate = &subobjects[sub_obj_index-1];
+        
+        subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
+        subobjects[sub_obj_index++].pDesc = &hit_assoc[i];
+    }
+    
+    // shader config
+    D3D12_RAYTRACING_SHADER_CONFIG shader_config = { 0 };
+    shader_config.MaxPayloadSizeInBytes   = desc.payload_size;
+    shader_config.MaxAttributeSizeInBytes = sizeof(float) * 2;
+    
+    D3D12_RAYTRACING_PIPELINE_CONFIG pipe_config = { 0 };
+    pipe_config.MaxTraceRecursionDepth = desc.max_recursion;
+    
+    subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
+    subobjects[sub_obj_index++].pDesc = &shader_config;
+    
+    // config assoc
+    uint32_t export_index = 0;
+    
+    ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.raygen));
+    swprintf(ws_exports[export_index++], 100, L"%hs", desc.raygen);
+    
+    for(uint32_t i=0; i<desc.miss_count; i++)
+    {
+        ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.miss[i]));
+        swprintf(ws_exports[export_index++], 100, L"%hs", desc.miss[i]);
+    }
+    
+    for(uint32_t i=0; i<desc.hit_group_count; i++)
+    {
+        if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_ANY_HIT)
         {
-            if(ws_exports[i]) dm_free(&ws_exports[i]);
+            ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].any_hit));
+            swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].any_hit);
         }
         
-        for(uint32_t i=0; i<desc.hit_group_count; i++)
+        if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_CLOSEST_HIT)
         {
-            if(!ws_hit[i]) continue;
-            
-            dm_free(&ws_hit[i]);
+            ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].closest_hit));
+            swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].closest_hit);
         }
         
+        if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION)
+        {
+            ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].intersection));
+            swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].intersection);
+        }
+    }
+    
+    D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION export_assoc = { 0 };
+    export_assoc.NumExports            = export_index;
+    export_assoc.pExports              = ws_exports;
+    export_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
+    
+    subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
+    subobjects[sub_obj_index++].pDesc = &export_assoc;
+    
+    // global root sig
+    D3D12_GLOBAL_ROOT_SIGNATURE global_sig = { 0 };
+    global_sig.pGlobalRootSignature        = internal_pipe.sbt.global_root_signature;
+    
+    subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_GLOBAL_ROOT_SIGNATURE;
+    subobjects[sub_obj_index++].pDesc = &global_sig;
+    
+    // pipeline config
+    subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
+    subobjects[sub_obj_index++].pDesc = &pipe_config;
+    
+    D3D12_STATE_OBJECT_DESC obj_desc = { 0 };
+    obj_desc.Type          = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
+    obj_desc.NumSubobjects = sub_obj_index;
+    obj_desc.pSubobjects   = subobjects;
+    
+    hr = ID3D12Device5_CreateStateObject(dx12_renderer->device, &obj_desc, &IID_ID3D12StateObject, &internal_pipe.state_object);
+    if(!dm_platform_win32_decode_hresult(hr))
+    {
+        DM_LOG_FATAL("ID3D12Device5_CreateStateObject failed");
+        DM_LOG_FATAL("Could not create raytracing pipeline state object");
+        return false;
+    }
+    
+    dm_free(&ws_raygen);
+    
+    for(uint32_t i=0; i<1 + 2 * 3 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS; i++)
+    {
+        if(ws_exports[i]) dm_free(&ws_exports[i]);
+    }
+    
+    for(uint32_t i=0; i<desc.hit_group_count; i++)
+    {
+        if(!ws_hit[i]) continue;
+        
+        dm_free(&ws_hit[i]);
     }
     
     // shader table
+    internal_pipe.sbt.max_instance_count = desc.max_instance_count;
+    internal_pipe.sbt.miss_count         = desc.miss_count;
+    internal_pipe.sbt.hit_group_count    = desc.hit_group_count;
+    
+    size_t record_size                   = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+    
+    uint32_t max_param_count = 0;
+    
+    max_param_count = desc.global_params.count > max_param_count ? desc.global_params.count : max_param_count;
+    max_param_count = desc.raygen_params.count > max_param_count ? desc.raygen_params.count : max_param_count;
+    
+    for(uint32_t i=0; i<desc.hit_group_count; i++)
     {
-        internal_pipe.sbt.max_instance_count = desc.max_instance_count;
-        internal_pipe.sbt.miss_count         = desc.miss_count;
-        internal_pipe.sbt.hit_group_count    = desc.hit_group_count;
-        
-        size_t record_size                   = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-        
-        uint32_t max_param_count = 0;
-        
-        max_param_count = desc.global_params.count > max_param_count ? desc.global_params.count : max_param_count;
-        max_param_count = desc.raygen_params.count > max_param_count ? desc.raygen_params.count : max_param_count;
-        
-        for(uint32_t i=0; i<desc.hit_group_count; i++)
+        if(desc.hit_groups[i].params.count > max_param_count) max_param_count = desc.hit_groups[i].params.count;
+    }
+    
+    record_size += sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * max_param_count;
+    
+    static const align = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+    //internal_pipe.shader_table_entry_size = align;
+    size_t remainder = record_size % align;
+    internal_pipe.sbt.record_size = remainder ? record_size + (align - remainder) : record_size;
+    
+    // 1 raygen, (miss count) misses, (hit group count * max instances) hit groups
+    const uint32_t shader_table_count = 1 + desc.miss_count + desc.hit_group_count * desc.max_instance_count;
+    
+    D3D12_RESOURCE_DESC sbt_desc = DM_DX12_BASIC_BUFFER_DESC;
+    sbt_desc.Width = shader_table_count * internal_pipe.sbt.record_size;
+    
+    for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
+    {
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &sbt_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_pipe.sbt.table[i]);
+        if(!dm_platform_win32_decode_hresult(hr))
         {
-            if(desc.hit_groups[i].params.count > max_param_count) max_param_count = desc.hit_groups[i].params.count;
+            DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
+            DM_LOG_FATAL("Could not create DirectX12 raytracing pipeline shader ids");
+            return false;
         }
         
-        record_size += sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * max_param_count;
-        
-        static const align = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
-        //internal_pipe.shader_table_entry_size = align;
-        size_t remainder = record_size % align;
-        internal_pipe.sbt.record_size = remainder ? record_size + (align - remainder) : record_size;
-        
-        // 1 raygen, (miss count) misses, (hit group count * max instances) hit groups
-        const uint32_t shader_table_count = 1 + desc.miss_count + desc.hit_group_count * desc.max_instance_count;
-        
-        D3D12_RESOURCE_DESC sbt_desc = DM_DX12_BASIC_BUFFER_DESC;
-        sbt_desc.Width = shader_table_count * internal_pipe.sbt.record_size;
-        
-        for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
+        hr = ID3D12Resource_Map(internal_pipe.sbt.table[i], 0, NULL, &internal_pipe.sbt.mapped_address[i]);
+        if(!dm_platform_win32_decode_hresult(hr))
         {
-            hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &sbt_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_pipe.sbt.table[i]);
-            if(!dm_platform_win32_decode_hresult(hr))
-            {
-                DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
-                DM_LOG_FATAL("Could not create DirectX12 raytracing pipeline shader ids");
-                return false;
-            }
-            
-            hr = ID3D12Resource_Map(internal_pipe.sbt.table[i], 0, NULL, &internal_pipe.sbt.mapped_address[i]);
-            if(!dm_platform_win32_decode_hresult(hr))
-            {
-                DM_LOG_FATAL("ID3D12Resource_Map failed");
-                DM_LOG_FATAL("Could not map onto DirectX12 shader binding table");
-                return false;
-            }
-            
-            ID3D12StateObjectProperties* props;
-            ID3D12StateObject_QueryInterface(internal_pipe.state_object, &IID_ID3D12StateObjectProperties, &props);
-            
-            uint8_t* ref  = NULL;
-            uint8_t* data = internal_pipe.sbt.mapped_address[i];
-            
-            ref = data;
-            
-            // raygen shader
-            if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.raygen, &data, internal_pipe.sbt.record_size, props)) return false;
-            
-            // miss shaders
-            for(uint32_t i=0; i<desc.miss_count; i++)
-            {
-                if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.miss[i], &data, internal_pipe.sbt.record_size, props)) return false;
-            }
-            
-            // hit groups
-            for(uint32_t j=0; j<desc.max_instance_count; j++)
-            {
-                for(uint32_t k=0; k<desc.hit_group_count; k++)
-                {
-                    if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.hit_groups[k].name, &data, internal_pipe.sbt.record_size, props)) return false;
-                }
-            }
-            
-            // sanity checks the above algorithms worked
-            assert(*data % internal_pipe.sbt.record_size == 0);
-            assert(data - ref == sbt_desc.Width);
-            
-            data = NULL;
-            ref  = NULL;
-            
-            ID3D12StateObjectProperties_Release(props);
+            DM_LOG_FATAL("ID3D12Resource_Map failed");
+            DM_LOG_FATAL("Could not map onto DirectX12 shader binding table");
+            return false;
         }
+        
+        ID3D12StateObjectProperties* props;
+        ID3D12StateObject_QueryInterface(internal_pipe.state_object, &IID_ID3D12StateObjectProperties, &props);
+        
+        uint8_t* ref  = NULL;
+        uint8_t* data = internal_pipe.sbt.mapped_address[i];
+        
+        ref = data;
+        
+        // raygen shader
+        if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.raygen, &data, internal_pipe.sbt.record_size, props)) return false;
+        
+        // miss shaders
+        for(uint32_t i=0; i<desc.miss_count; i++)
+        {
+            if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.miss[i], &data, internal_pipe.sbt.record_size, props)) return false;
+        }
+        
+        // hit groups
+        for(uint32_t j=0; j<desc.max_instance_count; j++)
+        {
+            for(uint32_t k=0; k<desc.hit_group_count; k++)
+            {
+                if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.hit_groups[k].name, &data, internal_pipe.sbt.record_size, props)) return false;
+            }
+        }
+        
+        // sanity checks the above algorithms worked
+        assert(*data % internal_pipe.sbt.record_size == 0);
+        assert(data - ref == sbt_desc.Width);
+        
+        data = NULL;
+        ref  = NULL;
+        
+        ID3D12StateObjectProperties_Release(props);
     }
     
     //
@@ -2559,7 +2545,7 @@ bool dm_dx12_sbt_create_shader_view(dm_raytracing_pipeline_shader_param_type typ
             }
         } break;
         
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_OUTPUT_TEXTURE:
+        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_TEXTURE:
         {
             dm_dx12_texture* texture = &dx12_renderer->textures[handle];
             
@@ -3083,7 +3069,7 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
     desc.Height = height;
     desc.Depth  = 1;
     
-    D3D12_GPU_VIRTUAL_ADDRESS addresses[203][3] = { 0 };
+    D3D12_GPU_VIRTUAL_ADDRESS addresses[34][3] = { 0 };
     uint32_t shader_count = 1 + internal_pipe->sbt.miss_count;
     shader_count += internal_pipe->sbt.hit_group_count * internal_pipe->sbt.max_instance_count;
     
@@ -3093,7 +3079,7 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
         data += i * internal_pipe->sbt.record_size;
         data += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
         
-        dm_memcpy(addresses[i], data, sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * 3);
+        //dm_memcpy(addresses[i], data, sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * 3);
     }
     
     D3D12_GPU_DESCRIPTOR_HANDLE t = { 0 };
