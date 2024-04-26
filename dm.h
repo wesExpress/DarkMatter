@@ -796,11 +796,12 @@ typedef struct dm_blas_desc_t
 } dm_blas_desc;
 
 #define DM_MAX_BLAS 100
-#define DM_TLAS_MAS_INSTANCE_COUNT 1000
 typedef struct dm_tlas_desc_t
 {
-    uint32_t mesh_instance[DM_TLAS_MAS_INSTANCE_COUNT];
-    uint32_t instance_count;
+    dm_mat4*  instance_transforms;
+    uint32_t* instance_meshes;
+    uint32_t  instance_count;
+    uint32_t  max_instance_count;
 } dm_tlas_desc;
 
 typedef struct dm_acceleration_structure_desc_t
@@ -853,9 +854,6 @@ typedef struct dm_raytracing_pipeline_hit_group_desc_t
     dm_raytracing_pipeline_hit_group_geometry_type geom_type;
     dm_raytracing_pipeline_hit_group_flag          flags;
     
-    //dm_raytracing_pipeline_shader_param params[DM_RAYTRACING_PIPELINE_SHADER_MAX_PARAMS];
-    //uint32_t                            param_count;
-    
     dm_rt_pipeline_shader_params params;
     
     char name[512];
@@ -878,10 +876,11 @@ typedef struct dm_raytracing_pipeline_desc_t
     dm_raytracing_pipeline_hit_group_desc hit_groups[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
     uint32_t                              hit_group_count;
     
+    uint32_t max_instance_count;
+    
     void*  shader_data;
     size_t shader_data_size;
     
-    uint32_t max_instance_count;
     size_t   payload_size;
     uint32_t max_recursion;
 } dm_raytracing_pipeline_desc;

@@ -600,6 +600,10 @@ bool dm_platform_win32_decode_hresult(HRESULT hr)
         DM_LOG_ERROR("DXGI Error: Device removed: Device hung");
         break;
         
+        case 2289696774:
+        DM_LOG_ERROR("GPU will not respond to more commands due to invalid command");
+        break;
+        
         default:
         DM_LOG_ERROR("Unknown error: %u", hr);
         break;
