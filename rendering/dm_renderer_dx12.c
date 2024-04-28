@@ -1917,7 +1917,7 @@ bool dm_dx12_create_tlas(dm_acceleration_structure_desc as_desc, dm_dx12_acceler
             ID3D12Resource* blas_buffer = internal_as->blas[blas_index].result_buffer[i];
             
             internal_as->tlas.instance_data[i][j].InstanceID   = j;
-            internal_as->tlas.instance_data[i][j].InstanceMask = 1;
+            internal_as->tlas.instance_data[i][j].InstanceMask = 0xFF;
             if(as_desc.tlas_desc.instance_transforms) dm_memcpy(internal_as->tlas.instance_data[i][j].Transform, as_desc.tlas_desc.instance_transforms[j], sizeof(float) * 4 * 3);
             internal_as->tlas.instance_data[i][j].AccelerationStructure = ID3D12Resource_GetGPUVirtualAddress(blas_buffer);
             
@@ -2962,9 +2962,9 @@ bool dm_render_command_backend_update_acceleration_structure_tlas(dm_render_hand
     
     dm_dx12_acceleration_structure* internal_as = &dx12_renderer->accel_structs[handle];
     
-    ID3D12Resource* instance_buffer  = internal_as->tlas.instance_buffer[current_frame_index];
-    ID3D12Resource* result_buffer    = internal_as->tlas.result_buffer[current_frame_index];
-    ID3D12Resource* scratch_buffer   = internal_as->tlas.scratch_buffer[current_frame_index];
+    ID3D12Resource* instance_buffer = internal_as->tlas.instance_buffer[current_frame_index];
+    ID3D12Resource* result_buffer   = internal_as->tlas.result_buffer[current_frame_index];
+    ID3D12Resource* scratch_buffer  = internal_as->tlas.scratch_buffer[current_frame_index];
     
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC desc = { 0 };
     desc.DestAccelerationStructureData    = ID3D12Resource_GetGPUVirtualAddress(result_buffer);
@@ -2975,15 +2975,6 @@ bool dm_render_command_backend_update_acceleration_structure_tlas(dm_render_hand
     desc.Inputs.InstanceDescs             = ID3D12Resource_GetGPUVirtualAddress(instance_buffer);
     desc.SourceAccelerationStructureData  = ID3D12Resource_GetGPUVirtualAddress(result_buffer);
     desc.ScratchAccelerationStructureData = ID3D12Resource_GetGPUVirtualAddress(scratch_buffer);
-    
-#if 0
-    D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = { 0 };
-    inputs.Type          = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-    inputs.Flags         = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE;
-    inputs.NumDescs      = internal_as->tlas.max_instance_count;
-    inputs.DescsLayout   = D3D12_ELEMENTS_LAYOUT_ARRAY;
-    inputs.InstanceDescs = ID3D12Resource_GetGPUVirtualAddress(internal_as->tlas.instance_buffer[i]);
-#endif
     
     // uav barrier
     {
