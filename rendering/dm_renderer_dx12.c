@@ -1883,6 +1883,12 @@ bool dm_dx12_create_tlas(dm_acceleration_structure_desc as_desc, dm_dx12_acceler
 {
     HRESULT hr;
     
+    if(!as_desc.tlas_desc.instance_transforms)
+    {
+        DM_LOG_FATAL("Need to have valid transforms to initialize acceleration structure");
+        return false;
+    }
+    
     internal_as->tlas.max_instance_count = as_desc.tlas_desc.max_instance_count;
     
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
@@ -1918,10 +1924,12 @@ bool dm_dx12_create_tlas(dm_acceleration_structure_desc as_desc, dm_dx12_acceler
             
             internal_as->tlas.instance_data[i][j].InstanceID   = j;
             internal_as->tlas.instance_data[i][j].InstanceMask = 0xFF;
-            if(as_desc.tlas_desc.instance_transforms) dm_memcpy(internal_as->tlas.instance_data[i][j].Transform, as_desc.tlas_desc.instance_transforms[j], sizeof(float) * 4 * 3);
-            internal_as->tlas.instance_data[i][j].AccelerationStructure = ID3D12Resource_GetGPUVirtualAddress(blas_buffer);
             
+            dm_memcpy(internal_as->tlas.instance_data[i][j].Transform, as_desc.tlas_desc.instance_transforms[j], sizeof(float) * 4 * 3);
+            
+            internal_as->tlas.instance_data[i][j].AccelerationStructure = ID3D12Resource_GetGPUVirtualAddress(blas_buffer);
             internal_as->tlas.instance_data[i][j].InstanceContributionToHitGroupIndex = i_offset;
+            
             i_offset += as_desc.hit_group_count;
         }
         
