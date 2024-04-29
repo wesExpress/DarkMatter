@@ -21,36 +21,6 @@
 #define CGLTF_IMPLEMENTATION
 #include "cgltf/cgltf.h"
 
-//#define DM_MATH_TESTS
-
-/*********
-BYTE POOL
-***********/
-void __dm_byte_pool_insert(dm_byte_pool* byte_pool, void* data, size_t data_size)
-{
-    if(!byte_pool->data) byte_pool->data = dm_alloc(data_size);
-    else                 byte_pool->data = dm_realloc(byte_pool->data, byte_pool->size + data_size);
-    
-    void* dest = (char*)byte_pool->data + byte_pool->size;
-    dm_memcpy(dest, data, data_size);
-    byte_pool->size += data_size;
-}
-#define DM_BYTE_POOL_INSERT(BYTE_POOL, DATA) __dm_byte_pool_insert(&BYTE_POOL, &DATA, sizeof(DATA))
-
-void* __dm_byte_pool_pop(dm_byte_pool* byte_pool, size_t data_size)
-{
-    if(!byte_pool->size)
-    {
-        DM_LOG_ERROR("Trying to pop from an empty byte pool");
-        return NULL;
-    }
-    
-    void* result = (char*)byte_pool->data + byte_pool->size - data_size;
-    byte_pool->size -= data_size;
-    return result;
-}
-#define DM_BYTE_POOL_POP(BYTE_POOL, T, NAME) T NAME = *(T*)__dm_byte_pool_pop(&BYTE_POOL, sizeof(T))
-
 /****
 MATH
 ******/
@@ -840,6 +810,7 @@ extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_render
 
 #ifdef DM_RAYTRACING
 extern bool dm_render_command_backend_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_acceleration_structure_instance_range(dm_render_handle handle, uint32_t instance_start, uint32_t instance_end, void* data, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_acceleration_structure_tlas(dm_render_handle handle, dm_renderer* renderer);
 
 extern bool dm_render_command_backend_add_global_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle vb_handle, dm_render_handle pipe_handle,  dm_renderer* renderer);
@@ -851,206 +822,266 @@ extern bool dm_render_command_backend_raytracing_pipeline_dispatch_rays(uint32_t
 extern bool dm_render_command_backend_copy_texture_to_screen(dm_render_handle handle, dm_renderer* renderer);
 #endif
 
-void __dm_renderer_submit_render_command(dm_render_command* command, dm_render_command_manager* manager)
+DM_INLINE
+void __dm_renderer_submit_render_command(dm_render_command command, dm_render_command_manager* manager)
 {
-    dm_render_command* c = &manager->commands[manager->command_count++];
+    if(!manager->commands)
+    {
+        manager->capacity = 16;
+        manager->commands = dm_alloc(sizeof(dm_render_command) * manager->capacity);
+    }
+    else if((float)manager->count / (float)manager->capacity >= 0.75f)
+    {
+        manager->capacity *= 2;
+        manager->commands = dm_realloc(manager->commands, sizeof(dm_render_command) * manager->capacity);
+    }
     
-    if(!c->params.data) c->params.data = dm_alloc(command->params.size);
-    else if(c->params.size != command->params.size) c->params.data = dm_realloc(c->params.data, command->params.size);
-    dm_memcpy(c->params.data, command->params.data, command->params.size);
-    
-    c->type = command->type;
-    c->params.size = command->params.size;
+    manager->commands[manager->count++] = command;
 }
-#define DM_SUBMIT_RENDER_COMMAND(COMMAND) __dm_renderer_submit_render_command(&COMMAND, &context->renderer.command_manager)
+#define DM_SUBMIT_RENDER_COMMAND(COMMAND) __dm_renderer_submit_render_command(COMMAND, &context->renderer.command_manager)
 #define DM_SUBMIT_RENDER_COMMAND_MANAGER(COMMAND, MANAGER) __dm_renderer_submit_render_command(&COMMAND, &MANAGER)
-#define DM_TOO_MANY_COMMANDS context->renderer.command_manager.command_count > DM_MAX_RENDER_COMMANDS
 
 void dm_render_command_begin_renderpass(dm_render_handle handle, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_BEGIN_RENDERPASS;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.param_count = 1;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_end_renderpass(dm_render_handle handle, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_END_RENDERPASS;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.param_count = 1;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_bind_pipeline(dm_render_handle handle, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_BIND_PIPELINE;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.param_count = 1;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_bind_vertex_buffer(dm_render_handle handle, uint32_t slot, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_BIND_VERTEX_BUFFER;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    DM_BYTE_POOL_INSERT(command.params, slot);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = slot;
+    
+    command.param_count = 2;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_bind_index_buffer(dm_render_handle handle, uint32_t slot, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_BIND_INDEX_BUFFER;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    DM_BYTE_POOL_INSERT(command.params, slot);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = slot;
+    
+    command.param_count = 2;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_bind_texture(dm_render_handle handle, uint32_t slot, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_BIND_TEXTURE;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    DM_BYTE_POOL_INSERT(command.params, slot);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = slot;
+    
+    command.param_count = 2;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_update_vertex_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_UPDATE_VERTEX_BUFFER;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    __dm_byte_pool_insert(&command.params, data, data_size);
-    DM_BYTE_POOL_INSERT(command.params, data_size);
-    DM_BYTE_POOL_INSERT(command.params, offset);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type     = DM_RENDER_COMMAND_PARAM_TYPE_VOID;
+    command.params[1].void_val = data;
+    
+    command.params[2].type       = DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T;
+    command.params[2].size_t_val = data_size;
+    
+    command.params[3].type       = DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T;
+    command.params[3].size_t_val = offset;
+    
+    command.param_count = 4;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_UPDATE_TEXTURE;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    DM_BYTE_POOL_INSERT(command.params, width);
-    DM_BYTE_POOL_INSERT(command.params, height);
-    __dm_byte_pool_insert(&command.params, data, data_size);
-    DM_BYTE_POOL_INSERT(command.params, data_size);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = width;
+    
+    command.params[2].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[2].uint32_val = height;
+    
+    command.params[3].type     = DM_RENDER_COMMAND_PARAM_TYPE_VOID;
+    command.params[3].void_val = data;
+    
+    command.params[4].type       = DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T;
+    command.params[4].size_t_val = data_size;
+    
+    command.param_count = 5;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_update_constant_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_UPDATE_CONSTANT_BUFFER;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    __dm_byte_pool_insert(&command.params, data, data_size);
-    DM_BYTE_POOL_INSERT(command.params, data_size);
-    DM_BYTE_POOL_INSERT(command.params, offset);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type     = DM_RENDER_COMMAND_PARAM_TYPE_VOID;
+    command.params[1].void_val = data;
+    
+    command.params[2].type       = DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T;
+    command.params[2].size_t_val = data_size;
+    
+    command.params[3].type       = DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T;
+    command.params[3].size_t_val = offset;
+    
+    command.param_count = 4;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_DRAW_ARRAYS;
     
-    DM_BYTE_POOL_INSERT(command.params, start);
-    DM_BYTE_POOL_INSERT(command.params, count);
+    command.params[0].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[0].uint32_val = start;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = count;
+    
+    command.param_count = 2;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_DRAW_INDEXED;
     
-    DM_BYTE_POOL_INSERT(command.params, num_indices);
-    DM_BYTE_POOL_INSERT(command.params, index_offset);
-    DM_BYTE_POOL_INSERT(command.params, vertex_offset);
+    command.params[0].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[0].uint32_val = num_indices;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = index_offset;
+    
+    command.params[2].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[2].uint32_val = vertex_offset;
+    
+    command.param_count = 3;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_draw_instanced(uint32_t index_count, uint32_t vertex_count, uint32_t inst_count, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_DRAW_INSTANCED;
     
-    DM_BYTE_POOL_INSERT(command.params, index_count);
-    DM_BYTE_POOL_INSERT(command.params, vertex_count);
-    DM_BYTE_POOL_INSERT(command.params, inst_count);
-    DM_BYTE_POOL_INSERT(command.params, index_offset);
-    DM_BYTE_POOL_INSERT(command.params, vertex_offset);
-    DM_BYTE_POOL_INSERT(command.params, inst_offset);
+    command.params[0].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[0].uint32_val = index_count;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = vertex_count;
+    
+    command.params[2].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[2].uint32_val = inst_count;
+    
+    command.params[3].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[3].uint32_val = index_offset;
+    
+    command.params[4].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[4].uint32_val = vertex_offset;
+    
+    command.params[5].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[5].uint32_val = inst_offset;
+    
+    command.param_count = 6;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_set_primitive_topology(dm_primitive_topology topology, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_SET_TOPOLOGY;
     
-    DM_BYTE_POOL_INSERT(command.params, topology);
+    command.params[0].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[0].uint32_val = topology;
+    
+    command.param_count = 1;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_TOGGLE_WIREFRAME;
     
-    DM_BYTE_POOL_INSERT(command.params, wireframe);
+    command.params[0].type     = DM_RENDER_COMMAND_PARAM_TYPE_BOOL;
+    command.params[0].bool_val = wireframe;
+    
+    command.param_count = 1;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
@@ -1058,65 +1089,102 @@ void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context)
 #ifdef DM_RAYTRACING
 void dm_render_command_bind_raytracing_pipeline(dm_render_handle handle, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_BIND_RAYTRACING_PIPELINE;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.param_count = 1;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_INSTANCE;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    DM_BYTE_POOL_INSERT(command.params, instance_id);
-    __dm_byte_pool_insert(&command.params, data, data_size);
-    DM_BYTE_POOL_INSERT(command.params, data_size);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = instance_id;
+    
+    command.params[2].type     = DM_RENDER_COMMAND_PARAM_TYPE_VOID;
+    command.params[2].void_val = data;
+    
+    command.params[3].type       = DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T;
+    command.params[3].size_t_val = data_size;
+    
+    command.param_count = 4;
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_update_acceleration_structure_instance_range(dm_render_handle handle, uint32_t instance_start, uint32_t instance_end, void* data,  dm_context* context)
+{
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_INSTANCE_RANGE;
+    
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = instance_start;
+    
+    command.params[2].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[2].uint32_val = instance_end;
+    
+    command.params[3].type     = DM_RENDER_COMMAND_PARAM_TYPE_VOID;
+    command.params[3].void_val = data;
+    
+    command.param_count = 4;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_update_acceleration_structure_tlas(dm_render_handle handle, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_TLAS;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.param_count = 1;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_DISPATCH_RAYS;
     
-    DM_BYTE_POOL_INSERT(command.params, width);
-    DM_BYTE_POOL_INSERT(command.params, height);
-    DM_BYTE_POOL_INSERT(command.params, handle);
+    command.params[0].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[0].uint32_val = width;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = height;
+    
+    command.params[2].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[2].render_handle_val = handle;
+    
+    command.param_count = 3;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
 void dm_render_command_copy_texture_to_screen(dm_render_handle handle, dm_context* context)
 {
-    if(DM_TOO_MANY_COMMANDS) return;
-    
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_COPY_TEXTURE_TO_SCREEN;
     
-    DM_BYTE_POOL_INSERT(command.params, handle);
+    command.params[0].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[0].uint32_val = handle;
+    
+    command.param_count = 1;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
@@ -1129,7 +1197,7 @@ bool dm_renderer_submit_commands(dm_context* context)
     
     dm_renderer* renderer = &context->renderer;
     
-    for(uint32_t i=0; i<context->renderer.command_manager.command_count; i++)
+    for(uint32_t i=0; i<context->renderer.command_manager.count; i++)
     {
         dm_render_command command = context->renderer.command_manager.commands[i];
         
@@ -1138,7 +1206,7 @@ bool dm_renderer_submit_commands(dm_context* context)
             // pipeline
             case DM_RENDER_COMMAND_BIND_PIPELINE:
             {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
                 
                 if(dm_render_command_backend_bind_pipeline(handle, renderer)) continue;
                 DM_LOG_FATAL("Bind pipeline failed"); 
@@ -1148,8 +1216,8 @@ bool dm_renderer_submit_commands(dm_context* context)
             // buffer
             case DM_RENDER_COMMAND_BIND_VERTEX_BUFFER:
             {
-                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                const uint32_t slot           = command.params[1].uint32_val;
                 
                 if(dm_render_command_backend_bind_vertex_buffer(handle, slot, renderer)) continue;
                 DM_LOG_FATAL("Bind vertex buffer failed"); 
@@ -1157,8 +1225,8 @@ bool dm_renderer_submit_commands(dm_context* context)
             } break;
             case DM_RENDER_COMMAND_BIND_INDEX_BUFFER:
             {
-                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                const uint32_t slot           = command.params[1].uint32_val;
                 
                 if(dm_render_command_backend_bind_index_buffer(handle, slot, renderer)) continue;
                 DM_LOG_FATAL("Bind index buffer failed"); 
@@ -1167,10 +1235,10 @@ bool dm_renderer_submit_commands(dm_context* context)
             
             case DM_RENDER_COMMAND_UPDATE_VERTEX_BUFFER:
             {
-                DM_BYTE_POOL_POP(command.params, size_t, offset);
-                DM_BYTE_POOL_POP(command.params, size_t, data_size);
-                void* data = __dm_byte_pool_pop(&command.params, data_size);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                void* data                    = command.params[1].void_val;
+                const size_t data_size        = command.params[2].size_t_val;
+                const size_t offset           = command.params[3].size_t_val;
                 
                 if(dm_render_command_backend_update_vertex_buffer(handle, data, data_size, offset, renderer)) continue;
                 DM_LOG_FATAL("Update buffer failed"); 
@@ -1180,8 +1248,8 @@ bool dm_renderer_submit_commands(dm_context* context)
             // texture
             case DM_RENDER_COMMAND_BIND_TEXTURE:
             {
-                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                const uint32_t slot           = command.params[1].uint32_val;
                 
                 if(dm_render_command_backend_bind_texture(handle, slot, &context->renderer)) continue; 
                 
@@ -1190,11 +1258,11 @@ bool dm_renderer_submit_commands(dm_context* context)
             } break;
             case DM_RENDER_COMMAND_UPDATE_TEXTURE:
             {
-                DM_BYTE_POOL_POP(command.params, size_t, data_size);
-                void* data = __dm_byte_pool_pop(&command.params, data_size);
-                DM_BYTE_POOL_POP(command.params, uint32_t, height);
-                DM_BYTE_POOL_POP(command.params, uint32_t, width);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                const uint32_t width          = command.params[1].uint32_val;
+                const uint32_t height         = command.params[2].uint32_val;
+                void* data                    = command.params[3].void_val;
+                size_t data_size              = command.params[4].size_t_val;
                 
                 if(dm_render_command_backend_update_texture(handle, width, height, data, data_size, renderer)) continue;
                 DM_LOG_FATAL("Update texture failed"); 
@@ -1204,10 +1272,10 @@ bool dm_renderer_submit_commands(dm_context* context)
             // constant buffer
             case DM_RENDER_COMMAND_UPDATE_CONSTANT_BUFFER:
             {
-                DM_BYTE_POOL_POP(command.params, size_t, offset);
-                DM_BYTE_POOL_POP(command.params, size_t, data_size);
-                void* data = __dm_byte_pool_pop(&command.params, data_size);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                void* data                    = command.params[1].void_val;
+                size_t data_size              = command.params[2].size_t_val;
+                size_t offset                 = command.params[3].size_t_val;
                 
                 if(dm_render_command_backend_update_constant_buffer(handle, data, data_size, offset, renderer)) continue;
                 DM_LOG_FATAL("Update constant buffer failed");
@@ -1217,7 +1285,7 @@ bool dm_renderer_submit_commands(dm_context* context)
             // render pass
             case DM_RENDER_COMMAND_BEGIN_RENDERPASS:
             {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
                 
                 if(dm_render_command_backend_begin_renderpass(handle, renderer)) continue;
                 
@@ -1226,7 +1294,7 @@ bool dm_renderer_submit_commands(dm_context* context)
             } break;
             case DM_RENDER_COMMAND_END_RENDERPASS:
             {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
                 
                 if(dm_render_command_backend_end_renderpass(handle, renderer)) continue;
                 
@@ -1237,27 +1305,27 @@ bool dm_renderer_submit_commands(dm_context* context)
             // drawing
             case DM_RENDER_COMMAND_DRAW_ARRAYS:
             {
-                DM_BYTE_POOL_POP(command.params, uint32_t, count);
-                DM_BYTE_POOL_POP(command.params, uint32_t, start);
+                const uint32_t start = command.params[0].uint32_val;
+                const uint32_t count = command.params[1].uint32_val;
                 
                 dm_render_command_backend_draw_arrays(start, count, renderer);
             } break;
             case DM_RENDER_COMMAND_DRAW_INDEXED:
             {
-                DM_BYTE_POOL_POP(command.params, uint32_t, vertex_offset);
-                DM_BYTE_POOL_POP(command.params, uint32_t, index_offset);
-                DM_BYTE_POOL_POP(command.params, uint32_t, num_indices);
+                const uint32_t num_indices   = command.params[0].uint32_val;
+                const uint32_t index_offset  = command.params[1].uint32_val;
+                const uint32_t vertex_offset = command.params[2].uint32_val;
                 
                 dm_render_command_backend_draw_indexed(num_indices, index_offset, vertex_offset, renderer);
             } break;
             case DM_RENDER_COMMAND_DRAW_INSTANCED:
             {
-                DM_BYTE_POOL_POP(command.params, uint32_t, inst_offset);
-                DM_BYTE_POOL_POP(command.params, uint32_t, vertex_offset);
-                DM_BYTE_POOL_POP(command.params, uint32_t, index_offset);
-                DM_BYTE_POOL_POP(command.params, uint32_t, inst_count);
-                DM_BYTE_POOL_POP(command.params, uint32_t, vertex_count);
-                DM_BYTE_POOL_POP(command.params, uint32_t, index_count);
+                const uint32_t index_count   = command.params[0].uint32_val;
+                const uint32_t vertex_count  = command.params[1].uint32_val;
+                const uint32_t inst_count    = command.params[2].uint32_val;
+                const uint32_t index_offset  = command.params[3].uint32_val;
+                const uint32_t vertex_offset = command.params[4].uint32_val;
+                const uint32_t inst_offset   = command.params[5].uint32_val;
                 
                 dm_render_command_backend_draw_instanced(index_count, vertex_count, inst_count, index_offset, vertex_offset, inst_offset, renderer);
             } break;
@@ -1265,7 +1333,7 @@ bool dm_renderer_submit_commands(dm_context* context)
             // misc
             case DM_RENDER_COMMAND_TOGGLE_WIREFRAME:
             {
-                DM_BYTE_POOL_POP(command.params, bool, wireframe);
+                const bool wireframe = command.params[0].bool_val;
                 
                 dm_render_command_backend_toggle_wireframe(wireframe, renderer);
             } break;
@@ -1274,18 +1342,29 @@ bool dm_renderer_submit_commands(dm_context* context)
             // acceleration structure
             case DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_INSTANCE:
             {
-                DM_BYTE_POOL_POP(command.params, size_t, data_size);
-                void* data = __dm_byte_pool_pop(&command.params, data_size);
-                DM_BYTE_POOL_POP(command.params, uint32_t, instance_id);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                const uint32_t instance_id    = command.params[1].uint32_val;
+                void* data                    = command.params[2].void_val;
+                const size_t data_size        = command.params[3].size_t_val;
                 
                 if(dm_render_command_backend_update_acceleration_structure_instance(handle, instance_id, data, data_size, renderer)) continue;
                 DM_LOG_FATAL("Update acceleration structure instance failed");
                 return false;
             } break;
+            case DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_INSTANCE_RANGE:
+            {
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                const uint32_t instance_start = command.params[1].uint32_val;
+                const uint32_t instance_end   = command.params[2].uint32_val;
+                void* data                    = command.params[3].void_val;
+                
+                if(dm_render_command_backend_update_acceleration_structure_instance_range(handle, instance_start, instance_end, data, renderer)) continue;
+                DM_LOG_FATAL("Update acceleration structure instance failed");
+                return false;
+            } break;
             case DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_TLAS:
             {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
                 
                 if(dm_render_command_backend_update_acceleration_structure_tlas(handle, renderer)) continue;
                 
@@ -1296,7 +1375,7 @@ bool dm_renderer_submit_commands(dm_context* context)
             // raytacing pipeline
             case DM_RENDER_COMMAND_BIND_RAYTRACING_PIPELINE:
             {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
                 
                 if(dm_render_command_backend_bind_raytracing_pipeline(handle, renderer)) continue;
                 
@@ -1307,9 +1386,9 @@ bool dm_renderer_submit_commands(dm_context* context)
             // dispatch rays
             case DM_RENDER_COMMAND_DISPATCH_RAYS:
             {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
-                DM_BYTE_POOL_POP(command.params, uint32_t, height);
-                DM_BYTE_POOL_POP(command.params, uint32_t, width);
+                const uint32_t width          = command.params[0].uint32_val;
+                const uint32_t height         = command.params[1].uint32_val;
+                const dm_render_handle handle = command.params[2].render_handle_val;
                 
                 if(dm_render_command_backend_dispatch_rays(width, height, handle, renderer)) continue;
                 
@@ -1320,7 +1399,7 @@ bool dm_renderer_submit_commands(dm_context* context)
             // copy texture to screen
             case DM_RENDER_COMMAND_COPY_TEXTURE_TO_SCREEN:
             {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
+                const dm_render_handle handle = command.params[0].render_handle_val;
                 
                 if(dm_render_command_backend_copy_texture_to_screen(handle, renderer)) continue;
                 
@@ -1426,13 +1505,7 @@ dm_context* dm_init(dm_context_init_packet init_packet)
 
 void dm_shutdown(dm_context* context)
 {
-    for(uint32_t i=0; i<DM_MAX_RENDER_COMMANDS; i++)
-    {
-        if(!context->renderer.command_manager.commands[i].params.data) continue; 
-        
-        dm_free(&context->renderer.command_manager.commands[i].params.data);
-    }
-    
+    dm_free(&context->renderer.command_manager.commands);
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
     
@@ -1570,7 +1643,7 @@ bool dm_renderer_end_frame(dm_context* context)
         return false; 
     }
     
-    context->renderer.command_manager.command_count = 0;
+    context->renderer.command_manager.count = 0;
     
     if(!dm_renderer_backend_end_frame(context)) 
     {

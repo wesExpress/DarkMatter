@@ -462,17 +462,6 @@ typedef struct dm_threadpool_t
     void* internal_pool;
 } dm_threadpool;
 
-/**********
-STRUCTURES
-************/
-// byte pool
-// basically a growing void ptr. useful for cacheing func params
-typedef struct dm_byte_pool_t
-{
-    size_t size;
-    void* data;
-} dm_byte_pool;
-
 /*********
 RENDERING
 ***********/
@@ -944,6 +933,7 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_BIND_RAYTRACING_PIPELINE,
     
     DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_INSTANCE,
+    DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_INSTANCE_RANGE,
     DM_RENDER_COMMAND_UPDATE_ACCELERATION_STRUCTURE_TLAS,
     
     DM_RENDER_COMMAND_DISPATCH_RAYS,
@@ -954,17 +944,52 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_UNKNOWN
 } dm_render_command_type;
 
+typedef enum dm_render_command_param_type_t
+{
+    DM_RENDER_COMMAND_PARAM_TYPE_BOOL,
+    DM_RENDER_COMMAND_PARAM_TYPE_INT,
+    DM_RENDER_COMMAND_PARAM_TYPE_UINT8,
+    DM_RENDER_COMMAND_PARAM_TYPE_UINT16,
+    DM_RENDER_COMMAND_PARAM_TYPE_UINT32,
+    DM_RENDER_COMMAND_PARAM_TYPE_UINT64,
+    DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T,
+    DM_RENDER_COMMAND_PARAM_TYPE_FLOAT,
+    DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE,
+    DM_RENDER_COMMAND_PARAM_TYPE_VOID,
+    DM_RENDER_COMMAND_PARAM_TYPE_UNKNOWN
+} dm_render_command_param_type;
+
+typedef struct dm_render_command_param_t
+{
+    dm_render_command_param_type type;
+    
+    union
+    {
+        bool             bool_val;
+        int              int_val;
+        uint8_t          uint8_val;
+        uint16_t         uint16_val;
+        uint32_t         uint32_val;
+        uint64_t         uint64_val;
+        size_t           size_t_val;
+        float            float_val;
+        dm_render_handle render_handle_val;
+        void*            void_val;
+    };
+} dm_render_command_param;
+
+#define DM_RENDER_COMMAND_MAX_PARAMS
 typedef struct dm_render_command_t
 {
-    dm_render_command_type type;
-    dm_byte_pool           params;
+    dm_render_command_type  type;
+    dm_render_command_param params[10];
+    uint8_t                 param_count;
 } dm_render_command;
 
-#define DM_MAX_RENDER_COMMANDS 100
 typedef struct dm_render_command_manager_t
 {
-    dm_render_command commands[DM_MAX_RENDER_COMMANDS];
-    uint32_t          command_count;
+    dm_render_command* commands;
+    uint32_t           capacity, count;
 } dm_render_command_manager;
 
 #define DM_RENDERER_MAX_RESOURCE_COUNT 100
@@ -1283,6 +1308,7 @@ void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
 
 #ifdef DM_RAYTRACING
 void dm_render_command_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size,  dm_context* context);
+void dm_render_command_update_acceleration_structure_instance_range(dm_render_handle handle, uint32_t instance_start, uint32_t instance_end, void* data,  dm_context* context);
 void dm_render_command_update_acceleration_structure_tlas(dm_render_handle handle, dm_context* context);
 
 void dm_render_command_bind_raytracing_pipeline(dm_render_handle handle, dm_context* context);

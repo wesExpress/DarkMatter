@@ -2954,6 +2954,34 @@ bool dm_render_command_backend_update_acceleration_structure_instance(dm_render_
     return true;
 }
 
+bool dm_render_command_backend_update_acceleration_structure_instance_range(dm_render_handle handle, uint32_t instance_start, uint32_t instance_end, void* data, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+    
+    if(handle > dx12_renderer->as_count || dx12_renderer->as_count==0)
+    {
+        DM_LOG_FATAL("Trying to update invalid DirectX12 acceleration structure");
+        return false;
+    }
+    
+    const uint32_t current_frame_index = dx12_renderer->current_frame_index;
+    dm_dx12_acceleration_structure* internal_as = &dx12_renderer->accel_structs[handle];
+    
+    uint32_t instance = instance_start;
+    const uint32_t instance_count = instance_end - instance_start;
+    
+    dm_mat4* transforms = data;
+    
+    for(uint32_t i=0; i<instance_count; i++)
+    {
+        dm_memcpy(internal_as->tlas.instance_data[current_frame_index][instance].Transform, transforms + instance, sizeof(float) * 4 * 3);
+        instance++;
+    }
+    
+    return true;
+}
+
 bool dm_render_command_backend_update_acceleration_structure_tlas(dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
