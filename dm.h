@@ -789,6 +789,8 @@ typedef struct dm_tlas_desc_t
 {
     dm_mat4*  instance_transforms;
     uint32_t* instance_meshes;
+    uint8_t*  instance_masks;
+    
     uint32_t  instance_count;
     uint32_t  max_instance_count;
 } dm_tlas_desc;

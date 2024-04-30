@@ -1885,7 +1885,12 @@ bool dm_dx12_create_tlas(dm_acceleration_structure_desc as_desc, dm_dx12_acceler
     
     if(!as_desc.tlas_desc.instance_transforms)
     {
-        DM_LOG_FATAL("Need to have valid transforms to initialize acceleration structure");
+        DM_LOG_FATAL("Need to have non-NULL transforms to initialize acceleration structure");
+        return false;
+    }
+    if(!as_desc.tlas_desc.instance_masks)
+    {
+        DM_LOG_FATAL("Need to have non-NULL instance masks to initialize acceleration structure");
         return false;
     }
     
@@ -1923,7 +1928,7 @@ bool dm_dx12_create_tlas(dm_acceleration_structure_desc as_desc, dm_dx12_acceler
             ID3D12Resource* blas_buffer = internal_as->blas[blas_index].result_buffer[i];
             
             internal_as->tlas.instance_data[i][j].InstanceID   = j;
-            internal_as->tlas.instance_data[i][j].InstanceMask = 0xFF;
+            internal_as->tlas.instance_data[i][j].InstanceMask = as_desc.tlas_desc.instance_masks[j];
             
             dm_memcpy(internal_as->tlas.instance_data[i][j].Transform, as_desc.tlas_desc.instance_transforms[j], sizeof(float) * 4 * 3);
             
