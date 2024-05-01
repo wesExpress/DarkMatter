@@ -922,6 +922,7 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_UPDATE_VERTEX_BUFFER,
     DM_RENDER_COMMAND_UPDATE_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_UPDATE_TEXTURE,
+    DM_RENDER_COMMAND_CLEAR_TEXTURE,
     
     DM_RENDER_COMMAND_DRAW_ARRAYS,
     DM_RENDER_COMMAND_DRAW_INDEXED,
@@ -1301,6 +1302,7 @@ void dm_render_command_bind_texture(dm_render_handle handle, uint32_t slot, dm_c
 void dm_render_command_update_vertex_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
 void dm_render_command_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_context* context);
 void dm_render_command_update_constant_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
+void dm_render_command_clear_texture(dm_render_handle handle, dm_context* context);
 void dm_render_command_begin_renderpass(dm_render_handle handle, dm_context* conext);
 void dm_render_command_end_renderpass(dm_render_handle handle, dm_context* conext);
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_context* context);

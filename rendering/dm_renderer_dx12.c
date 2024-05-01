@@ -2883,6 +2883,21 @@ bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t 
     return true;
 }
 
+bool dm_render_command_backend_clear_texture(dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+    
+    if(handle > dx12_renderer->texture_count || dx12_renderer->texture_count==0)
+    {
+        DM_LOG_FATAL("Trying to clear invalid DirectX12 texture");
+        return false;
+    }
+    
+    DM_LOG_FATAL("Not supported");
+    return false;
+}
+
 bool dm_render_command_backend_update_constant_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;

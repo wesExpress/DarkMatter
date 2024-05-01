@@ -801,6 +801,7 @@ extern bool dm_render_command_backend_bind_constant_buffer(dm_render_handle hand
 extern bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_vertex_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_renderer* renderer);
+extern bool dm_render_command_backend_clear_texture(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_constant_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
 extern void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count, dm_renderer* renderer);
 extern void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
@@ -971,6 +972,19 @@ void dm_render_command_update_texture(dm_render_handle handle, uint32_t width, u
     command.params[4].size_t_val = data_size;
     
     command.param_count = 5;
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_clear_texture(dm_render_handle handle, dm_context* context)
+{
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_CLEAR_TEXTURE;
+    
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.param_count = 1;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
@@ -1268,6 +1282,15 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_LOG_FATAL("Update texture failed"); 
                 return false;
             } break;
+            case DM_RENDER_COMMAND_CLEAR_TEXTURE:
+            {
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                
+                if(dm_render_command_backend_clear_texture(handle, renderer)) continue;
+                
+                DM_LOG_FATAL("Clear texture failed");
+                return false;
+            };
             
             // constant buffer
             case DM_RENDER_COMMAND_UPDATE_CONSTANT_BUFFER:
