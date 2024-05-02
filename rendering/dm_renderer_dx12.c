@@ -1233,14 +1233,6 @@ bool dm_renderer_backend_create_vertex_buffer(const dm_vertex_buffer_desc desc, 
             return false;
         }
         
-        D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
-        view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
-        view_desc.Format                     = DXGI_FORMAT_UNKNOWN;
-        view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        view_desc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_NONE;
-        view_desc.Buffer.StructureByteStride = desc.stride;
-        view_desc.Buffer.NumElements         = desc.count;
-        
         if(!desc.data) continue;
         
         void* ptr = NULL;
@@ -2214,10 +2206,13 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     //    -MAX_HIT_GROUPS of root associations for hit groups
     D3D12_STATE_SUBOBJECT subobjects[4 + 1 + 1 + 1 + 3 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
     
-    WCHAR* ws_raygen = dm_alloc(sizeof(WCHAR) * strlen(desc.raygen));
-    WCHAR* ws_hit[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
-    WCHAR* ws_exports[1 + 2 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS * 3] = { 0 };
+    wchar_t ws_raygen[512] = { 0 };
+    wchar_t ws_hit[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS][512] = { 0 };
+    wchar_t ws_exports[1 + 2 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS * 3][512] = { 0 };
     
+    LPCWSTR l_raygen  = 0;
+    LPCWSTR l_hits[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
+    LPCWSTR l_exports[1 + 2 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
     uint32_t sub_obj_index = 0;
     
     // library
@@ -2236,7 +2231,8 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION raygen_assoc = { 0 };
     raygen_assoc.NumExports = 1;
     swprintf(ws_raygen, 100, L"%hs", desc.raygen);
-    raygen_assoc.pExports = &ws_raygen;
+    l_raygen = ws_raygen;
+    raygen_assoc.pExports = &l_raygen;
     raygen_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
     
     subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
@@ -2256,9 +2252,9 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         subobjects[sub_obj_index++].pDesc = &internal_pipe.sbt.hit_root_signatures[i];
         
         hit_assoc[i].NumExports = 1;
-        ws_hit[i] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].name));
         swprintf(ws_hit[i], 100, L"%s", exports[i][0]);
-        hit_assoc[i].pExports = &ws_hit[i];
+        l_hits[i] = ws_hit[i];
+        hit_assoc[i].pExports = &l_hits[i];
         hit_assoc[i].pSubobjectToAssociate = &subobjects[sub_obj_index-1];
         
         subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
@@ -2279,12 +2275,10 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     // config assoc
     uint32_t export_index = 0;
     
-    ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.raygen));
     swprintf(ws_exports[export_index++], 100, L"%hs", desc.raygen);
     
     for(uint32_t i=0; i<desc.miss_count; i++)
     {
-        ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.miss[i]));
         swprintf(ws_exports[export_index++], 100, L"%hs", desc.miss[i]);
     }
     
@@ -2292,26 +2286,27 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     {
         if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_ANY_HIT)
         {
-            ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].any_hit));
             swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].any_hit);
         }
         
         if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_CLOSEST_HIT)
         {
-            ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].closest_hit));
             swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].closest_hit);
         }
         
         if(desc.hit_groups[i].flags & DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION)
         {
-            ws_exports[export_index] = dm_alloc(sizeof(WCHAR) * strlen(desc.hit_groups[i].intersection));
             swprintf(ws_exports[export_index++], 100, L"%hs", desc.hit_groups[i].intersection);
         }
     }
     
     D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION export_assoc = { 0 };
     export_assoc.NumExports            = export_index;
-    export_assoc.pExports              = ws_exports;
+    for(uint32_t i=0; i<export_index; i++)
+    {
+        l_exports[i] = ws_exports[i];
+    }
+    export_assoc.pExports              = &(l_exports[0]);
     export_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
     
     subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
@@ -2341,18 +2336,18 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         return false;
     }
     
-    dm_free(&ws_raygen);
+    //dm_free(&ws_raygen);
     
     for(uint32_t i=0; i<1 + 2 * 3 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS; i++)
     {
-        if(ws_exports[i]) dm_free(&ws_exports[i]);
+        //if(ws_exports[i]) //dm_free(&ws_exports[i]);
     }
     
     for(uint32_t i=0; i<desc.hit_group_count; i++)
     {
         if(!ws_hit[i]) continue;
         
-        dm_free(&ws_hit[i]);
+        //dm_free(&ws_hit[i]);
     }
     
     // shader table
@@ -3135,7 +3130,7 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
     
 #if 0
     D3D12_GPU_VIRTUAL_ADDRESS addresses[320][3] = { 0 };
-    const uint32_t shader_count = 1 + internal_pipe->sbt.miss_count + internal_pipe->sbt.hit_group_count * 100;
+    const uint32_t shader_count = 1 + internal_pipe->sbt.miss_count + internal_pipe->sbt.hit_group_count * 110;
     for(uint32_t i=0; i<shader_count; i++)
     {
         uint8_t* ptr = internal_pipe->sbt.mapped_address[current_frame_index] + internal_pipe->sbt.record_size * i;
