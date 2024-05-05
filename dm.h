@@ -617,6 +617,25 @@ typedef enum dm_texture_mode_t
     DM_TEXTURE_MODE_UNKNOWN
 } dm_texture_mode;
 
+typedef enum dm_texture_data_type_t
+{
+    DM_TEXTURE_DATA_TYPE_FLOAT_8,
+    DM_TEXTURE_DATA_TYPE_INT_8,
+    DM_TEXTURE_DATA_TYPE_UINT_8,
+    DM_TEXTURE_DATA_TYPE_UNORM_8,
+    
+    DM_TEXTURE_DATA_TYPE_FLOAT_16,
+    DM_TEXTURE_DATA_TYPE_INT_16,
+    DM_TEXTURE_DATA_TYPE_UINT_16,
+    DM_TEXTURE_DATA_TYPE_UNORM_16,
+    
+    DM_TEXTURE_DATA_TYPE_FLOAT_32,
+    DM_TEXTURE_DATA_TYPE_INT_32,
+    DM_TEXTURE_DATA_TYPE_UINT_32,
+    
+    DM_TEXTURE_DATA_TYPE_UNKNOWN
+} dm_texture_data_type;
+
 typedef enum dm_uniform_stage_t
 {
     DM_UNIFORM_STAGE_VERTEX,
@@ -661,6 +680,16 @@ typedef struct dm_index_buffer_desc_t
     size_t size, count;
     const void* data;
 } dm_index_buffer_desc;
+
+typedef struct dm_texture_desc_t
+{
+    dm_texture_data_type data_type;
+    
+    uint32_t data_count;
+    uint32_t width, height;
+    
+    void* data;
+} dm_texture_desc;
 
 typedef struct dm_vertex_attrib_desc_t
 {
@@ -1268,7 +1297,7 @@ void dm_platform_sleep(uint64_t ms, dm_context* context);
 bool dm_renderer_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_index_buffer(const dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_constant_buffer(const void* data, size_t data_size, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_context* context);
 

@@ -63,6 +63,7 @@ typedef struct dm_dx12_resource_t
 typedef struct dm_dx12_vertex_buffer_t
 {
     ID3D12Resource* buffer[DM_DX12_NUM_FRAMES];
+    void*           mapped_addresses[DM_DX12_NUM_FRAMES];
     size_t          stride, count;
 } dm_dx12_vertex_buffer;
 
@@ -1233,11 +1234,7 @@ bool dm_renderer_backend_create_vertex_buffer(const dm_vertex_buffer_desc desc, 
             return false;
         }
         
-        if(!desc.data) continue;
-        
-        void* ptr = NULL;
-        
-        ID3D12Resource_Map(internal_buffer.buffer[i], 0, NULL, &ptr);
+        ID3D12Resource_Map(internal_buffer.buffer[i], 0, NULL, &internal_buffer.mapped_addresses[i]);
         if(!dm_platform_win32_decode_hresult(hr))
         {
             DM_LOG_FATAL("ID3D12Resource_Map failed");
@@ -1245,8 +1242,9 @@ bool dm_renderer_backend_create_vertex_buffer(const dm_vertex_buffer_desc desc, 
             return false;
         }
         
-        dm_memcpy(ptr, desc.data, desc.size);
-        ID3D12Resource_Unmap(internal_buffer.buffer[i], 0, NULL);
+        if(!desc.data) continue;
+        
+        dm_memcpy(internal_buffer.mapped_addresses[i], desc.data, desc.size);
         
         dm_dx12_flush(dx12_renderer);
     }
@@ -1314,6 +1312,7 @@ void dm_dx12_renderer_destroy_vertex_buffer(dm_dx12_vertex_buffer* buffer)
 {
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
+        ID3D12Resource_Unmap(buffer->buffer[i], 0, NULL);
         ID3D12Resource_Release(buffer->buffer[i]);
     }
 }
@@ -1617,7 +1616,60 @@ bool dm_renderer_backend_create_renderpass(dm_renderpass_desc desc, dm_render_ha
     return true;
 }
 
-bool dm_renderer_backend_create_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle* handle, dm_renderer* renderer)
+DM_INLINE
+DXGI_FORMAT dm_texture_data_type_to_dxgi_format(dm_texture_desc desc)
+{
+    switch(desc.data_count)
+    {
+        case 2:
+        switch(desc.data_type)
+        {
+            case DM_TEXTURE_DATA_TYPE_INT_8:    return DXGI_FORMAT_R8G8_SINT;
+            case DM_TEXTURE_DATA_TYPE_UINT_8:   return DXGI_FORMAT_R8G8_UINT;
+            case DM_TEXTURE_DATA_TYPE_UNORM_8:  return DXGI_FORMAT_R8G8_UNORM;
+            
+            case DM_TEXTURE_DATA_TYPE_FLOAT_16: return DXGI_FORMAT_R16G16_FLOAT;
+            case DM_TEXTURE_DATA_TYPE_INT_16:   return DXGI_FORMAT_R16G16_SINT;
+            case DM_TEXTURE_DATA_TYPE_UINT_16:  return DXGI_FORMAT_R16G16_UINT;
+            
+            case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32G32_FLOAT;
+            case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32G32_SINT;
+            case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32G32_UINT;
+        }
+        break;
+        
+        case 3:
+        switch(desc.data_type)
+        {
+            case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32G32B32_FLOAT;
+            case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32G32B32_SINT;
+            case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32G32B32_UINT;
+        }
+        break;
+        
+        case 4:
+        switch(desc.data_type)
+        {
+            case DM_TEXTURE_DATA_TYPE_INT_8:    return DXGI_FORMAT_R8G8B8A8_SINT;
+            case DM_TEXTURE_DATA_TYPE_UINT_8:   return DXGI_FORMAT_R8G8B8A8_UINT;
+            case DM_TEXTURE_DATA_TYPE_UNORM_8:  return DXGI_FORMAT_R8G8B8A8_UNORM;
+            
+            case DM_TEXTURE_DATA_TYPE_FLOAT_16: return DXGI_FORMAT_R16G16B16A16_FLOAT;
+            case DM_TEXTURE_DATA_TYPE_INT_16:   return DXGI_FORMAT_R16G16B16A16_SINT;
+            case DM_TEXTURE_DATA_TYPE_UINT_16:  return DXGI_FORMAT_R16G16B16A16_UINT;
+            
+            case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+            case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32G32B32A32_SINT;
+            case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32G32B32A32_UINT;
+        }
+        break;
+    }
+    
+    DM_LOG_FATAL("Unknown or invalid texture data type");
+    return DXGI_FORMAT_UNKNOWN;
+}
+
+bool dm_renderer_backend_create_texture(dm_texture_desc texture_desc, dm_render_handle* handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
@@ -1627,10 +1679,10 @@ bool dm_renderer_backend_create_texture(const void* data, uint32_t width, uint32
     D3D12_RESOURCE_DESC desc = { 0 };
     desc.DepthOrArraySize = 1;
     desc.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
+    desc.Format           = dm_texture_data_type_to_dxgi_format(texture_desc);
     desc.Flags            = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    desc.Width            = width;
-    desc.Height           = height;
+    desc.Width            = texture_desc.width;
+    desc.Height           = texture_desc.height;
     desc.MipLevels        = 1;
     desc.SampleDesc.Count = 1;
     
@@ -2224,19 +2276,22 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     subobjects[sub_obj_index++].pDesc = &lib;
     
     // raygen root sig
-    subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
-    subobjects[sub_obj_index++].pDesc = &internal_pipe.sbt.raygen_root_signature;
-    
-    // raygen assoc
-    D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION raygen_assoc = { 0 };
-    raygen_assoc.NumExports = 1;
-    swprintf(ws_raygen, 100, L"%hs", desc.raygen);
-    l_raygen = ws_raygen;
-    raygen_assoc.pExports = &l_raygen;
-    raygen_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
-    
-    subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
-    subobjects[sub_obj_index++].pDesc = &raygen_assoc;
+    if(desc.raygen_params.count>0)
+    {
+        subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
+        subobjects[sub_obj_index++].pDesc = &internal_pipe.sbt.raygen_root_signature;
+        
+        // raygen assoc
+        D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION raygen_assoc = { 0 };
+        raygen_assoc.NumExports = 1;
+        swprintf(ws_raygen, 100, L"%hs", desc.raygen);
+        l_raygen = ws_raygen;
+        raygen_assoc.pExports = &l_raygen;
+        raygen_assoc.pSubobjectToAssociate = &subobjects[sub_obj_index-1];
+        
+        subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_SUBOBJECT_TO_EXPORTS_ASSOCIATION;
+        subobjects[sub_obj_index++].pDesc = &raygen_assoc;
+    }
     
     // hit groups
     D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION hit_assoc[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS] = { 0 };
@@ -2336,19 +2391,6 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         return false;
     }
     
-    //dm_free(&ws_raygen);
-    
-    for(uint32_t i=0; i<1 + 2 * 3 * DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS; i++)
-    {
-        //if(ws_exports[i]) //dm_free(&ws_exports[i]);
-    }
-    
-    for(uint32_t i=0; i<desc.hit_group_count; i++)
-    {
-        if(!ws_hit[i]) continue;
-        
-        //dm_free(&ws_hit[i]);
-    }
     
     // shader table
     internal_pipe.sbt.max_instance_count = desc.max_instance_count;
@@ -2852,23 +2894,16 @@ bool dm_render_command_backend_update_vertex_buffer(dm_render_handle handle, voi
     }
     
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
+    
     dm_dx12_vertex_buffer* internal_buffer = &dx12_renderer->vertex_buffers[handle];
     
-    void* pData = NULL;
-    
-    hr = ID3D12Resource_Map(internal_buffer->buffer[current_frame_index], 0, NULL, &pData);
-    if(!dm_platform_win32_decode_hresult(hr))
+    if(!internal_buffer->mapped_addresses[current_frame_index])
     {
-        DM_LOG_FATAL("ID3D12Resource_Map failed");
-        DM_LOG_FATAL("Could not update DirectX12 vertex buffer");
+        DM_LOG_FATAL("DirectX12 vertex buffer has invalid mapped address");
         return false;
     }
     
-    dm_memcpy(pData, data, data_size);
-    
-    ID3D12Resource_Unmap(internal_buffer->buffer[current_frame_index], 0, NULL);
-    
-    pData = NULL;
+    dm_memcpy(internal_buffer->mapped_addresses[current_frame_index], data, data_size);
     
     return true;
 }
