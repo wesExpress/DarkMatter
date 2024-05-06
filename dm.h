@@ -644,14 +644,36 @@ typedef enum dm_uniform_stage_t
     DM_UNIFORM_STAGE_UNKNOWN
 } dm_uniform_stage;
 
-typedef uint32_t         dm_render_handle;
+/*************
+RENDER HANDLE
+***************/
+// we have 7 valid graphics resource types, so can use 4 bits to determine
+// which resource we are dealing with. First type can be used as invalid
+// so each handle is initialized to invalid
+typedef enum dm_render_resource_type_t
+{
+    DM_RENDER_RESOURCE_TYPE_INVALID,
+    DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER,
+    DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER,
+    DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER,
+    DM_RENDER_RESOURCE_TYPE_TEXTURE,
+    DM_RENDER_RESOURCE_TYPE_PIPELINE,
+    DM_RENDER_RESOURCE_TYPE_RT_ACCELERATION_STRUCTURE,
+    DM_RENDER_RESOURCE_TYPE_RT_PIPELINE
+} dm_render_resource_type;
+
+// use 16 bits for the handle, means first 4 are the resource type
+// next 12 are the actual resource index
+// means we have 4095 max possible resources for each type
+typedef uint16_t         dm_render_handle;
 typedef dm_render_handle dm_compute_handle;
 
-#define DM_RENDER_HANDLE_INVALID UINT_MAX
-#define DM_BUFFER_INVALID        DM_RENDER_HANDLE_INVALID
-#define DM_TEXTURE_INVALID       DM_RENDER_HANDLE_INVALID
-#define DM_SHADER_INVALID        DM_RENDER_HANDLE_INVALID
-#define DM_PIPELINE_INVALID      DM_RENDER_HANDLE_INVALID
+#define DM_RENDER_HANDLE_NEW_MAX 0xFFF
+
+#define DM_RENDER_HANDLE_SET_TYPE(HANDLE, TYPE)   HANDLE = ((HANDLE & 0xFFF0) | (TYPE & 0x000F))
+#define DM_RENDER_HANDLE_SET_INDEX(HANDLE, INDEX) HANDLE = ((HANDLE & 0x000F) | (INDEX << 4))
+#define DM_RENDER_HANDLE_GET_TYPE(HANDLE)         (HANDLE & 0x000F)
+#define DM_RENDER_HANDLE_GET_INDEX(HANDLE)        (HANDLE >> 4)
 
 typedef enum dm_vertex_buffer_type_t
 {
@@ -851,22 +873,11 @@ typedef enum dm_raytracing_pipeline_hit_group_flag_t
     DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_UNKNOWN       = 1 << 3
 } dm_raytracing_pipeline_hit_group_flag;
 
-typedef enum dm_raytracing_pipeline_shader_param_type_t
-{
-    DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_BUFFER,
-    DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_INDEX_BUFFER,
-    DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_CONSTANT_BUFFER,
-    DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_ACCELERATION_STRUCTURE,
-    DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_TEXTURE,
-    DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_UNKNOWN
-} dm_raytracing_pipeline_shader_param_type;
-
-#define DM_RAYTRACING_PIPELINE_SHADER_MAX_PARAMS 10
 typedef struct dm_rt_pipeline_shader_params_t
 {
-    dm_raytracing_pipeline_shader_param_type types[DM_RAYTRACING_PIPELINE_SHADER_MAX_PARAMS];
-    uint32_t                                 registers[DM_RAYTRACING_PIPELINE_SHADER_MAX_PARAMS];
-    uint32_t                                 count;
+    dm_render_handle* handles;
+    uint8_t*         registers;
+    uint32_t          count;
 } dm_rt_pipeline_shader_params;
 
 typedef struct dm_raytracing_pipeline_hit_group_desc_t
@@ -896,7 +907,7 @@ typedef struct dm_raytracing_pipeline_desc_t
     dm_raytracing_pipeline_hit_group_desc hit_groups[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
     uint32_t                              hit_group_count;
     
-    uint32_t max_instance_count;
+    uint32_t max_instance_count, instance_count;
     
     void*  shader_data;
     size_t shader_data_size;
@@ -1316,10 +1327,6 @@ void dm_renderer_raytracing_pipeline_hit_group_add_any_hit(const char* shader, u
 void dm_renderer_raytracing_pipeline_hit_group_add_closest_hit(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
 void dm_renderer_raytracing_pipeline_hit_group_add_intersection(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
 
-bool dm_renderer_rt_pipe_global_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context);
-bool dm_renderer_rt_pipe_raygen_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context);
-bool dm_renderer_rt_pipe_miss_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t miss_index, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context);
-bool dm_renderer_rt_pipe_hit_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t hit_group, uint32_t slot, uint32_t instance, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context);
 
 #endif
 

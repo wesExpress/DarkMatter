@@ -612,15 +612,12 @@ extern bool dm_renderer_backend_resize_texutre(const void* data, uint32_t width,
 extern bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 
-extern bool dm_renderer_backend_rt_pipe_global_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_rt_pipe_raygen_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_rt_pipe_miss_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t miss_index, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_rt_pipe_hit_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t hit_group, uint32_t slot, uint32_t instance, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer);
-
 #endif
 
 bool dm_renderer_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context)
 {
+    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER);
+    
     if(dm_renderer_backend_create_vertex_buffer(desc, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Creating vertex buffer failed");
@@ -629,6 +626,8 @@ bool dm_renderer_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_rende
 
 bool dm_renderer_create_index_buffer(const dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context)
 {
+    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER);
+    
     if(dm_renderer_backend_create_index_buffer(desc, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Creating index buffer failed");
@@ -637,6 +636,8 @@ bool dm_renderer_create_index_buffer(const dm_index_buffer_desc desc, dm_render_
 
 bool dm_renderer_create_constant_buffer(const void* data, size_t data_size, dm_render_handle* handle, dm_context* context)
 {
+    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER);
+    
     if(dm_renderer_backend_create_constant_buffer(data, data_size, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Creating constant buffer failed");
@@ -645,6 +646,8 @@ bool dm_renderer_create_constant_buffer(const void* data, size_t data_size, dm_r
 
 bool dm_renderer_create_pipeline(const dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context)
 {
+    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_PIPELINE);
+    
     if(dm_renderer_backend_create_pipeline(desc, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Could not create pipeline");
@@ -661,6 +664,8 @@ bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* ha
 
 bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_context* context)
 {
+    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_TEXTURE);
+    
     if(dm_renderer_backend_create_texture(desc, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Could not create texture");
@@ -678,6 +683,8 @@ bool dm_renderer_resize_texutre(const void* data, uint32_t width, uint32_t heigh
 #ifdef DM_RAYTRACING
 bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_render_handle* handle, dm_context* context)
 {
+    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_RT_ACCELERATION_STRUCTURE);
+    
     if(dm_renderer_backend_create_acceleration_structure(desc, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Creating acceleration structure failed");
@@ -687,6 +694,8 @@ bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc de
 // rt pipeline
 bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_render_handle* handle, dm_context* context)
 {
+    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_RT_PIPELINE);
+    
     if(dm_renderer_backend_create_raytracing_pipeline(desc, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Creating raytracing pipeline failed");
@@ -742,51 +751,6 @@ void dm_renderer_raytracing_pipeline_hit_group_add_intersection(const char* shad
     desc->hit_groups[group_index].flags |= DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION;
 }
 
-// shader params
-void dm_renderer_raytracing_pipeline_global_add_param(dm_raytracing_pipeline_shader_param_type type, uint32_t shader_register, dm_raytracing_pipeline_desc* desc)
-{
-    desc->global_params.types[desc->global_params.count] = type;
-    desc->global_params.registers[desc->global_params.count] = shader_register;
-    desc->global_params.count++;
-}
-
-void dm_renderer_raytracing_pipeline_raygen_add_param(dm_raytracing_pipeline_shader_param_type type, uint32_t shader_register, dm_raytracing_pipeline_desc* desc)
-{
-    desc->raygen_params.types[desc->raygen_params.count] = type;
-    desc->raygen_params.registers[desc->raygen_params.count] = shader_register;
-    desc->raygen_params.count++;
-}
-
-void dm_renderer_raytracing_pipeline_hit_group_add_param(dm_raytracing_pipeline_shader_param_type type, uint32_t shader_register, uint32_t group_index, dm_raytracing_pipeline_desc* desc)
-{
-    const uint32_t param_index = desc->hit_groups[group_index].params.count;
-    
-    desc->hit_groups[group_index].params.types[param_index] = type;
-    desc->hit_groups[group_index].params.registers[param_index] = shader_register;
-    desc->hit_groups[group_index].params.count++;
-}
-
-// inserting resources into shader binding table
-bool dm_renderer_rt_pipe_global_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context)
-{
-    return dm_renderer_backend_rt_pipe_global_insert_resource(type, slot, handle, pipe_handle, &context->renderer);
-}
-
-bool dm_renderer_rt_pipe_raygen_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context)
-{
-    return dm_renderer_backend_rt_pipe_raygen_insert_resource(type, slot, handle, pipe_handle, &context->renderer);
-}
-
-bool dm_renderer_rt_pipe_miss_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t miss_index, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context)
-{
-    return dm_renderer_backend_rt_pipe_miss_insert_resource(type, miss_index, slot, handle, pipe_handle, &context->renderer);
-}
-
-bool dm_renderer_rt_pipe_hit_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t hit_group, uint32_t slot, uint32_t instance, dm_render_handle handle, dm_render_handle pipe_handle, dm_context* context)
-{
-    return dm_renderer_backend_rt_pipe_hit_insert_resource(type, hit_group, slot, instance, handle, pipe_handle, &context->renderer);
-}
-
 #endif
 
 /***************
@@ -813,10 +777,6 @@ extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_render
 extern bool dm_render_command_backend_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_acceleration_structure_instance_range(dm_render_handle handle, uint32_t instance_start, uint32_t instance_end, void* data, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_acceleration_structure_tlas(dm_render_handle handle, dm_renderer* renderer);
-
-extern bool dm_render_command_backend_add_global_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle vb_handle, dm_render_handle pipe_handle,  dm_renderer* renderer);
-extern bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle vb_handle, dm_render_handle pipe_handle,  dm_renderer* renderer);
-extern bool dm_render_command_backend_add_hit_group_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, uint32_t hit_group, uint32_t instance, dm_render_handle vb_handle, dm_render_handle pipe_handle,  dm_renderer* renderer);
 
 extern bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_raytracing_pipeline_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer);

@@ -126,9 +126,7 @@ typedef struct dm_dx12_rt_shader_binding_table_t
     uint32_t record_count, miss_count, hit_group_count, max_instance_count;
     size_t   record_size;
     
-    size_t global_heap_offset, raygen_heap_offset;
-    size_t miss_heap_offset[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
-    size_t hit_heap_offset[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
+    size_t global_heap_offset;
 } dm_dx12_rt_shader_binding_table;
 
 typedef struct dm_dx12_raytracing_pipeline_t
@@ -1251,7 +1249,7 @@ bool dm_renderer_backend_create_vertex_buffer(const dm_vertex_buffer_desc desc, 
     
     //
     dm_memcpy(dx12_renderer->vertex_buffers + dx12_renderer->vb_count, &internal_buffer, sizeof(internal_buffer));
-    *handle = dx12_renderer->vb_count++;
+    DM_RENDER_HANDLE_SET_INDEX(*handle, dx12_renderer->vb_count++);
     
     return true;
 }
@@ -1303,7 +1301,7 @@ bool dm_renderer_backend_create_index_buffer(const dm_index_buffer_desc desc, dm
     
     //
     dm_memcpy(dx12_renderer->index_buffers + dx12_renderer->ib_count, &internal_buffer, sizeof(internal_buffer));
-    *handle = dx12_renderer->ib_count++;
+    DM_RENDER_HANDLE_SET_INDEX(*handle, dx12_renderer->ib_count++);
     
     return true;
 }
@@ -1359,7 +1357,7 @@ bool dm_renderer_backend_create_constant_buffer(const void* data, size_t data_si
     
     //
     dm_memcpy(dx12_renderer->constant_buffers + dx12_renderer->cb_count, &internal_buffer, sizeof(internal_buffer));
-    *handle = dx12_renderer->cb_count++;
+    DM_RENDER_HANDLE_SET_INDEX(*handle, dx12_renderer->cb_count++);
     
     return true;
 }
@@ -1598,7 +1596,7 @@ bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_
     
     //
     dm_memcpy(dx12_renderer->pipes + dx12_renderer->pipe_count, &internal_pipe, sizeof(internal_pipe));
-    *handle = dx12_renderer->pipe_count++;
+    DM_RENDER_HANDLE_SET_INDEX(*handle, dx12_renderer->pipe_count++);
     
     dm_free(&input_desc);
     
@@ -1698,7 +1696,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc texture_desc, dm_render_
     
     //
     dm_memcpy(dx12_renderer->textures + dx12_renderer->texture_count, &internal_texture, sizeof(internal_texture));
-    *handle = dx12_renderer->texture_count++;
+    DM_RENDER_HANDLE_SET_INDEX(*handle, dx12_renderer->texture_count++);
     
     return true;
 }
@@ -1847,7 +1845,7 @@ bool dm_dx12_create_blas(dm_blas_desc blas_desc, dm_dx12_acceleration_structure*
     ID3D12Resource* vertex_buffer = NULL;
     ID3D12Resource* index_buffer  = NULL;
     
-    if(blas_desc.vertex_buffer==DM_RENDER_HANDLE_INVALID)
+    if(DM_RENDER_HANDLE_GET_TYPE(blas_desc.vertex_buffer)==DM_RENDER_RESOURCE_TYPE_INVALID)
     {
         DM_LOG_FATAL("Trying to create DirectX12 blas with invalid vertex buffer");
         return false;
@@ -1861,8 +1859,8 @@ bool dm_dx12_create_blas(dm_blas_desc blas_desc, dm_dx12_acceleration_structure*
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
         // blas geometry filling in
-        vertex_buffer = dx12_renderer->vertex_buffers[blas_desc.vertex_buffer].buffer[i];
-        index_buffer  = blas_desc.index_buffer!=DM_RENDER_HANDLE_INVALID ? dx12_renderer->index_buffers[blas_desc.index_buffer].buffer : NULL;
+        vertex_buffer = dx12_renderer->vertex_buffers[DM_RENDER_HANDLE_GET_INDEX(blas_desc.vertex_buffer)].buffer[i];
+        index_buffer  = DM_RENDER_HANDLE_GET_TYPE(blas_desc.index_buffer)!=DM_RENDER_RESOURCE_TYPE_INVALID ? dx12_renderer->index_buffers[DM_RENDER_HANDLE_GET_INDEX(blas_desc.index_buffer)].buffer : NULL;
         
         D3D12_RAYTRACING_GEOMETRY_DESC geom_desc = { 0 };
         geom_desc.Type  = dm_blas_geom_type_to_dx12_geom_type(blas_desc.geom_type);
@@ -2012,7 +2010,7 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
     
     //
     dm_memcpy(dx12_renderer->accel_structs + dx12_renderer->as_count, &internal_as, sizeof(internal_as));
-    *handle = dx12_renderer->as_count++;
+    DM_RENDER_HANDLE_SET_INDEX(*handle, dx12_renderer->as_count++);
     
     return true;
 }
@@ -2086,19 +2084,19 @@ bool dm_dx12_raytracing_pipeline_sbt_make_root_signature(uint32_t shader_stage, 
     
     for(uint32_t i=0; i<params.count; i++)
     {
-        switch(params.types[i])
+        switch(DM_RENDER_HANDLE_GET_TYPE(params.handles[i]))
         {
-            case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_TEXTURE:
+            case DM_RENDER_RESOURCE_TYPE_TEXTURE:
             dm_dx12_rt_sbt_add_uav_to_range(params.registers[i], ranges, &uav_index, &range_count);
             break;
             
-            case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_BUFFER:
-            case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_INDEX_BUFFER:
-            case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_ACCELERATION_STRUCTURE:
+            case DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER:
+            case DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER:
+            case DM_RENDER_RESOURCE_TYPE_RT_ACCELERATION_STRUCTURE:
             dm_dx12_rt_sbt_add_srv_to_range(params.registers[i], ranges, &srv_index, &range_count);
             break;
             
-            case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_CONSTANT_BUFFER:
+            case DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER:
             dm_dx12_rt_sbt_add_cbv_to_range(params.registers[i], ranges, &cbv_index, &range_count);
             break;
             
@@ -2167,6 +2165,108 @@ bool dm_dx12_raytracing_pipeline_sbt_add_entry(const char* name, uint8_t** data,
     *data += offset;
     
     id = NULL;
+    
+    return true;
+}
+
+DM_INLINE
+bool dm_dx12_rt_sbt_add_resource_view(dm_render_handle handle, bool is_global, size_t param_offset, dm_dx12_rt_shader_binding_table* sbt, dm_dx12_renderer* dx12_renderer)
+{
+    dm_render_resource_type type  = DM_RENDER_HANDLE_GET_TYPE(handle);
+    uint16_t                index = DM_RENDER_HANDLE_GET_INDEX(handle);
+    
+    ID3D12DescriptorHeap* heap              = NULL;
+    D3D12_CPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
+    D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle  = { 0 };
+    
+    for(uint8_t i=0; i<DM_DX12_NUM_FRAMES; i++)
+    {
+        heap = dx12_renderer->resource_descriptor_heap[i];
+        ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &heap_handle);
+        heap_handle.ptr += dx12_renderer->descriptor_heap_offset;
+        
+        switch(type)
+        {
+            case DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER:
+            {
+                dm_dx12_vertex_buffer buffer = dx12_renderer->vertex_buffers[index];
+                
+                D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
+                
+                view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
+                view_desc.Format                     = DXGI_FORMAT_UNKNOWN;
+                view_desc.Buffer.NumElements         = buffer.count;
+                view_desc.Buffer.StructureByteStride = buffer.stride;
+                view_desc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_NONE;
+                
+                ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, buffer.buffer[i], &view_desc, heap_handle);
+            } break;
+            
+            case DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER:
+            {
+                dm_dx12_index_buffer buffer = dx12_renderer->index_buffers[index];
+                
+                D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
+                view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
+                view_desc.Format                     = DXGI_FORMAT_UNKNOWN;
+                view_desc.Buffer.NumElements         = buffer.count;
+                view_desc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_NONE;
+                view_desc.Buffer.StructureByteStride = sizeof(uint32_t);
+                
+                ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, buffer.buffer, &view_desc, heap_handle);
+            } break;
+            
+            case DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER:
+            {
+                dm_dx12_constant_buffer buffer= dx12_renderer->constant_buffers[index];
+                
+                D3D12_CONSTANT_BUFFER_VIEW_DESC view_desc = { 0 };
+                view_desc.SizeInBytes    = buffer.size;
+                view_desc.BufferLocation = ID3D12Resource_GetGPUVirtualAddress(buffer.buffer[i]);
+                
+                ID3D12Device5_CreateConstantBufferView(dx12_renderer->device, &view_desc, heap_handle);
+            } break;
+            
+            case DM_RENDER_RESOURCE_TYPE_TEXTURE:
+            {
+                dm_dx12_texture texture = dx12_renderer->textures[index];
+                
+                D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
+                view_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+                
+                ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, texture.texture[i], NULL, &view_desc, heap_handle);
+            } break;
+            
+            case DM_RENDER_RESOURCE_TYPE_RT_ACCELERATION_STRUCTURE:
+            {
+                dm_dx12_acceleration_structure as = dx12_renderer->accel_structs[index];
+                
+                D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
+                view_desc.Format                  = DXGI_FORMAT_UNKNOWN;
+                view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                view_desc.ViewDimension           = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+                view_desc.RaytracingAccelerationStructure.Location = ID3D12Resource_GetGPUVirtualAddress(as.tlas.result_buffer[i]);
+                
+                ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, NULL, &view_desc, heap_handle);
+            } break;
+            
+            default:
+            DM_LOG_FATAL("Invalid resource");
+            return false;
+        }
+        
+        // global params are not in the shader binding table
+        if(is_global) continue;
+        
+        ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(heap, &gpu_handle);
+        gpu_handle.ptr += dx12_renderer->descriptor_heap_offset;
+        
+        *(uint64_t*)(sbt->mapped_address[i] + param_offset) = gpu_handle.ptr;
+    }
+    
+    dx12_renderer->descriptor_heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
     
     return true;
 }
@@ -2392,7 +2492,7 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     }
     
     
-    // shader table
+    // shader binding table
     internal_pipe.sbt.max_instance_count = desc.max_instance_count;
     internal_pipe.sbt.miss_count         = desc.miss_count;
     internal_pipe.sbt.hit_group_count    = desc.hit_group_count;
@@ -2404,15 +2504,23 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     max_param_count = desc.global_params.count > max_param_count ? desc.global_params.count : max_param_count;
     max_param_count = desc.raygen_params.count > max_param_count ? desc.raygen_params.count : max_param_count;
     
+    for(uint32_t i=0; i<desc.miss_count; i++)
+    {
+        max_param_count = desc.miss_params[i].count > max_param_count ? desc.miss_params[i].count : max_param_count;
+    }
+    
     for(uint32_t i=0; i<desc.hit_group_count; i++)
     {
         if(desc.hit_groups[i].params.count > max_param_count) max_param_count = desc.hit_groups[i].params.count;
     }
     
-    record_size += sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * max_param_count;
+    // max number of params per record
+    internal_pipe.sbt.record_count = max_param_count;
+    
+    // get size in bytes of parameters and align
+    record_size += sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * internal_pipe.sbt.record_count;
     
     static const align = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
-    //internal_pipe.shader_table_entry_size = align;
     size_t remainder = record_size % align;
     internal_pipe.sbt.record_size = remainder ? record_size + (align - remainder) : record_size;
     
@@ -2443,10 +2551,18 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         ID3D12StateObjectProperties* props;
         ID3D12StateObject_QueryInterface(internal_pipe.state_object, &IID_ID3D12StateObjectProperties, &props);
         
+#ifdef DM_DEBUG
         uint8_t* ref  = NULL;
         uint8_t* data = internal_pipe.sbt.mapped_address[i];
         
         ref = data;
+#endif
+        
+        ID3D12DescriptorHeap* heap              = dx12_renderer->resource_descriptor_heap[i];
+        D3D12_CPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
+        ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &heap_handle);
+        heap_handle.ptr += dx12_renderer->descriptor_heap_offset;
+        
         
         // raygen shader
         if(!dm_dx12_raytracing_pipeline_sbt_add_entry(desc.raygen, &data, internal_pipe.sbt.record_size, props)) return false;
@@ -2467,267 +2583,69 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         }
         
         // sanity checks the above algorithms worked
+#ifdef DM_DEBUG
         assert(*data % internal_pipe.sbt.record_size == 0);
         assert(data - ref == sbt_desc.Width);
         
         data = NULL;
         ref  = NULL;
+#endif
         
         ID3D12StateObjectProperties_Release(props);
     }
     
+    // add in resources to sbt
+    {
+        // global
+        size_t sbt_offset = 0;
+        for(uint16_t i=0; i<desc.global_params.count; i++)
+        {
+            if(!dm_dx12_rt_sbt_add_resource_view(desc.global_params.handles[i], true, sbt_offset, &internal_pipe.sbt, dx12_renderer)) return false;
+        }
+        
+        // raygen
+        sbt_offset = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+        for(uint16_t i=0; i<desc.raygen_params.count; i++)
+        {
+            if(!dm_dx12_rt_sbt_add_resource_view(desc.raygen_params.handles[i], false, sbt_offset, &internal_pipe.sbt, dx12_renderer)) return false;
+        }
+        
+        // misses
+        for(uint8_t j=0; j<desc.miss_count; j++)
+        {
+            sbt_offset = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES + internal_pipe.sbt.record_size * (1 + j);
+            for(uint16_t i=0; i<desc.miss_params[j].count; i++)
+            {
+                if(!dm_dx12_rt_sbt_add_resource_view(desc.miss_params[j].handles[i], false, sbt_offset, &internal_pipe.sbt, dx12_renderer)) return false;
+            }
+        }
+        
+        // hit groups
+        uint16_t shader_count = 1 + desc.miss_count;
+        for(uint32_t i=0; i<desc.instance_count; i++)
+        {
+            dm_render_handle handle;
+            for(uint8_t j=0; j<desc.hit_group_count; j++)
+            {
+                sbt_offset = internal_pipe.sbt.record_size * shader_count + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+                
+                const uint8_t param_count = desc.hit_groups[j].params.count;
+                for(uint8_t k=0; k<param_count; k++)
+                {
+                    handle = desc.hit_groups[j].params.handles[i * param_count + k];
+                    
+                    if(!dm_dx12_rt_sbt_add_resource_view(handle, false, sbt_offset, &internal_pipe.sbt, dx12_renderer)) return false;
+                    sbt_offset += sizeof(D3D12_GPU_VIRTUAL_ADDRESS);
+                }
+                
+                shader_count++;
+            }
+        }
+    }
+    
     //
     dm_memcpy(dx12_renderer->raytracing_pipelines + dx12_renderer->rt_pipe_count, &internal_pipe, sizeof(internal_pipe));
-    *handle = dx12_renderer->rt_pipe_count++;
-    
-    return true;
-}
-
-bool dm_dx12_sbt_create_shader_view(dm_raytracing_pipeline_shader_param_type type, size_t sbt_offset, dm_render_handle handle, uint32_t shader_stage, dm_dx12_rt_shader_binding_table* sbt, dm_dx12_renderer* dx12_renderer)
-{
-    HRESULT hr;
-    
-    ID3D12DescriptorHeap* heap = NULL;
-    
-    switch(type)
-    {
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_VERTEX_BUFFER:
-        {
-            dm_dx12_vertex_buffer* buffer = &dx12_renderer->vertex_buffers[handle];
-            
-            D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
-            view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
-            view_desc.Format                     = DXGI_FORMAT_UNKNOWN;
-            view_desc.Buffer.NumElements         = buffer->count;
-            view_desc.Buffer.StructureByteStride = buffer->stride;
-            view_desc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_NONE;
-            
-            for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
-            {
-                heap = dx12_renderer->resource_descriptor_heap[i];
-                
-                D3D12_CPU_DESCRIPTOR_HANDLE srv_handle = { 0 };
-                ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &srv_handle);
-                srv_handle.ptr += dx12_renderer->descriptor_heap_offset;
-                
-                ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, buffer->buffer[i], &view_desc, srv_handle);
-            }
-        } break;
-        
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_INDEX_BUFFER:
-        {
-            dm_dx12_index_buffer* buffer = &dx12_renderer->index_buffers[handle];
-            
-            D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
-            view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
-            view_desc.Format                     = DXGI_FORMAT_UNKNOWN;
-            view_desc.Buffer.NumElements         = buffer->count;
-            view_desc.Buffer.Flags               = D3D12_BUFFER_SRV_FLAG_NONE;
-            view_desc.Buffer.StructureByteStride = sizeof(uint32_t);
-            
-            for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
-            {
-                heap = dx12_renderer->resource_descriptor_heap[i];
-                
-                D3D12_CPU_DESCRIPTOR_HANDLE srv_handle = { 0 };
-                ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &srv_handle);
-                srv_handle.ptr += dx12_renderer->descriptor_heap_offset;
-                
-                ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, buffer->buffer, &view_desc, srv_handle);
-            }
-        } break;
-        
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_CONSTANT_BUFFER:
-        {
-            dm_dx12_constant_buffer* buffer= &dx12_renderer->constant_buffers[handle];
-            
-            D3D12_CONSTANT_BUFFER_VIEW_DESC view_desc = { 0 };
-            view_desc.SizeInBytes = buffer->size;
-            
-            for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
-            {
-                view_desc.BufferLocation = ID3D12Resource_GetGPUVirtualAddress(buffer->buffer[i]);
-                heap = dx12_renderer->resource_descriptor_heap[i];
-                
-                D3D12_CPU_DESCRIPTOR_HANDLE cbv_handle = { 0 };
-                ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &cbv_handle);
-                cbv_handle.ptr += dx12_renderer->descriptor_heap_offset;
-                
-                ID3D12Device5_CreateConstantBufferView(dx12_renderer->device, &view_desc, cbv_handle);
-            }
-        } break;
-        
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_ACCELERATION_STRUCTURE:
-        {
-            dm_dx12_acceleration_structure* as = &dx12_renderer->accel_structs[handle];
-            
-            D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
-            view_desc.Format = DXGI_FORMAT_UNKNOWN;
-            view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-            view_desc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
-            
-            for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
-            {
-                view_desc.RaytracingAccelerationStructure.Location = ID3D12Resource_GetGPUVirtualAddress(as->tlas.result_buffer[i]);
-                
-                heap = dx12_renderer->resource_descriptor_heap[i];
-                
-                D3D12_CPU_DESCRIPTOR_HANDLE srv_handle = { 0 };
-                ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &srv_handle);
-                srv_handle.ptr += dx12_renderer->descriptor_heap_offset;
-                
-                ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, NULL, &view_desc, srv_handle);
-            }
-        } break;
-        
-        case DM_RAYTRACING_PIPELINE_SHADER_PARAM_TYPE_TEXTURE:
-        {
-            dm_dx12_texture* texture = &dx12_renderer->textures[handle];
-            
-            D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
-            view_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-            
-            for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
-            {
-                D3D12_CPU_DESCRIPTOR_HANDLE uav_handle = { 0 };
-                
-                heap = dx12_renderer->resource_descriptor_heap[i];
-                ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(heap, &uav_handle);
-                uav_handle.ptr += dx12_renderer->descriptor_heap_offset;
-                
-                ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, texture->texture[i], NULL, &view_desc, uav_handle);
-            }
-        } break;
-        
-        default:
-        DM_LOG_FATAL("Invalid shader parameter type for DirectX12 raytracing shader binding table");
-        return false;
-    }
-    
-    
-    // we don't add resources for global parameters
-    if(shader_stage==0) return true;
-    
-    for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
-    {
-        heap = dx12_renderer->resource_descriptor_heap[i];
-        
-        D3D12_GPU_DESCRIPTOR_HANDLE heap_handle = { 0 };
-        ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(heap, &heap_handle);
-        heap_handle.ptr += dx12_renderer->descriptor_heap_offset;
-        
-        *(uint64_t*)(sbt->mapped_address[i] + sbt_offset) = heap_handle.ptr;
-    }
-    
-    heap = NULL;
-    
-    return true;
-}
-
-bool dm_renderer_backend_rt_pipe_global_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
-{
-    DM_DX12_GET_RENDERER;
-    
-    if(pipe_handle>=dx12_renderer->rt_pipe_count || dx12_renderer->rt_pipe_count==0)
-    {
-        DM_LOG_FATAL("Trying to insert resource into invalid SBT (DirectX12 raytracing pipeline is invalid)");
-        return false;
-    }
-    
-    dm_dx12_raytracing_pipeline* internal_pipe = &dx12_renderer->raytracing_pipelines[pipe_handle];
-    
-    if(!dm_dx12_sbt_create_shader_view(type, 0, handle, 0, &internal_pipe->sbt, dx12_renderer)) return false;
-    
-    if(slot==0) internal_pipe->sbt.global_heap_offset = dx12_renderer->descriptor_heap_offset;
-    
-    dx12_renderer->descriptor_heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
-    
-    return true;
-}
-
-bool dm_renderer_backend_rt_pipe_raygen_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
-{
-    DM_DX12_GET_RENDERER;
-    
-    if(pipe_handle>=dx12_renderer->rt_pipe_count || dx12_renderer->rt_pipe_count==0)
-    {
-        DM_LOG_FATAL("Trying to insert resource into invalid SBT (DirectX12 raytracing pipeline is invalid)");
-        return false;
-    }
-    
-    dm_dx12_raytracing_pipeline* internal_pipe = &dx12_renderer->raytracing_pipelines[pipe_handle];
-    
-    // just offset from raygen entry and which slot 
-    size_t sbt_offset = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
-    sbt_offset += slot * sizeof(D3D12_GPU_VIRTUAL_ADDRESS);
-    
-    if(!dm_dx12_sbt_create_shader_view(type, sbt_offset, handle, 1, &internal_pipe->sbt, dx12_renderer)) return false;
-    
-    if(slot==0) internal_pipe->sbt.raygen_heap_offset = dx12_renderer->descriptor_heap_offset;
-    
-    dx12_renderer->descriptor_heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
-    
-    return true;
-}
-
-bool dm_renderer_backend_rt_pipe_miss_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t miss_index, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
-{
-    DM_DX12_GET_RENDERER;
-    
-    if(pipe_handle>=dx12_renderer->rt_pipe_count || dx12_renderer->rt_pipe_count==0)
-    {
-        DM_LOG_FATAL("Trying to insert resource into invalid SBT (DirectX12 raytracing pipeline is invalid)");
-        return false;
-    }
-    
-    dm_dx12_raytracing_pipeline* internal_pipe = &dx12_renderer->raytracing_pipelines[pipe_handle];
-    
-    // shader count
-    uint32_t shader_count = 1; // we just pass over raygen shader
-    
-    // in bytes
-    size_t sbt_offset = shader_count * internal_pipe->sbt.record_size;
-    sbt_offset += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;                // skip shader entry
-    sbt_offset += slot * sizeof(D3D12_GPU_VIRTUAL_ADDRESS);             // specific parameter slot
-    
-    if(!dm_dx12_sbt_create_shader_view(type, sbt_offset, handle, 2, &internal_pipe->sbt, dx12_renderer)) return false;
-    
-    if(slot==0 && miss_index==0) internal_pipe->sbt.miss_heap_offset[miss_index] = dx12_renderer->descriptor_heap_offset;
-    
-    dx12_renderer->descriptor_heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
-    
-    return true;
-}
-
-bool dm_renderer_backend_rt_pipe_hit_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t hit_group, uint32_t slot, uint32_t instance, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
-{
-    DM_DX12_GET_RENDERER;
-    
-    if(pipe_handle>=dx12_renderer->rt_pipe_count || dx12_renderer->rt_pipe_count==0)
-    {
-        DM_LOG_FATAL("Trying to insert resource into invalid SBT (DirectX12 raytracing pipeline is invalid)");
-        return false;
-    }
-    
-    dm_dx12_raytracing_pipeline* internal_pipe = &dx12_renderer->raytracing_pipelines[pipe_handle];
-    
-    // shader count
-    uint32_t shader_count = 1 + internal_pipe->sbt.miss_count;     // hit groups start at raygen + miss count
-    shader_count += instance * internal_pipe->sbt.hit_group_count; // this instance starts instance * hit count further
-    shader_count += hit_group;                                     // and we are at this hit_group
-    
-    // in bytes
-    size_t sbt_offset = shader_count * internal_pipe->sbt.record_size; 
-    sbt_offset += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;            // skip shader entry
-    sbt_offset += slot * sizeof(D3D12_GPU_VIRTUAL_ADDRESS);         // offset via slot we are in
-    
-    if(!dm_dx12_sbt_create_shader_view(type, sbt_offset, handle, 3, &internal_pipe->sbt, dx12_renderer)) return false;
-    
-    if(slot==0 && instance==0 && hit_group==0) internal_pipe->sbt.hit_heap_offset[hit_group] = dx12_renderer->descriptor_heap_offset;
-    
-    dx12_renderer->descriptor_heap_offset += dx12_renderer->handle_increment_size_cbv_srv_uav;
+    DM_RENDER_HANDLE_SET_INDEX(*handle, dx12_renderer->rt_pipe_count++);
     
     return true;
 }
@@ -2776,13 +2694,13 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
 {
     DM_DX12_GET_RENDERER;
     
-    if(handle > dx12_renderer->pipe_count || dx12_renderer->pipe_count==0)
+    if(DM_RENDER_HANDLE_GET_TYPE(handle)!=DM_RENDER_RESOURCE_TYPE_PIPELINE)
     {
-        DM_LOG_FATAL("Trying to bind invalid DirectX12 pipeline");
+        DM_LOG_FATAL("Trying to bind resource that is not a pipeline");
         return false;
     }
     
-    dm_dx12_pipeline* internal_pipe = &dx12_renderer->pipes[handle];
+    dm_dx12_pipeline* internal_pipe = &dx12_renderer->pipes[DM_RENDER_HANDLE_GET_INDEX(handle)];
     
     const uint32_t current_frame = dx12_renderer->current_frame_index;
     ID3D12GraphicsCommandList4* command_list = dx12_renderer->command_list[current_frame];
@@ -2814,51 +2732,20 @@ bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_rendere
 
 bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer)
 {
-#if 0
-    DM_DX12_GET_RENDERER;
-    
-    if(handle > dx12_renderer->vb_count || dx12_renderer->vb_count==0)
-    {
-        DM_LOG_FATAL("Trying to bind invalid DirectX12 vertex buffer");
-        return false;
-    }
-    
-    dm_dx12_vertex_buffer* internal_buffer = &dx12_renderer->vertex_buffers[handle];
-    
-    const uint32_t current_frame = dx12_renderer->current_frame_index;
-    ID3D12GraphicsCommandList4* command_list = dx12_renderer->command_list[current_frame];
-    
-    ID3D12GraphicsCommandList4_IASetVertexBuffers(command_list, slot,1, &internal_buffer->view[current_frame]);
-#endif
-    
-    return true;
+    DM_LOG_FATAL("Not supported");
+    return false;
 }
 
 bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer)
 {
-#if 0
-    DM_DX12_GET_RENDERER;
-    
-    if(handle > dx12_renderer->ib_count || dx12_renderer->ib_count==0)
-    {
-        DM_LOG_FATAL("Trying to bind invalid DirectX12 index buffer");
-        return false;
-    }
-    
-    dm_dx12_index_buffer* internal_buffer = &dx12_renderer->index_buffers[handle];
-    
-    const uint32_t current_frame = dx12_renderer->current_frame_index;
-    ID3D12GraphicsCommandList4* command_list = dx12_renderer->command_list[current_frame];
-    
-    ID3D12GraphicsCommandList4_IASetIndexBuffer(command_list, &internal_buffer->view);
-#endif
-    
-    return true;
+    DM_LOG_FATAL("Not supported");
+    return false;
 }
 
 bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer)
 {
-    return true;
+    DM_LOG_FATAL("Not supported");
+    return false;
 }
 
 bool dm_render_command_backend_bind_constant_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer)
@@ -2866,13 +2753,13 @@ bool dm_render_command_backend_bind_constant_buffer(dm_render_handle handle, uin
     DM_DX12_GET_RENDERER;
     HRESULT hr;
     
-    if(handle > dx12_renderer->cb_count || dx12_renderer->cb_count==0)
+    if(DM_RENDER_HANDLE_GET_TYPE(handle)!=DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER)
     {
-        DM_LOG_FATAL("Trying to bind invalid DirectX12 constant buffer");
+        DM_LOG_FATAL("Trying to bind resource that is not a constant buffer");
         return false;
     }
     
-    dm_dx12_constant_buffer* internal_buffer = &dx12_renderer->constant_buffers[handle];
+    dm_dx12_constant_buffer* internal_buffer = &dx12_renderer->constant_buffers[DM_RENDER_HANDLE_GET_INDEX(handle)];
     
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
     ID3D12GraphicsCommandList4* command_list = dx12_renderer->command_list[current_frame_index];
@@ -2887,15 +2774,15 @@ bool dm_render_command_backend_update_vertex_buffer(dm_render_handle handle, voi
     DM_DX12_GET_RENDERER;
     HRESULT hr;
     
-    if(handle > dx12_renderer->vb_count || dx12_renderer->vb_count==0)
+    if(DM_RENDER_HANDLE_GET_TYPE(handle)!=DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER)
     {
-        DM_LOG_FATAL("Trying to update invalid DirectX12 vertex buffer");
+        DM_LOG_FATAL("Trying to update a resource that is not a vertex buffer");
         return false;
     }
     
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
     
-    dm_dx12_vertex_buffer* internal_buffer = &dx12_renderer->vertex_buffers[handle];
+    dm_dx12_vertex_buffer* internal_buffer = &dx12_renderer->vertex_buffers[DM_RENDER_HANDLE_GET_INDEX(handle)];
     
     if(!internal_buffer->mapped_addresses[current_frame_index])
     {
@@ -2910,20 +2797,12 @@ bool dm_render_command_backend_update_vertex_buffer(dm_render_handle handle, voi
 
 bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_renderer* renderer)
 {
-    return true;
+    DM_LOG_FATAL("Not supported");
+    return false;
 }
 
 bool dm_render_command_backend_clear_texture(dm_render_handle handle, dm_renderer* renderer)
 {
-    DM_DX12_GET_RENDERER;
-    HRESULT hr;
-    
-    if(handle > dx12_renderer->texture_count || dx12_renderer->texture_count==0)
-    {
-        DM_LOG_FATAL("Trying to clear invalid DirectX12 texture");
-        return false;
-    }
-    
     DM_LOG_FATAL("Not supported");
     return false;
 }
@@ -2933,15 +2812,15 @@ bool dm_render_command_backend_update_constant_buffer(dm_render_handle handle, v
     DM_DX12_GET_RENDERER;
     HRESULT hr;
     
-    if(handle > dx12_renderer->cb_count || dx12_renderer->cb_count==0)
+    if(DM_RENDER_HANDLE_GET_TYPE(handle)!=DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER)
     {
-        DM_LOG_FATAL("Trying to bind invalid DirectX12 constant buffer");
+        DM_LOG_FATAL("Trying to update resource that is not a constant buffer");
         return false;
     }
     
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
     
-    dm_dx12_constant_buffer* internal_buffer = &dx12_renderer->constant_buffers[handle];
+    dm_dx12_constant_buffer* internal_buffer = &dx12_renderer->constant_buffers[DM_RENDER_HANDLE_GET_INDEX(handle)];
     
     void* dest = NULL;
     dest = internal_buffer->mapped_address[current_frame_index];
@@ -2959,10 +2838,12 @@ bool dm_render_command_backend_update_constant_buffer(dm_render_handle handle, v
 
 void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count, dm_renderer* renderer)
 {
+    DM_LOG_WARN("Not supported");
 }
 
 void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer)
 {
+    DM_LOG_WARN("Not supported");
 }
 
 void dm_render_command_backend_draw_instanced(uint32_t index_count, uint32_t vertex_count, uint32_t inst_count, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer)
@@ -2977,11 +2858,13 @@ void dm_render_command_backend_draw_instanced(uint32_t index_count, uint32_t ver
 
 bool dm_render_command_backend_set_primitive_topology(dm_primitive_topology topology, dm_renderer* renderer)
 {
+    DM_LOG_WARN("Not supported");
     return true;
 }
 
 void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer)
 {
+    DM_LOG_WARN("Not supported");
 }
 
 #ifdef DM_RAYTRACING
@@ -2990,14 +2873,14 @@ bool dm_render_command_backend_update_acceleration_structure_instance(dm_render_
     DM_DX12_GET_RENDERER;
     HRESULT hr;
     
-    if(handle > dx12_renderer->as_count || dx12_renderer->as_count==0)
+    if(DM_RENDER_HANDLE_GET_TYPE(handle)!=DM_RENDER_RESOURCE_TYPE_RT_ACCELERATION_STRUCTURE)
     {
-        DM_LOG_FATAL("Trying to update invalid DirectX12 acceleration structure");
+        DM_LOG_FATAL("Trying to update resource that is not an acceleration structure");
         return false;
     }
     
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
-    dm_dx12_acceleration_structure* internal_as = &dx12_renderer->accel_structs[handle];
+    dm_dx12_acceleration_structure* internal_as = &dx12_renderer->accel_structs[DM_RENDER_HANDLE_GET_INDEX(handle)];
     
     dm_memcpy(internal_as->tlas.instance_data[current_frame_index][instance_id].Transform, data, sizeof(float) * 4 * 3);
     
@@ -3009,14 +2892,14 @@ bool dm_render_command_backend_update_acceleration_structure_instance_range(dm_r
     DM_DX12_GET_RENDERER;
     HRESULT hr;
     
-    if(handle > dx12_renderer->as_count || dx12_renderer->as_count==0)
+    if(DM_RENDER_HANDLE_GET_TYPE(handle)!=DM_RENDER_RESOURCE_TYPE_RT_ACCELERATION_STRUCTURE)
     {
-        DM_LOG_FATAL("Trying to update invalid DirectX12 acceleration structure");
+        DM_LOG_FATAL("Trying to update resource that is not an acceleration structure");
         return false;
     }
     
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
-    dm_dx12_acceleration_structure* internal_as = &dx12_renderer->accel_structs[handle];
+    dm_dx12_acceleration_structure* internal_as = &dx12_renderer->accel_structs[DM_RENDER_HANDLE_GET_INDEX(handle)];
     
     uint32_t instance = instance_start;
     const uint32_t instance_count = instance_end - instance_start;
@@ -3037,16 +2920,16 @@ bool dm_render_command_backend_update_acceleration_structure_tlas(dm_render_hand
     DM_DX12_GET_RENDERER;
     HRESULT hr;
     
-    if(handle > dx12_renderer->as_count || dx12_renderer->as_count==0)
+    if(DM_RENDER_HANDLE_GET_TYPE(handle)!=DM_RENDER_RESOURCE_TYPE_RT_ACCELERATION_STRUCTURE)
     {
-        DM_LOG_FATAL("Trying to update invalid DirectX12 acceleration structure");
+        DM_LOG_FATAL("Trying to update resource that is not an acceleration structure");
         return false;
     }
     
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
     ID3D12GraphicsCommandList4* command_list  = dx12_renderer->command_list[current_frame_index];
     
-    dm_dx12_acceleration_structure* internal_as = &dx12_renderer->accel_structs[handle];
+    dm_dx12_acceleration_structure* internal_as = &dx12_renderer->accel_structs[DM_RENDER_HANDLE_GET_INDEX(handle)];
     
     ID3D12Resource* instance_buffer = internal_as->tlas.instance_buffer[current_frame_index];
     ID3D12Resource* result_buffer   = internal_as->tlas.result_buffer[current_frame_index];
@@ -3090,13 +2973,13 @@ bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle handle,
     DM_DX12_GET_RENDERER;
     HRESULT hr;
     
-    if(handle > dx12_renderer->rt_pipe_count || dx12_renderer->rt_pipe_count==0)
+    if(DM_RENDER_HANDLE_GET_TYPE(handle)!=DM_RENDER_RESOURCE_TYPE_RT_PIPELINE)
     {
-        DM_LOG_FATAL("Trying to bind invalid DirectX12 raytracing pipeline");
+        DM_LOG_FATAL("Trying to bind resource that is not a raytracing pipeline");
         return false;
     }
     
-    dm_dx12_raytracing_pipeline* internal_pipe = &dx12_renderer->raytracing_pipelines[handle];
+    dm_dx12_raytracing_pipeline* internal_pipe = &dx12_renderer->raytracing_pipelines[DM_RENDER_HANDLE_GET_INDEX(handle)];
     
     const uint32_t current_frame_index = dx12_renderer->current_frame_index;
     ID3D12GraphicsCommandList4* command_list    = dx12_renderer->command_list[current_frame_index];
@@ -3123,13 +3006,13 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
     DM_DX12_GET_RENDERER;
     HRESULT hr;
     
-    if(handle > dx12_renderer->rt_pipe_count || dx12_renderer->rt_pipe_count==0)
+    if(DM_RENDER_HANDLE_GET_TYPE(handle)!=DM_RENDER_RESOURCE_TYPE_RT_PIPELINE)
     {
-        DM_LOG_FATAL("Trying to bind invalid DirectX12 raytracing pipeline");
+        DM_LOG_FATAL("Trying to dispatch rays with resource that is not a raytracing pipeline");
         return false;
     }
     
-    dm_dx12_raytracing_pipeline* internal_pipe = &dx12_renderer->raytracing_pipelines[handle];
+    dm_dx12_raytracing_pipeline* internal_pipe = &dx12_renderer->raytracing_pipelines[DM_RENDER_HANDLE_GET_INDEX(handle)];
     
     const uint32_t current_frame_index       = dx12_renderer->current_frame_index;
     ID3D12GraphicsCommandList4* command_list = dx12_renderer->command_list[current_frame_index];
@@ -3163,16 +3046,6 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
     // ray dispatch
     ID3D12GraphicsCommandList4_DispatchRays(command_list, &desc);
     
-#if 0
-    D3D12_GPU_VIRTUAL_ADDRESS addresses[320][3] = { 0 };
-    const uint32_t shader_count = 1 + internal_pipe->sbt.miss_count + internal_pipe->sbt.hit_group_count * 110;
-    for(uint32_t i=0; i<shader_count; i++)
-    {
-        uint8_t* ptr = internal_pipe->sbt.mapped_address[current_frame_index] + internal_pipe->sbt.record_size * i;
-        dm_memcpy(addresses[i], ptr + D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES, sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * 3);
-    }
-#endif
-    
     return true;
 }
 
@@ -3181,13 +3054,13 @@ bool dm_render_command_backend_copy_texture_to_screen(dm_render_handle handle, d
     DM_DX12_GET_RENDERER;
     HRESULT hr;
     
-    if(handle>=dx12_renderer->texture_count || dx12_renderer->texture_count==0)
+    if(DM_RENDER_HANDLE_GET_TYPE(handle)!=DM_RENDER_RESOURCE_TYPE_TEXTURE)
     {
-        DM_LOG_FATAL("Trying to copy invalid DirectX12 texture");
+        DM_LOG_FATAL("Trying to copy resource that is not a texture");
         return false;
     }
     
-    dm_dx12_texture* internal_texture = &dx12_renderer->textures[handle];
+    dm_dx12_texture* internal_texture = &dx12_renderer->textures[DM_RENDER_HANDLE_GET_INDEX(handle)];
     
     const uint32_t current_frame_index       = dx12_renderer->current_frame_index;
     ID3D12GraphicsCommandList4* command_list = dx12_renderer->command_list[current_frame_index];
