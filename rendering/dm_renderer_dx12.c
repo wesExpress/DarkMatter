@@ -123,7 +123,7 @@ typedef struct dm_dx12_rt_shader_binding_table_t
     ID3D12RootSignature* miss_root_signatures[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
     ID3D12RootSignature* hit_root_signatures[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
     
-    uint32_t record_count, miss_count, hit_group_count, max_instance_count;
+    uint32_t record_count, miss_count, hit_group_count, max_instance_count, instance_count;
     size_t   record_size;
     
     size_t global_heap_offset;
@@ -1064,8 +1064,10 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     return true;
 }
 
+#ifdef DM_DEBUG
 #ifdef DM_DX12_DRED_VALIDATION
 void dm_dx12_track_down_device_removal(dm_dx12_renderer* dx12_renderer);
+#endif
 #endif
 
 bool dm_renderer_backend_end_frame(dm_context* context)
@@ -1105,8 +1107,10 @@ bool dm_renderer_backend_end_frame(dm_context* context)
     {
         DM_LOG_FATAL("IDXGISwapChain4_Present failed");
         
+#ifdef DM_DEBUG
 #ifdef DM_DX12_DRED_VALIDATION
         dm_dx12_track_down_device_removal(dx12_renderer);
+#endif
 #endif
         
         return false;
@@ -2368,13 +2372,13 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     subobjects[sub_obj_index++].pDesc = &lib;
     
     // raygen root sig
+    D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION raygen_assoc = { 0 };
     if(desc.raygen_params.count>0)
     {
         subobjects[sub_obj_index].Type    = D3D12_STATE_SUBOBJECT_TYPE_LOCAL_ROOT_SIGNATURE;
         subobjects[sub_obj_index++].pDesc = &internal_pipe.sbt.raygen_root_signature;
         
         // raygen assoc
-        D3D12_SUBOBJECT_TO_EXPORTS_ASSOCIATION raygen_assoc = { 0 };
         raygen_assoc.NumExports = 1;
         swprintf(ws_raygen, 100, L"%hs", desc.raygen);
         l_raygen = ws_raygen;
@@ -2483,9 +2487,9 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         return false;
     }
     
-    
     // shader binding table
     internal_pipe.sbt.max_instance_count = desc.max_instance_count;
+    internal_pipe.sbt.instance_count     = desc.instance_count;
     internal_pipe.sbt.miss_count         = desc.miss_count;
     internal_pipe.sbt.hit_group_count    = desc.hit_group_count;
     
@@ -2543,9 +2547,9 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         ID3D12StateObjectProperties* props;
         ID3D12StateObject_QueryInterface(internal_pipe.state_object, &IID_ID3D12StateObjectProperties, &props);
         
+        uint8_t* data = internal_pipe.sbt.mapped_address[i];
 #ifdef DM_DEBUG
         uint8_t* ref  = NULL;
-        uint8_t* data = internal_pipe.sbt.mapped_address[i];
         
         ref = data;
 #endif
@@ -2579,9 +2583,9 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         assert(*data % internal_pipe.sbt.record_size == 0);
         assert(data - ref == sbt_desc.Width);
         
-        data = NULL;
         ref  = NULL;
 #endif
+        data = NULL;
         
         ID3D12StateObjectProperties_Release(props);
     }
@@ -2589,6 +2593,8 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     // add in resources to sbt
     {
         // global
+        internal_pipe.sbt.global_heap_offset = dx12_renderer->descriptor_heap_offset;
+        
         size_t sbt_offset = 0;
         for(uint16_t i=0; i<desc.global_params.count; i++)
         {
@@ -3013,6 +3019,7 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
     const size_t miss_count         = internal_pipe->sbt.miss_count;
     const size_t hit_group_count    = internal_pipe->sbt.hit_group_count;
     const size_t max_instance_count = internal_pipe->sbt.max_instance_count;
+    const size_t instance_count     = internal_pipe->sbt.instance_count;
     
     const D3D12_GPU_VIRTUAL_ADDRESS start_address = ID3D12Resource_GetGPUVirtualAddress(internal_pipe->sbt.table[current_frame_index]);
     
@@ -3032,7 +3039,7 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
     
     // hit groups
     desc.HitGroupTable.StartAddress  = start_address + shader_size + miss_count * shader_size;
-    desc.HitGroupTable.SizeInBytes   = shader_size * hit_group_count * max_instance_count;
+    desc.HitGroupTable.SizeInBytes   = shader_size * hit_group_count * instance_count;
     desc.HitGroupTable.StrideInBytes = shader_size;
     
     // ray dispatch
@@ -3060,51 +3067,39 @@ bool dm_render_command_backend_copy_texture_to_screen(dm_render_handle handle, d
     ID3D12Resource* screen  = dx12_renderer->render_target[current_frame_index];
     ID3D12Resource* texture = internal_texture->texture[current_frame_index];
     
+    D3D12_RESOURCE_BARRIER prior_barriers[2] = { 0 };
+    D3D12_RESOURCE_BARRIER post_barriers[2] = { 0 };
+    
     // texture from unordered access to copy source
-    {
-        D3D12_RESOURCE_BARRIER barrier = { 0 };
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource   = texture;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        
-        ID3D12GraphicsCommandList4_ResourceBarrier(command_list, 1, &barrier);
-    }
+    prior_barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    prior_barriers[0].Transition.pResource   = texture;
+    prior_barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    prior_barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
     
     // screen from render target to copy destination
-    {
-        D3D12_RESOURCE_BARRIER barrier = { 0 };
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource   = screen;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
-        
-        ID3D12GraphicsCommandList4_ResourceBarrier(command_list, 1, &barrier);
-    }
+    prior_barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    prior_barriers[1].Transition.pResource   = screen;
+    prior_barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    prior_barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
     
+    ID3D12GraphicsCommandList4_ResourceBarrier(command_list, 2, prior_barriers);
+    
+    // copy
     ID3D12GraphicsCommandList4_CopyResource(command_list, screen, texture);
     
     // screen from copy destination to render target
-    {
-        D3D12_RESOURCE_BARRIER barrier = { 0 };
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource   = screen;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-        
-        ID3D12GraphicsCommandList4_ResourceBarrier(command_list, 1, &barrier);
-    }
+    post_barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    post_barriers[0].Transition.pResource   = screen;
+    post_barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    post_barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
     
     // texture from copy source to unordered access
-    {
-        D3D12_RESOURCE_BARRIER barrier = { 0 };
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource   = texture;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        
-        ID3D12GraphicsCommandList4_ResourceBarrier(command_list, 1, &barrier);
-    }
+    post_barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    post_barriers[1].Transition.pResource   = texture;
+    post_barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    post_barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    
+    ID3D12GraphicsCommandList4_ResourceBarrier(command_list, 2, post_barriers);
     
     return true;
 }
