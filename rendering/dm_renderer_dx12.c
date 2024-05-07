@@ -1269,17 +1269,9 @@ bool dm_renderer_backend_create_index_buffer(const dm_index_buffer_desc desc, dm
     if(!dm_platform_win32_decode_hresult(hr))
     {
         DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
-        DM_LOG_FATAL("Creating DirectX12 buffer failed");
+        DM_LOG_FATAL("Creating DirectX12 index buffer failed");
         return false;
     }
-    
-    D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
-    view_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-    view_desc.Format = DXGI_FORMAT_UNKNOWN;
-    view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    view_desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
-    view_desc.Buffer.StructureByteStride = desc.data_type==DM_INDEX_BUFFER_DATA_UINT32 ? sizeof(uint32_t) : sizeof(uint16_t);
-    view_desc.Buffer.NumElements = desc.count;
     
     assert(desc.data);
     {
