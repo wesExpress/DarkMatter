@@ -1312,7 +1312,7 @@ bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, 
 bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_context* context);
 
-bool dm_renderer_resize_texutre(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context);
+bool dm_renderer_resize_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context);
 
 #ifdef DM_RAYTRACING
 bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_render_handle* handle, dm_context* context);

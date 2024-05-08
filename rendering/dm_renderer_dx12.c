@@ -1615,6 +1615,24 @@ DXGI_FORMAT dm_texture_data_type_to_dxgi_format(dm_texture_desc desc)
 {
     switch(desc.data_count)
     {
+        case 1:
+        switch(desc.data_type)
+        {
+            case DM_TEXTURE_DATA_TYPE_INT_8:   return DXGI_FORMAT_R8_SINT;
+            case DM_TEXTURE_DATA_TYPE_UINT_8:  return DXGI_FORMAT_R8_UINT;
+            case DM_TEXTURE_DATA_TYPE_UNORM_8: return DXGI_FORMAT_R8_UNORM;
+            
+            case DM_TEXTURE_DATA_TYPE_INT_16:   return DXGI_FORMAT_R16_SINT;
+            case DM_TEXTURE_DATA_TYPE_UINT_16:  return DXGI_FORMAT_R16_UINT;
+            case DM_TEXTURE_DATA_TYPE_UNORM_16: return DXGI_FORMAT_R16_UNORM;
+            case DM_TEXTURE_DATA_TYPE_FLOAT_16: return DXGI_FORMAT_R16_FLOAT;
+            
+            case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32_SINT;
+            case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32_UINT;
+            case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32_FLOAT;
+        }
+        break;
+        
         case 2:
         switch(desc.data_type)
         {
@@ -1697,14 +1715,14 @@ bool dm_renderer_backend_create_texture(dm_texture_desc texture_desc, dm_render_
     return true;
 }
 
-bool dm_renderer_backend_resize_texutre(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer)
+bool dm_renderer_backend_resize_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
     
-    if(handle>=dx12_renderer->texture_count || dx12_renderer->texture_count==0)
+    if(DM_RENDER_HANDLE_GET_TYPE(handle)!=DM_RENDER_RESOURCE_TYPE_TEXTURE)
     {
-        DM_LOG_FATAL("Trying to update invalid DirectX12 texture");
+        DM_LOG_FATAL("Trying to resize resource that is not a texture");
         return false;
     }
     
@@ -2078,22 +2096,31 @@ bool dm_dx12_raytracing_pipeline_sbt_make_root_signature(uint32_t shader_stage, 
     
     uint32_t range_count  = 0;
     
+    dm_render_resource_type type;
+    uint16_t                index;
+    uint8_t                 r;
+    
     for(uint32_t i=0; i<params.count; i++)
     {
-        switch(DM_RENDER_HANDLE_GET_TYPE(params.handles[i]))
+        type  = DM_RENDER_HANDLE_GET_TYPE(params.handles[i]);
+        index = DM_RENDER_HANDLE_GET_INDEX(params.handles[i]);
+        
+        r = params.registers[i];
+        
+        switch(type)
         {
             case DM_RENDER_RESOURCE_TYPE_TEXTURE:
-            dm_dx12_rt_sbt_add_uav_to_range(params.registers[i], ranges, &uav_index, &range_count);
+            dm_dx12_rt_sbt_add_uav_to_range(r, ranges, &uav_index, &range_count);
             break;
             
             case DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER:
             case DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER:
             case DM_RENDER_RESOURCE_TYPE_RT_ACCELERATION_STRUCTURE:
-            dm_dx12_rt_sbt_add_srv_to_range(params.registers[i], ranges, &srv_index, &range_count);
+            dm_dx12_rt_sbt_add_srv_to_range(r, ranges, &srv_index, &range_count);
             break;
             
             case DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER:
-            dm_dx12_rt_sbt_add_cbv_to_range(params.registers[i], ranges, &cbv_index, &range_count);
+            dm_dx12_rt_sbt_add_cbv_to_range(r, ranges, &cbv_index, &range_count);
             break;
             
             default:

@@ -606,7 +606,7 @@ extern bool dm_renderer_backend_create_constant_buffer(const void* data, size_t 
 extern bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_resize_texutre(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_resize_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer);
 
 #ifdef DM_RAYTRACING
 extern bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_render_handle* handle, dm_renderer* renderer);
@@ -672,9 +672,9 @@ bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, 
     return false;
 }
 
-bool dm_renderer_resize_texutre(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context)
+bool dm_renderer_resize_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context)
 {
-    if(dm_renderer_backend_resize_texutre(data, width, height, handle, &context->renderer)) return true;
+    if(dm_renderer_backend_resize_texture(data, width, height, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Resizing texture failed");
     return false;
