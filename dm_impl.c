@@ -603,6 +603,7 @@ void dm_renderer_shutdown(dm_context* context)
 extern bool dm_renderer_backend_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_index_buffer(const dm_index_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_constant_buffer(const void* data, size_t data_size, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_structured_buffer(const dm_structured_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_renderer* renderer);
@@ -644,21 +645,13 @@ bool dm_renderer_create_constant_buffer(const void* data, size_t data_size, dm_r
     return false;
 }
 
-bool dm_renderer_create_pipeline(const dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_structured_buffer(const dm_structured_buffer_desc desc, dm_render_handle* handle, dm_context* context)
 {
-    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_PIPELINE);
+    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_STRUCTURED_BUFFER);
     
-    if(dm_renderer_backend_create_pipeline(desc, handle, &context->renderer)) return true;
+    if(dm_renderer_backend_create_structured_buffer(desc, handle, &context->renderer)) return true;
     
-    DM_LOG_FATAL("Could not create pipeline");
-    return false;
-}
-
-bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_context* context)
-{
-    if(dm_renderer_backend_create_renderpass(desc, handle, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Could not create renderpass");
+    DM_LOG_FATAL("Creating structured buffer failed");
     return false;
 }
 
@@ -677,6 +670,24 @@ bool dm_renderer_resize_texture(const void* data, uint32_t width, uint32_t heigh
     if(dm_renderer_backend_resize_texture(data, width, height, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Resizing texture failed");
+    return false;
+}
+
+bool dm_renderer_create_pipeline(const dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context)
+{
+    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_PIPELINE);
+    
+    if(dm_renderer_backend_create_pipeline(desc, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create pipeline");
+    return false;
+}
+
+bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_context* context)
+{
+    if(dm_renderer_backend_create_renderpass(desc, handle, &context->renderer)) return true;
+    
+    DM_LOG_FATAL("Could not create renderpass");
     return false;
 }
 

@@ -80,6 +80,12 @@ typedef struct dm_dx12_constant_buffer_t
     size_t          size;
 } dm_dx12_constant_buffer;
 
+typedef struct dm_dx12_structured_buffer_t
+{
+    ID3D12Resource* buffer[DM_DX12_NUM_FRAMES];
+    size_t          stride, count;
+} dm_dx12_structured_buffer;
+
 typedef struct dm_dx12_texture_t
 {
     ID3D12Resource* texture[DM_DX12_NUM_FRAMES];
@@ -174,14 +180,15 @@ typedef struct dm_dx12_renderer_t
     uint64_t     frame_fence_values[DM_DX12_NUM_FRAMES];
     
     uint32_t current_frame_index, descriptor_heap_offset;
-    uint32_t pass_count, pipe_count, vb_count, ib_count, cb_count, texture_count, resource_count;
+    uint32_t pass_count, pipe_count, vb_count, ib_count, cb_count, sb_count, texture_count, resource_count;
     
-    dm_dx12_renderpass      passes[DM_DX12_MAX_PASSES];
-    dm_dx12_pipeline        pipes[DM_DX12_MAX_PIPES];
-    dm_dx12_vertex_buffer   vertex_buffers[DM_DX12_MAX_BUFFERS];
-    dm_dx12_index_buffer    index_buffers[DM_DX12_MAX_BUFFERS];
-    dm_dx12_constant_buffer constant_buffers[DM_DX12_MAX_BUFFERS];
-    dm_dx12_texture         textures[DM_DX12_MAX_RESOURCE];
+    dm_dx12_renderpass        passes[DM_DX12_MAX_PASSES];
+    dm_dx12_pipeline          pipes[DM_DX12_MAX_PIPES];
+    dm_dx12_vertex_buffer     vertex_buffers[DM_DX12_MAX_BUFFERS];
+    dm_dx12_index_buffer      index_buffers[DM_DX12_MAX_BUFFERS];
+    dm_dx12_constant_buffer   constant_buffers[DM_DX12_MAX_BUFFERS];
+    dm_dx12_structured_buffer structured_buffers[DM_DX12_MAX_RESOURCE];
+    dm_dx12_texture           textures[DM_DX12_MAX_RESOURCE];
     
     dm_dx12_resource resources[DM_DX12_MAX_RESOURCE];
     
@@ -221,6 +228,7 @@ void dm_dx12_renderer_destroy_pipe(dm_dx12_pipeline* pipe);
 void dm_dx12_renderer_destroy_vertex_buffer(dm_dx12_vertex_buffer* buffer);
 void dm_dx12_renderer_destroy_index_buffer(dm_dx12_index_buffer* buffer);
 void dm_dx12_renderer_destroy_constant_buffer(dm_dx12_constant_buffer* buffer);
+void dm_dx12_renderer_destroy_structured_buffer(dm_dx12_structured_buffer* buffer);
 void dm_dx12_renderer_destroy_texture(dm_dx12_texture* texture);
 
 #ifdef DM_RAYTRACING
@@ -924,10 +932,14 @@ void dm_renderer_backend_shutdown(dm_context* context)
         dm_dx12_renderer_destroy_index_buffer(&dx12_renderer->index_buffers[i]);
     }
     
-    
     for(uint32_t i=0; i<dx12_renderer->cb_count; i++)
     {
         dm_dx12_renderer_destroy_constant_buffer(&dx12_renderer->constant_buffers[i]);
+    }
+    
+    for(uint8_t i=0; i<dx12_renderer->sb_count; i++)
+    {
+        dm_dx12_renderer_destroy_structured_buffer(&dx12_renderer->structured_buffers[i]);
     }
     
     for(uint32_t i=0; i<dx12_renderer->texture_count; i++)
@@ -1229,6 +1241,7 @@ bool dm_renderer_backend_create_vertex_buffer(const dm_vertex_buffer_desc desc, 
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
         hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_buffer.buffer[i]);
+        
         if(!dm_platform_win32_decode_hresult(hr))
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
@@ -1361,6 +1374,44 @@ bool dm_renderer_backend_create_constant_buffer(const void* data, size_t data_si
 void dm_dx12_renderer_destroy_constant_buffer(dm_dx12_constant_buffer* buffer)
 {
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
+    {
+        ID3D12Resource_Release(buffer->buffer[i]);
+    }
+}
+
+bool dm_renderer_backend_create_structured_buffer(const dm_structured_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+    
+    dm_dx12_structured_buffer internal_buffer = { 0 };
+    internal_buffer.stride = desc.stride;
+    internal_buffer.count  = desc.count;
+    
+    D3D12_RESOURCE_DESC resource_desc = DM_DX12_BASIC_BUFFER_DESC;
+    resource_desc.Width = desc.size;
+    resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    
+    for(uint8_t i=0; i<DM_DX12_NUM_FRAMES; i++)
+    {
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &internal_buffer.buffer[i]);
+        if(!dm_platform_win32_decode_hresult(hr))
+        {
+            DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
+            return false;
+        }
+    }
+    
+    //
+    dm_memcpy(dx12_renderer->structured_buffers + dx12_renderer->sb_count, &internal_buffer, sizeof(internal_buffer));
+    DM_RENDER_HANDLE_SET_INDEX(*handle, dx12_renderer->sb_count++);
+    
+    return true;
+}
+
+void dm_dx12_renderer_destroy_structured_buffer(dm_dx12_structured_buffer* buffer)
+{
+    for(uint8_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
         ID3D12Resource_Release(buffer->buffer[i]);
     }
@@ -1991,7 +2042,7 @@ bool dm_dx12_create_tlas(dm_acceleration_structure_desc as_desc, dm_dx12_acceler
             internal_as->tlas.instance_data[i][j].AccelerationStructure = ID3D12Resource_GetGPUVirtualAddress(blas_buffer);
             internal_as->tlas.instance_data[i][j].InstanceContributionToHitGroupIndex = i_offset;
             
-            i_offset += as_desc.hit_group_count;
+            i_offset += 1;
         }
         
         // actual acceleration structure
@@ -2110,6 +2161,7 @@ bool dm_dx12_raytracing_pipeline_sbt_make_root_signature(uint32_t shader_stage, 
         switch(type)
         {
             case DM_RENDER_RESOURCE_TYPE_TEXTURE:
+            case DM_RENDER_RESOURCE_TYPE_STRUCTURED_BUFFER:
             dm_dx12_rt_sbt_add_uav_to_range(r, ranges, &uav_index, &range_count);
             break;
             
@@ -2226,6 +2278,19 @@ bool dm_dx12_rt_sbt_add_resource_view(dm_render_handle handle, bool is_global, s
                 ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, buffer.buffer[i], &view_desc, heap_handle);
             } break;
             
+            case DM_RENDER_RESOURCE_TYPE_STRUCTURED_BUFFER:
+            {
+                dm_dx12_structured_buffer buffer = dx12_renderer->structured_buffers[index];
+                
+                D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
+                view_desc.ViewDimension              = D3D12_UAV_DIMENSION_BUFFER;
+                view_desc.Buffer.NumElements         = buffer.count;
+                view_desc.Buffer.StructureByteStride = buffer.stride;
+                view_desc.Buffer.Flags               = D3D12_BUFFER_UAV_FLAG_NONE;
+                
+                ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, buffer.buffer[i], NULL, &view_desc, heap_handle);
+            } break;
+            
             case DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER:
             {
                 dm_dx12_index_buffer buffer = dx12_renderer->index_buffers[index];
@@ -2243,7 +2308,7 @@ bool dm_dx12_rt_sbt_add_resource_view(dm_render_handle handle, bool is_global, s
             
             case DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER:
             {
-                dm_dx12_constant_buffer buffer= dx12_renderer->constant_buffers[index];
+                dm_dx12_constant_buffer buffer = dx12_renderer->constant_buffers[index];
                 
                 D3D12_CONSTANT_BUFFER_VIEW_DESC view_desc = { 0 };
                 view_desc.SizeInBytes    = buffer.size;
@@ -3060,14 +3125,20 @@ bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm
     desc.RayGenerationShaderRecord.SizeInBytes  = shader_size;
     
     // miss groups
-    desc.MissShaderTable.StartAddress  = start_address + shader_size;
-    desc.MissShaderTable.SizeInBytes   = shader_size * miss_count;
-    desc.MissShaderTable.StrideInBytes = shader_size;
+    if(miss_count)
+    {
+        desc.MissShaderTable.StartAddress  = start_address + shader_size;
+        desc.MissShaderTable.SizeInBytes   = shader_size * miss_count;
+        desc.MissShaderTable.StrideInBytes = shader_size;
+    }
     
     // hit groups
-    desc.HitGroupTable.StartAddress  = start_address + shader_size + miss_count * shader_size;
-    desc.HitGroupTable.SizeInBytes   = shader_size * hit_group_count * instance_count;
-    desc.HitGroupTable.StrideInBytes = shader_size;
+    if(hit_group_count)
+    {
+        desc.HitGroupTable.StartAddress  = start_address + shader_size + miss_count * shader_size;
+        desc.HitGroupTable.SizeInBytes   = shader_size * hit_group_count * instance_count;
+        desc.HitGroupTable.StrideInBytes = shader_size;
+    }
     
     // ray dispatch
     ID3D12GraphicsCommandList4_DispatchRays(command_list, &desc);

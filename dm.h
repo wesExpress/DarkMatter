@@ -656,6 +656,7 @@ typedef enum dm_render_resource_type_t
     DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER,
     DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER,
     DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER,
+    DM_RENDER_RESOURCE_TYPE_STRUCTURED_BUFFER,
     DM_RENDER_RESOURCE_TYPE_TEXTURE,
     DM_RENDER_RESOURCE_TYPE_PIPELINE,
     DM_RENDER_RESOURCE_TYPE_RT_ACCELERATION_STRUCTURE,
@@ -712,6 +713,12 @@ typedef struct dm_texture_desc_t
     
     void* data;
 } dm_texture_desc;
+
+typedef struct dm_structured_buffer_desc_t
+{
+    size_t size, stride, count;
+    const void* data;
+} dm_structured_buffer_desc;
 
 typedef struct dm_vertex_attrib_desc_t
 {
@@ -1308,6 +1315,7 @@ void dm_platform_sleep(uint64_t ms, dm_context* context);
 bool dm_renderer_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_index_buffer(const dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_constant_buffer(const void* data, size_t data_size, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_structured_buffer(const dm_structured_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_context* context);
