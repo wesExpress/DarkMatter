@@ -476,8 +476,6 @@ typedef struct dm_byte_pool_t
 /*********
 RENDERING
 ***********/
-#define DM_DEFAULT_MAX_FPS 60.0f
-
 // render enums
 typedef enum dm_buffer_type_t
 {
