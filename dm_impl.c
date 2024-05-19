@@ -1142,7 +1142,7 @@ void dm_render_command_update_acceleration_structure_tlas(dm_render_handle handl
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
-void dm_render_command_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context)
+void dm_render_command_raytracing_pipeline_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context)
 {
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_DISPATCH_RAYS;
@@ -1384,7 +1384,7 @@ bool dm_renderer_submit_commands(dm_context* context)
                 const uint32_t height         = command.params[1].uint32_val;
                 const dm_render_handle handle = command.params[2].render_handle_val;
                 
-                if(dm_render_command_backend_dispatch_rays(width, height, handle, renderer)) continue;
+                if(dm_render_command_backend_raytracing_pipeline_dispatch_rays(width, height, handle, renderer)) continue;
                 
                 DM_LOG_FATAL("Dispatch rays failed");
                 return false;
@@ -1469,7 +1469,7 @@ dm_context* dm_init(dm_context_init_packet init_packet)
     
     if(!dm_platform_init(init_packet.window_x, init_packet.window_y, context))
     {
-        dm_free(&context);
+        dm_free((void**)&context);
         return NULL;
     }
     
@@ -1478,7 +1478,7 @@ dm_context* dm_init(dm_context_init_packet init_packet)
     if(!dm_renderer_init(context))
     {
         dm_platform_shutdown(&context->platform_data);
-        dm_free(&context);
+        dm_free((void**)&context);
         return NULL;
     }
     
@@ -1491,7 +1491,7 @@ dm_context* dm_init(dm_context_init_packet init_packet)
     init_genrand64(&context->random_64, (uint64_t)dm_platform_get_time(&context->platform_data));
     
     // misc
-    context->delta = 1.0f / DM_DEFAULT_MAX_FPS;
+    context->delta = 1.0f / 60.f;
     context->flags |= DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
     
     return context;
@@ -1503,7 +1503,7 @@ void dm_shutdown(dm_context* context)
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
     
-    dm_free(&context);
+    dm_free((void**)&context);
 }
 
 // also pass through nuklear inputs
