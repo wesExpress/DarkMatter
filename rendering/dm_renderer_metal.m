@@ -267,8 +267,6 @@ void dm_renderer_backend_shutdown(dm_context* context)
     [metal_renderer->compute_command_encoder release];
     [metal_renderer->command_queue release];
     [metal_renderer->device release];
-    
-    return true;
 }
 
 bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
@@ -314,11 +312,11 @@ bool dm_renderer_backend_create_vertex_buffer(const dm_vertex_buffer_desc desc, 
     {
         if(desc.data)
         {
-            internal_buffer.buffer[i] = [metal_renderer->device newBufferWithBytes:desc.data length:desc.size options:MTLResourceOptionCPUCacheModeDefault];
+            internal_buffer.buffer[i] = [metal_renderer->device newBufferWithBytes:desc.data length:desc.size options:MTLResourceCPUCacheModeDefaultCache];
         }
         else
         {
-            internal_buffer.buffer[i] = [metal_renderer->device newBufferWithLength:desc.size options:MTLResourceOptionCPUCacheModeDefault];
+            internal_buffer.buffer[i] = [metal_renderer->device newBufferWithLength:desc.size options:MTLResourceCPUCacheModeDefaultCache];
         }
         
         if(internal_buffer.buffer[i]) continue;
@@ -359,7 +357,7 @@ bool dm_renderer_backend_create_index_buffer(const dm_index_buffer_desc desc, dm
     
     for(uint32_t i=0; i<DM_METAL_NUM_FRAMES; i++)
     {
-        internal_buffer.buffer[i] = [metal_renderer->device newBufferWithBytes:desc.data length:desc.size options:MTLResourceOptionCPUCacheModeDefault];
+        internal_buffer.buffer[i] = [metal_renderer->device newBufferWithBytes:desc.data length:desc.size options:MTLResourceCPUCacheModeDefaultCache];
         
         if(internal_buffer.buffer[i]) continue;
         
@@ -395,11 +393,11 @@ bool dm_renderer_backend_create_constant_buffer(const void* data, size_t data_si
     {
         if(data)
         {
-            internal_buffer.buffer[i] = [metal_renderer->device newBufferWithBytes:data length:data_size options:MTLResourceOptionCPUCacheModeDefault];
+            internal_buffer.buffer[i] = [metal_renderer->device newBufferWithBytes:data length:data_size options:MTLResourceCPUCacheModeDefaultCache];
         }
         else
         {
-            internal_buffer.buffer[i] = [metal_renderer->device newBufferWithLength:data_size options:MTLResourceOptionCPUCacheModeDefault];
+            internal_buffer.buffer[i] = [metal_renderer->device newBufferWithLength:data_size options:MTLResourceCPUCacheModeDefaultCache];
         }
         
         if(internal_buffer.buffer[i]) continue;
@@ -670,129 +668,11 @@ void dm_metal_destroy_acceleration_structure(dm_metal_acceleration_structure* as
     }
 }
 
-DM_INLINE
-bool dm_metal_sbt_load_function(const char* name, NSMutableDictionary <NSString *, id <MTLFunction>> *functions, dm_metal_raytracing_pipeline* internal_pipe)
-{
-    MTLFunctionConstantValues *constants = [[MTLFunctionConstantValues alloc] init];
-
-    // The first constant is the stride between entries in the resource buffer. The sample
-    // uses this stride to allow intersection functions to look up any resources they use.
-    [constants setConstantValue:internal_pipe->sbt.record_size type:MTLDataTypeUInt atIndex:0];
-
-    NSError *error;
-
-    // Load the function from the Metal library.
-    functions[[NSString stringWithUTF8String:name]] = [internal_pipe->library newFunctionWithName:[NSString stringWithUTF8String:name] constantValues:constants error:&error];
-
-    if(!functions[[NSString stringWithUTF8String:name]])
-    {
-        DM_LOG_FATAL("Failed to create Metal function: %s", name);
-        DM_LOG_FATAL("Error: %s", error);
-        return false;
-    }
-    
-    [constants release];
-    
-    return true;
-}
-
-DM_INLINE
-void dm_metal_insert_into_sbt(const char* name, uint32_t* index, id<MTLIntersectionFunctionTable> sbt, dm_metal_raytracing_pipeline* internal_pipe, NSMutableDictionary <NSString *, id <MTLFunction>> *functions)
-{
-    id <MTLFunction> intersection_function = functions[[NSString stringWithUTF8String:name]];
-    id <MTLFunctionHandle>          handle = [internal_pipe->state functionHandleWithFunction:intersection_function];
-    [sbt setFunction:handle atIndex:(*index)++];
-}
-
-bool dm_metal_create_shader_binding_table(dm_raytracing_pipeline_desc desc, dm_metal_raytracing_pipeline* internal_pipe, dm_metal_renderer* metal_renderer)
-{
-    NSMutableDictionary <NSString *, id <MTLFunction>> *functions = [NSMutableDictionary dictionary];
-    
-    // raygen
-    if(!dm_metal_sbt_load_function(desc.raygen, functions, internal_pipe)) return false;
-    
-    // misses
-    for(uint8_t i=0; i<desc.miss_count; i++)
-    {
-        if(!dm_metal_sbt_load_function(desc.miss[i], functions, internal_pipe)) return false;
-    }
-    
-    // hit groups
-    for(uint8_t i=0; i<desc.hit_group_count; i++)
-    {
-        if(desc.hit_groups[i].flags && DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_ANY_HIT)
-        {
-            if(!dm_metal_sbt_load_function(desc.hit_groups[i].any_hit, functions, internal_pipe)) return false;
-        }
-        
-        if(desc.hit_groups[i].flags && DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_CLOSEST_HIT)
-        {
-            if(!dm_metal_sbt_load_function(desc.hit_groups[i].closest_hit, functions, internal_pipe)) return false;
-        }
-        
-        if(desc.hit_groups[i].flags && DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION)
-        {
-            if(!dm_metal_sbt_load_function(desc.hit_groups[i].intersection, functions, internal_pipe)) return false;
-        }
-    }
-    
-    for(uint8_t i=0; i<DM_METAL_NUM_FRAMES; i++)
-    {
-        uint32_t index = 0;
-        
-        MTLIntersectionFunctionTableDescriptor *sbt_descriptor = [[MTLIntersectionFunctionTableDescriptor alloc] init];
-        sbt_descriptor.functionCount = 1 + desc.miss_count + desc.hit_group_count * desc.max_instance_count;
-        
-        internal_pipe->sbt.sbt[i] = [internal_pipe->state newIntersectionFunctionTableWithDescriptor:sbt_descriptor];
-        
-        // raygen
-        dm_metal_insert_into_sbt(desc.raygen, &index, internal_pipe->sbt.sbt[i], internal_pipe, functions);
-        
-        // miss
-        for(uint8_t j=0; j<desc.miss_count; j++)
-        {
-            dm_metal_insert_into_sbt(desc.miss[j], &index, internal_pipe->sbt.sbt[i], internal_pipe, functions);
-        }
-        
-        // hit groups
-        for(uint8_t k=0; k<desc.max_instance_count; k++)
-        {
-            for(uint8_t j=0; j<desc.hit_group_count; j++)
-            {
-                if(desc.hit_groups[j].flags && DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_ANY_HIT)
-                {
-                    dm_metal_insert_into_sbt(desc.hit_groups[j].any_hit, &index, internal_pipe->sbt.sbt[i], internal_pipe, functions);
-                }
-                
-                if(desc.hit_groups[j].flags && DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_CLOSEST_HIT)
-                {
-                    dm_metal_insert_into_sbt(desc.hit_groups[j].closest_hit, &index, internal_pipe->sbt.sbt[i], internal_pipe, functions);
-                }
-                
-                if(desc.hit_groups[j].flags && DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION)
-                {
-                    dm_metal_insert_into_sbt(desc.hit_groups[j].intersection, &index, internal_pipe->sbt.sbt[i], internal_pipe, functions);
-                }
-            }
-        }
-        
-        //
-        [sbt_descriptor release];
-    }
-    
-    //
-    [functions release];
-    
-    return true;
-}
-
 bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer)
 {
     DM_METAL_GET_RENDERER;
     
     dm_metal_raytracing_pipeline internal_pipe = { 0 };
-    
-    if(!dm_metal_create_shader_binding_table(desc, &internal_pipe, metal_renderer)) return false;
     
     //
     dm_memcpy(metal_renderer->rt_pipes + metal_renderer->rt_pipe_count, &internal_pipe, sizeof(internal_pipe));

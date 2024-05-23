@@ -36,6 +36,9 @@ dm_simd_float dm_simd_set_float(const float x, const float y, const float z, con
 {
 #ifdef DM_SIMD_X86
     return _mm_set_ps(x,y,z,w);
+#elif defined(DM_SIMD_ARM)
+    const float t[4] = { w,z,y,x };
+    return vld1q_f32(t);
 #endif
 }
 
@@ -120,6 +123,8 @@ dm_simd_float dm_simd_rsqrt_float(dm_simd_float mm)
 {
 #ifdef DM_SIMD_X86
     return _mm_rsqrt_ps(mm);
+#elif defined(DM_SIMD_ARM)
+    return vrsqrteq_f32(mm);
 #endif
 }
 
@@ -128,6 +133,8 @@ dm_simd_float dm_simd_hadd_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_hadd_ps(left, right);
+#elif defined(DM_SIMD_ARM)
+    return vpaddq_f32(left, right);
 #endif
 }
 
@@ -341,14 +348,8 @@ dm_simd_float dm_simd_eq_float(dm_simd_float left, dm_simd_float right)
 {
 #ifdef DM_SIMD_X86
     return _mm_cmpeq_ps(left, right);
-#endif
-}
-
-DM_INLINE
-dm_simd_float dm_simd_neq_float(dm_simd_float left, dm_simd_float right)
-{
-#ifdef DM_SIMD_X86
-    return _mm_cmpneq_ps(left, right);
+#elif defined(DM_SIMD_ARM)
+    return vceqq_f32(left, right);
 #endif
 }
 
@@ -445,6 +446,8 @@ dm_simd_int dm_simd_min_i(dm_simd_int left, dm_simd_int right)
 {
 #ifdef DM_SIMD_X86
     return _mm_min_epu32(left, right);
+#elif defined(DM_SIMD_ARM)
+    return vminq_s32(left, right);
 #endif
 }
 
@@ -453,6 +456,8 @@ dm_simd_int dm_simd_max_i(dm_simd_int left, dm_simd_int right)
 {
 #ifdef DM_SIMD_X86
     return _mm_max_epu32(left, right);
+#elif defined(DM_SIMD_ARM)
+    return vmaxq_s32(left, right);
 #endif
 }
 
@@ -471,16 +476,18 @@ dm_simd_int dm_simd_eq_i(dm_simd_int left, dm_simd_int right)
 {
 #ifdef DM_SIMD_X86
     return _mm_cmpeq_epi32(left, right);
+#elif defined(DM_SIMD_ARM)
+    return vceqq_s32(left, right);
 #endif
 }
 
+#ifdef DM_SIMD_X86
 DM_INLINE
 dm_simd_int dm_simd_neq_i(dm_simd_int left, dm_simd_int right)
 {
-#ifdef DM_SIMD_X86
     return _mm_andnot_si128(_mm_cmpeq_epi32(left, right), _mm_set1_epi8(-1));
-#endif
 }
+#endif
 
 /*
 MATRIX
