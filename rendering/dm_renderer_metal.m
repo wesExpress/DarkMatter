@@ -380,6 +380,11 @@ void dm_metal_destroy_index_buffer(dm_metal_index_buffer* buffer)
     }
 }
 
+bool dm_renderer_backend_create_structured_buffer(dm_structured_buffer_desc buffer_desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    return true;
+}
+
 bool dm_renderer_backend_create_constant_buffer(const void* data, size_t data_size, dm_render_handle* handle, dm_renderer* renderer)
 {
     DM_METAL_GET_RENDERER;
@@ -441,7 +446,7 @@ bool dm_renderer_backend_create_texture(const void* data, uint32_t width, uint32
     return true;
 }
 
-bool dm_renderer_backend_resize_texutre(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer)
+bool dm_renderer_backend_resize_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer)
 {
     return true;
 }
@@ -730,6 +735,12 @@ bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t 
     return true;
 }
 
+bool dm_render_command_backend_clear_texture(dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_LOG_FATAL("Not supported");
+    return false;
+}
+
 bool dm_render_command_backend_update_constant_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer)
 {
     return true;
@@ -762,6 +773,11 @@ void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* ren
 
 #ifdef DM_RAYTRACING
 bool dm_render_command_backend_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size, dm_renderer* renderer)
+{
+    return true;
+}
+
+bool dm_render_command_backend_update_acceleration_structure_instance_range(dm_render_handle handle, uint32_t instance_start, uint32_t instance_end, void* data, dm_renderer* renderer)
 {
     return true;
 }

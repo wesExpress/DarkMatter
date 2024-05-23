@@ -32,7 +32,7 @@ typedef struct dm_dx12_pipeline_t
     ID3D12PipelineState*     state;
     
     D3D12_PRIMITIVE_TOPOLOGY topology;
-    
+   
     uint32_t cb_count;
     
     uint32_t cbv_heap_offset, tex_offset;
