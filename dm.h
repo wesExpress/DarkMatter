@@ -8,13 +8,6 @@ APP DEFINES
 
 /********************************************
 DETERMINE PLATFORM AND RENDERING BACKEND
-
-we default to directX on windows platforms, 
-metal on OSX. But if DM_OPENGL is defined 
-then we overwrite that for windows. On mac, 
-we switch our platform to GLFW if OpenGL is 
-desired as creating an OpenGL context is 
-depreciated
 **********************************************/
 #ifdef __APPLE__
 #define DM_PLATFORM_APPLE

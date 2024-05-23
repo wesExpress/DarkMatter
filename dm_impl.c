@@ -1499,7 +1499,8 @@ dm_context* dm_init(dm_context_init_packet init_packet)
 
 void dm_shutdown(dm_context* context)
 {
-    dm_free(&context->renderer.command_manager.commands);
+    dm_free((void**)&context->renderer.command_manager.commands);
+    
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
     

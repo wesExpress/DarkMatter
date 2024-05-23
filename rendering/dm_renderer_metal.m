@@ -22,6 +22,12 @@ typedef struct dm_metal_index_buffer_t
     size_t        index_size, count;
 } dm_metal_index_buffer;
 
+typedef struct dm_metal_structured_buffer_t
+{
+    id<MTLBuffer> buffer[DM_METAL_NUM_FRAMES];
+    size_t        stride, count;
+} dm_metal_structured_buffer;
+
 typedef struct dm_metal_constant_buffer_t
 {
     id<MTLBuffer> buffer[DM_METAL_NUM_FRAMES];
@@ -528,7 +534,7 @@ bool dm_metal_create_blas(dm_blas_desc desc, dm_metal_acceleration_structure* in
     
     const dm_metal_vertex_buffer* vb = &metal_renderer->vertex_buffers[vb_handle];
     const dm_metal_index_buffer*  ib = NULL;
-    if(desc.index_buffer!=DM_RENDER_HANDLE_INVALID) ib = &metal_renderer->index_buffers[ib_handle];
+    if(DM_RENDER_HANDLE_GET_TYPE(desc.index_buffer)!=DM_RENDER_RESOURCE_TYPE_INVALID) ib = &metal_renderer->index_buffers[ib_handle];
     
     for(uint32_t i=0; i<DM_METAL_NUM_FRAMES; i++)
     {
@@ -548,7 +554,7 @@ bool dm_metal_create_blas(dm_blas_desc desc, dm_metal_acceleration_structure* in
                 geom_descriptor.vertexStride  = vb->stride;
                 geom_descriptor.triangleCount = vb->count / 3;
                 
-                if(desc.index_buffer!=DM_RENDER_HANDLE_INVALID)
+                if(DM_RENDER_HANDLE_GET_TYPE(desc.index_buffer)!=DM_RENDER_RESOURCE_TYPE_INVALID)
                 {
                     geom_descriptor.indexBuffer = ib->buffer[i];
                     geom_descriptor.indexType   = MTLIndexTypeUInt32;
@@ -794,26 +800,6 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     
     return true;
 }
-
-bool dm_renderer_backend_rt_pipe_global_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
-{
-    return true;
-}
-
-bool dm_renderer_backend_rt_pipe_raygen_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
-{
-    return true;
-}
-
-bool dm_renderer_backend_rt_pipe_miss_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t miss_index, uint32_t slot, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
-{
-    return true;
-}
-
-bool dm_renderer_backend_rt_pipe_hit_insert_resource(dm_raytracing_pipeline_shader_param_type type, uint32_t hit_group, uint32_t slot, uint32_t instance, dm_render_handle handle, dm_render_handle pipe_handle, dm_renderer* renderer)
-{
-    return true;
-}
 #endif
 
 /*****************************
@@ -901,21 +887,6 @@ bool dm_render_command_backend_update_acceleration_structure_instance(dm_render_
 }
 
 bool dm_render_command_backend_update_acceleration_structure_tlas(dm_render_handle handle, dm_renderer* renderer)
-{
-    return true;
-}
-
-bool dm_render_command_backend_add_global_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle vb_handle, dm_render_handle pipe_handle,  dm_renderer* renderer)
-{
-    
-}
-
-bool dm_render_command_backend_add_raygen_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, dm_render_handle vb_handle, dm_render_handle pipe_handle,  dm_renderer* renderer)
-{
-    return true;
-}
-
-bool dm_render_command_backend_add_hit_group_param(dm_raytracing_pipeline_shader_param_type type, uint32_t slot, uint32_t hit_group, uint32_t instance, dm_render_handle vb_handle, dm_render_handle pipe_handle,  dm_renderer* renderer)
 {
     return true;
 }
