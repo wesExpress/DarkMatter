@@ -59,7 +59,7 @@ INCLUDES
 #include <string.h>
 #include <limits.h>
 
-#ifndef  DM_PLATFORM_APPLE
+#ifdef DM_SIMD_X86
 #include <immintrin.h>
 #include <emmintrin.h>
 #include <xmmintrin.h>
@@ -154,8 +154,10 @@ typedef DM_ALIGN(16) float dm_mat4[4][4];
 SIMD
 ******/
 #ifdef DM_SIMD_X86
+#ifdef DM_AVX512
 typedef __m256  dm_simd256_float;
 typedef __m256i dm_simd256_int;
+#endif
 
 typedef __m128  dm_simd_float;
 typedef __m128i dm_simd_int;
@@ -174,7 +176,7 @@ typedef int32x4_t   dm_simd_int;
 INTRINSICS
 ************/
 #include "dm_intrinsics.h"
-#ifdef DM_SIMD_X86
+#ifdef DM_AVX512
 #include "dm_intrinsics256.h"
 #endif
 

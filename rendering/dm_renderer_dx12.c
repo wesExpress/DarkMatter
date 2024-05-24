@@ -3091,7 +3091,7 @@ bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle handle,
     return true;
 }
 
-bool dm_render_command_backend_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer)
+bool dm_render_command_backend_raytracing_pipeline_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
