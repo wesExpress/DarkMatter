@@ -2,6 +2,8 @@
 
 #ifdef DM_PLATFORM_WIN32
 
+#include <stdio.h>
+
 #ifdef DM_OPENGL
 #include "glad/glad_wgl.h"
 
@@ -447,7 +449,7 @@ void* dm_win32_thread_start_func(void* args)
         if(task) 
         {
             task->func(task->args);
-            dm_free(&task);
+            dm_free((void**)&task);
         }
         
         // decrement thread working counter
@@ -530,7 +532,7 @@ void dm_platform_clipboard_paste(void (*callback)(char*,int,void*), void* edit)
     
     callback(utf8, utf8size, edit);
     //nk_textedit_paste(edit, utf8, utf8size);
-    dm_free(&utf8);
+    dm_free((void**)&utf8);
     
     GlobalUnlock(mem);
     CloseClipboard();
@@ -596,11 +598,11 @@ bool dm_platform_win32_decode_hresult(HRESULT hr)
         DM_LOG_ERROR("File not found");
         break;
         
-        case 2289696773:
+        case 0x887A0005:
         DM_LOG_ERROR("DXGI Error: Device removed: Device hung");
         break;
         
-        case 2289696774:
+        case 0x887A0006:
         DM_LOG_ERROR("GPU will not respond to more commands due to invalid command");
         break;
         

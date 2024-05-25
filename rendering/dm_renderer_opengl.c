@@ -379,7 +379,7 @@ bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_
     glGenerateMipmap(GL_TEXTURE_2D);
     if(glCheckError()) return false;
     
-    strcpy(internal_texture.name, name);
+    dm_strcpy(internal_texture.name, name);
     
     // pbos
     for(uint32_t i=0; i<2; i++)
@@ -432,7 +432,7 @@ bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height,
     DM_OPENGL_GET_RENDERER;
     
     dm_opengl_texture internal_texture = { 0 };
-    strcpy(internal_texture.name, name);
+    dm_strcpy(internal_texture.name, name);
     internal_texture.is_dynamic = true;
     
     GLenum format;

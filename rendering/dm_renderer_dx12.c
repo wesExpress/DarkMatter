@@ -14,6 +14,8 @@
 #endif
 
 #include <assert.h>
+#include <string.h>
+#include <stdio.h>
 
 #define DM_DX12_NUM_FRAMES 3
 
@@ -343,7 +345,7 @@ D3D12_INPUT_CLASSIFICATION dm_vertex_class_to_dx12_class(dm_vertex_attrib_class 
         
         default:
 		DM_LOG_FATAL("Unknown vertex attribute input class!");
-		return DM_VERTEX_ATTRIB_CLASS_UNKNOWN;
+		return D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
 	}
 }
 
@@ -529,65 +531,68 @@ bool dm_renderer_backend_init(dm_context* context)
     context->renderer.internal_renderer = dm_alloc(sizeof(dm_dx12_renderer));
     dm_dx12_renderer* dx12_renderer = context->renderer.internal_renderer;
     
-    IDXGIFactory2* factory;
-    IDXGIAdapter1* adapter;
+    IDXGIFactory2* factory = NULL;
+    IDXGIAdapter1* adapter = NULL;
+    void* tmp = NULL;
     
 #ifdef DM_DEBUG
-    hr = CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory2, &factory);
-    if(!dm_platform_win32_decode_hresult(hr))
+    hr = CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory2, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
     {
-        hr = CreateDXGIFactory2(0, &IID_IDXGIFactory2, &factory);
-        if(!dm_platform_win32_decode_hresult(hr))
+        hr = CreateDXGIFactory2(0, &IID_IDXGIFactory2, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("CreateDXGIFactory2 failed");
             return false;
         }
     }
 #else
-    hr = CreateDXGIFactory2(0, &IID_IDXGIFactory2, &factory);
-    if(!dm_platform_win32_decode_hresult(hr))
+    hr = CreateDXGIFactory2(0, &IID_IDXGIFactory2, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
     {
         DM_LOG_FATAL("CreateDXGIFactory2 failed");
         return false;
     }
 #endif
+    factory = tmp;
     
     // debug layer
 #ifdef DM_DEBUG
     {
-        hr = D3D12GetDebugInterface(&IID_ID3D12Debug, &dx12_renderer->debug);
-        if(!dm_platform_win32_decode_hresult(hr))
+        hr = D3D12GetDebugInterface(&IID_ID3D12Debug, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("D3D12GetDebugInterface failed");
             DM_LOG_FATAL("Debug interface initialization failed");
             return false;
         }
-        
+        dx12_renderer->debug = tmp;        
+
         ID3D12Debug_EnableDebugLayer(dx12_renderer->debug);
         
 #ifdef DM_DX12_GPU_BASED_VALIDATION
         ID3D12Debug1* debug_controller;
         
-        hr = ID3D12Debug_QueryInterface(dx12_renderer->debug, &IID_ID3D12Debug1, &debug_controller);
-        if(!dm_platform_win32_decode_hresult(hr))
+        hr = ID3D12Debug_QueryInterface(dx12_renderer->debug, &IID_ID3D12Debug1, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Debug_QueryInterface failed");
             DM_LOG_FATAL("GPU Validation layer initialization failed");
             return false;
         }
-        
+        debug_controller = tmp; 
         ID3D12Debug1_SetEnableGPUBasedValidation(debug_controller, true);
 #endif
         
 #ifdef DM_DX12_DRED_VALIDATION
-        hr = D3D12GetDebugInterface(&IID_ID3D12DeviceRemovedExtendedDataSettings, &dx12_renderer->dred_settings);
-        if(!dm_platform_win32_decode_hresult(hr))
+        hr = D3D12GetDebugInterface(&IID_ID3D12DeviceRemovedExtendedDataSettings, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("D3D12GetDebugInterface");
             DM_LOG_FATAL("DRED Settings initialization failed");
             return false;
         }
-        
+        dx12_renderer->dred_settings = tmp; 
         ID3D12DeviceRemovedExtendedDataSettings_SetAutoBreadcrumbsEnablement(dx12_renderer->dred_settings, D3D12_DRED_ENABLEMENT_FORCED_ON);
         ID3D12DeviceRemovedExtendedDataSettings_SetPageFaultEnablement(dx12_renderer->dred_settings, D3D12_DRED_ENABLEMENT_FORCED_ON);
 #endif
@@ -605,19 +610,19 @@ bool dm_renderer_backend_init(dm_context* context)
             
             if(dxgi_adapter_desc1.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) continue;
             
-            hr = D3D12CreateDevice((IUnknown*)adapter, D3D_FEATURE_LEVEL_12_1, &IID_ID3D12Device5, &dx12_renderer->device);
+            hr = D3D12CreateDevice((IUnknown*)adapter, D3D_FEATURE_LEVEL_12_1, &IID_ID3D12Device5, &tmp);
             bool valid_device = dm_platform_win32_decode_hresult(hr);
-            valid_device = valid_device & (dxgi_adapter_desc1.DedicatedVideoMemory > max_dedicated_video_memory);
+            valid_device = valid_device && (dxgi_adapter_desc1.DedicatedVideoMemory > max_dedicated_video_memory);
             if(!valid_device) continue;
             
             max_dedicated_video_memory = dxgi_adapter_desc1.DedicatedVideoMemory;
             break;
         }
-        
+        dx12_renderer->device = tmp; 
+
         if(!adapter)
         {
             DM_LOG_FATAL("No hardware adapter found. System does not support DX12");
-            IDXGIAdapter1_Release(adapter);
             IDXGIFactory2_Release(factory);
             return false;
         }
@@ -653,15 +658,16 @@ bool dm_renderer_backend_init(dm_context* context)
 #ifdef DM_DEBUG
     {
         ID3D12InfoQueue* info_queue;
-        hr = ID3D12Device5_QueryInterface(dx12_renderer->device, &IID_ID3D12InfoQueue, &info_queue);
-        if(!dm_platform_win32_decode_hresult(hr))
+        hr = ID3D12Device5_QueryInterface(dx12_renderer->device, &IID_ID3D12InfoQueue, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("IUnknown_QueryInterface failed");
             IDXGIFactory2_Release(factory);
             IDXGIAdapter1_Release(adapter);
             return false;
         }
-        
+        info_queue = tmp;
+
         ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
 #ifndef DM_DX12_DRED_VALIDATION
         ID3D12InfoQueue_SetBreakOnSeverity(info_queue, D3D12_MESSAGE_SEVERITY_ERROR, true);
@@ -696,27 +702,29 @@ bool dm_renderer_backend_init(dm_context* context)
         D3D12_COMMAND_QUEUE_DESC command_queue_desc = { 0 };
         command_queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
         
-        hr = ID3D12Device5_CreateCommandQueue(dx12_renderer->device, &command_queue_desc, &IID_ID3D12CommandQueue, &dx12_renderer->command_queue);
-        if(!dm_platform_win32_decode_hresult(hr))
+        hr = ID3D12Device5_CreateCommandQueue(dx12_renderer->device, &command_queue_desc, &IID_ID3D12CommandQueue, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommandQueue failed");
             IDXGIFactory2_Release(factory);
             IDXGIAdapter1_Release(adapter);
             return false;
         }
+        dx12_renderer->command_queue = tmp;
     }
     
     // fence
     {
-        hr = ID3D12Device5_CreateFence(dx12_renderer->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, &dx12_renderer->fence);
-        if(!dm_platform_win32_decode_hresult(hr))
+        hr = ID3D12Device5_CreateFence(dx12_renderer->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateFence failed");
             IDXGIFactory2_Release(factory);
             IDXGIAdapter1_Release(adapter);
             return false;
         }
-        
+        dx12_renderer->fence = tmp; 
+
         dx12_renderer->frame_fence_values[0]++;
         
         dx12_renderer->fence_event = CreateEvent(NULL, FALSE, FALSE, NULL);
@@ -742,10 +750,17 @@ bool dm_renderer_backend_init(dm_context* context)
         
         dm_internal_w32_data* win32_data = context->platform_data.internal_data;
         IDXGISwapChain1* swap_chain;
-        
-        IDXGIFactory2_CreateSwapChainForHwnd(factory, (IUnknown*)dx12_renderer->command_queue, win32_data->hwnd, &swap_chain_desc, NULL, NULL, &swap_chain);
-        IDXGISwapChain1_QueryInterface(swap_chain, &IID_IDXGISwapChain3, &dx12_renderer->swap_chain);
-        
+      
+        IDXGIFactory2_CreateSwapChainForHwnd(factory, (IUnknown*)dx12_renderer->command_queue, win32_data->hwnd, &swap_chain_desc, NULL, NULL, &swap_chain); 
+        IDXGISwapChain1_QueryInterface(swap_chain, &IID_IDXGISwapChain3, &tmp);
+        if(!tmp)
+        {
+            DM_LOG_FATAL("IDXGISwapchain1_QueryInterface failed");
+            DM_LOG_FATAL("Could not create DX12 swap chain");
+            return false;
+        }
+        dx12_renderer->swap_chain = tmp;
+
         // cleanup
         IDXGISwapChain1_Release(swap_chain);
     }
@@ -756,8 +771,8 @@ bool dm_renderer_backend_init(dm_context* context)
         heap_desc.NumDescriptors = DM_DX12_NUM_FRAMES;
         heap_desc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
         
-        hr = ID3D12Device5_CreateDescriptorHeap(dx12_renderer->device, &heap_desc, &IID_ID3D12DescriptorHeap, &dx12_renderer->rtv_descriptor_heap);
-        if(!dm_platform_win32_decode_hresult(hr))
+        hr = ID3D12Device5_CreateDescriptorHeap(dx12_renderer->device, &heap_desc, &IID_ID3D12DescriptorHeap, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateDescriptorHeap failed");
             DM_LOG_FATAL("Could not create DirectX12 render target descriptor heap");
@@ -765,6 +780,7 @@ bool dm_renderer_backend_init(dm_context* context)
             IDXGIAdapter1_Release(adapter);
             return false;
         }
+        dx12_renderer->rtv_descriptor_heap = tmp;
     }
     
     // depth stencil descriptor heap
@@ -774,8 +790,8 @@ bool dm_renderer_backend_init(dm_context* context)
         heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
         heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
         
-        hr = ID3D12Device5_CreateDescriptorHeap(dx12_renderer->device, &heap_desc, &IID_ID3D12DescriptorHeap, &dx12_renderer->depth_stencil_descriptor_heap);
-        if(!dm_platform_win32_decode_hresult(hr))
+        hr = ID3D12Device5_CreateDescriptorHeap(dx12_renderer->device, &heap_desc, &IID_ID3D12DescriptorHeap, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateDescriptorHeap failed");
             DM_LOG_FATAL("Could not create DirectX12 depth stencil descriptor heap");
@@ -783,6 +799,7 @@ bool dm_renderer_backend_init(dm_context* context)
             IDXGIAdapter1_Release(adapter);
             return false;
         }
+        dx12_renderer->depth_stencil_descriptor_heap = tmp; 
     }
     
     // resource descriptor heap
@@ -795,8 +812,8 @@ bool dm_renderer_backend_init(dm_context* context)
             heap_desc.Type  = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
             heap_desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
             
-            hr = ID3D12Device5_CreateDescriptorHeap(dx12_renderer->device, &heap_desc, &IID_ID3D12DescriptorHeap, &dx12_renderer->resource_descriptor_heap[i]);
-            if(!dm_platform_win32_decode_hresult(hr))
+            hr = ID3D12Device5_CreateDescriptorHeap(dx12_renderer->device, &heap_desc, &IID_ID3D12DescriptorHeap, &tmp);
+            if(!dm_platform_win32_decode_hresult(hr) || !tmp)
             {
                 DM_LOG_FATAL("ID3D12Device5_CreateDescriptorHeap failed");
                 DM_LOG_FATAL("Could not create DirectX12 resource descriptor heap for frame: %u", i);
@@ -804,6 +821,7 @@ bool dm_renderer_backend_init(dm_context* context)
                 IDXGIAdapter1_Release(adapter);
                 return false;
             }
+            dx12_renderer->resource_descriptor_heap[i] = tmp; 
         }
     }
     
@@ -814,15 +832,16 @@ bool dm_renderer_backend_init(dm_context* context)
         
         for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
         {
-            hr = IDXGISwapChain1_GetBuffer(dx12_renderer->swap_chain, (UINT)i, &IID_ID3D12Resource, &dx12_renderer->render_target[i]);
-            if(!dm_platform_win32_decode_hresult(hr))
+            hr = IDXGISwapChain1_GetBuffer(dx12_renderer->swap_chain, (UINT)i, &IID_ID3D12Resource, &tmp);
+            if(!dm_platform_win32_decode_hresult(hr) || !tmp)
             {
                 DM_LOG_FATAL("IDXGISwapChain1_GetBuffer failed");
                 IDXGIFactory2_Release(factory);
                 IDXGIAdapter1_Release(adapter);
                 return false;
             }
-            
+            dx12_renderer->render_target[i] = tmp; 
+
             ID3D12Device5_CreateRenderTargetView(dx12_renderer->device, dx12_renderer->render_target[i], NULL, rtv_descriptor_handle);
             rtv_descriptor_handle.ptr += dx12_renderer->handle_increment_size_rtv;
         }
@@ -849,9 +868,9 @@ bool dm_renderer_backend_init(dm_context* context)
         depth_desc.DepthOrArraySize = 1;
         depth_desc.SampleDesc.Count = 1;
         depth_desc.MipLevels = 1;
-        
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &depth_desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &clear_value, &IID_ID3D12Resource, &dx12_renderer->depth_stencil_buffer);
-        if(!dm_platform_win32_decode_hresult(hr))
+
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &depth_desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &clear_value, &IID_ID3D12Resource, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommandAllocator failed");
             DM_LOG_FATAL("Could not create DirectX12 depth-stencil buffer");
@@ -859,7 +878,8 @@ bool dm_renderer_backend_init(dm_context* context)
             IDXGIAdapter1_Release(adapter);
             return false;
         }
-        
+        dx12_renderer->depth_stencil_buffer = tmp;       
+
         // view
         D3D12_DEPTH_STENCIL_VIEW_DESC depth_stencil_desc = { 0 };
         depth_stencil_desc.Format        = DXGI_FORMAT_D32_FLOAT;
@@ -873,14 +893,15 @@ bool dm_renderer_backend_init(dm_context* context)
     {
         for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
         {
-            hr = ID3D12Device5_CreateCommandAllocator(dx12_renderer->device, D3D12_COMMAND_LIST_TYPE_DIRECT, &IID_ID3D12CommandAllocator, &dx12_renderer->command_allocator[i]);
-            if(!dm_platform_win32_decode_hresult(hr))
+            hr = ID3D12Device5_CreateCommandAllocator(dx12_renderer->device, D3D12_COMMAND_LIST_TYPE_DIRECT, &IID_ID3D12CommandAllocator, &tmp);
+            if(!dm_platform_win32_decode_hresult(hr) || !tmp)
             {
                 DM_LOG_FATAL("ID3D12Device5_CreateCommandAllocator failed");
                 IDXGIFactory2_Release(factory);
                 IDXGIAdapter1_Release(adapter);
                 return false;
             }
+            dx12_renderer->command_allocator[i] = tmp; 
         }
     }
     
@@ -888,14 +909,15 @@ bool dm_renderer_backend_init(dm_context* context)
     {
         for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
         {
-            hr = ID3D12Device5_CreateCommandList1(dx12_renderer->device, 0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, &IID_ID3D12GraphicsCommandList, &dx12_renderer->command_list[i]);
-            if(!dm_platform_win32_decode_hresult(hr))
+            hr = ID3D12Device5_CreateCommandList1(dx12_renderer->device, 0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, &IID_ID3D12GraphicsCommandList, &tmp);
+            if(!dm_platform_win32_decode_hresult(hr) || !tmp)
             {
                 DM_LOG_FATAL("ID3D12Device5_CreateCommandList1 failed");
                 IDXGIFactory2_Release(factory);
                 IDXGIAdapter1_Release(adapter);
                 return false;
             }
+            dx12_renderer->command_list[i] = tmp;
         }
     }
     
@@ -987,13 +1009,15 @@ void dm_renderer_backend_shutdown(dm_context* context)
     ID3D12DeviceRemovedExtendedDataSettings_Release(dx12_renderer->dred_settings);
 #endif
     
-    HRESULT hr = DXGIGetDebugInterface1(0, &IID_IDXGIDebug1, &dxgi_debug);
-    if(!dm_platform_win32_decode_hresult(hr))
+    void* tmp = NULL;
+    HRESULT hr = DXGIGetDebugInterface1(0, &IID_IDXGIDebug1, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
     {
         DM_LOG_ERROR("DXGIGetDebugInterface1 failed");
     }
     else
     {
+        dxgi_debug = tmp; 
         IDXGIDebug1_ReportLiveObjects(dxgi_debug, DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_SUMMARY | DXGI_DEBUG_RLO_DETAIL | DXGI_DEBUG_RLO_IGNORE_INTERNAL);
         IDXGIDebug1_Release(dxgi_debug);
     }
@@ -1168,13 +1192,15 @@ bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* re
         
         for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
         {
-            hr = IDXGISwapChain3_GetBuffer(dx12_renderer->swap_chain, i, &IID_ID3D12Resource, &dx12_renderer->render_target[i]);
-            if(!dm_platform_win32_decode_hresult(hr))
+            void* tmp = NULL;
+            hr = IDXGISwapChain3_GetBuffer(dx12_renderer->swap_chain, i, &IID_ID3D12Resource, &tmp);
+            if(!dm_platform_win32_decode_hresult(hr) || !tmp)
             {
                 DM_LOG_FATAL("IDXGISwapChain3_GetBuffer failed");
                 return false;
             }
-            
+            dx12_renderer->render_target[i] = tmp;
+
             ID3D12Device5_CreateRenderTargetView(dx12_renderer->device, dx12_renderer->render_target[i], NULL, rtv_descriptor_handle);
             rtv_descriptor_handle.ptr += dx12_renderer->handle_increment_size_rtv;
         }
@@ -1202,14 +1228,16 @@ bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* re
         depth_desc.SampleDesc.Count = 1;
         depth_desc.MipLevels = 1;
         
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &depth_desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &clear_value, &IID_ID3D12Resource, &dx12_renderer->depth_stencil_buffer);
-        if(!dm_platform_win32_decode_hresult(hr))
+        void* tmp = NULL;
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &depth_desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &clear_value, &IID_ID3D12Resource, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommandAllocator failed");
             DM_LOG_FATAL("Could not resize DirectX12 depth-stencil buffer");
             return false;
         }
-        
+        dx12_renderer->depth_stencil_buffer = tmp;
+
         // view
         D3D12_DEPTH_STENCIL_VIEW_DESC depth_stencil_desc = { 0 };
         depth_stencil_desc.Format        = DXGI_FORMAT_D32_FLOAT;
@@ -1240,15 +1268,17 @@ bool dm_renderer_backend_create_vertex_buffer(const dm_vertex_buffer_desc desc, 
     
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_buffer.buffer[i]);
+        void* tmp = NULL;
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &tmp);
         
-        if(!dm_platform_win32_decode_hresult(hr))
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
             DM_LOG_FATAL("Creating DirectX12 buffer failed");
             return false;
         }
-        
+        internal_buffer.buffer[i] = tmp;
+
         ID3D12Resource_Map(internal_buffer.buffer[i], 0, NULL, &internal_buffer.mapped_addresses[i]);
         if(!dm_platform_win32_decode_hresult(hr))
         {
@@ -1282,14 +1312,16 @@ bool dm_renderer_backend_create_index_buffer(const dm_index_buffer_desc desc, dm
     D3D12_RESOURCE_DESC buffer_desc = DM_DX12_BASIC_BUFFER_DESC;
     buffer_desc.Width = desc.size;
     
-    hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_buffer.buffer);
-    if(!dm_platform_win32_decode_hresult(hr))
+    void* tmp = NULL;
+    hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
     {
         DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
         DM_LOG_FATAL("Creating DirectX12 index buffer failed");
         return false;
     }
-    
+    internal_buffer.buffer = tmp;
+
     assert(desc.data);
     {
         void* ptr = NULL;
@@ -1344,14 +1376,16 @@ bool dm_renderer_backend_create_constant_buffer(const void* data, size_t data_si
     {
         D3D12_RESOURCE_DESC desc = DM_DX12_BASIC_BUFFER_DESC;
         desc.Width = size;
-        
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_buffer.buffer[i]);
-        if(!dm_platform_win32_decode_hresult(hr))
+
+        void* tmp = NULL;
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
             return false;
         }
-        
+        internal_buffer.buffer[i] = tmp;
+
         hr = ID3D12Resource_Map(internal_buffer.buffer[i], 0, NULL, &internal_buffer.mapped_address[i]);
         if(!dm_platform_win32_decode_hresult(hr))
         {
@@ -1394,12 +1428,14 @@ bool dm_renderer_backend_create_structured_buffer(const dm_structured_buffer_des
     
     for(uint8_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &internal_buffer.buffer[i]);
-        if(!dm_platform_win32_decode_hresult(hr))
+        void* tmp = NULL;
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
             return false;
         }
+        internal_buffer.buffer[i] = tmp;
     }
     
     //
@@ -1589,31 +1625,35 @@ bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_
         if (!dm_platform_win32_decode_hresult(hr))
         {
             DM_LOG_FATAL("D3D12SerializeRootSignature failed");
-            DM_LOG_FATAL("%s", (char*)ID3D10Blob_GetBufferPointer(error_blob));
+            if(error_blob) DM_LOG_FATAL("%s", (char*)ID3D10Blob_GetBufferPointer(error_blob));
             return false;
         }
         
-        hr = ID3D12Device5_CreateRootSignature(dx12_renderer->device, 0, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), &IID_ID3D12RootSignature, &internal_pipe.root_signature);
-        if(!dm_platform_win32_decode_hresult(hr))
+        void* tmp = NULL;
+        hr = ID3D12Device5_CreateRootSignature(dx12_renderer->device, 0, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), &IID_ID3D12RootSignature, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateRootSignature failed");
             DM_LOG_FATAL("Could not create root signature for raytracing pipeline");
             return false;
         }
-        
+        internal_pipe.root_signature = tmp;
+
         ID3D10Blob_Release(blob);
     }
     
     pipe_desc.pRootSignature = internal_pipe.root_signature;
     
     // state object
-    hr = ID3D12Device5_CreateGraphicsPipelineState(dx12_renderer->device, &pipe_desc, &IID_ID3D12PipelineState, &internal_pipe.state);
-    if(!dm_platform_win32_decode_hresult(hr))
+    void* tmp = NULL;
+    hr = ID3D12Device5_CreateGraphicsPipelineState(dx12_renderer->device, &pipe_desc, &IID_ID3D12PipelineState, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
     {
         DM_LOG_FATAL("ID3D12Device5_CreateGraphicsPipelineState failed");
         return false;
     }
-    
+    internal_pipe.state = tmp;
+
     // resource views
     // TODO: have no idea how to handle the handle pointer moving
     if(desc.cb_count>0)
@@ -1645,7 +1685,7 @@ bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_
     dm_memcpy(dx12_renderer->pipes + dx12_renderer->pipe_count, &internal_pipe, sizeof(internal_pipe));
     DM_RENDER_HANDLE_SET_INDEX(*handle, dx12_renderer->pipe_count++);
     
-    dm_free(&input_desc);
+    dm_free((void**)&input_desc);
     
     return true;
 }
@@ -1681,6 +1721,9 @@ DXGI_FORMAT dm_texture_data_type_to_dxgi_format(dm_texture_desc desc)
             case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32_SINT;
             case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32_UINT;
             case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32_FLOAT;
+
+            default:
+            break;
         }
         break;
         
@@ -1698,6 +1741,9 @@ DXGI_FORMAT dm_texture_data_type_to_dxgi_format(dm_texture_desc desc)
             case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32G32_FLOAT;
             case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32G32_SINT;
             case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32G32_UINT;
+
+            default:
+            break;
         }
         break;
         
@@ -1707,6 +1753,9 @@ DXGI_FORMAT dm_texture_data_type_to_dxgi_format(dm_texture_desc desc)
             case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32G32B32_FLOAT;
             case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32G32B32_SINT;
             case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32G32B32_UINT;
+
+            default:
+            break;
         }
         break;
         
@@ -1724,6 +1773,9 @@ DXGI_FORMAT dm_texture_data_type_to_dxgi_format(dm_texture_desc desc)
             case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32G32B32A32_FLOAT;
             case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32G32B32A32_SINT;
             case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32G32B32A32_UINT;
+
+            default:
+            break;
         }
         break;
     }
@@ -1751,12 +1803,14 @@ bool dm_renderer_backend_create_texture(dm_texture_desc texture_desc, dm_render_
     
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &internal_texture.texture[i]);
-        if(!dm_platform_win32_decode_hresult(hr))
+        void* tmp = NULL;
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
             return false;
         }
+        internal_texture.texture[i] = tmp;
     }
     
     //
@@ -1796,13 +1850,15 @@ bool dm_renderer_backend_resize_texture(const void* data, uint32_t width, uint32
         image_desc.SampleDesc.Count = 1;
         image_desc.Flags            = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
         
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &image_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &internal_texture->texture[i]);
-        if(!dm_platform_win32_decode_hresult(hr))
+        void* tmp = NULL;
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &image_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
             DM_LOG_FATAL("Could not resize DirectX12 texture");
             return false;
         }
+        internal_texture->texture[i] = NULL;
     }
     
     return true;
@@ -1863,27 +1919,30 @@ bool dm_dx12_create_acceleration_structure(D3D12_BUILD_RAYTRACING_ACCELERATION_S
     buffer_desc.Width = prebuild_info.ScratchDataSizeInBytes;
     buffer_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     
-    hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_COMMON, NULL, &IID_ID3D12Resource, scratch_buffer);
-    if(!dm_platform_win32_decode_hresult(hr))
+    void* tmp = NULL;
+    hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_COMMON, NULL, &IID_ID3D12Resource, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
     {
         DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
         DM_LOG_FATAL("Could not create scratch buffer");
         return false;
     }
-    
+    *scratch_buffer = tmp;
+
     // result buffer
     buffer_desc       = DM_DX12_BASIC_BUFFER_DESC;
     buffer_desc.Width = prebuild_info.ResultDataMaxSizeInBytes;
     buffer_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     
-    hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, NULL, &IID_ID3D12Resource, result_buffer);
-    if(!dm_platform_win32_decode_hresult(hr))
+    hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, NULL, &IID_ID3D12Resource, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
     {
         DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
         DM_LOG_FATAL("Could not create result buffer");
         return false;
     }
-    
+   *result_buffer = tmp;
+
     // acceleration structure
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build_desc = { 0 };
     build_desc.DestAccelerationStructureData    = ID3D12Resource_GetGPUVirtualAddress(*result_buffer);
@@ -1897,7 +1956,7 @@ bool dm_dx12_create_acceleration_structure(D3D12_BUILD_RAYTRACING_ACCELERATION_S
     
     ID3D12CommandQueue_ExecuteCommandLists(dx12_renderer->command_queue, 1, (ID3D12CommandList**)&command_list);
     dm_dx12_flush(dx12_renderer);
-    
+   
     ///
     return true;
 }
@@ -2013,21 +2072,24 @@ bool dm_dx12_create_tlas(dm_acceleration_structure_desc as_desc, dm_dx12_acceler
         D3D12_RESOURCE_DESC buffer_desc = DM_DX12_BASIC_BUFFER_DESC;
         buffer_desc.Width = sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * as_desc.tlas_desc.max_instance_count;
         
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_as->tlas.instance_buffer[i]);
-        if(!dm_platform_win32_decode_hresult(hr))
+        void* tmp = NULL;
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &buffer_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
             DM_LOG_FATAL("Could not create acceleration structure top-level instance buffer");
             return false;
         }
-        
-        ID3D12Resource_Map(internal_as->tlas.instance_buffer[i], 0, NULL, (void**)&internal_as->tlas.instance_data[i]);
-        if(!dm_platform_win32_decode_hresult(hr))
+        internal_as->tlas.instance_buffer[i] = tmp;        
+
+        ID3D12Resource_Map(internal_as->tlas.instance_buffer[i], 0, NULL, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Resource_Map failed");
             return false;
         }
-        
+        internal_as->tlas.instance_data[i] = tmp;
+
         uint32_t i_offset = 0;
         for(uint32_t j=0; j<as_desc.tlas_desc.instance_count; j++)
         {
@@ -2101,7 +2163,7 @@ void dm_dx12_renderer_destroy_acceleration_structure(dm_dx12_acceleration_struct
 
 // raytracing pipeline
 DM_INLINE
-void dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count)
+void dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, int* range_index, uint32_t* range_count)
 {
     if(*range_index == -1)
     {
@@ -2115,24 +2177,23 @@ void dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t shad
 }
 
 DM_INLINE
-void dm_dx12_rt_sbt_add_uav_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count)
+void dm_dx12_rt_sbt_add_uav_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, int* range_index, uint32_t* range_count)
 {
     dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, shader_register, ranges, range_index, range_count);
 }
 
 DM_INLINE
-void dm_dx12_rt_sbt_add_srv_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count)
+void dm_dx12_rt_sbt_add_srv_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, int* range_index, uint32_t* range_count)
 {
     dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, shader_register, ranges, range_index, range_count);
 }
 
 DM_INLINE
-void dm_dx12_rt_sbt_add_cbv_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, uint32_t* range_index, uint32_t* range_count)
+void dm_dx12_rt_sbt_add_cbv_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, int* range_index, uint32_t* range_count)
 {
     dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, shader_register, ranges, range_index, range_count);
 }
 
-DM_INLINE
 bool dm_dx12_raytracing_pipeline_sbt_make_root_signature(uint32_t shader_stage, dm_rt_pipeline_shader_params params, ID3D12RootSignature** root_sig, ID3D12Device5* device)
 {
     HRESULT hr;
@@ -2210,13 +2271,15 @@ bool dm_dx12_raytracing_pipeline_sbt_make_root_signature(uint32_t shader_stage, 
         return false;
     }
     
-    hr = ID3D12Device5_CreateRootSignature(device, 0, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), &IID_ID3D12RootSignature, root_sig);
-    if(!dm_platform_win32_decode_hresult(hr))
+    void* tmp = NULL;
+    hr = ID3D12Device5_CreateRootSignature(device, 0, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), &IID_ID3D12RootSignature, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
     {
         DM_LOG_FATAL("ID3D12Device5_CreateRootSignature failed");
         return false;
     }
-    
+    *root_sig = tmp;
+
     ID3D10Blob_Release(blob);
     
     return true;
@@ -2571,14 +2634,16 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     obj_desc.NumSubobjects = sub_obj_index;
     obj_desc.pSubobjects   = subobjects;
     
-    hr = ID3D12Device5_CreateStateObject(dx12_renderer->device, &obj_desc, &IID_ID3D12StateObject, &internal_pipe.state_object);
-    if(!dm_platform_win32_decode_hresult(hr))
+    void* tmp = NULL;
+    hr = ID3D12Device5_CreateStateObject(dx12_renderer->device, &obj_desc, &IID_ID3D12StateObject, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
     {
         DM_LOG_FATAL("ID3D12Device5_CreateStateObject failed");
         DM_LOG_FATAL("Could not create raytracing pipeline state object");
         return false;
     }
-    
+    internal_pipe.state_object = tmp;
+
     // shader binding table
     internal_pipe.sbt.max_instance_count = desc.max_instance_count;
     internal_pipe.sbt.instance_count     = desc.instance_count;
@@ -2608,7 +2673,7 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     // get size in bytes of parameters and align
     record_size += sizeof(D3D12_GPU_VIRTUAL_ADDRESS) * internal_pipe.sbt.record_count;
     
-    static const align = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+    static const size_t align = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
     size_t remainder = record_size % align;
     internal_pipe.sbt.record_size = remainder ? record_size + (align - remainder) : record_size;
     
@@ -2620,25 +2685,35 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     
     for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &sbt_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &internal_pipe.sbt.table[i]);
-        if(!dm_platform_win32_decode_hresult(hr))
+        void* tmp = NULL;
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &sbt_desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, &IID_ID3D12Resource, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
             DM_LOG_FATAL("Could not create DirectX12 raytracing pipeline shader ids");
             return false;
         }
-        
-        hr = ID3D12Resource_Map(internal_pipe.sbt.table[i], 0, NULL, &internal_pipe.sbt.mapped_address[i]);
-        if(!dm_platform_win32_decode_hresult(hr))
+        internal_pipe.sbt.table[i] = tmp;
+
+        hr = ID3D12Resource_Map(internal_pipe.sbt.table[i], 0, NULL, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Resource_Map failed");
             DM_LOG_FATAL("Could not map onto DirectX12 shader binding table");
             return false;
         }
-        
+        internal_pipe.sbt.mapped_address[i] = tmp;
+
         ID3D12StateObjectProperties* props;
-        ID3D12StateObject_QueryInterface(internal_pipe.state_object, &IID_ID3D12StateObjectProperties, &props);
-        
+
+        ID3D12StateObject_QueryInterface(internal_pipe.state_object, &IID_ID3D12StateObjectProperties, &tmp);
+        if(!tmp)
+        {
+            DM_LOG_FATAL("ID3D12StateObject_QueryInterface failed");
+            return false;
+        }
+        props = tmp;
+
         uint8_t* data = internal_pipe.sbt.mapped_address[i];
 #ifdef DM_DEBUG
         uint8_t* ref  = NULL;
@@ -3438,37 +3513,41 @@ void dm_dx12_track_down_device_removal(dm_dx12_renderer* dx12_renderer)
     DM_LOG_ERROR("DirectX12 device removed");
     
     ID3D12DeviceRemovedExtendedData* dred;
-    hr = ID3D12Device5_QueryInterface(dx12_renderer->device, &IID_ID3D12DeviceRemovedExtendedData, &dred);
-    if(!dm_platform_win32_decode_hresult(hr))
+    void* tmp = NULL;
+    hr = ID3D12Device5_QueryInterface(dx12_renderer->device, &IID_ID3D12DeviceRemovedExtendedData, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
     {
         DM_LOG_FATAL("ID3D12Device5_QueryInterface failed");
         DM_LOG_FATAL("Could not obtain DirectX12 DRED data");
         return;
     }
-    
+    dred = tmp;
+
     D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT breadcrumbs_output = { 0 };
     D3D12_DRED_PAGE_FAULT_OUTPUT       page_fault_output = { 0 };
     
     hr = ID3D12DeviceRemovedExtendedData_GetAutoBreadcrumbsOutput(dred, &breadcrumbs_output);
     hr = ID3D12DeviceRemovedExtendedData_GetPageFaultAllocationOutput(dred, &page_fault_output);
     
-    D3D12_AUTO_BREADCRUMB_NODE head = *breadcrumbs_output.pHeadAutoBreadcrumbNode;
-    
-    while(head.BreadcrumbCount == *head.pLastBreadcrumbValue)
+    D3D12_AUTO_BREADCRUMB_NODE* head = breadcrumbs_output.pHeadAutoBreadcrumbNode;
+    if (!head) goto BREAD_CRUMB_FINISH;
+
+    while(head->BreadcrumbCount == *head->pLastBreadcrumbValue)
     {
-        head = *head.pNext;
+        head = head->pNext;
     }
     
     DM_LOG_DEBUG("Tracking down command failure...");
-    for(uint32_t i=0; i<head.BreadcrumbCount; i++)
+    for(uint32_t i=0; i<head->BreadcrumbCount; i++)
     {
         uint8_t flag = 0;
-        if(i == *head.pLastBreadcrumbValue) flag = 1;
-        if(i >  *head.pLastBreadcrumbValue)  flag = 2;
+        if(i == *head->pLastBreadcrumbValue) flag = 1;
+        if(i >  *head->pLastBreadcrumbValue)  flag = 2;
         
-        dm_dx12_decode_breadcrumb_op(head.pCommandHistory[i], flag);
+        dm_dx12_decode_breadcrumb_op(head->pCommandHistory[i], flag);
     }
     
+BREAD_CRUMB_FINISH:
     ID3D12DeviceRemovedExtendedData_Release(dred);
 }
 #endif
