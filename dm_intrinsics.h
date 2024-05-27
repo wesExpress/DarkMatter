@@ -3,6 +3,9 @@
 
 #if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
 #define DM_SIMD_X86
+#ifdef __AVX__
+#define DM_SIMD_AVX
+#endif
 #elif defined(__aarch64__)
 #define DM_SIMD_ARM
 #endif
@@ -19,7 +22,7 @@
 typedef __m128  dm_simd_float;
 typedef __m128i dm_simd_int;
 
-#ifdef __AVX__
+#ifdef DM_SIMD_AVX
 typedef __m256  dm_simd256_float;
 typedef __m256i dm_simd256_int;
 #define DM_SIMD256_FLOAT_N 8
@@ -28,7 +31,6 @@ typedef __m256i dm_simd256_int;
 #elif defined(DM_SIMD_ARM)
 // neon does not support 256bit registers
 typedef float32x4_t dm_simd_float;
-
 typedef int32x4_t   dm_simd_int;
 #endif
 
@@ -564,7 +566,7 @@ void dm_simd_transpose_mat4(dm_simd_float* row1, dm_simd_float* row2, dm_simd_fl
 }
 #endif
 
-#ifdef __AVX__ 
+#ifdef DM_SIMD_AVX 
 
 DM_INLINE
 dm_simd256_int dm_simd256_cast_float_to_int(dm_simd256_float mm)

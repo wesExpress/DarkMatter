@@ -844,13 +844,17 @@ void dm_mat4_identity(dm_mat4 mat)
     mat[0][2] = 0;
     mat[0][3] = 0;
     
-    mat[1][1] = 0;
+    mat[1][0] = 0;
     mat[1][2] = 0;
     mat[1][3] = 0;
 
+    mat[2][0] = 0;
     mat[2][1] = 0;
-    mat[2][2] = 0;
     mat[2][3] = 0;
+
+    mat[3][0] = 0;
+    mat[3][1] = 0;
+    mat[3][2] = 0;
 }
 
 DM_INLINE
@@ -1122,17 +1126,17 @@ void dm_mat4_inverse(const dm_mat4 mat, dm_mat4 dest)
 }
 
 DM_INLINE
-bool dm_mat4_is_equal(const dm_mat4 left, const dm_mat4 right)
+int dm_mat4_is_equal(const dm_mat4 left, const dm_mat4 right)
 {
 	for (int y = 0; y < 4; y++)
 	{
         for(int x=0; x<4; x++)
         {
-            if (left[y] != right[x]) return false;
+            if (left[y] != right[x]) return 0;
         }
 	}
     
-	return true;
+	return 1;
 }
 
 DM_INLINE
@@ -1237,6 +1241,7 @@ void dm_mat_translate(const dm_mat4 mat, const dm_vec3 translation, dm_mat4 out)
     out[3][0] += translation[0];
     out[3][1] += translation[1];
     out[3][2] += translation[2];
+    out[3][3] = mat[3][3];
 }
 
 DM_INLINE
