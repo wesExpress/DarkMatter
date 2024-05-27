@@ -127,42 +127,6 @@ typedef DM_ALIGN(16) float dm_mat4[4][4];
 
 #define DM_ALIGN_BYTES(SIZE, ALIGNMENT) ((SIZE + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
 
-/**********
-INTRINSICS
-************/
-#if defined(__x86_64__) || defined(_M_X64) || defined(__i386__)
-#define DM_SIMD_X86
-#elif defined(__aarch64__)
-#define DM_SIMD_ARM
-#endif
-
-#ifdef DM_SIMD_X86
-#include <immintrin.h>
-//#include <emmintrin.h>
-//#include <xmmintrin.h>
-#else
-#include <arm_neon.h>
-#endif
-
-#ifdef DM_SIMD_X86
-#ifdef __AVX__
-typedef __m256  dm_simd256_float;
-typedef __m256i dm_simd256_int;
-#define DM_SIMD256_FLOAT_N 8
-#endif
-
-typedef __m128  dm_simd_float;
-typedef __m128i dm_simd_int;
-
-#elif defined(DM_SIMD_ARM)
-// neon does not support 256bit registers
-typedef float32x4_t dm_simd_float;
-
-typedef int32x4_t   dm_simd_int;
-#endif
-
-#define DM_SIMD_FLOAT_N    4
-
 /*******
 HASHING
 *********/
@@ -1290,126 +1254,6 @@ float dm_random_float_normal(float mu, float sigma, dm_context* context);
 // platform
 void dm_platform_sleep(uint64_t ms, dm_context* context);
 
-// intrinsics
-#ifndef DM_SIMD_ARM
-dm_simd_int dm_simd_cast_float_to_int(dm_simd_float mm);
-dm_simd_float dm_simd_cast_int_to_float(dm_simd_int mm);
-#endif
-
-/*****
-float
-*******/
-dm_simd_float dm_simd_load_float(const float* d);
-
-dm_simd_float dm_simd_set_float(const float x, const float y, const float z, const float w);
-dm_simd_float dm_simd_set1_float(const float d);
-void dm_simd_store_float(float* d, dm_simd_float mm);
-dm_simd_float dm_simd_add_float(dm_simd_float left, dm_simd_float right);
-dm_simd_float dm_simd_sub_float(dm_simd_float left, dm_simd_float right);
-dm_simd_float dm_simd_mul_float(dm_simd_float left, dm_simd_float right);
-dm_simd_float dm_simd_div_float(dm_simd_float left, dm_simd_float right);
-dm_simd_float dm_simd_inv_float(dm_simd_float v);
-dm_simd_float dm_simd_sqrt_float(dm_simd_float mm);
-dm_simd_float dm_simd_rsqrt_float(dm_simd_float mm);
-dm_simd_float dm_simd_hadd_float(dm_simd_float left, dm_simd_float right);
-dm_simd_float dm_simd_fmadd_float(dm_simd_float a, dm_simd_float b, dm_simd_float c);
-#ifdef DM_SIMD_ARM
-dm_simd_float dm_simd_fsubps(dm_simd_float a, dm_simd_float b, dm_simd_float c)
-#endif
-dm_simd_float dm_simd_max_float(dm_simd_float a, dm_simd_float b);
-dm_simd_float dm_simd_min_float(dm_simd_float a, dm_simd_float b);
-float dm_simd_extract_float(dm_simd_float mm);
-dm_simd_float dm_simd_hadd_fast_float(dm_simd_float mm);
-dm_simd_float dm_simd_blendv_float(dm_simd_float left, dm_simd_float right, dm_simd_float mask);
-float dm_simd_sum_elements(dm_simd_float mm);
-float dm_simd_dot_float(dm_simd_float left, dm_simd_float right);
-dm_simd_float dm_simd_normalize_float(dm_simd_float mm);
-dm_simd_float dm_simd_broadcast_x_float(dm_simd_float mm);
-dm_simd_float dm_simd_broadcast_y_float(dm_simd_float mm);
-dm_simd_float dm_simd_broadcast_z_float(dm_simd_float mm);
-dm_simd_float dm_simd_broadcast_w_float(dm_simd_float mm);
-
-/************
-COMPARISSONS
-**************/
-dm_simd_float dm_simd_gt_float(dm_simd_float left, dm_simd_float right);
-dm_simd_float dm_simd_geq_float(dm_simd_float left, dm_simd_float right);
-dm_simd_float dm_simd_lt_float(dm_simd_float left, dm_simd_float right);
-dm_simd_float dm_simd_leq_float(dm_simd_float left, dm_simd_float right);
-dm_simd_float dm_simd_eq_float(dm_simd_float left, dm_simd_float right);
-int dm_simd_any_zero(dm_simd_float mm);
-
-/*******
-BITWISE
-*********/
-dm_simd_float dm_simd_and_float(dm_simd_float left, dm_simd_float right);
-
-/*
- int
-*/
-dm_simd_int dm_simd_load_i(const int* d);
-dm_simd_int dm_simd_set1_i(const int d);
-void dm_simd_store_i(int* i, dm_simd_int mm);
-dm_simd_int dm_simd_add_i(dm_simd_int left, dm_simd_int right);
-dm_simd_int dm_simd_sub_i(dm_simd_int left, dm_simd_int right);
-dm_simd_int dm_simd_mul_i(dm_simd_int left, dm_simd_int right);
-dm_simd_int dm_simd_min_i(dm_simd_int left, dm_simd_int right);
-dm_simd_int dm_simd_max_i(dm_simd_int left, dm_simd_int right);
-dm_simd_int dm_simd_blendv_i(dm_simd_int left, dm_simd_int right, dm_simd_int mask);
-dm_simd_int dm_simd_eq_i(dm_simd_int left, dm_simd_int right);
-#ifdef DM_SIMD_X86
-dm_simd_int dm_simd_neq_i(dm_simd_int left, dm_simd_int right);
-#endif
-
-/*
-MATRIX
-*/
-#ifdef DM_SIMD_X86
-void dm_simd_transpose_mat4(dm_simd_float* row1, dm_simd_float* row2, dm_simd_float* row3, dm_simd_float* row4);
-#endif
-
-/****
-AVX2
-******/
-#ifdef __AVX__ 
-dm_simd256_int dm_simd256_cast_float_to_int(dm_simd256_float mm);
-dm_simd256_float dm_simd256_cast_int_to_float(dm_simd256_int mm);
-dm_simd256_float dm_simd256_load_float(const float* d);
-dm_simd256_float dm_simd256_set1_float(const float d);
-dm_simd256_float dm_simd256_set_float(float h, float g, float f, float e, float d, float c, float b, float a);
-void dm_simd256_store_float(float* d, dm_simd256_float mm);
-dm_simd256_float dm_simd256_add_float(dm_simd256_float left, dm_simd256_float right);
-dm_simd256_float dm_simd256_sub_float(dm_simd256_float left, dm_simd256_float right);
-dm_simd256_float dm_simd256_mul_float(dm_simd256_float left, dm_simd256_float right);
-dm_simd256_float dm_simd256_div_float(dm_simd256_float left, dm_simd256_float right);
-dm_simd256_float dm_simd256_sqrt_float(dm_simd256_float mm);
-dm_simd256_float dm_simd256_hadd_float(dm_simd256_float left, dm_simd256_float right);
-dm_simd256_float dm_simd256_fmadd_float(dm_simd256_float a, dm_simd256_float b, dm_simd256_float c);
-dm_simd256_float dm_simd256_max_float(dm_simd256_float a, dm_simd256_float b);
-dm_simd256_float dm_simd256_min_float(dm_simd256_float a, dm_simd256_float b);
-float dm_simd256_extract_float(dm_simd256_float mm);
-float dm_simd256_sum_elements(dm_simd256_float mm);
-float dm_simd256_mul_elements(dm_simd256_float mm);
-dm_simd256_float dm_simd256_gt_float(dm_simd256_float left, dm_simd256_float right);
-dm_simd256_float dm_simd256_geq_float(dm_simd256_float left, dm_simd256_float right);
-dm_simd256_float dm_simd256_lt_float(dm_simd256_float left, dm_simd256_float right);
-dm_simd256_float dm_simd256_leq_float(dm_simd256_float left, dm_simd256_float right);
-int dm_simd256_any_non_zero(dm_simd256_float mm);
-int dm_simd256_any_zero(dm_simd256_float mm);
-dm_simd256_float dm_simd256_and_float(dm_simd256_float left, dm_simd256_float right);
-dm_simd256_int dm_simd256_load_i(int* d);
-dm_simd256_int dm_simd256_set1_i(int d);
-void dm_simd256_store_i(int* i, dm_simd256_int mm);
-dm_simd256_int dm_simd256_add_i(dm_simd256_int left, dm_simd256_int right);
-dm_simd256_int dm_simd256_sub_i(dm_simd256_int left, dm_simd256_int right);
-dm_simd256_int dm_simd256_mul_i(dm_simd256_int left, dm_simd256_int right);
-dm_simd256_int dm_simd256_hadd_i(dm_simd256_int left, dm_simd256_int right);
-dm_simd256_int dm_simd256_shiftl_1(dm_simd256_int mm);
-dm_simd256_int dm_simd256_shiftr_1(dm_simd256_int mm);
-#endif
-
-
-
 // rendering
 bool dm_renderer_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_index_buffer(const dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
@@ -1433,8 +1277,6 @@ uint32_t dm_renderer_raytracing_pipeline_add_procedural_hit_group(const char* na
 void dm_renderer_raytracing_pipeline_hit_group_add_any_hit(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
 void dm_renderer_raytracing_pipeline_hit_group_add_closest_hit(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
 void dm_renderer_raytracing_pipeline_hit_group_add_intersection(const char* shader, uint32_t group_index, dm_raytracing_pipeline_desc* desc);
-
-
 #endif
 
 // render commands
@@ -1519,5 +1361,6 @@ dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y);
 uint32_t  dm_hash_reduce(uint32_t x, uint32_t n);
 
 #include "dm_math.h"
+#include "dm_intrinsics.h"
 
 #endif //DM_H

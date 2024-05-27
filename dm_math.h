@@ -1,6 +1,52 @@
 #ifndef DM_MATH_H
 #define DM_MATH_H
 
+// hack for now to get lsp to shut up
+#ifndef DM_H
+float dm_sqrtf(float x);
+float dm_fabs(float x);
+float dm_sin(float angle);
+float dm_cos(float angle);
+float dm_tan(float angle);
+float dm_sind(float angle);
+float dm_cosd(float angle);
+float dm_asin(float value);
+float dm_acos(float value);
+float dm_atan(float x, float y);
+
+#define DM_SIGNF(X)           (float)((0 < X) - (X < 0))
+#define DM_MATH_DEG_TO_RAD          0.0174533f
+#define DM_MATH_RAD_TO_DEG          57.2958f
+
+#define N2 2
+#define N3 3
+#define N4 4
+#define M2 N2 * N2
+#define M3 N3 * N3
+#define M4 N4 * N4
+
+#define DM_VEC2_SIZE sizeof(float) * N2
+#define DM_VEC3_SIZE sizeof(float) * N3
+#define DM_VEC4_SIZE sizeof(float) * N4
+#define DM_QUAT_SIZE DM_VEC4_SIZE
+#define DM_MAT2_SIZE sizeof(float) * N2
+#define DM_MAT3_SIZE sizeof(float) * M3
+#define DM_MAT4_SIZE sizeof(float) * M4
+
+#define DM_VEC2_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC2_SIZE)
+#define DM_VEC3_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC3_SIZE)
+#define DM_VEC4_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC4_SIZE)
+#define DM_QUAT_COPY(DEST, SRC) DM_VEC4_COPY(DEST, SRC)
+#define DM_MAT2_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT2_SIZE)
+#define DM_MAT3_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT3_SIZE)
+#define DM_MAT4_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT4_SIZE)
+
+#define DM_ALIGN_BYTES(SIZE, ALIGNMENT) ((SIZE + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
+
+#endif
+
+#include "dm_intrinsics.h"
+
 /****
 VEC2
 ******/
@@ -125,7 +171,7 @@ void dm_vec3_div_vec3(const dm_vec3 left, const dm_vec3 right, dm_vec3 out)
 DM_INLINE
 float dm_vec3_dot(const dm_vec3 left, const dm_vec3 right)
 {
-#if 1
+#if 0
     dm_simd_float x1 = dm_simd_set1_float(left[0]);
     dm_simd_float y1 = dm_simd_set1_float(left[1]);
     dm_simd_float z1 = dm_simd_set1_float(left[2]);
@@ -287,26 +333,6 @@ void dm_vec3_reflect(const dm_vec3 vec, const dm_vec3 normal, dm_vec3 out)
 DM_INLINE
 void dm_vec3_refract(const dm_vec3 vec, const dm_vec3 n, const float e, dm_vec3 out)
 {
-    float cos_theta, s;
-    dm_vec3 neg_v, perp, para;
-    
-#if 0
-    dm_vec3_negate(vec, neg_v);
-    cos_theta = dm_vec3_dot(neg_v, n);
-    cos_theta = DM_MIN(cos_theta, 1);
-    
-    dm_vec3_scale(n, cos_theta, perp);
-    dm_vec3_add_vec3(perp, vec, perp);
-    dm_vec3_scale(perp, e, perp);
-    
-    s = dm_vec3_mag2(perp);
-    s = 1 - s;
-    s = dm_fabs(s);
-    s = -dm_sqrtf(s);
-    dm_vec3_scale(n, s, para);
-    
-    dm_vec3_add_vec3(perp, para, out);
-#else
     float vec_length = dm_vec3_mag(vec);
     float c = -dm_vec3_dot(vec, n) / vec_length;
     
@@ -315,7 +341,6 @@ void dm_vec3_refract(const dm_vec3 vec, const dm_vec3 n, const float e, dm_vec3 
     dm_vec3_scale(vec, e, nv);
     dm_vec3_scale(n, aux, nn);
     dm_vec3_add_vec3(nv, nn, out);
-#endif
 }
 
 /****
@@ -567,7 +592,7 @@ void dm_quat_from_axis_angle(const dm_quat axis, float angle, dm_quat out)
 DM_INLINE
 void dm_quat_from_axis_angle_deg(const dm_vec3 axis, float angle, dm_quat out)
 {
-    dm_quat_from_axis_angle(axis, dm_deg_to_rad(angle), out);
+    dm_quat_from_axis_angle(axis, DM_MATH_DEG_TO_RAD * angle, out);
 }
 
 DM_INLINE
@@ -611,16 +636,22 @@ MAT3
 DM_INLINE
 void dm_mat3_identity(dm_mat3 mat)
 {
-    dm_memzero(mat, DM_MAT3_SIZE);
-    
     mat[0][0] = 1;
     mat[1][1] = 1;
     mat[2][2] = 1;
+
+    mat[0][1] = 0;
+    mat[0][2] = 0;
+    mat[1][0] = 0;
+    mat[1][2] = 0;
+    mat[2][0] = 0;
+    mat[2][1] = 0;
 }
 
 DM_INLINE
 void dm_mat3_transpose(const dm_mat3 mat, dm_mat3 out)
 {
+    // need a dummy matrix since we could be writing to the same one we are transposing
     dm_mat3 d;
     
     // diagonals the same
@@ -638,8 +669,19 @@ void dm_mat3_transpose(const dm_mat3 mat, dm_mat3 out)
     d[1][2] = mat[2][1];
     
     d[2][1] = mat[1][2];
-    
-    dm_memcpy(out, d, sizeof(d));
+
+    // write back out
+    out[0][0] = d[0][0];
+    out[0][1] = d[0][1];
+    out[0][2] = d[0][2];
+
+    out[1][0] = d[1][0];
+    out[1][1] = d[1][1];
+    out[1][2] = d[1][2];
+
+    out[2][0] = d[2][0];
+    out[2][1] = d[2][1];
+    out[2][2] = d[2][2];
 }
 
 DM_INLINE
@@ -661,7 +703,19 @@ void dm_mat3_mul_mat3(dm_mat3 left, dm_mat3 right, dm_mat3 out)
     d[2][1] = dm_vec3_dot(left[2], r_t[1]);
     d[2][2] = dm_vec3_dot(left[2], r_t[2]);
     
-    dm_memcpy(out, d, sizeof(d));
+    //dm_memcpy(out, d, sizeof(d));
+    out[0][0] = d[0][0];
+    out[0][1] = d[0][1];
+    out[0][2] = d[0][2];
+
+    out[1][0] = d[1][0];
+    out[1][1] = d[1][1];
+    out[1][2] = d[1][2];
+
+    out[2][0] = d[2][0];
+    out[2][1] = d[2][1];
+    out[2][2] = d[2][2];
+
 }
 
 DM_INLINE
@@ -745,7 +799,7 @@ void dm_mat3_rotation(float radians, const dm_vec3 axis, dm_mat3 out)
 DM_INLINE
 void dm_mat3_rotation_degrees(float degrees, const dm_vec3 axis, dm_mat3 out)
 {
-	dm_mat3_rotation(dm_deg_to_rad(degrees), axis, out);
+	dm_mat3_rotation(DM_MATH_DEG_TO_RAD * degrees, axis, out);
 }
 
 DM_INLINE
@@ -781,12 +835,22 @@ MAT4
 DM_INLINE
 void dm_mat4_identity(dm_mat4 mat)
 {
-    dm_memzero(mat, DM_MAT4_SIZE);
-    
 	mat[0][0] = 1;
     mat[1][1] = 1;
     mat[2][2] = 1;
     mat[3][3] = 1;
+
+    mat[0][1] = 0;
+    mat[0][2] = 0;
+    mat[0][3] = 0;
+    
+    mat[1][1] = 0;
+    mat[1][2] = 0;
+    mat[1][3] = 0;
+
+    mat[2][1] = 0;
+    mat[2][2] = 0;
+    mat[2][3] = 0;
 }
 
 DM_INLINE
@@ -1074,19 +1138,20 @@ bool dm_mat4_is_equal(const dm_mat4 left, const dm_mat4 right)
 DM_INLINE
 void dm_mat4_from_mat3(dm_mat3 mat, dm_mat4 out)
 {
-    dm_memzero(out, DM_MAT4_SIZE);
-    
     out[0][0] = mat[0][0];
     out[0][1] = mat[0][1];
     out[0][2] = mat[0][2];
-    
+    out[0][3] = 0;
+
     out[1][0] = mat[1][0];
     out[1][1] = mat[1][1];
     out[1][2] = mat[1][2];
-    
+    out[1][3] = 0;
+
     out[2][0] = mat[2][0];
     out[2][1] = mat[2][1];
     out[2][2] = mat[2][2];
+    out[2][3] = 0;
 }
 
 DM_INLINE
@@ -1118,8 +1183,11 @@ void dm_mat_scale(const dm_mat4 mat, const dm_vec3 scale, dm_mat4 out)
     dm_vec4_scale(mat[0], scale[0], out[0]);
     dm_vec4_scale(mat[1], scale[1], out[1]);
     dm_vec4_scale(mat[2], scale[2], out[2]);
-    //dm_vec4_scale(mat[3], scale[3], out[3]);
-    dm_memcpy(out[3], mat[3], sizeof(float) * 4);
+
+    out[3][0] = mat[3][0];
+    out[3][1] = mat[3][1];
+    out[3][2] = mat[3][2];
+    out[3][3] = mat[3][3];
 }
 
 DM_INLINE
@@ -1135,7 +1203,7 @@ void dm_mat_rotation_make(float radians, const dm_vec3 axis, dm_mat4 out)
 DM_INLINE
 void dm_mat_rotation_degrees_make(float degrees, const dm_vec3 axis, dm_mat4 out)
 {
-	dm_mat_rotation_make(dm_deg_to_rad(degrees), axis, out);
+	dm_mat_rotation_make(DM_MATH_DEG_TO_RAD * degrees, axis, out);
 }
 
 DM_INLINE
@@ -1151,8 +1219,21 @@ void dm_mat_translate_make(const dm_vec3 translation, dm_mat4 out)
 DM_INLINE
 void dm_mat_translate(const dm_mat4 mat, const dm_vec3 translation, dm_mat4 out)
 {
-    dm_memcpy(out, mat, sizeof(dm_mat4));
-    
+    out[0][0] = mat[0][0];
+    out[0][1] = mat[0][1];
+    out[0][2] = mat[0][2];
+    out[0][3] = mat[0][3];
+
+    out[1][0] = mat[1][0];
+    out[1][1] = mat[1][1];
+    out[1][2] = mat[1][2];
+    out[1][3] = mat[1][3];
+
+    out[2][0] = mat[2][0];
+    out[2][1] = mat[2][1];
+    out[2][2] = mat[2][2];
+    out[2][3] = mat[2][3];
+
     out[3][0] += translation[0];
     out[3][1] += translation[1];
     out[3][2] += translation[2];
@@ -1170,7 +1251,7 @@ void dm_mat_rotate(const dm_mat4 mat, float radians, const dm_vec3 axis, dm_mat4
 DM_INLINE
 void dm_mat_rotate_degrees(const dm_mat4 mat, float degrees, const dm_vec3 axis, dm_mat4 out)
 {
-	dm_mat_rotate(mat, dm_deg_to_rad(degrees), axis, out);
+	dm_mat_rotate(mat, DM_MATH_DEG_TO_RAD * degrees, axis, out);
 }
 
 /***************
@@ -1219,8 +1300,21 @@ void dm_mat_perspective(float fov, float aspect_ratio, float n, float f, dm_mat4
 	const float t  = 1.0f / dm_tan(fov * 0.5f);
 	const float fn = 1.0f / (n - f);
 	
-    dm_memzero(out, DM_MAT4_SIZE);
-    
+    out[0][1] = 0;
+    out[0][2] = 0;
+    out[0][3] = 0;
+
+    out[1][0] = 0;
+    out[1][2] = 0;
+    out[1][3] = 0;
+
+    out[2][0] = 0;
+    out[2][1] = 0;
+
+    out[3][0] = 0;
+    out[3][1] = 0;
+    out[3][3] = 0;
+
     out[0][0]  = t / aspect_ratio;
 	out[1][1]  = t;
 #ifdef DM_METAL
@@ -1237,8 +1331,18 @@ void dm_mat_perspective(float fov, float aspect_ratio, float n, float f, dm_mat4
 DM_INLINE
 void dm_mat_ortho(float left, float right, float bottom, float top, float n, float f, dm_mat4 out)
 {
-    dm_memzero(out, sizeof(float) * M4);
-    
+    out[0][1] = 0;
+    out[0][2] = 0;
+    out[0][3] = 0;
+
+    out[1][0] = 0;
+    out[1][2] = 0;
+    out[1][3] = 0;
+
+    out[2][0] = 0;
+    out[2][1] = 0;
+    out[2][3] = 0;
+
 	out[0][0] = 2.0f / (right - left);
 	out[1][1] = 2.0f / (top - bottom);
 #ifdef DM_METAL
@@ -1252,6 +1356,7 @@ void dm_mat_ortho(float left, float right, float bottom, float top, float n, flo
     
     out[3][0] = -(right + left) / (right - left);
     out[3][1] = -(top + bottom) / (top - bottom);
+    out[3][2] = 0;
 #endif
     
 	out[3][3] = 1.0f;
