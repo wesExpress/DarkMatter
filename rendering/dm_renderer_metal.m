@@ -41,8 +41,7 @@ typedef struct dm_metal_texture_t
 } dm_metal_texture;
 
 #ifdef DM_RAYTRACING
-typedef struct dm_metal_as_t
-{
+typedef struct dm_metal_as_t {
     id<MTLBuffer> scratch_buffer;
     id<MTLBuffer> result_buffer;
     
