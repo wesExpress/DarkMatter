@@ -1,0 +1,64 @@
+#ifndef DM_DEFINES_H
+#define DM_DEFINES_H
+
+/********************************************
+DETERMINE PLATFORM AND RENDERING BACKEND
+**********************************************/
+#ifdef __APPLE__
+#define DM_PLATFORM_APPLE
+#define DM_METAL
+#define DM_INLINE __attribute__((always_inline)) inline
+
+#elif defined(__WIN32__) || defined(_WIN32) || defined(WIN32)
+#define DM_PLATFORM_WIN32
+#define DM_INLINE __forceinline
+
+#ifdef DM_RAYTRACING
+#ifdef DM_DIRECTX11     // raytracing ONLY SUPPORTED by DX12
+#undef DM_DIRECTX11
+#endif
+#define DM_DIRECTX12
+#else
+#if !defined(DM_DIRECTX11) || !defined(DM_DIRECTX12)   // we DEFAULT to DX11 (meaning nothing is specified)
+#define DM_DIRECTX11
+#endif
+#endif
+
+#define DM_DIRECTX
+
+#elif __linux__ || __gnu_linux__
+#define DM_PLATFORM_LINUX
+#define DM_INLINE __always_inline
+#define DM_VULKAN
+#define _GNU_SOURCE
+
+#else
+#define DM_PLATFORM_GLFW
+#define DM_INLINE
+#define DM_OPENGL
+#endif
+
+/*********
+ALIGNMENT
+***********/
+//#ifdef DM_PLATFORM_WIN32
+#ifdef __MSC_VER_
+#define DM_ALIGN(X) __declspec(align(X))
+#else
+#define DM_ALIGN(X) __attribute((aligned(X)))
+#endif
+
+/*****
+TYPES
+*******/
+#ifndef __cplusplus
+#define false 0
+#define true  1
+#ifndef __bool_true_false_are_defined
+typedef _Bool bool;
+#endif
+#endif
+
+#define DM_ARRAY_LEN(ARRAY) sizeof(ARRAY) / sizeof(ARRAY[0])
+
+#endif

@@ -605,6 +605,10 @@ bool dm_platform_win32_decode_hresult(HRESULT hr)
         case 0x887A0006:
         DM_LOG_ERROR("GPU will not respond to more commands due to invalid command");
         break;
+
+        case 0x8876086c:
+        DM_LOG_ERROR("Invalid call");
+        break;
         
         default:
         DM_LOG_ERROR("Unknown error: %u", hr);

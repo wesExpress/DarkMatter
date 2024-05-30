@@ -1,10 +1,16 @@
 #ifndef DM_MATH_H
 #define DM_MATH_H
 
-// hack for now to get lsp to shut up
-#ifndef DM_H
-float dm_sqrtf(float x);
+#include "dm_defines.h"
+#include "dm_math_defines.h"
+#include "dm_math_types.h"
+
+#include "dm_intrinsics.h"
+
+int   dm_abs(int x);
 float dm_fabs(float x);
+float dm_sqrtf(float x);
+float dm_math_angle_xy(float x, float y);
 float dm_sin(float angle);
 float dm_cos(float angle);
 float dm_tan(float angle);
@@ -13,92 +19,81 @@ float dm_cosd(float angle);
 float dm_asin(float value);
 float dm_acos(float value);
 float dm_atan(float x, float y);
+float dm_smoothstep(float edge0, float edge1, float x);
+float dm_smootherstep(float edge0, float edge1, float x);
+float dm_exp(float x);
+float dm_powf(float x, float y);
+float dm_roundf(float x);
+int   dm_round(float x);
+int   dm_ceil(float x);
+int   dm_floor(float x);
+float dm_logf(float x);
+float dm_log2f(float x);
+bool  dm_isnan(float x);
+float dm_clamp(float x, float min, float max);
 
-#define DM_SIGNF(X)           (float)((0 < X) - (X < 0))
-#define DM_MATH_DEG_TO_RAD          0.0174533f
-#define DM_MATH_RAD_TO_DEG          57.2958f
-
-#define N2 2
-#define N3 3
-#define N4 4
-#define M2 N2 * N2
-#define M3 N3 * N3
-#define M4 N4 * N4
-
-#define DM_VEC2_SIZE sizeof(float) * N2
-#define DM_VEC3_SIZE sizeof(float) * N3
-#define DM_VEC4_SIZE sizeof(float) * N4
-#define DM_QUAT_SIZE DM_VEC4_SIZE
-#define DM_MAT2_SIZE sizeof(float) * N2
-#define DM_MAT3_SIZE sizeof(float) * M3
-#define DM_MAT4_SIZE sizeof(float) * M4
-
-#define DM_VEC2_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC2_SIZE)
-#define DM_VEC3_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC3_SIZE)
-#define DM_VEC4_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC4_SIZE)
-#define DM_QUAT_COPY(DEST, SRC) DM_VEC4_COPY(DEST, SRC)
-#define DM_MAT2_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT2_SIZE)
-#define DM_MAT3_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT3_SIZE)
-#define DM_MAT4_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT4_SIZE)
-
-#define DM_ALIGN_BYTES(SIZE, ALIGNMENT) ((SIZE + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
-
-#endif
-
-#include "dm_intrinsics.h"
+float dm_rad_to_deg(float radians);
+float dm_deg_to_rad(float degrees);
 
 /****
 VEC2
 ******/
 DM_INLINE
-void dm_vec2_add_vec2(dm_vec2 left, dm_vec2 right, dm_vec2 out)
+void dm_vec2_set_from_vec2(const dm_vec2 in, dm_vec2 out)
+{
+    out[0] = in[0];
+    out[1] = in[1];
+}
+
+DM_INLINE
+void dm_vec2_add_vec2(const dm_vec2 left, const dm_vec2 right, dm_vec2 out)
 {
     out[0] = left[0] + right[0];
     out[1] = left[1] + right[1];
 }
 
 DM_INLINE
-void dm_vec2_sub_vec2(dm_vec2 left, dm_vec2 right, dm_vec2 out)
+void dm_vec2_sub_vec2(const dm_vec2 left, const dm_vec2 right, dm_vec2 out)
 {
     out[0] = left[0] - right[0];
     out[1] = left[1] - right[1];
 }
 
 DM_INLINE
-void dm_vec2_add_scalar(dm_vec2 vec, float scalar, dm_vec2 out)
+void dm_vec2_add_scalar(const dm_vec2 vec, const float scalar, dm_vec2 out)
 {
     out[0] = vec[0] + scalar;
     out[1] = vec[1] + scalar;;
 }
 
 DM_INLINE
-void dm_vec2_sub_scalar(dm_vec2 vec, float scalar, dm_vec2 out)
+void dm_vec2_sub_scalar(const dm_vec2 vec, const float scalar, dm_vec2 out)
 {
     out[0] = vec[0] - scalar;
     out[1] = vec[1] - scalar;;
 }
 
 DM_INLINE
-void dm_vec2_scale(dm_vec2 vec, float s, dm_vec2 out)
+void dm_vec2_scale(const dm_vec2 vec, const float s, dm_vec2 out)
 {
     out[0] = vec[0] * s;
     out[1] = vec[1] * s;
 }
 
 DM_INLINE
-float dm_vec2_dot(dm_vec2 left, dm_vec2 right)
+float dm_vec2_dot(const dm_vec2 left, const dm_vec2 right)
 {
     return ((left[0] * right[0]) + (left[1] * right[1]) + (left[2] * right[2]));
 }
 
 DM_INLINE
-float dm_vec2_mag(dm_vec2 vec)
+float dm_vec2_mag(const dm_vec2 vec)
 {
     return dm_sqrtf((vec[0] * vec[0]) + (vec[1] * vec[2]));
 }
 
 DM_INLINE
-void dm_vec2_norm(dm_vec2 vec, dm_vec2 out)
+void dm_vec2_norm(const dm_vec2 vec, dm_vec2 out)
 {
 	out[0] = vec[0];
     out[1] = vec[1];
@@ -112,6 +107,14 @@ void dm_vec2_norm(dm_vec2 vec, dm_vec2 out)
 /****
 VEC3
 ******/
+DM_INLINE
+void dm_vec3_from_vec3(const dm_vec3 in, dm_vec3 out)
+{
+    out[0] = in[0];
+    out[1] = in[1];
+    out[2] = in[2];
+}
+
 DM_INLINE
 void dm_vec3_from_vec4(const dm_vec4 vec4, dm_vec3 out)
 {
@@ -444,6 +447,15 @@ void dm_vec4_norm(const dm_vec4 vec, dm_vec4 out)
 /**********
 QUATERNION
 ************/
+DM_INLINE
+void dm_quat_from_quat(const dm_quat in, dm_quat out)
+{
+    out[0] = in[0];
+    out[1] = in[1];
+    out[2] = in[2];
+    out[3] = in[3];
+}
+
 DM_INLINE
 void dm_quat_from_vec4(const dm_vec4 vec, dm_quat out)
 {

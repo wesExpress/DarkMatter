@@ -592,6 +592,7 @@ void dm_strcpy(char* dest, const char* src)
 RENDERING
 ***********/
 extern bool dm_renderer_backend_init(dm_context* context);
+extern bool dm_renderer_backend_finish_init(dm_context* context);
 extern void dm_renderer_backend_shutdown(dm_context* context);
 extern bool dm_renderer_backend_begin_frame(dm_renderer* renderer);
 extern bool dm_renderer_backend_end_frame(dm_context* context);
@@ -657,7 +658,8 @@ bool dm_renderer_create_constant_buffer(const void* data, size_t data_size, dm_r
 
 bool dm_renderer_create_structured_buffer(const dm_structured_buffer_desc desc, dm_render_handle* handle, dm_context* context)
 {
-    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_STRUCTURED_BUFFER);
+    if(desc.write) DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_STRUCTURED_WRITE_BUFFER);
+    else           DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_STRUCTURED_READ_BUFFER);
     
     if(dm_renderer_backend_create_structured_buffer(desc, handle, &context->renderer)) return true;
     
@@ -785,6 +787,7 @@ extern bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle,
 extern bool dm_render_command_backend_bind_constant_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_vertex_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_structured_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_renderer* renderer);
 extern bool dm_render_command_backend_clear_texture(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_constant_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
@@ -803,6 +806,9 @@ extern bool dm_render_command_backend_bind_raytracing_pipeline(dm_render_handle 
 extern bool dm_render_command_backend_raytracing_pipeline_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_copy_texture_to_screen(dm_render_handle handle, dm_renderer* renderer);
 #endif
+
+extern bool dm_render_command_backend_compute_bind_pipeline(dm_compute_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_compute_dispatch(dm_compute_handle handle, dm_renderer* renderer);
 
 DM_INLINE
 void __dm_renderer_submit_render_command(dm_render_command command, dm_render_command_manager* manager)
@@ -930,6 +936,29 @@ void dm_render_command_update_vertex_buffer(dm_render_handle handle, void* data,
     command.param_count = 4;
     
     DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_update_structured_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context)
+{
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_UPDATE_STRUCTURED_BUFFER;
+    
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type     = DM_RENDER_COMMAND_PARAM_TYPE_VOID;
+    command.params[1].void_val = data;
+    
+    command.params[2].type       = DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T;
+    command.params[2].size_t_val = data_size;
+    
+    command.params[3].type       = DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T;
+    command.params[3].size_t_val = offset;
+    
+    command.param_count = 4;
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+
 }
 
 void dm_render_command_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_context* context)
@@ -1185,6 +1214,32 @@ void dm_render_command_copy_texture_to_screen(dm_render_handle handle, dm_contex
 }
 #endif // dm_raytracing
 
+void dm_render_command_compute_bind_pipeline(dm_compute_handle handle, dm_context* context)
+{
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_COMPUTE_BIND_PIPELINE;
+
+    command.params[0].type               = DM_RENDER_COMMAND_PARAM_TYPE_COMPUTE_HANDLE;
+    command.params[0].compute_handle_val = handle;
+
+    command.param_count = 1;
+
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_compute_dispatch(dm_compute_handle handle, dm_context* context)
+{
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_COMPUTE_DISPTACH;
+
+    command.params[0].type               = DM_RENDER_COMMAND_PARAM_TYPE_COMPUTE_HANDLE;
+    command.params[0].compute_handle_val = handle;
+
+    command.param_count = 1;
+
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
 bool dm_renderer_submit_commands(dm_context* context)
 {
     dm_timer t = { 0 };
@@ -1236,7 +1291,19 @@ bool dm_renderer_submit_commands(dm_context* context)
                 const size_t offset           = command.params[3].size_t_val;
                 
                 if(dm_render_command_backend_update_vertex_buffer(handle, data, data_size, offset, renderer)) continue;
-                DM_LOG_FATAL("Update buffer failed"); 
+                DM_LOG_FATAL("Update vertex buffer failed"); 
+                return false;
+            } break;
+
+            case DM_RENDER_COMMAND_UPDATE_STRUCTURED_BUFFER:
+            {
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                void* data                    = command.params[1].void_val;
+                const size_t data_size        = command.params[2].size_t_val;
+                const size_t offset           = command.params[3].size_t_val;
+
+                if(dm_render_command_backend_update_structured_buffer(handle, data, data_size, offset, renderer)) continue;
+                DM_LOG_FATAL("Update structured buffer failed");
                 return false;
             } break;
             
@@ -1421,6 +1488,48 @@ bool dm_renderer_submit_commands(dm_context* context)
     }
     
     return true;
+}
+
+// compute stuff
+extern bool dm_compute_backend_create_pipeline(dm_compute_pipeline_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
+extern bool dm_compute_backend_create_write_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
+extern bool dm_compute_backend_create_read_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
+extern bool dm_compute_backend_create_texture(dm_texture_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
+
+bool dm_compute_create_pipeline(dm_compute_pipeline_desc desc, dm_compute_handle* handle, dm_context* context)
+{
+    DM_RENDER_HANDLE_SET_TYPE(*handle, DM_COMPUTE_RESOURCE_TYPE_PIPELINE);
+    if(dm_compute_backend_create_pipeline(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Could not create compute pipeline");
+    return false;
+}
+
+bool dm_compute_create_write_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_context* context)
+{
+    DM_COMPUTE_HANDLE_SET_TYPE(*handle, DM_COMPUTE_RESOURCE_TYPE_WRITE_BUFFER);
+    if(dm_compute_backend_create_write_buffer(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Could not create compute write buffer");
+    return false;
+}
+
+bool dm_compute_create_read_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_context* context)
+{
+    DM_COMPUTE_HANDLE_SET_TYPE(*handle, DM_COMPUTE_RESOURCE_TYPE_READ_BUFFER);
+    if(dm_compute_backend_create_read_buffer(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Could not create compute read buffer");    
+    return false;
+}
+
+bool dm_compute_create_texture(dm_texture_desc desc, dm_compute_handle* handle, dm_context* context)
+{ 
+    DM_COMPUTE_HANDLE_SET_TYPE(*handle, DM_COMPUTE_RESOURCE_TYPE_TEXTURE);
+    if(dm_compute_backend_create_texture(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Could not create compute texture");
+    return false;
 }
 
 /*********
@@ -1870,7 +1979,15 @@ int main(int argc, char** argv)
         int r = getchar();
         return DM_EXIT_CODE_INIT_FAIL;
     }
-    
+   
+    if(!dm_renderer_backend_finish_init(context))
+    {
+        DM_LOG_FATAL("Renderer backend finish init failed");
+
+        int r = getchar();
+        return DM_EXIT_CODE_INIT_FAIL;
+    }
+
     while(dm_context_is_running(context))
     {
         dm_start(context);

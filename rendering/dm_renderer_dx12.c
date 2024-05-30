@@ -20,7 +20,7 @@
 #define DM_DX12_NUM_FRAMES 3
 
 //#define DM_DX12_GPU_BASED_VALIDATION
-#define DM_DX12_DRED_VALIDATION
+//#define DM_DX12_DRED_VALIDATION
 
 typedef struct dm_dx12_renderpass_t
 {
@@ -85,6 +85,9 @@ typedef struct dm_dx12_constant_buffer_t
 typedef struct dm_dx12_structured_buffer_t
 {
     ID3D12Resource* buffer[DM_DX12_NUM_FRAMES];
+    ID3D12Resource* upload_buffer[DM_DX12_NUM_FRAMES];
+    void*           mapped_addresses[DM_DX12_NUM_FRAMES];
+
     size_t          stride, count;
 } dm_dx12_structured_buffer;
 
@@ -150,6 +153,16 @@ typedef struct dm_dx12_raytracing_pipeline_t
 #define DM_DX12_MAX_RAYTRACING_PIPELINES    10
 #endif
 
+typedef struct dm_dx12_compute_pipeline_t
+{
+    ID3D12PipelineState* state;
+    ID3D12RootSignature* root_signature;
+
+    size_t descriptor_table_heap_offset;
+
+    uint16_t dim_x, dim_y, dim_z;
+} dm_dx12_compute_pipeline;
+
 // attempt at descriptor heap sizing / offsetting
 #define DM_DX12_DESCRIPTOR_HEAP_MAX     1000
 #define DM_DX12_DESCRIPTOR_HEAP_MAX_SRV 2 * DM_DX12_DESCRIPTOR_HEAP_MAX
@@ -182,7 +195,7 @@ typedef struct dm_dx12_renderer_t
     uint64_t     frame_fence_values[DM_DX12_NUM_FRAMES];
     
     uint32_t current_frame_index, descriptor_heap_offset;
-    uint32_t pass_count, pipe_count, vb_count, ib_count, cb_count, sb_count, texture_count, resource_count;
+    uint32_t pass_count, pipe_count, vb_count, ib_count, cb_count, sb_count, texture_count, resource_count, compute_pipe_count;
     
     dm_dx12_renderpass        passes[DM_DX12_MAX_PASSES];
     dm_dx12_pipeline          pipes[DM_DX12_MAX_PIPES];
@@ -191,6 +204,7 @@ typedef struct dm_dx12_renderer_t
     dm_dx12_constant_buffer   constant_buffers[DM_DX12_MAX_BUFFERS];
     dm_dx12_structured_buffer structured_buffers[DM_DX12_MAX_RESOURCE];
     dm_dx12_texture           textures[DM_DX12_MAX_RESOURCE];
+    dm_dx12_compute_pipeline  compute_pipelines[DM_DX12_MAX_PIPES];
     
     dm_dx12_resource resources[DM_DX12_MAX_RESOURCE];
     
@@ -232,6 +246,7 @@ void dm_dx12_renderer_destroy_index_buffer(dm_dx12_index_buffer* buffer);
 void dm_dx12_renderer_destroy_constant_buffer(dm_dx12_constant_buffer* buffer);
 void dm_dx12_renderer_destroy_structured_buffer(dm_dx12_structured_buffer* buffer);
 void dm_dx12_renderer_destroy_texture(dm_dx12_texture* texture);
+void dm_dx12_renderer_destroy_compute_pipeline(dm_dx12_compute_pipeline* pipe);
 
 #ifdef DM_RAYTRACING
 void dm_dx12_renderer_destroy_acceleration_structure(dm_dx12_acceleration_structure* as);
@@ -533,32 +548,36 @@ bool dm_renderer_backend_init(dm_context* context)
     
     IDXGIFactory2* factory = NULL;
     IDXGIAdapter1* adapter = NULL;
-    void* tmp = NULL;
     
 #ifdef DM_DEBUG
-    hr = CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory2, &tmp);
-    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
     {
+        void* tmp = NULL;
+        hr = CreateDXGIFactory2(DXGI_CREATE_FACTORY_DEBUG, &IID_IDXGIFactory2, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
+        {
+            hr = CreateDXGIFactory2(0, &IID_IDXGIFactory2, &tmp);
+            if(!dm_platform_win32_decode_hresult(hr) || !tmp)
+            {
+                DM_LOG_FATAL("CreateDXGIFactory2 failed");
+                return false;
+            }
+        }
+#else
         hr = CreateDXGIFactory2(0, &IID_IDXGIFactory2, &tmp);
         if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("CreateDXGIFactory2 failed");
             return false;
         }
-    }
-#else
-    hr = CreateDXGIFactory2(0, &IID_IDXGIFactory2, &tmp);
-    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
-    {
-        DM_LOG_FATAL("CreateDXGIFactory2 failed");
-        return false;
-    }
 #endif
-    factory = tmp;
+        factory = tmp;
+    }
     
     // debug layer
 #ifdef DM_DEBUG
     {
+        void* tmp = NULL;
+
         hr = D3D12GetDebugInterface(&IID_ID3D12Debug, &tmp);
         if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
@@ -601,6 +620,8 @@ bool dm_renderer_backend_init(dm_context* context)
     
     // device
     {
+        void* tmp = NULL;
+
         size_t max_dedicated_video_memory = 0;
         for(uint32_t i=0; DXGI_ERROR_NOT_FOUND != IDXGIFactory1_EnumAdapters1(factory, i, &adapter); i++)
         {
@@ -657,6 +678,8 @@ bool dm_renderer_backend_init(dm_context* context)
     // more debug
 #ifdef DM_DEBUG
     {
+        void* tmp = NULL;
+
         ID3D12InfoQueue* info_queue;
         hr = ID3D12Device5_QueryInterface(dx12_renderer->device, &IID_ID3D12InfoQueue, &tmp);
         if(!dm_platform_win32_decode_hresult(hr) || !tmp)
@@ -699,6 +722,8 @@ bool dm_renderer_backend_init(dm_context* context)
     
     // command queue
     {
+        void* tmp = NULL;
+
         D3D12_COMMAND_QUEUE_DESC command_queue_desc = { 0 };
         command_queue_desc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
         
@@ -715,6 +740,8 @@ bool dm_renderer_backend_init(dm_context* context)
     
     // fence
     {
+        void* tmp = NULL;
+
         hr = ID3D12Device5_CreateFence(dx12_renderer->device, 0, D3D12_FENCE_FLAG_NONE, &IID_ID3D12Fence, &tmp);
         if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
@@ -742,6 +769,8 @@ bool dm_renderer_backend_init(dm_context* context)
     
     // swapchain
     {
+        void* tmp = NULL;
+
         DXGI_SWAP_CHAIN_DESC1 swap_chain_desc = { 0 };
         swap_chain_desc.Format           = DXGI_FORMAT_R8G8B8A8_UNORM;
         swap_chain_desc.SampleDesc.Count = 1;
@@ -767,6 +796,8 @@ bool dm_renderer_backend_init(dm_context* context)
     
     // rtv descriptor heap
     {
+        void* tmp = NULL;
+
         D3D12_DESCRIPTOR_HEAP_DESC heap_desc = { 0 };
         heap_desc.NumDescriptors = DM_DX12_NUM_FRAMES;
         heap_desc.Type           = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
@@ -785,6 +816,8 @@ bool dm_renderer_backend_init(dm_context* context)
     
     // depth stencil descriptor heap
     {
+        void* tmp = NULL;
+
         D3D12_DESCRIPTOR_HEAP_DESC heap_desc = { 0 };
         heap_desc.NumDescriptors = 1;
         heap_desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
@@ -805,8 +838,11 @@ bool dm_renderer_backend_init(dm_context* context)
     // resource descriptor heap
     // big block of: MAX_CBVs + MAX_TEXs + MAX_SRV -> per frame!
     {
+
         for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
         {
+            void* tmp = NULL;
+
             D3D12_DESCRIPTOR_HEAP_DESC heap_desc = { 0 };
             heap_desc.NumDescriptors = DM_DX12_DESCRIPTOR_HEAP_MAX_CBV + DM_DX12_DESCRIPTOR_HEAP_MAX_UAV + DM_DX12_DESCRIPTOR_HEAP_MAX_SRV;
             heap_desc.Type  = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
@@ -832,6 +868,8 @@ bool dm_renderer_backend_init(dm_context* context)
         
         for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
         {
+            void* tmp = NULL;
+
             hr = IDXGISwapChain1_GetBuffer(dx12_renderer->swap_chain, (UINT)i, &IID_ID3D12Resource, &tmp);
             if(!dm_platform_win32_decode_hresult(hr) || !tmp)
             {
@@ -869,6 +907,7 @@ bool dm_renderer_backend_init(dm_context* context)
         depth_desc.SampleDesc.Count = 1;
         depth_desc.MipLevels = 1;
 
+        void* tmp = NULL;
         hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &depth_desc, D3D12_RESOURCE_STATE_DEPTH_WRITE, &clear_value, &IID_ID3D12Resource, &tmp);
         if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
@@ -893,6 +932,8 @@ bool dm_renderer_backend_init(dm_context* context)
     {
         for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
         {
+            void* tmp = NULL;
+
             hr = ID3D12Device5_CreateCommandAllocator(dx12_renderer->device, D3D12_COMMAND_LIST_TYPE_DIRECT, &IID_ID3D12CommandAllocator, &tmp);
             if(!dm_platform_win32_decode_hresult(hr) || !tmp)
             {
@@ -909,6 +950,8 @@ bool dm_renderer_backend_init(dm_context* context)
     {
         for(uint32_t i=0; i<DM_DX12_NUM_FRAMES; i++)
         {
+            void* tmp = NULL;
+
             hr = ID3D12Device5_CreateCommandList1(dx12_renderer->device, 0, D3D12_COMMAND_LIST_TYPE_DIRECT, D3D12_COMMAND_LIST_FLAG_NONE, &IID_ID3D12GraphicsCommandList, &tmp);
             if(!dm_platform_win32_decode_hresult(hr) || !tmp)
             {
@@ -925,8 +968,38 @@ bool dm_renderer_backend_init(dm_context* context)
     IDXGIAdapter1_Release(adapter);
     
     //
-    dm_dx12_flush(dx12_renderer);
     dx12_renderer->current_frame_index = IDXGISwapChain3_GetCurrentBackBufferIndex((IDXGISwapChain3*)dx12_renderer->swap_chain);
+    
+    ID3D12CommandAllocator* command_allocator = dx12_renderer->command_allocator[dx12_renderer->current_frame_index];
+    ID3D12GraphicsCommandList4* command_list  = dx12_renderer->command_list[dx12_renderer->current_frame_index];
+
+    hr = ID3D12CommandAllocator_Reset(command_allocator);
+    if(!dm_platform_win32_decode_hresult(hr))
+    {
+        DM_LOG_FATAL("ID3D12CommandAllocator_Reset failed");
+        return false;
+    }
+
+    hr = ID3D12GraphicsCommandList4_Reset(command_list, command_allocator, NULL);
+    if(!dm_platform_win32_decode_hresult(hr))
+    {
+        DM_LOG_FATAL("ID3D12GraphicsCommandList4_Reset failed");
+        return false;
+    }
+    
+    return true;
+}
+
+bool dm_renderer_backend_finish_init(dm_context* context)
+{
+    dm_dx12_renderer* dx12_renderer = context->renderer.internal_renderer;
+    ID3D12GraphicsCommandList4* command_list  = dx12_renderer->command_list[dx12_renderer->current_frame_index];
+
+    ID3D12GraphicsCommandList4_Close(command_list);
+    
+    ID3D12CommandQueue_ExecuteCommandLists(dx12_renderer->command_queue, 1, (ID3D12CommandList**)&command_list);
+
+    dm_dx12_flush(dx12_renderer);
     
     return true;
 }
@@ -969,6 +1042,11 @@ void dm_renderer_backend_shutdown(dm_context* context)
         dm_dx12_renderer_destroy_texture(&dx12_renderer->textures[i]);
     }
     
+    for(uint32_t i=0; i<dx12_renderer->compute_pipe_count; i++)
+    {
+        dm_dx12_renderer_destroy_compute_pipeline(&dx12_renderer->compute_pipelines[i]);
+    }
+
 #ifdef DM_RAYTRACING
     for(uint32_t i=0; i<dx12_renderer->as_count; i++)
     {
@@ -1424,18 +1502,78 @@ bool dm_renderer_backend_create_structured_buffer(const dm_structured_buffer_des
     
     D3D12_RESOURCE_DESC resource_desc = DM_DX12_BASIC_BUFFER_DESC;
     resource_desc.Width = desc.size;
-    resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    
+   
+    D3D12_RESOURCE_STATES state;
+
     for(uint8_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
         void* tmp = NULL;
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &tmp);
+
+        if(desc.write) 
+        {
+            state               = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+            resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+        }
+        else
+        {
+            state               = D3D12_RESOURCE_STATE_COMMON;
+            resource_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+        }
+
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &resource_desc, state, NULL, &IID_ID3D12Resource, &tmp);
         if(!dm_platform_win32_decode_hresult(hr) || !tmp)
         {
             DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
             return false;
         }
         internal_buffer.buffer[i] = tmp;
+
+        resource_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+        state               = D3D12_RESOURCE_STATE_GENERIC_READ;
+
+        tmp = NULL;
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &resource_desc, state, NULL, &IID_ID3D12Resource, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
+        {
+            DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
+            return false;
+        }
+        internal_buffer.upload_buffer[i] = tmp;
+
+        hr = ID3D12Resource_Map(internal_buffer.upload_buffer[i], 0, NULL, &internal_buffer.mapped_addresses[i]);
+        if(!dm_platform_win32_decode_hresult(hr) || !internal_buffer.mapped_addresses[i])
+        {
+            DM_LOG_FATAL("ID3D12Resource_Map failed");
+            return false;
+        }
+
+        if(!desc.data) continue;
+        dm_memcpy(internal_buffer.mapped_addresses[i], desc.data, desc.size);
+
+        // copy over data
+        ID3D12Resource* dest_buffer = internal_buffer.buffer[i];
+        ID3D12Resource* upload_buff = internal_buffer.upload_buffer[i];
+        ID3D12GraphicsCommandList4* command_list = dx12_renderer->command_list[dx12_renderer->current_frame_index];
+
+        D3D12_RESOURCE_BARRIER begin_barrier = { 0 };
+        begin_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        begin_barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        begin_barrier.Transition.pResource   = dest_buffer;
+        begin_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        begin_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+        begin_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
+
+        D3D12_RESOURCE_BARRIER end_barrier = { 0 };
+        end_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        end_barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+        end_barrier.Transition.pResource   = dest_buffer;
+        end_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+        end_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        end_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_GENERIC_READ;
+
+        ID3D12GraphicsCommandList4_ResourceBarrier(command_list, 1, &begin_barrier);
+        ID3D12GraphicsCommandList4_CopyBufferRegion(command_list, dest_buffer, 0, upload_buff, 0, desc.size);
+        ID3D12GraphicsCommandList4_ResourceBarrier(command_list, 1, &end_barrier);
     }
     
     //
@@ -1450,6 +1588,10 @@ void dm_dx12_renderer_destroy_structured_buffer(dm_dx12_structured_buffer* buffe
     for(uint8_t i=0; i<DM_DX12_NUM_FRAMES; i++)
     {
         ID3D12Resource_Release(buffer->buffer[i]);
+        ID3D12Resource_Unmap(buffer->upload_buffer[i], 0, NULL);
+        ID3D12Resource_Release(buffer->upload_buffer[i]);
+
+        buffer->mapped_addresses[i] = NULL;
     }
 }
 
@@ -1949,13 +2091,7 @@ bool dm_dx12_create_acceleration_structure(D3D12_BUILD_RAYTRACING_ACCELERATION_S
     build_desc.ScratchAccelerationStructureData = ID3D12Resource_GetGPUVirtualAddress(*scratch_buffer);
     build_desc.Inputs                           = inputs;
     
-    ID3D12CommandAllocator_Reset(command_allocator);
-    ID3D12GraphicsCommandList4_Reset(command_list, command_allocator, NULL);
     ID3D12GraphicsCommandList4_BuildRaytracingAccelerationStructure(command_list, &build_desc, 0, NULL);
-    ID3D12GraphicsCommandList4_Close(command_list);
-    
-    ID3D12CommandQueue_ExecuteCommandLists(dx12_renderer->command_queue, 1, (ID3D12CommandList**)&command_list);
-    dm_dx12_flush(dx12_renderer);
    
     ///
     return true;
@@ -2194,7 +2330,7 @@ void dm_dx12_rt_sbt_add_cbv_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_
     dm_dx12_rt_sbt_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, shader_register, ranges, range_index, range_count);
 }
 
-bool dm_dx12_raytracing_pipeline_sbt_make_root_signature(uint32_t shader_stage, dm_rt_pipeline_shader_params params, ID3D12RootSignature** root_sig, ID3D12Device5* device)
+bool dm_dx12_raytracing_pipeline_sbt_make_root_signature(uint32_t shader_stage, dm_pipeline_shader_params params, ID3D12RootSignature** root_sig, ID3D12Device5* device)
 {
     HRESULT hr;
     
@@ -2222,12 +2358,13 @@ bool dm_dx12_raytracing_pipeline_sbt_make_root_signature(uint32_t shader_stage, 
         switch(type)
         {
             case DM_RENDER_RESOURCE_TYPE_TEXTURE:
-            case DM_RENDER_RESOURCE_TYPE_STRUCTURED_BUFFER:
+            case DM_RENDER_RESOURCE_TYPE_STRUCTURED_WRITE_BUFFER:
             dm_dx12_rt_sbt_add_uav_to_range(r, ranges, &uav_index, &range_count);
             break;
             
             case DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER:
             case DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER:
+            case DM_RENDER_RESOURCE_TYPE_STRUCTURED_READ_BUFFER:
             case DM_RENDER_RESOURCE_TYPE_RT_ACCELERATION_STRUCTURE:
             dm_dx12_rt_sbt_add_srv_to_range(r, ranges, &srv_index, &range_count);
             break;
@@ -2341,7 +2478,7 @@ bool dm_dx12_rt_sbt_add_resource_view(dm_render_handle handle, bool is_global, s
                 ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, buffer.buffer[i], &view_desc, heap_handle);
             } break;
             
-            case DM_RENDER_RESOURCE_TYPE_STRUCTURED_BUFFER:
+            case DM_RENDER_RESOURCE_TYPE_STRUCTURED_WRITE_BUFFER:
             {
                 dm_dx12_structured_buffer buffer = dx12_renderer->structured_buffers[index];
                 
@@ -2354,6 +2491,21 @@ bool dm_dx12_rt_sbt_add_resource_view(dm_render_handle handle, bool is_global, s
                 ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, buffer.buffer[i], NULL, &view_desc, heap_handle);
             } break;
             
+            case DM_RENDER_RESOURCE_TYPE_STRUCTURED_READ_BUFFER:
+            {
+                dm_dx12_structured_buffer buffer = dx12_renderer->structured_buffers[index];
+
+                D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
+                view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+                view_desc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+                view_desc.Format        = DXGI_FORMAT_UNKNOWN;
+                view_desc.Buffer.NumElements = buffer.count;
+                view_desc.Buffer.StructureByteStride = buffer.stride;
+                view_desc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_NONE;
+
+                ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, buffer.buffer[i], &view_desc, heap_handle);
+            } break;
+
             case DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER:
             {
                 dm_dx12_index_buffer buffer = dx12_renderer->index_buffers[index];
@@ -2842,6 +2994,237 @@ void dm_dx12_renderer_destroy_raytracing_pipeline(dm_dx12_raytracing_pipeline* p
 }
 #endif
 
+// COMPUTE STUFF
+bool dm_compute_backend_create_write_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+
+    dm_dx12_structured_buffer internal_buffer = { 0 };
+    internal_buffer.stride = desc.stride;
+    internal_buffer.count  = desc.count;
+    
+    D3D12_RESOURCE_DESC resource_desc = DM_DX12_BASIC_BUFFER_DESC;
+    resource_desc.Width = desc.size;
+    resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    
+    for(uint8_t i=0; i<DM_DX12_NUM_FRAMES; i++)
+    {
+        void* tmp = NULL;
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
+        {
+            DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
+            return false;
+        }
+        internal_buffer.buffer[i] = tmp;
+    }
+    //
+    dm_memcpy(dx12_renderer->structured_buffers + dx12_renderer->sb_count, &internal_buffer, sizeof(internal_buffer));
+    DM_COMPUTE_HANDLE_SET_INDEX(*handle, dx12_renderer->sb_count++);
+
+    return true;
+}
+
+bool dm_compute_backend_create_read_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_renderer* renderer)
+{
+    return true;
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+
+    dm_dx12_structured_buffer internal_buffer = { 0 };
+    internal_buffer.stride = desc.stride;
+    internal_buffer.count  = desc.count;
+    
+    D3D12_RESOURCE_DESC resource_desc = DM_DX12_BASIC_BUFFER_DESC;
+    resource_desc.Width = desc.size;
+    resource_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
+    
+    for(uint8_t i=0; i<DM_DX12_NUM_FRAMES; i++)
+    {
+        void* tmp = NULL;
+        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, NULL, &IID_ID3D12Resource, &tmp);
+        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
+        {
+            DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
+            return false;
+        }
+        internal_buffer.buffer[i] = tmp;
+    }
+    //
+    dm_memcpy(dx12_renderer->structured_buffers + dx12_renderer->sb_count, &internal_buffer, sizeof(internal_buffer));
+    DM_COMPUTE_HANDLE_SET_INDEX(*handle, dx12_renderer->sb_count++);
+
+    return true;
+}
+
+bool dm_compute_backend_create_texture(dm_texture_desc desc, dm_compute_handle* handle, dm_renderer* renderer)
+{
+    return true;
+}
+
+DM_INLINE
+void dm_dx12_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE type, uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, int* range_index, uint32_t* range_count)
+{
+    if(*range_index == -1)
+    {
+        *range_index = (*range_count)++;
+        ranges[*range_index].RangeType                         = type;
+        ranges[*range_index].BaseShaderRegister                = shader_register;
+        ranges[*range_index].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+    }
+    
+    ranges[*range_index].NumDescriptors++;
+}
+
+DM_INLINE
+void dm_dx12_add_uav_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, int* range_index, uint32_t* range_count)
+{
+    dm_dx12_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, shader_register, ranges, range_index, range_count);
+}
+
+DM_INLINE
+void dm_dx12_add_srv_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, int* range_index, uint32_t* range_count)
+{
+    dm_dx12_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, shader_register, ranges, range_index, range_count);
+}
+
+DM_INLINE
+void dm_dx12_add_cbv_to_range(uint32_t shader_register, D3D12_DESCRIPTOR_RANGE* ranges, int* range_index, uint32_t* range_count)
+{
+    dm_dx12_add_to_range(D3D12_DESCRIPTOR_RANGE_TYPE_CBV, shader_register, ranges, range_index, range_count);
+}
+
+bool dm_dx12_create_root_signature(dm_pipeline_shader_params params, ID3D12RootSignature** root_sig, dm_dx12_renderer* dx12_renderer)
+{
+    HRESULT hr;
+    
+    D3D12_ROOT_SIGNATURE_DESC sig_desc       = { 0 };
+    D3D12_DESCRIPTOR_RANGE    ranges[3]      = { 0 }; // uav, srv, cbv supported
+    D3D12_ROOT_PARAMETER      root_parameter = { 0 };
+    
+    int uav_index = -1;
+    int srv_index = -1;
+    int cbv_index = -1;
+    
+    uint32_t range_count  = 0;
+    
+    dm_render_resource_type type;
+    uint16_t                index;
+    uint8_t                 r;
+    
+    for(uint32_t i=0; i<params.count; i++)
+    {
+        type  = DM_COMPUTE_HANDLE_GET_TYPE(params.handles[i]);
+        index = DM_COMPUTE_HANDLE_GET_INDEX(params.handles[i]);
+        
+        r = params.registers[i];
+        
+        switch(type)
+        {
+            case DM_COMPUTE_RESOURCE_TYPE_TEXTURE:
+            case DM_COMPUTE_RESOURCE_TYPE_WRITE_BUFFER:
+            dm_dx12_add_uav_to_range(r, ranges, &uav_index, &range_count);
+            break;
+           
+            case DM_COMPUTE_RESOURCE_TYPE_READ_BUFFER:
+            dm_dx12_add_srv_to_range(r, ranges, &srv_index, &range_count);
+            break;
+
+            case DM_COMPUTE_RESOURCE_TYPE_CONSTANT_BUFFER:
+            dm_dx12_add_cbv_to_range(r, ranges, &cbv_index, &range_count);
+            break;
+            
+            default:
+            DM_LOG_FATAL("Unknown shader parameter for DirectX12 compute pipeline");
+            return false;
+        }
+    }
+    
+    if(range_count>0)
+    {
+        root_parameter.ParameterType                       = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+        root_parameter.DescriptorTable.NumDescriptorRanges = range_count;
+        root_parameter.DescriptorTable.pDescriptorRanges   = ranges;
+        
+        sig_desc.NumParameters = 1;
+        sig_desc.pParameters   = &root_parameter;
+    }
+    
+    ID3DBlob* blob;
+    ID3DBlob* error_blob;
+    
+    hr = D3D12SerializeRootSignature(&sig_desc, D3D_ROOT_SIGNATURE_VERSION_1_0, &blob, &error_blob);
+    if(!dm_platform_win32_decode_hresult(hr))
+    {
+        DM_LOG_FATAL("D3D12SerializeRootSignature failed");
+        if(error_blob)
+        {
+            DM_LOG_FATAL("%s", (char*)ID3D10Blob_GetBufferPointer(error_blob));
+        }
+        return false;
+    }
+    
+    void* tmp = NULL;
+    hr = ID3D12Device5_CreateRootSignature(dx12_renderer->device, 0, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), &IID_ID3D12RootSignature, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
+    {
+        DM_LOG_FATAL("ID3D12Device5_CreateRootSignature failed");
+        return false;
+    }
+    *root_sig = tmp;
+
+    ID3D10Blob_Release(blob);
+    
+    return true;
+}
+
+bool dm_compute_backend_create_pipeline(dm_compute_pipeline_desc desc, dm_compute_handle* handle, dm_renderer* renderer)
+{
+    if(DM_RENDER_HANDLE_GET_TYPE(*handle) != DM_COMPUTE_RESOURCE_TYPE_PIPELINE)
+    {
+        DM_LOG_FATAL("Invalid resource handle");
+        return false;
+    }
+
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+
+    dm_dx12_compute_pipeline internal_pipe = { 0 };
+
+    if(!dm_dx12_create_root_signature(desc.params, &internal_pipe.root_signature, dx12_renderer)) return false;
+
+    D3D12_COMPUTE_PIPELINE_STATE_DESC pipe_desc = { 0 };
+    pipe_desc.pRootSignature     = internal_pipe.root_signature;
+    pipe_desc.CS.pShaderBytecode = desc.shader_data;
+    pipe_desc.CS.BytecodeLength  = desc.shader_size;
+
+    void* tmp = NULL;
+    hr = ID3D12Device5_CreateComputePipelineState(dx12_renderer->device, &pipe_desc, &IID_ID3D12PipelineState, &tmp);
+    if(!dm_platform_win32_decode_hresult(hr) || !tmp)
+    {
+        DM_LOG_FATAL("ID3D12Device5_CreatePipelineState failed");
+        return false;
+    }
+    internal_pipe.state = tmp;
+
+    internal_pipe.dim_x = desc.dim_x;
+    internal_pipe.dim_y = desc.dim_y;
+    internal_pipe.dim_z = desc.dim_z;
+
+    //
+    dm_memcpy(dx12_renderer->compute_pipelines + dx12_renderer->compute_pipe_count, &internal_pipe, sizeof(internal_pipe));
+    DM_RENDER_HANDLE_SET_INDEX(*handle, dx12_renderer->compute_pipe_count++);
+
+    return true;
+}
+
+void dm_dx12_renderer_destroy_compute_pipeline(dm_dx12_compute_pipeline* pipe)
+{
+    ID3D12PipelineState_Release(pipe->state);
+    ID3D12RootSignature_Release(pipe->root_signature);
+}
+
 /********
 COMMANDS
 **********/
@@ -2957,6 +3340,60 @@ bool dm_render_command_backend_update_vertex_buffer(dm_render_handle handle, voi
     
     dm_memcpy(internal_buffer->mapped_addresses[current_frame_index], data, data_size);
     
+    return true;
+}
+
+bool dm_render_command_backend_update_structured_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+
+    dm_render_resource_type type = DM_RENDER_HANDLE_GET_TYPE(handle);
+
+    bool b = type==DM_RENDER_RESOURCE_TYPE_STRUCTURED_READ_BUFFER || type==DM_RENDER_RESOURCE_TYPE_STRUCTURED_WRITE_BUFFER;
+    if(!b)
+    {
+        DM_LOG_FATAL("Trying to update a resource that is not a structure buffer");
+        return false;
+    }
+
+    const uint8_t current_frame_index = dx12_renderer->current_frame_index;
+    ID3D12GraphicsCommandList4* command_list = dx12_renderer->command_list[current_frame_index];
+
+    dm_dx12_structured_buffer* internal_buffer = &dx12_renderer->structured_buffers[DM_RENDER_HANDLE_GET_INDEX(handle)];
+
+    if(!internal_buffer->mapped_addresses[current_frame_index])
+    {
+        DM_LOG_FATAL("DirectX12 structured buffer has invalid mapped address");
+        return false;
+    }
+
+    ID3D12Resource* mapped_addr = internal_buffer->mapped_addresses[current_frame_index];
+    ID3D12Resource* dest_buffer = internal_buffer->buffer[current_frame_index];
+    ID3D12Resource* upload_buff = internal_buffer->upload_buffer[current_frame_index];
+
+    dm_memcpy(mapped_addr, data, data_size);
+
+    D3D12_RESOURCE_BARRIER begin_barrier = { 0 };
+    begin_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    begin_barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    begin_barrier.Transition.pResource   = dest_buffer;
+    begin_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    begin_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+    begin_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
+
+    D3D12_RESOURCE_BARRIER end_barrier = { 0 };
+    end_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    end_barrier.Flags                  = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+    end_barrier.Transition.pResource   = dest_buffer;
+    end_barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+    end_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    end_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_GENERIC_READ;
+
+    ID3D12GraphicsCommandList4_ResourceBarrier(command_list, 1, &begin_barrier);
+    ID3D12GraphicsCommandList4_CopyBufferRegion(command_list, dest_buffer, 0, upload_buff, 0, data_size);
+    ID3D12GraphicsCommandList4_ResourceBarrier(command_list, 1, &end_barrier);
+
     return true;
 }
 
@@ -3278,6 +3715,83 @@ bool dm_render_command_backend_copy_texture_to_screen(dm_render_handle handle, d
 }
 
 #endif // dm_raytracing
+
+bool dm_render_command_backend_compute_bind_pipeline(dm_compute_handle handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+
+    if(DM_COMPUTE_HANDLE_GET_TYPE(handle) != DM_COMPUTE_RESOURCE_TYPE_PIPELINE)
+    {
+        DM_LOG_FATAL("Trying to bind invalid DirectX12 compute pipeline");
+        return false;
+    }
+
+    dm_dx12_compute_pipeline* internal_pipe = &dx12_renderer->compute_pipelines[DM_COMPUTE_HANDLE_GET_INDEX(handle)];
+
+    const uint8_t current_frame_index = dx12_renderer->current_frame_index;
+    ID3D12GraphicsCommandList4* command_list = dx12_renderer->command_list[current_frame_index];
+    ID3D12DescriptorHeap* heap = dx12_renderer->resource_descriptor_heap[current_frame_index];
+
+    D3D12_GPU_DESCRIPTOR_HANDLE gpu_handle = { 0 };
+    ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(heap, &gpu_handle);
+    gpu_handle.ptr += internal_pipe->descriptor_table_heap_offset;
+
+    ID3D12GraphicsCommandList4_SetComputeRootSignature(command_list, internal_pipe->root_signature);
+    ID3D12GraphicsCommandList4_SetComputeRootDescriptorTable(command_list, 0, gpu_handle);
+
+    return true;
+}
+
+bool dm_render_command_backend_compute_dispatch(dm_compute_handle handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+
+    if(DM_COMPUTE_HANDLE_GET_TYPE(handle) != DM_COMPUTE_RESOURCE_TYPE_PIPELINE)
+    {
+        DM_LOG_FATAL("Trying to bind invalid DirectX12 compute pipeline");
+        return false;
+    }
+
+    dm_dx12_compute_pipeline* internal_pipe = &dx12_renderer->compute_pipelines[DM_COMPUTE_HANDLE_GET_INDEX(handle)];
+
+    const uint8_t current_frame_index = dx12_renderer->current_frame_index;
+    ID3D12GraphicsCommandList4* command_list = dx12_renderer->command_list[current_frame_index];
+
+    ID3D12GraphicsCommandList4_Dispatch(command_list, internal_pipe->dim_x, internal_pipe->dim_y, internal_pipe->dim_z);
+
+    return true;
+}
+
+// misc
+ID3DBlob* dm_dx12_compile_shader(const char* path, const char* entry, const char* shader_version)
+{
+    HRESULT hr;
+
+    ID3DBlob* shader_blob = NULL;
+    ID3DBlob* error_blob  = NULL;
+
+    uint32_t compile_flags = 0;
+#ifdef DM_DEBUG
+    compile_flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
+#endif
+    wchar_t ws[512];
+    swprintf(ws, 512, L"%hs", path);
+
+    hr = D3DCompileFromFile(ws, NULL, NULL, entry, shader_version, compile_flags, 0, &shader_blob, &error_blob);
+    if(!dm_platform_win32_decode_hresult(hr))
+    {
+        DM_LOG_FATAL("D3DCompileFromFile failed");
+        if(error_blob)
+        {
+            DM_LOG_ERROR("Error blob: ");
+            DM_LOG_ERROR("%s", (char*)ID3D10Blob_GetBufferPointer(error_blob));
+        }
+        
+        return NULL;
+    }
+
+    return shader_blob;
+}
 
 #ifdef DM_DEBUG
 #ifdef DM_DX12_DRED_VALIDATION

@@ -2,130 +2,19 @@
 #define DM_H
 
 /***********
-APP DEFINES
+DEFINES
 *************/
+#include "dm_defines.h"
 #include "dm_app_defines.h"
 
-/********************************************
-DETERMINE PLATFORM AND RENDERING BACKEND
-**********************************************/
-#ifdef __APPLE__
-#define DM_PLATFORM_APPLE
-#define DM_METAL
-#define DM_INLINE __attribute__((always_inline)) inline
-
-#elif defined(__WIN32__) || defined(_WIN32) || defined(WIN32)
-#define DM_PLATFORM_WIN32
-#define DM_INLINE __forceinline
-
-#elif __linux__ || __gnu_linux__
-#define DM_PLATFORM_LINUX
-#define DM_INLINE __always_inline
-
-#else
-#define DM_PLATFORM_GLFW
-#define DM_INLINE
-#endif
-
-/*********
-ALIGNMENT
-***********/
-//#ifdef DM_PLATFORM_WIN32
-#ifdef __MSC_VER_
-#define DM_ALIGN(X) __declspec(align(X))
-#else
-#define DM_ALIGN(X) __attribute((aligned(X)))
-#endif
+#include "dm_math_types.h"
 
 /********
 INCLUDES
 **********/
-#ifdef DM_PLATFORM_LINUX
-#define _GNU_SOURCE
-#endif
-
 #include <stdint.h>
 #include <stddef.h>
 #include <limits.h>
-
-/*****
-TYPES
-*******/
-#ifndef __cplusplus
-#define false 0
-#define true  1
-#ifndef __bool_true_false_are_defined
-typedef _Bool bool;
-#endif
-#endif
-
-/****
-MATH
-******/
-// various constants
-#define DM_MATH_PI                  3.14159265359826f
-#define DM_MATH_INV_PI              0.31830988618f
-#define DM_MATH_2PI                 6.2831853071795f
-#define DM_MATH_INV_2PI             0.159154943091f
-#define DM_MATH_4PI                 12.566370614359173f
-#define DM_MATH_INV_4PI             0.0795774715459f
-#define DM_MATH_INV_12              0.0833333f
-
-#define DM_MATH_ANGLE_RAD_TOLERANCE 0.001f
-#define DM_MATH_SQRT2               1.41421356237309f
-#define DM_MATH_INV_SQRT2           0.70710678118654f
-#define DM_MATH_SQRT3               1.73205080756887f
-#define DM_MATH_INV_SQRT3           0.57735026918962f
-
-#define DM_MATH_DEG_TO_RAD          0.0174533f
-#define DM_MATH_RAD_TO_DEG          57.2958f
-
-#define DM_MATH_1024_INV            0.0009765625f
-
-// math macros
-#define DM_MAX(X, Y)          (X > Y ? X : Y)
-#define DM_MIN(X, Y)          (X < Y ? X : Y)
-#define DM_SIGN(X)            ((0 < X) - (X < 0))
-#define DM_SIGNF(X)           (float)((0 < X) - (X < 0))
-#define DM_CLAMP(X, MIN, MAX) DM_MIN(DM_MAX(X, MIN), MAX)
-#define DM_BIT_SHIFT(X)       (1 << X)
-
-/**********
-MATH TYPES
-************/
-typedef float dm_vec2[2];
-typedef float dm_vec3[3];
-typedef DM_ALIGN(16) float dm_vec4[4];
-typedef DM_ALIGN(16) float dm_quat[4];
-
-typedef float dm_mat2[2][2];
-typedef float dm_mat3[3][3];
-typedef DM_ALIGN(16) float dm_mat4[4][4];
-
-#define N2 2
-#define N3 3
-#define N4 4
-#define M2 N2 * N2
-#define M3 N3 * N3
-#define M4 N4 * N4
-
-#define DM_VEC2_SIZE sizeof(float) * N2
-#define DM_VEC3_SIZE sizeof(float) * N3
-#define DM_VEC4_SIZE sizeof(float) * N4
-#define DM_QUAT_SIZE DM_VEC4_SIZE
-#define DM_MAT2_SIZE sizeof(float) * N2
-#define DM_MAT3_SIZE sizeof(float) * M3
-#define DM_MAT4_SIZE sizeof(float) * M4
-
-#define DM_VEC2_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC2_SIZE)
-#define DM_VEC3_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC3_SIZE)
-#define DM_VEC4_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_VEC4_SIZE)
-#define DM_QUAT_COPY(DEST, SRC) DM_VEC4_COPY(DEST, SRC)
-#define DM_MAT2_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT2_SIZE)
-#define DM_MAT3_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT3_SIZE)
-#define DM_MAT4_COPY(DEST, SRC) dm_memcpy(DEST, SRC, DM_MAT4_SIZE)
-
-#define DM_ALIGN_BYTES(SIZE, ALIGNMENT) ((SIZE + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
 
 /*******
 HASHING
@@ -430,14 +319,6 @@ typedef enum dm_buffer_cpu_access_t
     DM_BUFFER_CPU_READ
 } dm_buffer_cpu_access;
 
-typedef enum dm_compute_buffer_type_t
-{
-    DM_COMPUTE_BUFFER_TYPE_READ_ONLY,
-    DM_COMPUTE_BUFFER_TYPE_WRITE_ONLY,
-    DM_COMPUTE_BUFFER_TYPE_READ_WRITE,
-    DM_COMPUTE_BUFFER_TYPE_UNKNOWN
-} dm_compute_buffer_type;
-
 typedef enum dm_shader_type_t
 {
     DM_SHADER_TYPE_VERTEX,
@@ -587,7 +468,16 @@ typedef enum dm_uniform_stage_t
 /*************
 RENDER HANDLE
 ***************/
-// we have 7 valid graphics resource types, so can use 4 bits to determine
+// have: 16 possible render resource types
+// use 16 bits for the handle means:
+// - first 4 are the resource type
+// - next 12 are the actual resource index
+// means we have 2^12 = 4096 max possible resources for each type
+// N.B. compute resources share the same indexing range!
+// i.e. render_texture == compute_texture
+typedef uint16_t         dm_render_handle;
+
+// we have 9 valid graphics resource types, so can use 4 bits to determine
 // which resource we are dealing with. First type can be used as invalid
 // so each handle is initialized to invalid
 typedef enum dm_render_resource_type_t
@@ -596,37 +486,23 @@ typedef enum dm_render_resource_type_t
     DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER,
     DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER,
     DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER,
-    DM_RENDER_RESOURCE_TYPE_STRUCTURED_BUFFER,
+    DM_RENDER_RESOURCE_TYPE_STRUCTURED_WRITE_BUFFER,
+    DM_RENDER_RESOURCE_TYPE_STRUCTURED_READ_BUFFER,
     DM_RENDER_RESOURCE_TYPE_TEXTURE,
     DM_RENDER_RESOURCE_TYPE_PIPELINE,
     DM_RENDER_RESOURCE_TYPE_RT_ACCELERATION_STRUCTURE,
     DM_RENDER_RESOURCE_TYPE_RT_PIPELINE
 } dm_render_resource_type;
 
-// use 16 bits for the handle, means first 4 are the resource type
-// next 12 are the actual resource index
-// means we have 4095 max possible resources for each type
-typedef uint16_t         dm_render_handle;
-typedef dm_render_handle dm_compute_handle;
-
-#define DM_RENDER_HANDLE_NEW_MAX 0xFFF
-
 #define DM_RENDER_HANDLE_SET_TYPE(HANDLE, TYPE)   HANDLE = ((HANDLE & 0xFFF0) | (TYPE & 0x000F))
 #define DM_RENDER_HANDLE_SET_INDEX(HANDLE, INDEX) HANDLE = ((HANDLE & 0x000F) | (INDEX << 4))
 #define DM_RENDER_HANDLE_GET_TYPE(HANDLE)         (HANDLE & 0x000F)
 #define DM_RENDER_HANDLE_GET_INDEX(HANDLE)        (HANDLE >> 4)
 
-typedef enum dm_vertex_buffer_type_t
-{
-    DM_VERTEX_BUFFER_TYPE_VERTEX,
-    DM_VERTEX_BUFFER_TYPE_INSTANCE,
-    DM_VERTEX_BUFFER_TYPE_UNKNOWN
-} dm_vertex_buffer_type;
-
 typedef struct dm_vertex_buffer_desc_t
 {
-    dm_vertex_buffer_type type;
     size_t size, stride, count;
+
     const void* data;
 } dm_vertex_buffer_desc;
 
@@ -641,6 +517,7 @@ typedef struct dm_index_buffer_desc_t
 {
     dm_index_buffer_data data_type;
     size_t size, count;
+
     const void* data;
 } dm_index_buffer_desc;
 
@@ -651,12 +528,14 @@ typedef struct dm_texture_desc_t
     uint32_t data_count;
     uint32_t width, height;
     
-    void* data;
+    const void* data;
 } dm_texture_desc;
 
 typedef struct dm_structured_buffer_desc_t
 {
     size_t size, stride, count;
+    bool   write;
+
     const void* data;
 } dm_structured_buffer_desc;
 
@@ -680,6 +559,13 @@ typedef enum dm_pipeline_flag_t
     DM_PIPELINE_FLAG_SCISSOR   = 1 << 3,
     DM_PIPELINE_FLAG_WIREFRAME = 1 << 4
 } dm_pipeline_flag;
+
+typedef struct dm_pipeline_shader_params_t
+{
+    dm_render_handle* handles;
+    uint8_t*          registers;
+    uint32_t          count;
+} dm_pipeline_shader_params;
 
 #define DM_PIPELINE_MAX_CBS 5
 typedef struct dm_pipeline_desc_t
@@ -731,6 +617,7 @@ typedef struct dm_compute_shader_desc_t
     char     function[512];
 #endif
 } dm_compute_shader_desc;
+
 
 typedef enum dm_load_operation_t
 {
@@ -820,19 +707,13 @@ typedef enum dm_raytracing_pipeline_hit_group_flag_t
     DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_UNKNOWN       = 1 << 3
 } dm_raytracing_pipeline_hit_group_flag;
 
-typedef struct dm_rt_pipeline_shader_params_t
-{
-    dm_render_handle* handles;
-    uint8_t*         registers;
-    uint32_t          count;
-} dm_rt_pipeline_shader_params;
 
 typedef struct dm_raytracing_pipeline_hit_group_desc_t
 {
     dm_raytracing_pipeline_hit_group_geometry_type geom_type;
     dm_raytracing_pipeline_hit_group_flag          flags;
     
-    dm_rt_pipeline_shader_params params;
+    dm_pipeline_shader_params params;
     
     char name[512];
     char any_hit[512];
@@ -846,18 +727,21 @@ typedef struct dm_raytracing_pipeline_desc_t
     char miss[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS][512];
     uint32_t miss_count;
     
-    dm_rt_pipeline_shader_params global_params;
-    dm_rt_pipeline_shader_params raygen_params;
+    dm_pipeline_shader_params global_params;
+    dm_pipeline_shader_params raygen_params;
     
-    dm_rt_pipeline_shader_params miss_params[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
+    dm_pipeline_shader_params miss_params[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
     
     dm_raytracing_pipeline_hit_group_desc hit_groups[DM_RAYTRACING_PIPELINE_MAX_HIT_GROUPS];
     uint32_t                              hit_group_count;
     
     uint32_t max_instance_count, instance_count;
     
+#ifdef DM_DIRECTX12
     void*  shader_data;
     size_t shader_data_size;
+#elif defined(DM_METAL)
+#endif
     
     size_t   payload_size;
     uint32_t max_recursion;
@@ -879,6 +763,37 @@ typedef enum dm_mesh_index_type_t
     DM_MESH_INDEX_TYPE_UINT32,
     DM_MESH_INDEX_TYPE_UNKNOWN
 } dm_mesh_index_type;
+
+// compute 
+typedef dm_render_handle dm_compute_handle;
+
+typedef enum dm_compute_resource_type_t
+{
+    DM_COMPUTE_RESOURCE_TYPE_INVALID,
+    DM_COMPUTE_RESOURCE_TYPE_WRITE_BUFFER,
+    DM_COMPUTE_RESOURCE_TYPE_READ_BUFFER,
+    DM_COMPUTE_RESOURCE_TYPE_CONSTANT_BUFFER,
+    DM_COMPUTE_RESOURCE_TYPE_TEXTURE,
+    DM_COMPUTE_RESOURCE_TYPE_PIPELINE,
+} dm_compute_resource_type;
+
+#define DM_COMPUTE_HANDLE_SET_TYPE(HANDLE, TYPE)   HANDLE = ((HANDLE & 0xFFF0) | (TYPE & 0x000F))
+#define DM_COMPUTE_HANDLE_SET_INDEX(HANDLE, INDEX) HANDLE = ((HANDLE & 0x000F) | (INDEX << 4))
+#define DM_COMPUTE_HANDLE_GET_TYPE(HANDLE)         (HANDLE & 0x000F)
+#define DM_COMPUTE_HANDLE_GET_INDEX(HANDLE)        (HANDLE >> 4)
+
+typedef struct dm_compute_pipeline_desc_t
+{
+#ifdef DM_DIRECTX
+    const void* shader_data;
+    size_t      shader_size;
+#elif defined(DM_METAL)
+#endif
+
+    dm_pipeline_shader_params params;
+
+    uint16_t dim_x, dim_y, dim_z;
+} dm_compute_pipeline_desc;
 
 // font
 typedef struct dm_bakedchar
@@ -907,8 +822,10 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_BIND_TEXTURE,
     
     DM_RENDER_COMMAND_UPDATE_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_UPDATE_STRUCTURED_BUFFER,
     DM_RENDER_COMMAND_UPDATE_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_UPDATE_TEXTURE,
+
     DM_RENDER_COMMAND_CLEAR_TEXTURE,
     
     DM_RENDER_COMMAND_DRAW_ARRAYS,
@@ -931,6 +848,10 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_COPY_TEXTURE_TO_SCREEN,
 #endif
     
+    // compute
+    DM_RENDER_COMMAND_COMPUTE_BIND_PIPELINE,
+    DM_RENDER_COMMAND_COMPUTE_DISPTACH,
+
     DM_RENDER_COMMAND_UNKNOWN
 } dm_render_command_type;
 
@@ -945,6 +866,7 @@ typedef enum dm_render_command_param_type_t
     DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T,
     DM_RENDER_COMMAND_PARAM_TYPE_FLOAT,
     DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE,
+    DM_RENDER_COMMAND_PARAM_TYPE_COMPUTE_HANDLE,
     DM_RENDER_COMMAND_PARAM_TYPE_VOID,
     DM_RENDER_COMMAND_PARAM_TYPE_UNKNOWN
 } dm_render_command_param_type;
@@ -955,24 +877,25 @@ typedef struct dm_render_command_param_t
     
     union
     {
-        bool             bool_val;
-        int              int_val;
-        uint8_t          uint8_val;
-        uint16_t         uint16_val;
-        uint32_t         uint32_val;
-        uint64_t         uint64_val;
-        size_t           size_t_val;
-        float            float_val;
-        dm_render_handle render_handle_val;
-        void*            void_val;
+        bool              bool_val;
+        int               int_val;
+        uint8_t           uint8_val;
+        uint16_t          uint16_val;
+        uint32_t          uint32_val;
+        uint64_t          uint64_val;
+        size_t            size_t_val;
+        float             float_val;
+        dm_render_handle  render_handle_val;
+        dm_compute_handle compute_handle_val;
+        void*             void_val;
     };
 } dm_render_command_param;
 
-#define DM_RENDER_COMMAND_MAX_PARAMS
+#define DM_RENDER_COMMAND_MAX_PARAMS 10
 typedef struct dm_render_command_t
 {
     dm_render_command_type  type;
-    dm_render_command_param params[10];
+    dm_render_command_param params[DM_RENDER_COMMAND_MAX_PARAMS];
     uint8_t                 param_count;
 } dm_render_command;
 
@@ -1146,35 +1069,6 @@ void* dm_memzero(void* block, size_t size);
 void* dm_memcpy(void* dest, const void* src, size_t size);
 void  dm_memmove(void* dest, const void* src, size_t size);
 
-// math
-int   dm_abs(int x);
-float dm_fabs(float x);
-float dm_sqrtf(float x);
-float dm_math_angle_xy(float x, float y);
-float dm_sin(float angle);
-float dm_cos(float angle);
-float dm_tan(float angle);
-float dm_sind(float angle);
-float dm_cosd(float angle);
-float dm_asin(float value);
-float dm_acos(float value);
-float dm_atan(float x, float y);
-float dm_smoothstep(float edge0, float edge1, float x);
-float dm_smootherstep(float edge0, float edge1, float x);
-float dm_exp(float x);
-float dm_powf(float x, float y);
-float dm_roundf(float x);
-int   dm_round(float x);
-int   dm_ceil(float x);
-int   dm_floor(float x);
-float dm_logf(float x);
-float dm_log2f(float x);
-bool  dm_isnan(float x);
-float dm_clamp(float x, float min, float max);
-
-float dm_rad_to_deg(float radians);
-float dm_deg_to_rad(float degrees);
-
 // general input
 bool dm_input_is_key_pressed(dm_key_code key, dm_context* context);
 bool dm_input_is_mousebutton_pressed(dm_mousebutton_code button, dm_context* context);
@@ -1285,6 +1179,7 @@ void dm_render_command_bind_pipeline(dm_render_handle handle, dm_context* contex
 void dm_render_command_bind_buffer(dm_render_handle handle, uint32_t slot, dm_context* context);
 void dm_render_command_bind_texture(dm_render_handle handle, uint32_t slot, dm_context* context);
 void dm_render_command_update_vertex_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
+void dm_render_command_update_structured_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
 void dm_render_command_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_context* context);
 void dm_render_command_update_constant_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
 void dm_render_command_clear_texture(dm_render_handle handle, dm_context* context);
@@ -1304,6 +1199,15 @@ void dm_render_command_bind_raytracing_pipeline(dm_render_handle handle, dm_cont
 void dm_render_command_raytracing_pipeline_dispatch_rays(uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context);
 void dm_render_command_copy_texture_to_screen(dm_render_handle handle, dm_context* context);
 #endif
+
+void dm_render_command_compute_bind_pipeline(dm_compute_handle handle, dm_context* context);
+void dm_render_command_compute_dispatch(dm_compute_handle handle, dm_context* context);
+
+// compute
+bool dm_compute_create_pipeline(dm_compute_pipeline_desc desc, dm_compute_handle* handle, dm_context* context);
+bool dm_compute_create_write_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_context* context);
+bool dm_compute_create_read_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_context* context);
+bool dm_compute_create_texture(dm_texture_desc desc, dm_compute_handle* handle, dm_context* context);
 
 // physics
 bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);
@@ -1333,8 +1237,6 @@ uint32_t __dm_get_screen_height(dm_context* context);
 
 #define DM_SCREEN_WIDTH(CONTEXT)  __dm_get_screen_width(context)
 #define DM_SCREEN_HEIGHT(CONTEXT) __dm_get_screen_height(context)
-
-#define DM_ARRAY_LEN(ARRAY) sizeof(ARRAY) / sizeof(ARRAY[0])
 
 void dm_qsort(void* array, size_t count, size_t elem_size, int (compar)(const void* a, const void* b));
 #ifdef DM_LINUX

@@ -12,8 +12,6 @@
 
 #ifdef DM_SIMD_X86
 #include <immintrin.h>
-//#include <emmintrin.h>
-//#include <xmmintrin.h>
 #else
 #include <arm_neon.h>
 #endif
@@ -34,38 +32,7 @@ typedef float32x4_t dm_simd_float;
 typedef int32x4_t   dm_simd_int;
 #endif
 
-// this is mostly to make a compiler happy, but possibly lets it be orphaned? not sure
-#ifndef DM_H
-
-#ifdef __APPLE__
-#define DM_INLINE __attribute__((always_inline)) inline
-#elif defined(__WIN32__) || defined(_WIN32) || defined(WIN32)
-#define DM_INLINE __forceinline
-#elif __linux__ || __gnu_linux__
-#define DM_INLINE __always_inline
-#endif
-
-/*********
-ALIGNMENT
-***********/
-#ifdef __MSC_VER_
-#define DM_ALIGN(X) __declspec(align(X))
-#else
-#define DM_ALIGN(X) __attribute((aligned(X)))
-#endif
-
-typedef float dm_vec2[2];
-typedef float dm_vec3[3];
-typedef DM_ALIGN(16) float dm_vec4[4];
-typedef DM_ALIGN(16) float dm_quat[4];
-
-typedef float dm_mat2[2][2];
-typedef float dm_mat3[3][3];
-typedef DM_ALIGN(16) float dm_mat4[4][4];
-
-#define DM_SIMD_FLOAT_N    4
-
-#endif // dm block
+#include "dm_defines.h"
 
 /*******
 casting
