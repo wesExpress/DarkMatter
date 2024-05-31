@@ -567,45 +567,11 @@ typedef struct dm_pipeline_shader_params_t
     uint32_t          count;
 } dm_pipeline_shader_params;
 
-#define DM_PIPELINE_MAX_CBS 5
-typedef struct dm_pipeline_desc_t
-{
-    dm_cull_mode          cull_mode;
-    dm_winding_order      winding_order;
-    
-    dm_blend_equation     blend_eq;
-    dm_blend_func         blend_src_f, blend_dest_f;
-    dm_blend_equation     blend_alpha_eq;
-    dm_blend_func         blend_src_alpha_f, blend_dest_alpha_f;
-    
-    dm_filter             sampler_filter;
-    dm_texture_mode       u_mode, v_mode, w_mode;
-    dm_pipeline_flag      flags;
-    dm_comparison         blend_comp, depth_comp, stencil_comp, sampler_comp;
-    
-    dm_primitive_topology primitive_topology;
-    float                 min_lod, max_lod;
-    
-    dm_vertex_attrib_desc* attribs;
-    uint32_t               attrib_count;
-    
-    dm_render_handle cbs[DM_PIPELINE_MAX_CBS];
-    size_t           cb_sizes[DM_PIPELINE_MAX_CBS];
-    uint32_t         cb_count;
-    
-    void*  vertex_shader_data;
-    size_t vertex_shader_size;
-    
-    void*  pixel_shader_data;
-    size_t pixel_shader_size;
-} dm_pipeline_desc;
-
 typedef struct dm_pipeline_raster_desc_t
 {
     dm_cull_mode          cull;
     dm_winding_order      winding;
     dm_primitive_topology topology;
-    bool                  wireframe;
 } dm_pipeline_raster_desc;
 
 typedef struct dm_pipeline_blend_desc_t
@@ -632,63 +598,27 @@ typedef enum dm_pipeline_shader_stage_t
 typedef struct dm_pipeline_shader_desc_t
 {
     dm_pipeline_shader_params params;
-    dm_pipeline_shader_stage  stage;
 
     const void* shader_data;
     size_t      shader_size;
 } dm_pipeline_shader_desc;
 
-typedef struct dm_pipeline_desc_new_t
+typedef struct dm_pipeline_desc_t
 {
     dm_pipeline_raster_desc raster_desc;
 
-    dm_pipeline_blend_desc  blend_desc;
-    dm_pipeline_blend_desc  blend_alpha_desc;
+    dm_pipeline_blend_desc blend_desc;
+    dm_pipeline_blend_desc blend_alpha_desc;
 
-    dm_pipeline_shader_params params;
-} dm_pipeline_desc_new;
+    dm_pipeline_sampler_desc sampler_desc;
 
-typedef struct dm_shader_desc_t
-{
-    char vertex[512];
-    char pixel[512];
-    char master[512];
-    
-    dm_render_handle vb[2];
-    uint32_t         vb_count;
-} dm_shader_desc;
+    dm_pipeline_shader_desc shaders[DM_PIPELINE_SHADER_STAGE_UNKNOWN]; // allows us to index into each shader directly with its enum
 
-typedef struct dm_compute_shader_desc_t
-{
-    char     path[512];
-#ifdef DM_METAL
-    char     function[512];
-#endif
-} dm_compute_shader_desc;
+    dm_vertex_attrib_desc*  vertex_attribs;
+    uint8_t                 vertex_attrib_count;
 
-
-typedef enum dm_load_operation_t
-{
-    DM_LOAD_OPERATION_LOAD,
-    DM_LOAD_OPERATION_CLEAR,
-    DM_LOAD_OPERATION_DONT_CARE,
-    DM_LOAD_OPERATION_UNKNOWN
-} dm_load_operation;
-
-typedef enum dm_store_operation_t
-{
-    DM_STORE_OPERATION_STORE,
-    DM_STORE_OPERATION_DONT_CARE,
-    DM_STORE_OPERATION_UNKNOWN
-} dm_store_operation;
-
-typedef struct dm_renderpass_desc_t
-{
-    float top, bottom;
-    float left, right;
-    
-    float depth_min, depth_max;
-} dm_renderpass_desc;
+    dm_pipeline_flag flags;
+} dm_pipeline_desc;
 
 #ifdef DM_RAYTRACING
 // raytracing acceleration structure
