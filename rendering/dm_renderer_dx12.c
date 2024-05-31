@@ -1495,7 +1495,12 @@ bool dm_renderer_backend_create_structured_buffer(const dm_structured_buffer_des
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
-    
+   
+    if((desc.stride%16)!=0)
+    {
+        DM_LOG_WARN("Warning: this istructured buffer is not aligned to 16 bytes. No promises what the result will be.");
+    }
+
     dm_dx12_structured_buffer internal_buffer = { 0 };
     internal_buffer.stride = desc.stride;
     internal_buffer.count  = desc.count;
@@ -2995,67 +3000,9 @@ void dm_dx12_renderer_destroy_raytracing_pipeline(dm_dx12_raytracing_pipeline* p
 #endif
 
 // COMPUTE STUFF
-bool dm_compute_backend_create_write_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_renderer* renderer)
+bool dm_compute_backend_create_structured_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_renderer* renderer)
 {
-    DM_DX12_GET_RENDERER;
-    HRESULT hr;
-
-    dm_dx12_structured_buffer internal_buffer = { 0 };
-    internal_buffer.stride = desc.stride;
-    internal_buffer.count  = desc.count;
-    
-    D3D12_RESOURCE_DESC resource_desc = DM_DX12_BASIC_BUFFER_DESC;
-    resource_desc.Width = desc.size;
-    resource_desc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    
-    for(uint8_t i=0; i<DM_DX12_NUM_FRAMES; i++)
-    {
-        void* tmp = NULL;
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_DEFAULT_HEAP, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, NULL, &IID_ID3D12Resource, &tmp);
-        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
-        {
-            DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
-            return false;
-        }
-        internal_buffer.buffer[i] = tmp;
-    }
-    //
-    dm_memcpy(dx12_renderer->structured_buffers + dx12_renderer->sb_count, &internal_buffer, sizeof(internal_buffer));
-    DM_COMPUTE_HANDLE_SET_INDEX(*handle, dx12_renderer->sb_count++);
-
-    return true;
-}
-
-bool dm_compute_backend_create_read_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_renderer* renderer)
-{
-    return true;
-    DM_DX12_GET_RENDERER;
-    HRESULT hr;
-
-    dm_dx12_structured_buffer internal_buffer = { 0 };
-    internal_buffer.stride = desc.stride;
-    internal_buffer.count  = desc.count;
-    
-    D3D12_RESOURCE_DESC resource_desc = DM_DX12_BASIC_BUFFER_DESC;
-    resource_desc.Width = desc.size;
-    resource_desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-    
-    for(uint8_t i=0; i<DM_DX12_NUM_FRAMES; i++)
-    {
-        void* tmp = NULL;
-        hr = ID3D12Device5_CreateCommittedResource(dx12_renderer->device, &DM_DX12_UPLOAD_HEAP, D3D12_HEAP_FLAG_NONE, &resource_desc, D3D12_RESOURCE_STATE_COMMON, NULL, &IID_ID3D12Resource, &tmp);
-        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
-        {
-            DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
-            return false;
-        }
-        internal_buffer.buffer[i] = tmp;
-    }
-    //
-    dm_memcpy(dx12_renderer->structured_buffers + dx12_renderer->sb_count, &internal_buffer, sizeof(internal_buffer));
-    DM_COMPUTE_HANDLE_SET_INDEX(*handle, dx12_renderer->sb_count++);
-
-    return true;
+    return dm_renderer_backend_create_structured_buffer(desc, handle, renderer);
 }
 
 bool dm_compute_backend_create_texture(dm_texture_desc desc, dm_compute_handle* handle, dm_renderer* renderer)

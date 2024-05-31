@@ -600,6 +600,54 @@ typedef struct dm_pipeline_desc_t
     size_t pixel_shader_size;
 } dm_pipeline_desc;
 
+typedef struct dm_pipeline_raster_desc_t
+{
+    dm_cull_mode          cull;
+    dm_winding_order      winding;
+    dm_primitive_topology topology;
+    bool                  wireframe;
+} dm_pipeline_raster_desc;
+
+typedef struct dm_pipeline_blend_desc_t
+{
+    dm_blend_equation eq;
+    dm_blend_func     src_func, dest_func;
+    dm_comparison     comparison_function;
+} dm_pipeline_blend_desc;
+
+typedef struct dm_pipeline_sampler_desc_t
+{
+    dm_filter       filter;
+    dm_texture_mode u, v, w;
+    dm_comparison   comparison_function;
+} dm_pipeline_sampler_desc;
+
+typedef enum dm_pipeline_shader_stage_t
+{
+    DM_PIPELINE_SHADER_STAGE_VERTEX,
+    DM_PIPELINE_SHADER_STAGE_PIXEL,
+    DM_PIPELINE_SHADER_STAGE_UNKNOWN,
+} dm_pipeline_shader_stage;
+
+typedef struct dm_pipeline_shader_desc_t
+{
+    dm_pipeline_shader_params params;
+    dm_pipeline_shader_stage  stage;
+
+    const void* shader_data;
+    size_t      shader_size;
+} dm_pipeline_shader_desc;
+
+typedef struct dm_pipeline_desc_new_t
+{
+    dm_pipeline_raster_desc raster_desc;
+
+    dm_pipeline_blend_desc  blend_desc;
+    dm_pipeline_blend_desc  blend_alpha_desc;
+
+    dm_pipeline_shader_params params;
+} dm_pipeline_desc_new;
+
 typedef struct dm_shader_desc_t
 {
     char vertex[512];
@@ -1205,8 +1253,7 @@ void dm_render_command_compute_dispatch(dm_compute_handle handle, dm_context* co
 
 // compute
 bool dm_compute_create_pipeline(dm_compute_pipeline_desc desc, dm_compute_handle* handle, dm_context* context);
-bool dm_compute_create_write_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_context* context);
-bool dm_compute_create_read_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_context* context);
+bool dm_compute_create_structured_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_context* context);
 bool dm_compute_create_texture(dm_texture_desc desc, dm_compute_handle* handle, dm_context* context);
 
 // physics

@@ -59,6 +59,10 @@ typedef _Bool bool;
 #endif
 #endif
 
+/****
+MISC
+******/
 #define DM_ARRAY_LEN(ARRAY) sizeof(ARRAY) / sizeof(ARRAY[0])
+#define DM_ALIGN_BYTES(SIZE, ALIGNMENT) ((SIZE + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
 
 #endif

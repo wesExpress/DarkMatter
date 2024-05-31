@@ -1492,8 +1492,7 @@ bool dm_renderer_submit_commands(dm_context* context)
 
 // compute stuff
 extern bool dm_compute_backend_create_pipeline(dm_compute_pipeline_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
-extern bool dm_compute_backend_create_write_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
-extern bool dm_compute_backend_create_read_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
+extern bool dm_compute_backend_create_structured_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
 extern bool dm_compute_backend_create_texture(dm_texture_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
 
 bool dm_compute_create_pipeline(dm_compute_pipeline_desc desc, dm_compute_handle* handle, dm_context* context)
@@ -1505,21 +1504,14 @@ bool dm_compute_create_pipeline(dm_compute_pipeline_desc desc, dm_compute_handle
     return false;
 }
 
-bool dm_compute_create_write_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_context* context)
+bool dm_compute_create_structured_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_context* context)
 {
-    DM_COMPUTE_HANDLE_SET_TYPE(*handle, DM_COMPUTE_RESOURCE_TYPE_WRITE_BUFFER);
-    if(dm_compute_backend_create_write_buffer(desc, handle, &context->renderer)) return true;
+    if(desc.write) DM_COMPUTE_HANDLE_SET_TYPE(*handle, DM_COMPUTE_RESOURCE_TYPE_WRITE_BUFFER);
+    else           DM_COMPUTE_HANDLE_SET_TYPE(*handle, DM_COMPUTE_RESOURCE_TYPE_READ_BUFFER);
 
-    DM_LOG_FATAL("Could not create compute write buffer");
-    return false;
-}
+    if(dm_compute_backend_create_structured_buffer(desc, handle, &context->renderer)) return true;
 
-bool dm_compute_create_read_buffer(dm_structured_buffer_desc desc, dm_compute_handle* handle, dm_context* context)
-{
-    DM_COMPUTE_HANDLE_SET_TYPE(*handle, DM_COMPUTE_RESOURCE_TYPE_READ_BUFFER);
-    if(dm_compute_backend_create_read_buffer(desc, handle, &context->renderer)) return true;
-
-    DM_LOG_FATAL("Could not create compute read buffer");    
+    DM_LOG_FATAL("Could not create compute structured buffer");
     return false;
 }
 
