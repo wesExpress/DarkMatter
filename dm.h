@@ -440,30 +440,56 @@ typedef enum dm_texture_mode_t
 
 typedef enum dm_texture_data_type_t
 {
-    DM_TEXTURE_DATA_TYPE_FLOAT_8,
-    DM_TEXTURE_DATA_TYPE_INT_8,
-    DM_TEXTURE_DATA_TYPE_UINT_8,
-    DM_TEXTURE_DATA_TYPE_UNORM_8,
-    
-    DM_TEXTURE_DATA_TYPE_FLOAT_16,
-    DM_TEXTURE_DATA_TYPE_INT_16,
-    DM_TEXTURE_DATA_TYPE_UINT_16,
-    DM_TEXTURE_DATA_TYPE_UNORM_16,
-    
-    DM_TEXTURE_DATA_TYPE_FLOAT_32,
-    DM_TEXTURE_DATA_TYPE_INT_32,
-    DM_TEXTURE_DATA_TYPE_UINT_32,
-    
+    DM_TEXTURE_DATA_TYPE_INT,
+    DM_TEXTURE_DATA_TYPE_UINT,
+    DM_TEXTURE_DATA_TYPE_UNORM,
+    DM_TEXTURE_DATA_TYPE_FLOAT,
     DM_TEXTURE_DATA_TYPE_UNKNOWN
 } dm_texture_data_type;
 
-typedef enum dm_uniform_stage_t
+typedef enum dm_texture_data_bytes_t
 {
-    DM_UNIFORM_STAGE_VERTEX,
-    DM_UNIFORM_STAGE_PIXEL,
-    DM_UNIFORM_STAGE_BOTH,
-    DM_UNIFORM_STAGE_UNKNOWN
-} dm_uniform_stage;
+    DM_TEXTURE_DATA_BYTES_8,
+    DM_TEXTURE_DATA_BYTES_16,
+    DM_TEXTURE_DATA_BYTES_32,
+    DM_TEXTURE_DATA_BYTES_UNKNOWN
+} dm_texture_data_bytes;
+
+typedef enum dm_texture_data_count_t
+{
+    DM_TEXTURE_DATA_COUNT_1,
+    DM_TEXTURE_DATA_COUNT_2,
+    DM_TEXTURE_DATA_COUNT_3,
+    DM_TEXTURE_DATA_COUNT_4,
+    DM_TEXTURE_DATA_COUNT_UNKNOWN
+} dm_texture_data_count;
+
+typedef enum dm_constant_buffer_stage_t
+{
+    DM_CONSTANT_BUFFER_STAGE_VERTEX   = 1 << 0,
+    DM_CONSTANT_BUFFER_STAGE_PIXEL    = 1 << 1,
+    DM_CONSTANT_BUFFER_STAGE_COMPUTE  = 1 << 3,
+#ifdef DM_RAYTRACING
+    DM_CONSTANT_BUFFER_STAGE_RT       = 1 << 4,
+#endif
+} dm_constant_buffer_stage;
+
+typedef enum dm_pipeline_shader_stage_t
+{
+    DM_PIPELINE_SHADER_STAGE_VERTEX,
+    DM_PIPELINE_SHADER_STAGE_PIXEL,
+    DM_PIPELINE_SHADER_STAGE_UNKNOWN,
+} dm_pipeline_shader_stage;
+
+typedef enum dm_pipeline_flag_t
+{
+    DM_PIPELINE_FLAG_NONE      = 0,
+    DM_PIPELINE_FLAG_BLEND     = 1 << 0,
+    DM_PIPELINE_FLAG_DEPTH     = 1 << 1,
+    DM_PIPELINE_FLAG_STENCIL   = 1 << 2,
+    DM_PIPELINE_FLAG_SCISSOR   = 1 << 3,
+    DM_PIPELINE_FLAG_WIREFRAME = 1 << 4
+} dm_pipeline_flag;
 
 /*************
 RENDER HANDLE
@@ -475,7 +501,7 @@ RENDER HANDLE
 // means we have 2^12 = 4096 max possible resources for each type
 // N.B. compute resources share the same indexing range!
 // i.e. render_texture == compute_texture
-typedef uint16_t         dm_render_handle;
+typedef uint16_t dm_render_handle;
 
 // we have 9 valid graphics resource types, so can use 4 bits to determine
 // which resource we are dealing with. First type can be used as invalid
@@ -486,7 +512,7 @@ typedef enum dm_render_resource_type_t
     DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER,
     DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER,
     DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER,
-    DM_RENDER_RESOURCE_TYPE_STRUCTURED_WRITE_BUFFER,
+    DM_RENDER_RESOURCE_TYPE_STRUCTURED_WRITE_BUFFER, // read/write refer to GPU side, NOT CPU side
     DM_RENDER_RESOURCE_TYPE_STRUCTURED_READ_BUFFER,
     DM_RENDER_RESOURCE_TYPE_TEXTURE,
     DM_RENDER_RESOURCE_TYPE_PIPELINE,
@@ -502,32 +528,36 @@ typedef enum dm_render_resource_type_t
 typedef struct dm_vertex_buffer_desc_t
 {
     size_t size, stride, count;
+    bool   dynamic;
 
     const void* data;
 } dm_vertex_buffer_desc;
 
-typedef enum dm_index_buffer_data_t
-{
-    DM_INDEX_BUFFER_DATA_UINT16,
-    DM_INDEX_BUFFER_DATA_UINT32,
-    DM_INDEX_BUFFER_UNKNOWN
-} dm_index_buffer_data;
-
 typedef struct dm_index_buffer_desc_t
 {
-    dm_index_buffer_data data_type;
     size_t size, count;
 
     const void* data;
 } dm_index_buffer_desc;
 
+typedef struct dm_constant_buffer_desc_t
+{
+    dm_constant_buffer_stage stage;
+    size_t data_size;
+
+    const void* data;
+} dm_constant_buffer_desc;
+
 typedef struct dm_texture_desc_t
 {
-    dm_texture_data_type data_type;
+    dm_texture_data_type  data_type;
+    dm_texture_data_bytes data_byte_size;
+    dm_texture_data_count data_count; 
     
-    uint32_t data_count;
     uint32_t width, height;
     
+    bool dynamic;
+
     const void* data;
 } dm_texture_desc;
 
@@ -541,7 +571,7 @@ typedef struct dm_structured_buffer_desc_t
 
 typedef struct dm_vertex_attrib_desc_t
 {
-    const char*            name;
+    char                   name[512];
     dm_vertex_data_t       data_t;
     dm_vertex_attrib_class attrib_class;
     bool                   normalized;
@@ -550,15 +580,6 @@ typedef struct dm_vertex_attrib_desc_t
     size_t                 count;
     size_t                 index;
 } dm_vertex_attrib_desc;
-
-typedef enum dm_pipeline_flag_t
-{
-    DM_PIPELINE_FLAG_BLEND     = 1 << 0,
-    DM_PIPELINE_FLAG_DEPTH     = 1 << 1,
-    DM_PIPELINE_FLAG_STENCIL   = 1 << 2,
-    DM_PIPELINE_FLAG_SCISSOR   = 1 << 3,
-    DM_PIPELINE_FLAG_WIREFRAME = 1 << 4
-} dm_pipeline_flag;
 
 typedef struct dm_pipeline_shader_params_t
 {
@@ -588,13 +609,6 @@ typedef struct dm_pipeline_sampler_desc_t
     dm_comparison   comparison_function;
 } dm_pipeline_sampler_desc;
 
-typedef enum dm_pipeline_shader_stage_t
-{
-    DM_PIPELINE_SHADER_STAGE_VERTEX,
-    DM_PIPELINE_SHADER_STAGE_PIXEL,
-    DM_PIPELINE_SHADER_STAGE_UNKNOWN,
-} dm_pipeline_shader_stage;
-
 typedef struct dm_pipeline_shader_desc_t
 {
     dm_pipeline_shader_params params;
@@ -603,6 +617,7 @@ typedef struct dm_pipeline_shader_desc_t
     size_t      shader_size;
 } dm_pipeline_shader_desc;
 
+#define DM_PIPELINE_MAX_VERTEX_ATTRIBS 10
 typedef struct dm_pipeline_desc_t
 {
     dm_pipeline_raster_desc raster_desc;
@@ -614,8 +629,8 @@ typedef struct dm_pipeline_desc_t
 
     dm_pipeline_shader_desc shaders[DM_PIPELINE_SHADER_STAGE_UNKNOWN]; // allows us to index into each shader directly with its enum
 
-    dm_vertex_attrib_desc*  vertex_attribs;
-    uint8_t                 vertex_attrib_count;
+    dm_vertex_attrib_desc vertex_attribs[DM_PIPELINE_MAX_VERTEX_ATTRIBS];
+    uint8_t               vertex_attrib_count;
 
     dm_pipeline_flag flags;
 } dm_pipeline_desc;
@@ -679,6 +694,7 @@ typedef enum dm_raytracing_pipeline_hit_group_geometry_type_t
 
 typedef enum dm_raytracing_pipeline_hit_group_flag_t
 {
+    DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_NONE          = 0,
     DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_ANY_HIT       = 1 << 0,
     DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_CLOSEST_HIT   = 1 << 1,
     DM_RAYTRACING_PIPELINE_HIT_GROUP_FLAG_INTERSECTION  = 1 << 2,
@@ -790,16 +806,19 @@ typedef struct dm_font_t
 // commands
 typedef enum dm_render_command_type_t
 {
-    DM_RENDER_COMMAND_BEGIN_RENDERPASS,
-    DM_RENDER_COMMAND_END_RENDERPASS,
-    
     DM_RENDER_COMMAND_BIND_PIPELINE,
+    DM_RENDER_COMMAND_PIPELINE_SET_TOPOLOGY,
+    
+    DM_RENDER_COMMAND_PIPELINE_TOGGLE_WIREFRAME,
     
     DM_RENDER_COMMAND_BIND_VERTEX_BUFFER,
     DM_RENDER_COMMAND_BIND_INDEX_BUFFER,
+    DM_RENDER_COMMAND_BIND_STRUCTURED_BUFFER,
+    DM_RENDER_COMMAND_BIND_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_BIND_TEXTURE,
     
     DM_RENDER_COMMAND_UPDATE_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_UPDATE_INDEX_BUFFER,
     DM_RENDER_COMMAND_UPDATE_STRUCTURED_BUFFER,
     DM_RENDER_COMMAND_UPDATE_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_UPDATE_TEXTURE,
@@ -810,9 +829,6 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_DRAW_INDEXED,
     DM_RENDER_COMMAND_DRAW_INSTANCED,
     
-    // misc
-    DM_RENDER_COMMAND_SET_TOPOLOGY,
-    DM_RENDER_COMMAND_TOGGLE_WIREFRAME,
     
 #ifdef DM_RAYTRACING
     DM_RENDER_COMMAND_BIND_RAYTRACING_PIPELINE,
@@ -921,22 +937,22 @@ typedef enum dm_physics_movement_type_t
 
 typedef struct dm_plane
 {
-    float normal[3];
-    float distance;
+    dm_vec3 normal;
+    float   distance;
 } dm_plane;
 
 typedef struct dm_simplex
 {
-    float    points[4][3];
+    dm_vec3  points[4];
     uint32_t size;
 } dm_simplex;
 
 typedef struct dm_contact_constraint
 {
-    float  jacobian[4][3];
-    float  delta_v[4][3];
-    float  b;
-    double lambda, warm_lambda, impulse_sum, impulse_min, impulse_max;
+    dm_vec3 jacobian[4];
+    dm_vec3 delta_v[4];
+    float   b;
+    double  lambda, warm_lambda, impulse_sum, impulse_min, impulse_max;
 } dm_contact_constraint;
 
 typedef struct dm_contact_point
@@ -944,9 +960,9 @@ typedef struct dm_contact_point
     dm_contact_constraint normal;
     dm_contact_constraint friction_a, friction_b;
     
-    float global_pos[2][3];
-    float local_pos[2][3];
-    float penetration;
+    dm_vec3 global_pos[2];
+    dm_vec3 local_pos[2];
+    float   penetration;
 } dm_contact_point;
 
 typedef struct dm_contact_data_t
@@ -964,11 +980,11 @@ typedef struct dm_contact_data_t
 #define DM_PHYSICS_CLIP_MAX_PTS 15
 typedef struct dm_contact_manifold
 {
-    float     normal[3];
-    float     tangent_a[3]; 
-    float     tangent_b[3];
-    float     orientation_a[4];
-    float     orientation_b[4];
+    dm_vec3 normal;
+    dm_vec3 tangent_a; 
+    dm_vec3 tangent_b;
+    dm_vec3 orientation_a;
+    dm_vec3 orientation_b;
     
     dm_contact_data contact_data[2];
     
@@ -976,12 +992,12 @@ typedef struct dm_contact_manifold
     uint32_t         point_count;
     
 #ifdef DM_PHYSICS_DEBUG
-    float    clipped_face[DM_PHYSICS_CLIP_MAX_PTS][3];
+    dm_vec3  clipped_face[DM_PHYSICS_CLIP_MAX_PTS];
     uint32_t clipped_point_count;
     
     uint32_t face_count_a, face_count_b;
-    float face_a[DM_PHYSICS_CLIP_MAX_PTS][3];
-    float face_b[DM_PHYSICS_CLIP_MAX_PTS][3];
+    dm_vec3  face_a[DM_PHYSICS_CLIP_MAX_PTS];
+    dm_vec3  face_b[DM_PHYSICS_CLIP_MAX_PTS];
     
     uint32_t plane_count_a, plane_count_b;
     dm_plane planes_a[DM_PHYSICS_CLIP_MAX_PTS];
@@ -1129,11 +1145,10 @@ void dm_platform_sleep(uint64_t ms, dm_context* context);
 // rendering
 bool dm_renderer_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_index_buffer(const dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_constant_buffer(const void* data, size_t data_size, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_constant_buffer(const dm_constant_buffer_desc desc,dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_structured_buffer(const dm_structured_buffer_desc desc, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_pipeline(dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_texture(const dm_texture_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_pipeline(const dm_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
 
 bool dm_renderer_resize_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_context* context);
 
@@ -1152,21 +1167,21 @@ void dm_renderer_raytracing_pipeline_hit_group_add_intersection(const char* shad
 #endif
 
 // render commands
-void dm_render_command_set_primitive_topology(dm_primitive_topology topology, dm_context* context);
 void dm_render_command_bind_pipeline(dm_render_handle handle, dm_context* context);
-void dm_render_command_bind_buffer(dm_render_handle handle, uint32_t slot, dm_context* context);
+void dm_render_command_bind_vertex_buffer(dm_render_handle handle, uint32_t slot, dm_context* context);
+void dm_render_command_bind_index_buffer(dm_render_handle handle, uint32_t slot, dm_context* context);
+void dm_render_command_bind_constant_buffer(dm_render_handle handle, uint32_t slot, dm_context* context);
 void dm_render_command_bind_texture(dm_render_handle handle, uint32_t slot, dm_context* context);
 void dm_render_command_update_vertex_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
 void dm_render_command_update_structured_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
 void dm_render_command_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_context* context);
 void dm_render_command_update_constant_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context);
 void dm_render_command_clear_texture(dm_render_handle handle, dm_context* context);
-void dm_render_command_begin_renderpass(dm_render_handle handle, dm_context* conext);
-void dm_render_command_end_renderpass(dm_render_handle handle, dm_context* conext);
 void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_context* context);
 void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);
 void dm_render_command_draw_instanced(uint32_t index_count, uint32_t vertex_count, uint32_t inst_count, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_context* context);
-void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context);
+void dm_render_command_pipeline_set_primitive_topology(dm_render_handle handle, dm_primitive_topology topology, dm_context* context);
+void dm_render_command_pipeline_toggle_wireframe(dm_render_handle handle, bool wireframe, dm_context* context);
 
 #ifdef DM_RAYTRACING
 void dm_render_command_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size,  dm_context* context);

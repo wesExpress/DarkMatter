@@ -613,17 +613,15 @@ void dm_renderer_shutdown(dm_context* context)
 // backend resource creation
 extern bool dm_renderer_backend_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_index_buffer(const dm_index_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_constant_buffer(const void* data, size_t data_size, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_constant_buffer(const dm_constant_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_structured_buffer(const dm_structured_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_texture(const dm_texture_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_resize_texture(const void* data, uint32_t width, uint32_t height, dm_render_handle handle, dm_renderer* renderer);
 
 #ifdef DM_RAYTRACING
 extern bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer);
-
 #endif
 
 bool dm_renderer_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context)
@@ -646,11 +644,11 @@ bool dm_renderer_create_index_buffer(const dm_index_buffer_desc desc, dm_render_
     return false;
 }
 
-bool dm_renderer_create_constant_buffer(const void* data, size_t data_size, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_context* context)
 {
     DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER);
     
-    if(dm_renderer_backend_create_constant_buffer(data, data_size, handle, &context->renderer)) return true;
+    if(dm_renderer_backend_create_constant_buffer(desc, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Creating constant buffer failed");
     return false;
@@ -692,14 +690,6 @@ bool dm_renderer_create_pipeline(const dm_pipeline_desc desc, dm_render_handle* 
     if(dm_renderer_backend_create_pipeline(desc, handle, &context->renderer)) return true;
     
     DM_LOG_FATAL("Could not create pipeline");
-    return false;
-}
-
-bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_context* context)
-{
-    if(dm_renderer_backend_create_renderpass(desc, handle, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Could not create renderpass");
     return false;
 }
 
@@ -779,14 +769,16 @@ void dm_renderer_raytracing_pipeline_hit_group_add_intersection(const char* shad
 /***************
 RENDER COMMANDS
 *****************/
-extern bool dm_render_command_backend_begin_renderpass(dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_end_renderpass(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_pipeline_set_primitive_topology(dm_render_handle handle, dm_primitive_topology topology, dm_renderer* renderer);
+extern bool dm_render_command_backend_pipeline_toggle_wireframe(dm_render_handle handle, bool wireframe, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_structured_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_constant_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_vertex_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_index_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_structured_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_renderer* renderer);
 extern bool dm_render_command_backend_clear_texture(dm_render_handle handle, dm_renderer* renderer);
@@ -794,8 +786,6 @@ extern bool dm_render_command_backend_update_constant_buffer(dm_render_handle ha
 extern void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count, dm_renderer* renderer);
 extern void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
 extern void dm_render_command_backend_draw_instanced(uint32_t index_count, uint32_t vertex_count, uint32_t inst_count, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer);
-extern bool dm_render_command_backend_set_primitive_topology(dm_primitive_topology topology, dm_renderer* renderer);
-extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer);
 
 #ifdef DM_RAYTRACING
 extern bool dm_render_command_backend_update_acceleration_structure_instance(dm_render_handle handle, uint32_t instance_id, void* data, size_t data_size, dm_renderer* renderer);
@@ -828,32 +818,6 @@ void __dm_renderer_submit_render_command(dm_render_command command, dm_render_co
 }
 #define DM_SUBMIT_RENDER_COMMAND(COMMAND) __dm_renderer_submit_render_command(COMMAND, &context->renderer.command_manager)
 #define DM_SUBMIT_RENDER_COMMAND_MANAGER(COMMAND, MANAGER) __dm_renderer_submit_render_command(&COMMAND, &MANAGER)
-
-void dm_render_command_begin_renderpass(dm_render_handle handle, dm_context* context)
-{
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_BEGIN_RENDERPASS;
-    
-    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
-    command.params[0].render_handle_val = handle;
-    
-    command.param_count = 1;
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_end_renderpass(dm_render_handle handle, dm_context* context)
-{
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_END_RENDERPASS;
-    
-    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
-    command.params[0].render_handle_val = handle;
-    
-    command.param_count = 1;
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
 
 void dm_render_command_bind_pipeline(dm_render_handle handle, dm_context* context)
 {
@@ -900,6 +864,38 @@ void dm_render_command_bind_index_buffer(dm_render_handle handle, uint32_t slot,
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
+void dm_render_command_bind_structured_buffer(dm_render_handle handle, uint32_t slot, dm_context* context)
+{
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BIND_STRUCTURED_BUFFER;
+    
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = slot;
+    
+    command.param_count = 2;
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_bind_constant_buffer(dm_render_handle handle, uint32_t slot, dm_context* context)
+{
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_BIND_CONSTANT_BUFFER;
+    
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = slot;
+    
+    command.param_count = 2;
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
 void dm_render_command_bind_texture(dm_render_handle handle, uint32_t slot, dm_context* context)
 {
     dm_render_command command = { 0 };
@@ -920,6 +916,28 @@ void dm_render_command_update_vertex_buffer(dm_render_handle handle, void* data,
 {
     dm_render_command command = { 0 };
     command.type = DM_RENDER_COMMAND_UPDATE_VERTEX_BUFFER;
+    
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+    
+    command.params[1].type     = DM_RENDER_COMMAND_PARAM_TYPE_VOID;
+    command.params[1].void_val = data;
+    
+    command.params[2].type       = DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T;
+    command.params[2].size_t_val = data_size;
+    
+    command.params[3].type       = DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T;
+    command.params[3].size_t_val = offset;
+    
+    command.param_count = 4;
+    
+    DM_SUBMIT_RENDER_COMMAND(command);
+}
+
+void dm_render_command_update_index_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context)
+{
+    dm_render_command command = { 0 };
+    command.type = DM_RENDER_COMMAND_UPDATE_INDEX_BUFFER;
     
     command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
     command.params[0].render_handle_val = handle;
@@ -1084,28 +1102,34 @@ void dm_render_command_draw_instanced(uint32_t index_count, uint32_t vertex_coun
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
-void dm_render_command_set_primitive_topology(dm_primitive_topology topology, dm_context* context)
+void dm_render_command_pipeline_set_primitive_topology(dm_render_handle handle, dm_primitive_topology topology, dm_context* context)
 {
     dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_SET_TOPOLOGY;
+    command.type = DM_RENDER_COMMAND_PIPELINE_SET_TOPOLOGY;
     
-    command.params[0].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
-    command.params[0].uint32_val = topology;
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+
+    command.params[1].type       = DM_RENDER_COMMAND_PARAM_TYPE_UINT32;
+    command.params[1].uint32_val = topology;
     
-    command.param_count = 1;
+    command.param_count = 2;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
 
-void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context)
+void dm_render_command_pipeline_toggle_wireframe(dm_render_handle handle, bool wireframe, dm_context* context)
 {
     dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_TOGGLE_WIREFRAME;
+    command.type = DM_RENDER_COMMAND_PIPELINE_TOGGLE_WIREFRAME;
     
-    command.params[0].type     = DM_RENDER_COMMAND_PARAM_TYPE_BOOL;
-    command.params[0].bool_val = wireframe;
+    command.params[0].type              = DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE;
+    command.params[0].render_handle_val = handle;
+
+    command.params[1].type     = DM_RENDER_COMMAND_PARAM_TYPE_BOOL;
+    command.params[1].bool_val = wireframe;
     
-    command.param_count = 1;
+    command.param_count = 2;
     
     DM_SUBMIT_RENDER_COMMAND(command);
 }
@@ -1262,7 +1286,27 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_LOG_FATAL("Bind pipeline failed"); 
                 return false;
             } break;
-            
+            case DM_RENDER_COMMAND_PIPELINE_TOGGLE_WIREFRAME:
+            {
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                const bool wireframe          = command.params[1].bool_val;
+                
+                if(dm_render_command_backend_pipeline_toggle_wireframe(handle, wireframe, renderer)) continue;
+
+                DM_LOG_FATAL("Toggle wireframe failed");
+                return false;
+            } break;
+            case DM_RENDER_COMMAND_PIPELINE_SET_TOPOLOGY:
+            {
+                const dm_render_handle handle        = command.params[0].render_handle_val;
+                const dm_primitive_topology topology = command.params[1].uint32_val;
+
+                if(dm_render_command_backend_pipeline_set_primitive_topology(handle, topology, renderer)) continue;
+
+                DM_LOG_FATAL("Set topology failed");
+                return false;
+            } break;
+
             // buffer
             case DM_RENDER_COMMAND_BIND_VERTEX_BUFFER:
             {
@@ -1282,6 +1326,24 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_LOG_FATAL("Bind index buffer failed"); 
                 return false;
             } break;
+            case DM_RENDER_COMMAND_BIND_CONSTANT_BUFFER:
+            {
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                const uint32_t slot           = command.params[1].uint32_val;
+
+                if(dm_render_command_backend_bind_constant_buffer(handle, slot, renderer)) continue;
+                DM_LOG_FATAL("Bind constant buffer failed");
+                return false;
+            } break;
+            case DM_RENDER_COMMAND_BIND_STRUCTURED_BUFFER:
+            {
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                const uint32_t slot           = command.params[1].uint32_val;
+
+                if(dm_render_command_backend_bind_structured_buffer(handle, slot, renderer)) continue;
+                DM_LOG_FATAL("Bind structured buffer failed");
+                return false;
+            } break;
             
             case DM_RENDER_COMMAND_UPDATE_VERTEX_BUFFER:
             {
@@ -1294,7 +1356,28 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_LOG_FATAL("Update vertex buffer failed"); 
                 return false;
             } break;
-
+            case DM_RENDER_COMMAND_UPDATE_INDEX_BUFFER:
+            {
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                void* data                    = command.params[1].void_val;
+                const size_t data_size        = command.params[2].size_t_val;
+                const size_t offset           = command.params[3].size_t_val;
+                
+                if(dm_render_command_backend_update_index_buffer(handle, data, data_size, offset, renderer)) continue;
+                DM_LOG_FATAL("Update index buffer failed"); 
+                return false;
+            } break;
+            case DM_RENDER_COMMAND_UPDATE_CONSTANT_BUFFER:
+            {
+                const dm_render_handle handle = command.params[0].render_handle_val;
+                void* data                    = command.params[1].void_val;
+                const size_t data_size        = command.params[2].size_t_val;
+                const size_t offset           = command.params[3].size_t_val;
+                
+                if(dm_render_command_backend_update_constant_buffer(handle, data, data_size, offset, renderer)) continue;
+                DM_LOG_FATAL("Update constant buffer failed"); 
+                return false;
+            } break;
             case DM_RENDER_COMMAND_UPDATE_STRUCTURED_BUFFER:
             {
                 const dm_render_handle handle = command.params[0].render_handle_val;
@@ -1340,39 +1423,6 @@ bool dm_renderer_submit_commands(dm_context* context)
                 return false;
             };
             
-            // constant buffer
-            case DM_RENDER_COMMAND_UPDATE_CONSTANT_BUFFER:
-            {
-                const dm_render_handle handle = command.params[0].render_handle_val;
-                void* data                    = command.params[1].void_val;
-                size_t data_size              = command.params[2].size_t_val;
-                size_t offset                 = command.params[3].size_t_val;
-                
-                if(dm_render_command_backend_update_constant_buffer(handle, data, data_size, offset, renderer)) continue;
-                DM_LOG_FATAL("Update constant buffer failed");
-                return false;
-            } break;
-            
-            // render pass
-            case DM_RENDER_COMMAND_BEGIN_RENDERPASS:
-            {
-                const dm_render_handle handle = command.params[0].render_handle_val;
-                
-                if(dm_render_command_backend_begin_renderpass(handle, renderer)) continue;
-                
-                DM_LOG_FATAL("Begin renderpass failed");
-                return false;
-            } break;
-            case DM_RENDER_COMMAND_END_RENDERPASS:
-            {
-                const dm_render_handle handle = command.params[0].render_handle_val;
-                
-                if(dm_render_command_backend_end_renderpass(handle, renderer)) continue;
-                
-                DM_LOG_FATAL("End renderpass failed");
-                return false;
-            } break;
-            
             // drawing
             case DM_RENDER_COMMAND_DRAW_ARRAYS:
             {
@@ -1402,12 +1452,6 @@ bool dm_renderer_submit_commands(dm_context* context)
             } break;
             
             // misc
-            case DM_RENDER_COMMAND_TOGGLE_WIREFRAME:
-            {
-                const bool wireframe = command.params[0].bool_val;
-                
-                dm_render_command_backend_toggle_wireframe(wireframe, renderer);
-            } break;
             
 #ifdef DM_RAYTRACING
             // acceleration structure
@@ -1477,13 +1521,13 @@ bool dm_renderer_submit_commands(dm_context* context)
                 DM_LOG_FATAL("Dispatch rays failed");
                 return false;
             } break;
+#endif
             
             default:
             DM_LOG_ERROR("Unknown render command! Shouldn't be here...");
             // TODO: do we kill here? Probably not, just ignore...
             //return false;
             break;
-#endif
         }
     }
     
