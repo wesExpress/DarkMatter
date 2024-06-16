@@ -363,6 +363,145 @@ D3D11_TEXTURE_ADDRESS_MODE dm_texture_mode_to_dx11_mode(dm_texture_mode dm_mode)
 }
 
 DM_INLINE
+DXGI_FORMAT dm_texture_data_to_dxgi_format(dm_texture_data_type type, dm_texture_data_bytes byte_size, dm_texture_data_count count)
+{
+    switch(type)
+    {
+        case DM_TEXTURE_DATA_TYPE_INT:
+        switch(byte_size)
+        {
+            case DM_TEXTURE_DATA_BYTES_8:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R8_SINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R8G8_SINT;
+                default:
+                break;
+            } 
+            break;
+
+            case DM_TEXTURE_DATA_BYTES_16:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_SINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_SINT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_SINT;
+                default: break;
+            }
+            break;
+
+            case DM_TEXTURE_DATA_BYTES_32:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R32_SINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R32G32_SINT;
+                case DM_TEXTURE_DATA_COUNT_3: return DXGI_FORMAT_R32G32B32_SINT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R32G32B32A32_SINT;
+                default: break;
+            }
+
+            default: break;
+        }
+        break;
+
+        case DM_TEXTURE_DATA_TYPE_UINT:
+        switch(byte_size)
+        {
+            case DM_TEXTURE_DATA_BYTES_8:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R8_UINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R8G8_UINT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R8G8B8A8_UINT;
+                default: break;
+            }
+            break;
+            
+            case DM_TEXTURE_DATA_BYTES_16:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_UINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_UINT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_UINT;
+                default: break;
+            }
+            break;
+
+            case DM_TEXTURE_DATA_BYTES_32:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R32_UINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R32G32_UINT;
+                case DM_TEXTURE_DATA_COUNT_3: return DXGI_FORMAT_R32G32B32_UINT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R32G32B32A32_UINT;
+                default: break;
+            }
+
+            default: break;
+        }
+        break;
+
+        case DM_TEXTURE_DATA_TYPE_UNORM:
+        switch(byte_size)
+        {
+            case DM_TEXTURE_DATA_BYTES_8:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R8_UNORM;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R8G8_UNORM;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R8G8B8A8_UNORM;
+                default: break;
+            }
+            break;
+
+            case DM_TEXTURE_DATA_BYTES_16:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_UNORM;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_UNORM;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_UNORM;
+                default: break;
+            } break;
+
+            default: break;
+        }
+        break;
+
+        case DM_TEXTURE_DATA_TYPE_FLOAT:
+        switch(byte_size)
+        {
+            case DM_TEXTURE_DATA_BYTES_16:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_FLOAT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_FLOAT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_FLOAT;
+                default: break;
+            }
+            break;
+
+            case DM_TEXTURE_DATA_BYTES_32:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R32_FLOAT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R32G32_FLOAT;
+                case DM_TEXTURE_DATA_COUNT_3: return DXGI_FORMAT_R32G32B32_FLOAT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+                default: break;
+            }
+
+            default: break;
+        }
+        break;
+
+        default: break;
+    }
+
+    DM_LOG_ERROR("Unsupported combination of texture data type (%u), size (%u), count (%u) for DirectX11", type, byte_size, count);
+    return DXGI_FORMAT_UNKNOWN;
+}
+
+DM_INLINE
 D3D11_BLEND dm_blend_func_to_dx11_func(dm_blend_func func)
 {
     switch(func)
@@ -1164,144 +1303,6 @@ void dm_dx11_destroy_pipeline(dm_dx11_pipeline* pipeline)
     if(pipeline->flags&DM_DX11_PIPELINE_FLAG_BLEND)ID3D11BlendState_Release(pipeline->blend_state);
 }
 
-DM_INLINE
-DXGI_FORMAT dm_texture_data_to_dxgi_format(dm_texture_data_type type, dm_texture_data_bytes byte_size, dm_texture_data_count count)
-{
-    switch(type)
-    {
-        case DM_TEXTURE_DATA_TYPE_INT:
-        switch(byte_size)
-        {
-            case DM_TEXTURE_DATA_BYTES_8:
-            switch(count)
-            {
-                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R8_SINT;
-                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R8G8_SINT;
-                default:
-                break;
-            } 
-            break;
-
-            case DM_TEXTURE_DATA_BYTES_16:
-            switch(count)
-            {
-                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_SINT;
-                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_SINT;
-                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_SINT;
-                default: break;
-            }
-            break;
-
-            case DM_TEXTURE_DATA_BYTES_32:
-            switch(count)
-            {
-                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R32_SINT;
-                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R32G32_SINT;
-                case DM_TEXTURE_DATA_COUNT_3: return DXGI_FORMAT_R32G32B32_SINT;
-                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R32G32B32A32_SINT;
-                default: break;
-            }
-
-            default: break;
-        }
-        break;
-
-        case DM_TEXTURE_DATA_TYPE_UINT:
-        switch(byte_size)
-        {
-            case DM_TEXTURE_DATA_BYTES_8:
-            switch(count)
-            {
-                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R8_UINT;
-                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R8G8_UINT;
-                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R8G8B8A8_UINT;
-                default: break;
-            }
-            break;
-            
-            case DM_TEXTURE_DATA_BYTES_16:
-            switch(count)
-            {
-                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_UINT;
-                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_UINT;
-                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_UINT;
-                default: break;
-            }
-            break;
-
-            case DM_TEXTURE_DATA_BYTES_32:
-            switch(count)
-            {
-                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R32_UINT;
-                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R32G32_UINT;
-                case DM_TEXTURE_DATA_COUNT_3: return DXGI_FORMAT_R32G32B32_UINT;
-                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R32G32B32A32_UINT;
-                default: break;
-            }
-
-            default: break;
-        }
-        break;
-
-        case DM_TEXTURE_DATA_TYPE_UNORM:
-        switch(byte_size)
-        {
-            case DM_TEXTURE_DATA_BYTES_8:
-            switch(count)
-            {
-                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R8_UNORM;
-                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R8G8_UNORM;
-                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R8G8B8A8_UNORM;
-                default: break;
-            }
-            break;
-
-            case DM_TEXTURE_DATA_BYTES_16:
-            switch(count)
-            {
-                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_UNORM;
-                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_UNORM;
-                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_UNORM;
-                default: break;
-            } break;
-
-            default: break;
-        }
-        break;
-
-        case DM_TEXTURE_DATA_TYPE_FLOAT:
-        switch(byte_size)
-        {
-            case DM_TEXTURE_DATA_BYTES_16:
-            switch(count)
-            {
-                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_FLOAT;
-                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_FLOAT;
-                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_FLOAT;
-                default: break;
-            }
-            break;
-
-            case DM_TEXTURE_DATA_BYTES_32:
-            switch(count)
-            {
-                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R32_FLOAT;
-                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R32G32_FLOAT;
-                case DM_TEXTURE_DATA_COUNT_3: return DXGI_FORMAT_R32G32B32_FLOAT;
-                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R32G32B32A32_FLOAT;
-                default: break;
-            }
-
-            default: break;
-        }
-        break;
-
-        default: break;
-    }
-
-    DM_LOG_ERROR("Unsupported combination of texture data type (%u), size (%u), count (%u) for DirectX11", type, byte_size, count);
-    return DXGI_FORMAT_UNKNOWN;
-}
 
 bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_renderer* renderer)
 {

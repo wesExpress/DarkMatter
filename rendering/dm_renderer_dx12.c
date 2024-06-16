@@ -464,6 +464,145 @@ D3D12_TEXTURE_ADDRESS_MODE dm_texture_mode_to_dx12_mode(dm_texture_mode dm_mode)
 }
 
 DM_INLINE
+DXGI_FORMAT dm_texture_data_to_dxgi_format(dm_texture_data_type type, dm_texture_data_bytes byte_size, dm_texture_data_count count)
+{
+    switch(type)
+    {
+        case DM_TEXTURE_DATA_TYPE_INT:
+        switch(byte_size)
+        {
+            case DM_TEXTURE_DATA_BYTES_8:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R8_SINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R8G8_SINT;
+                default:
+                break;
+            } 
+            break;
+
+            case DM_TEXTURE_DATA_BYTES_16:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_SINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_SINT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_SINT;
+                default: break;
+            }
+            break;
+
+            case DM_TEXTURE_DATA_BYTES_32:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R32_SINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R32G32_SINT;
+                case DM_TEXTURE_DATA_COUNT_3: return DXGI_FORMAT_R32G32B32_SINT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R32G32B32A32_SINT;
+                default: break;
+            }
+
+            default: break;
+        }
+        break;
+
+        case DM_TEXTURE_DATA_TYPE_UINT:
+        switch(byte_size)
+        {
+            case DM_TEXTURE_DATA_BYTES_8:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R8_UINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R8G8_UINT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R8G8B8A8_UINT;
+                default: break;
+            }
+            break;
+            
+            case DM_TEXTURE_DATA_BYTES_16:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_UINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_UINT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_UINT;
+                default: break;
+            }
+            break;
+
+            case DM_TEXTURE_DATA_BYTES_32:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R32_UINT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R32G32_UINT;
+                case DM_TEXTURE_DATA_COUNT_3: return DXGI_FORMAT_R32G32B32_UINT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R32G32B32A32_UINT;
+                default: break;
+            }
+
+            default: break;
+        }
+        break;
+
+        case DM_TEXTURE_DATA_TYPE_UNORM:
+        switch(byte_size)
+        {
+            case DM_TEXTURE_DATA_BYTES_8:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R8_UNORM;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R8G8_UNORM;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R8G8B8A8_UNORM;
+                default: break;
+            }
+            break;
+
+            case DM_TEXTURE_DATA_BYTES_16:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_UNORM;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_UNORM;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_UNORM;
+                default: break;
+            } break;
+
+            default: break;
+        }
+        break;
+
+        case DM_TEXTURE_DATA_TYPE_FLOAT:
+        switch(byte_size)
+        {
+            case DM_TEXTURE_DATA_BYTES_16:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R16_FLOAT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R16G16_FLOAT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R16G16B16A16_FLOAT;
+                default: break;
+            }
+            break;
+
+            case DM_TEXTURE_DATA_BYTES_32:
+            switch(count)
+            {
+                case DM_TEXTURE_DATA_COUNT_1: return DXGI_FORMAT_R32_FLOAT;
+                case DM_TEXTURE_DATA_COUNT_2: return DXGI_FORMAT_R32G32_FLOAT;
+                case DM_TEXTURE_DATA_COUNT_3: return DXGI_FORMAT_R32G32B32_FLOAT;
+                case DM_TEXTURE_DATA_COUNT_4: return DXGI_FORMAT_R32G32B32A32_FLOAT;
+                default: break;
+            }
+
+            default: break;
+        }
+        break;
+
+        default: break;
+    }
+
+    DM_LOG_ERROR("Unsupported combination of texture data type (%u), size (%u), count (%u) for DirectX11", type, byte_size, count);
+    return DXGI_FORMAT_UNKNOWN;
+}
+
+DM_INLINE
 D3D12_BLEND dm_blend_func_to_dx12_func(dm_blend_func func)
 {
     switch(func)
@@ -1626,8 +1765,6 @@ bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_
     DM_DX12_GET_RENDERER;
     HRESULT hr;
     
-    assert(desc.vertex_shader_data && desc.pixel_shader_data);
-    
     dm_dx12_pipeline internal_pipe = { 0 };
     
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pipe_desc  = { 0 };
@@ -1637,13 +1774,13 @@ bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_
     // blending
     if(desc.flags & DM_PIPELINE_FLAG_BLEND)
     {
-        blend_desc.SrcBlend  = dm_blend_func_to_dx12_func(desc.blend_src_f);
-        blend_desc.DestBlend = dm_blend_func_to_dx12_func(desc.blend_dest_f);
-        blend_desc.BlendOp   = dm_blend_eq_to_dx12_op(desc.blend_eq);
+        blend_desc.SrcBlend  = dm_blend_func_to_dx12_func(desc.blend_desc.src_func);
+        blend_desc.DestBlend = dm_blend_func_to_dx12_func(desc.blend_desc.dest_func);
+        blend_desc.BlendOp   = dm_blend_eq_to_dx12_op(desc.blend_desc.eq);
         
-        blend_desc.SrcBlendAlpha  = dm_blend_func_to_dx12_func(desc.blend_src_alpha_f);
-        blend_desc.DestBlendAlpha = dm_blend_func_to_dx12_func(desc.blend_dest_alpha_f);
-        blend_desc.BlendOpAlpha   = dm_blend_eq_to_dx12_op(desc.blend_alpha_eq);
+        blend_desc.SrcBlendAlpha  = dm_blend_func_to_dx12_func(desc.blend_alpha_desc.src_func);
+        blend_desc.DestBlendAlpha = dm_blend_func_to_dx12_func(desc.blend_alpha_desc.dest_func);
+        blend_desc.BlendOpAlpha   = dm_blend_eq_to_dx12_op(desc.blend_alpha_desc.eq);
         
         blend_desc.LogicOp               = D3D12_LOGIC_OP_NOOP;
         blend_desc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
@@ -1663,18 +1800,18 @@ bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_
     
     // rasterizer state
     pipe_desc.RasterizerState.FillMode = desc.flags & DM_PIPELINE_FLAG_WIREFRAME ? D3D12_FILL_MODE_WIREFRAME : D3D12_FILL_MODE_SOLID;
-    pipe_desc.RasterizerState.CullMode = dm_cull_to_dx12_cull(desc.cull_mode);
+    pipe_desc.RasterizerState.CullMode = dm_cull_to_dx12_cull(desc.raster_desc.cull);
     
     // misc
-    internal_pipe.topology = dm_toplogy_to_dx11_topology(desc.primitive_topology);
-    pipe_desc.PrimitiveTopologyType = dm_toplogy_to_dx12_topology(desc.primitive_topology);
+    internal_pipe.topology          = dm_toplogy_to_dx11_topology(desc.raster_desc.topology);
+    pipe_desc.PrimitiveTopologyType = dm_toplogy_to_dx12_topology(desc.raster_desc.topology);
     
     pipe_desc.NumRenderTargets = 1;
     pipe_desc.RTVFormats[0]    = DXGI_FORMAT_R8G8B8A8_UNORM;
     pipe_desc.SampleDesc.Count = 1;
     pipe_desc.SampleMask       = 0xFFFFFFFF;
     
-    switch(desc.winding_order)
+    switch(desc.raster_desc.winding)
     {
         case DM_WINDING_CLOCK:
         pipe_desc.RasterizerState.FrontCounterClockwise = false;
@@ -1690,19 +1827,20 @@ bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_
     }
     
     // shaders
-    pipe_desc.VS.pShaderBytecode = desc.vertex_shader_data;
-    pipe_desc.VS.BytecodeLength  = desc.vertex_shader_size;
+    pipe_desc.VS.pShaderBytecode = desc.shaders[DM_PIPELINE_SHADER_STAGE_VERTEX].shader_data;
+    pipe_desc.VS.BytecodeLength  = desc.shaders[DM_PIPELINE_SHADER_STAGE_VERTEX].shader_size;
     
-    pipe_desc.PS.pShaderBytecode = desc.pixel_shader_data;
-    pipe_desc.PS.BytecodeLength  = desc.pixel_shader_size;
+    pipe_desc.PS.pShaderBytecode = desc.shaders[DM_PIPELINE_SHADER_STAGE_PIXEL].shader_data;
+    pipe_desc.PS.BytecodeLength  = desc.shaders[DM_PIPELINE_SHADER_STAGE_PIXEL].shader_size;
     
-    D3D12_INPUT_ELEMENT_DESC* input_desc = dm_alloc(sizeof(D3D12_INPUT_ELEMENT_DESC) * 4 * desc.attrib_count);
+    // input desc
+    D3D12_INPUT_ELEMENT_DESC* input_desc = dm_alloc(sizeof(D3D12_INPUT_ELEMENT_DESC) * 4 * desc.vertex_attrib_count);
     uint32_t count = 0;
     
     // vertex attributes
-    for(uint32_t i=0; i<desc.attrib_count; i++)
+    for(uint32_t i=0; i<desc.vertex_attrib_count; i++)
     {
-        dm_vertex_attrib_desc attrib_desc = desc.attribs[i];
+        dm_vertex_attrib_desc attrib_desc = desc.vertex_attribs[i];
         
         if ((attrib_desc.data_t == DM_VERTEX_DATA_T_MATRIX_INT) || (attrib_desc.data_t == DM_VERTEX_DATA_T_MATRIX_FLOAT))
         {
@@ -1737,56 +1875,6 @@ bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_
     
     // root signature
     {
-        D3D12_ROOT_PARAMETER params[5] = { 0 };
-        uint32_t param_count = 0;
-        
-        if(desc.cb_count>0)
-        {
-            D3D12_ROOT_DESCRIPTOR cbv_descriptor = { 0 };
-            
-            D3D12_DESCRIPTOR_RANGE cbv_range[1] = { 0 };
-            cbv_range[0].RangeType      = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-            cbv_range[0].NumDescriptors = desc.cb_count;
-            cbv_range[0].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-            
-            D3D12_ROOT_DESCRIPTOR_TABLE cbv_table = { 0 };
-            cbv_table.NumDescriptorRanges = DM_ARRAY_LEN(cbv_range);
-            cbv_table.pDescriptorRanges   = cbv_range;
-            
-            params[param_count].ParameterType   = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-            params[param_count].DescriptorTable = cbv_table;
-            
-            internal_pipe.cb_count = desc.cb_count;
-            
-            param_count++;
-        }
-        
-        D3D12_ROOT_SIGNATURE_DESC root_desc = { 0 };
-        root_desc.NumParameters = param_count;
-        root_desc.pParameters   = params;
-        root_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
-        
-        ID3DBlob* blob = NULL;
-        ID3DBlob* error_blob = NULL;
-        hr = D3D12SerializeRootSignature(&root_desc, D3D_ROOT_SIGNATURE_VERSION_1_0, &blob, &error_blob);
-        if (!dm_platform_win32_decode_hresult(hr))
-        {
-            DM_LOG_FATAL("D3D12SerializeRootSignature failed");
-            if(error_blob) DM_LOG_FATAL("%s", (char*)ID3D10Blob_GetBufferPointer(error_blob));
-            return false;
-        }
-        
-        void* tmp = NULL;
-        hr = ID3D12Device5_CreateRootSignature(dx12_renderer->device, 0, ID3D10Blob_GetBufferPointer(blob), ID3D10Blob_GetBufferSize(blob), &IID_ID3D12RootSignature, &tmp);
-        if(!dm_platform_win32_decode_hresult(hr) || !tmp)
-        {
-            DM_LOG_FATAL("ID3D12Device5_CreateRootSignature failed");
-            DM_LOG_FATAL("Could not create root signature for raytracing pipeline");
-            return false;
-        }
-        internal_pipe.root_signature = tmp;
-
-        ID3D10Blob_Release(blob);
     }
     
     pipe_desc.pRootSignature = internal_pipe.root_signature;
@@ -1801,33 +1889,6 @@ bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_
     }
     internal_pipe.state = tmp;
 
-    // resource views
-    // TODO: have no idea how to handle the handle pointer moving
-    if(desc.cb_count>0)
-    {
-        for(uint32_t i=0; i<desc.cb_count; i++)
-        {
-            for(uint32_t j=0; j<DM_DX12_NUM_FRAMES; j++)
-            {
-                ID3D12Resource* buffer = dx12_renderer->constant_buffers[desc.cbs[i]].buffer[j];
-                if(!buffer)
-                {
-                    DM_LOG_FATAL("DirectX12 pipeline contains invalid constant buffer reference");
-                    return false;
-                }
-                
-                D3D12_CONSTANT_BUFFER_VIEW_DESC view_desc = { 0 };
-                view_desc.BufferLocation = ID3D12Resource_GetGPUVirtualAddress(buffer);
-                view_desc.SizeInBytes    = (255 + desc.cb_sizes[i]) & ~255;
-                
-                D3D12_CPU_DESCRIPTOR_HANDLE handle = { 0 };
-                ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(dx12_renderer->resource_descriptor_heap[j], &handle);
-                
-                ID3D12Device5_CreateConstantBufferView(dx12_renderer->device, &view_desc, handle);
-            }
-        }
-    }
-    
     //
     dm_memcpy(dx12_renderer->pipes + dx12_renderer->pipe_count, &internal_pipe, sizeof(internal_pipe));
     DM_RENDER_HANDLE_SET_INDEX(*handle, dx12_renderer->pipe_count++);
@@ -1843,94 +1904,6 @@ void dm_dx12_renderer_destroy_pipe(dm_dx12_pipeline* pipe)
     ID3D12PipelineState_Release(pipe->state);
 }
 
-bool dm_renderer_backend_create_renderpass(dm_renderpass_desc desc, dm_render_handle* handle, dm_renderer* renderer)
-{
-    return true;
-}
-
-DM_INLINE
-DXGI_FORMAT dm_texture_data_type_to_dxgi_format(dm_texture_desc desc)
-{
-    switch(desc.data_count)
-    {
-        case 1:
-        switch(desc.data_type)
-        {
-            case DM_TEXTURE_DATA_TYPE_INT_8:   return DXGI_FORMAT_R8_SINT;
-            case DM_TEXTURE_DATA_TYPE_UINT_8:  return DXGI_FORMAT_R8_UINT;
-            case DM_TEXTURE_DATA_TYPE_UNORM_8: return DXGI_FORMAT_R8_UNORM;
-            
-            case DM_TEXTURE_DATA_TYPE_INT_16:   return DXGI_FORMAT_R16_SINT;
-            case DM_TEXTURE_DATA_TYPE_UINT_16:  return DXGI_FORMAT_R16_UINT;
-            case DM_TEXTURE_DATA_TYPE_UNORM_16: return DXGI_FORMAT_R16_UNORM;
-            case DM_TEXTURE_DATA_TYPE_FLOAT_16: return DXGI_FORMAT_R16_FLOAT;
-            
-            case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32_SINT;
-            case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32_UINT;
-            case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32_FLOAT;
-
-            default:
-            break;
-        }
-        break;
-        
-        case 2:
-        switch(desc.data_type)
-        {
-            case DM_TEXTURE_DATA_TYPE_INT_8:    return DXGI_FORMAT_R8G8_SINT;
-            case DM_TEXTURE_DATA_TYPE_UINT_8:   return DXGI_FORMAT_R8G8_UINT;
-            case DM_TEXTURE_DATA_TYPE_UNORM_8:  return DXGI_FORMAT_R8G8_UNORM;
-            
-            case DM_TEXTURE_DATA_TYPE_FLOAT_16: return DXGI_FORMAT_R16G16_FLOAT;
-            case DM_TEXTURE_DATA_TYPE_INT_16:   return DXGI_FORMAT_R16G16_SINT;
-            case DM_TEXTURE_DATA_TYPE_UINT_16:  return DXGI_FORMAT_R16G16_UINT;
-            
-            case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32G32_FLOAT;
-            case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32G32_SINT;
-            case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32G32_UINT;
-
-            default:
-            break;
-        }
-        break;
-        
-        case 3:
-        switch(desc.data_type)
-        {
-            case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32G32B32_FLOAT;
-            case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32G32B32_SINT;
-            case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32G32B32_UINT;
-
-            default:
-            break;
-        }
-        break;
-        
-        case 4:
-        switch(desc.data_type)
-        {
-            case DM_TEXTURE_DATA_TYPE_INT_8:    return DXGI_FORMAT_R8G8B8A8_SINT;
-            case DM_TEXTURE_DATA_TYPE_UINT_8:   return DXGI_FORMAT_R8G8B8A8_UINT;
-            case DM_TEXTURE_DATA_TYPE_UNORM_8:  return DXGI_FORMAT_R8G8B8A8_UNORM;
-            
-            case DM_TEXTURE_DATA_TYPE_FLOAT_16: return DXGI_FORMAT_R16G16B16A16_FLOAT;
-            case DM_TEXTURE_DATA_TYPE_INT_16:   return DXGI_FORMAT_R16G16B16A16_SINT;
-            case DM_TEXTURE_DATA_TYPE_UINT_16:  return DXGI_FORMAT_R16G16B16A16_UINT;
-            
-            case DM_TEXTURE_DATA_TYPE_FLOAT_32: return DXGI_FORMAT_R32G32B32A32_FLOAT;
-            case DM_TEXTURE_DATA_TYPE_INT_32:   return DXGI_FORMAT_R32G32B32A32_SINT;
-            case DM_TEXTURE_DATA_TYPE_UINT_32:  return DXGI_FORMAT_R32G32B32A32_UINT;
-
-            default:
-            break;
-        }
-        break;
-    }
-    
-    DM_LOG_FATAL("Unknown or invalid texture data type");
-    return DXGI_FORMAT_UNKNOWN;
-}
-
 bool dm_renderer_backend_create_texture(dm_texture_desc texture_desc, dm_render_handle* handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
@@ -1941,7 +1914,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc texture_desc, dm_render_
     D3D12_RESOURCE_DESC desc = { 0 };
     desc.DepthOrArraySize = 1;
     desc.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-    desc.Format           = dm_texture_data_type_to_dxgi_format(texture_desc);
+    desc.Format           = dm_texture_data_to_dxgi_format(texture_desc.data_type, texture_desc.data_byte_size, texture_desc.data_count); 
     desc.Flags            = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     desc.Width            = texture_desc.width;
     desc.Height           = texture_desc.height;
@@ -3237,6 +3210,11 @@ bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, uint32
     return false;
 }
 
+bool dm_render_command_backend_bind_structured_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer)
+{
+    return true;
+}
+
 bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer)
 {
     DM_LOG_FATAL("Not supported");
@@ -3287,6 +3265,25 @@ bool dm_render_command_backend_update_vertex_buffer(dm_render_handle handle, voi
     
     dm_memcpy(internal_buffer->mapped_addresses[current_frame_index], data, data_size);
     
+    return true;
+}
+
+bool dm_render_command_backend_update_index_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+
+    dm_render_resource_type type = DM_RENDER_HANDLE_GET_TYPE(handle);
+    uint16_t index               = DM_RENDER_HANDLE_GET_INDEX(handle);
+
+    if(type!=DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER)
+    {
+        DM_LOG_FATAL("Resource is not an index buffer");
+        return false;
+    }
+
+    dm_dx12_index_buffer* internal_buffer = &dx12_renderer->index_buffers[index];
+
     return true;
 }
 
@@ -3405,13 +3402,13 @@ void dm_render_command_backend_draw_instanced(uint32_t index_count, uint32_t ver
     ID3D12GraphicsCommandList4_DrawIndexedInstanced(command_list, index_count, inst_count, index_offset, vertex_offset, inst_offset);
 }
 
-bool dm_render_command_backend_set_primitive_topology(dm_primitive_topology topology, dm_renderer* renderer)
+bool dm_render_command_backend_pipeline_set_primitive_topology(dm_render_handle handle, dm_primitive_topology topology, dm_renderer* renderer)
 {
     DM_LOG_WARN("Not supported");
     return true;
 }
 
-void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer)
+void dm_render_command_backend_pipeline_toggle_wireframe(dm_render_handle handle, bool wireframe, dm_renderer* renderer)
 {
     DM_LOG_WARN("Not supported");
 }
