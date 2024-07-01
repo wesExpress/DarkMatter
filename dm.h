@@ -340,7 +340,7 @@ typedef enum dm_vertex_data_t
     DM_VERTEX_DATA_T_MATRIX_INT,
     DM_VERTEX_DATA_T_MATRIX_FLOAT,
     DM_VERTEX_DATA_T_UNKNOWN
-} dm_vertex_data_t;
+} dm_vertex_data;
 
 typedef enum dm_vertex_attrib_class_t
 {
@@ -476,8 +476,10 @@ typedef enum dm_constant_buffer_stage_t
 
 typedef enum dm_pipeline_shader_stage_t
 {
+    DM_PIPELINE_SHADER_STAGE_MASTER,
     DM_PIPELINE_SHADER_STAGE_VERTEX,
     DM_PIPELINE_SHADER_STAGE_PIXEL,
+    DM_PIPELINE_SHADER_STAGE_COMPUTE,
     DM_PIPELINE_SHADER_STAGE_UNKNOWN,
 } dm_pipeline_shader_stage;
 
@@ -572,7 +574,7 @@ typedef struct dm_structured_buffer_desc_t
 typedef struct dm_vertex_attrib_desc_t
 {
     char                   name[512];
-    dm_vertex_data_t       data_t;
+    dm_vertex_data         data_t;
     dm_vertex_attrib_class attrib_class;
     bool                   normalized;
     size_t                 stride;
@@ -583,9 +585,10 @@ typedef struct dm_vertex_attrib_desc_t
 
 typedef struct dm_pipeline_shader_params_t
 {
-    dm_render_handle* handles;
-    uint8_t*          registers;
-    uint32_t          count;
+    //dm_render_handle* handles;
+    dm_render_resource_type* types;
+    uint8_t*                 registers;
+    uint32_t                 count;
 } dm_pipeline_shader_params;
 
 typedef struct dm_pipeline_raster_desc_t
@@ -613,8 +616,14 @@ typedef struct dm_pipeline_shader_desc_t
 {
     dm_pipeline_shader_params params;
 
-    const void* shader_data;
-    size_t      shader_size;
+    union
+    {
+        const void* shader_data;
+        char        shader_file[512];
+        char        shader_function[512];
+    };
+
+    size_t shader_data_size;
 } dm_pipeline_shader_desc;
 
 #define DM_PIPELINE_MAX_VERTEX_ATTRIBS 10
@@ -1143,6 +1152,8 @@ float dm_random_float_normal(float mu, float sigma, dm_context* context);
 void dm_platform_sleep(uint64_t ms, dm_context* context);
 
 // rendering
+void dm_renderer_pipeline_add_vertex_attrib(const char* name, dm_vertex_attrib_class attrib_class, dm_vertex_data data_type, uint8_t count, size_t stride, size_t offset, dm_pipeline_desc* pipe_desc);
+
 bool dm_renderer_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_index_buffer(const dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_constant_buffer(const dm_constant_buffer_desc desc,dm_render_handle* handle, dm_context* context);

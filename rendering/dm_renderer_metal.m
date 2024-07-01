@@ -166,6 +166,134 @@ void dm_metal_destroy_constant_buffer(dm_metal_constant_buffer* buffer);
 void dm_metal_destroy_texture(dm_metal_texture* texture);
 void dm_metal_destroy_pipeline(dm_metal_pipeline* pipeline);
 
+/*********************
+METAL ENUM CONVERSION
+***********************/
+MTLWinding dm_winding_to_metal_winding(dm_winding_order winding)
+{
+	switch(winding)
+	{
+		case DM_WINDING_CLOCK:         return MTLWindingClockwise;
+		case DM_WINDING_COUNTER_CLOCK: return MTLWindingCounterClockwise;
+		default:
+			DM_LOG_WARN("Unknown winding order. Returning \"MTLWindingCounterClockwise\"");
+			return MTLWindingCounterClockwise;
+	}
+}
+
+MTLCullMode dm_cull_to_metal_cull(dm_cull_mode cull)
+{
+	switch(cull)
+	{
+		case DM_CULL_FRONT_BACK:
+		case DM_CULL_FRONT: return MTLCullModeFront;
+		case DM_CULL_BACK:  return MTLCullModeBack;
+        case DM_CULL_NONE:  return MTLCullModeNone;
+		default:
+			DM_LOG_ERROR("Unknown cull mode. Returning \"MTLCullModeBack\"");
+			return MTLCullModeBack;
+	}
+}
+
+MTLCompareFunction dm_compare_to_metal_compare(dm_comparison comp)
+{
+	switch(comp)
+	{
+		case DM_COMPARISON_ALWAYS:   return MTLCompareFunctionAlways;
+		case DM_COMPARISON_NEVER:    return MTLCompareFunctionNever;
+		case DM_COMPARISON_EQUAL:    return MTLCompareFunctionEqual;
+		case DM_COMPARISON_NOTEQUAL: return MTLCompareFunctionNotEqual;
+		case DM_COMPARISON_LESS:     return MTLCompareFunctionLess;
+		case DM_COMPARISON_LEQUAL:   return MTLCompareFunctionLessEqual;
+		case DM_COMPARISON_GREATER:  return MTLCompareFunctionGreater;
+		case DM_COMPARISON_GEQUAL:   return MTLCompareFunctionGreaterEqual;
+		default:
+			DM_LOG_ERROR("Unknown comparison function. Returning \"MTLCompareFunctionLess\"");
+			return MTLCompareFunctionLess;
+	}
+}
+
+MTLSamplerAddressMode dm_tex_mode_to_metal_sampler_mode(dm_texture_mode mode)
+{
+	switch(mode)
+	{
+		case DM_TEXTURE_MODE_WRAP:          return MTLSamplerAddressModeRepeat;
+		case DM_TEXTURE_MODE_EDGE:          return MTLSamplerAddressModeClampToEdge;
+		case DM_TEXTURE_MODE_BORDER:        return MTLSamplerAddressModeClampToBorderColor;
+		case DM_TEXTURE_MODE_MIRROR_REPEAT: return MTLSamplerAddressModeMirrorRepeat;
+		case DM_TEXTURE_MODE_MIRROR_EDGE:   return MTLSamplerAddressModeMirrorClampToEdge;
+		default:
+			DM_LOG_ERROR("Unknown sampler mode. Returning \"MTLSamplerAddressModeRepeat\"");
+			return MTLSamplerAddressModeRepeat;
+	}
+}
+
+MTLSamplerMinMagFilter dm_minmagfilter_to_metal_minmagfilter(dm_filter filter)
+{
+	switch(filter)
+	{
+		case DM_FILTER_NEAREST: return MTLSamplerMinMagFilterNearest;
+		case DM_FILTER_LINEAR:  return MTLSamplerMinMagFilterLinear;
+		default:
+			DM_LOG_ERROR("Unknown min mag filter. Returning \"MTLSamplerMinMagFilterNearest\"");
+			return MTLSamplerMinMagFilterNearest;
+	}
+}
+
+MTLBlendOperation dm_blend_eq_to_metal_blend_op(dm_blend_equation eq)
+{
+	switch(eq)
+	{
+		case DM_BLEND_EQUATION_ADD:              return MTLBlendOperationAdd;
+		case DM_BLEND_EQUATION_SUBTRACT:         return MTLBlendOperationSubtract;
+		case DM_BLEND_EQUATION_REVERSE_SUBTRACT: return MTLBlendOperationReverseSubtract;
+		case DM_BLEND_EQUATION_MIN:              return MTLBlendOperationMin;
+		case DM_BLEND_EQUATION_MAX:              return MTLBlendOperationMax;
+		default:
+		DM_LOG_ERROR("Unknown blend equation, returning MTLBlendOperationAdd");
+		return MTLBlendOperationAdd;
+	}
+}
+
+MTLBlendFactor dm_blend_func_to_metal_blend_factor(dm_blend_func func)
+{
+	switch(func)
+	{
+		case DM_BLEND_FUNC_ZERO:                  return MTLBlendFactorZero;
+		case DM_BLEND_FUNC_ONE:                   return MTLBlendFactorOne;
+		case DM_BLEND_FUNC_SRC_COLOR:             return MTLBlendFactorSourceColor;
+		case DM_BLEND_FUNC_ONE_MINUS_SRC_COLOR:   return MTLBlendFactorOneMinusSourceColor;
+		case DM_BLEND_FUNC_DST_COLOR:             return MTLBlendFactorDestinationColor;
+		case DM_BLEND_FUNC_ONE_MINUS_DST_COLOR:   return MTLBlendFactorOneMinusDestinationColor;
+		case DM_BLEND_FUNC_SRC_ALPHA:             return MTLBlendFactorSourceAlpha;
+		case DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA:   return MTLBlendFactorOneMinusSourceAlpha;
+		case DM_BLEND_FUNC_DST_ALPHA:             return MTLBlendFactorDestinationAlpha;
+		case DM_BLEND_FUNC_ONE_MINUS_DST_ALPHA:   return MTLBlendFactorOneMinusDestinationAlpha;
+		case DM_BLEND_FUNC_CONST_COLOR:           return MTLBlendFactorBlendColor;
+		case DM_BLEND_FUNC_ONE_MINUS_CONST_COLOR: return MTLBlendFactorOneMinusBlendColor;
+		case DM_BLEND_FUNC_CONST_ALPHA:           return MTLBlendFactorBlendAlpha;
+		case DM_BLEND_FUNC_ONE_MINUS_CONST_ALPHA: return MTLBlendFactorOneMinusBlendAlpha;
+		default:
+		DM_LOG_ERROR("Unknown blend func, returning MTLBlendFactorSourceAlpha");
+		return MTLBlendFactorSourceAlpha;
+	}
+}
+
+MTLPrimitiveType dm_topology_to_metal_primitive(dm_primitive_topology topology)
+{
+	switch(topology)
+	{
+		case DM_TOPOLOGY_POINT_LIST:     return MTLPrimitiveTypePoint;
+		case DM_TOPOLOGY_LINE_LIST:      return MTLPrimitiveTypeLine;
+		case DM_TOPOLOGY_LINE_STRIP:     return MTLPrimitiveTypeLineStrip;
+		case DM_TOPOLOGY_TRIANGLE_LIST:  return MTLPrimitiveTypeTriangle;
+		case DM_TOPOLOGY_TRIANGLE_STRIP: return MTLPrimitiveTypeTriangleStrip;
+		default: 
+		DM_LOG_ERROR("Unknown DM primitive type! Returning MTLPrimitiveTypeTriangle...");
+		return MTLPrimitiveTypeTriangle;
+	}
+}
+
 /***********************
  RENDERER BACKEND
 *****************************/
@@ -427,6 +555,87 @@ void dm_metal_destroy_constant_buffer(dm_metal_constant_buffer* buffer)
 
 bool dm_renderer_backend_create_pipeline(const dm_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer)
 {
+    DM_METAL_GET_RENDERER;
+
+    dm_metal_pipeline internal_pipe = { 0 };
+
+    // shader
+    NSString* shader_file = [NSString stringWithUTF8String:desc.shaders[DM_PIPELINE_SHADER_STAGE_MASTER].shader_file];
+
+    NSURL* library_url = [NSURL URLWithString:shader_file];
+
+    NSError* library_error = NULL;
+
+    internal_pipe.library = [metal_renderer->device newLibraryWithURL:library_url error:&library_error];
+    if(!internal_pipe.library)
+    {
+        DM_LOG_FATAL("Creating Metal shader library failed");
+        DM_LOG_ERROR("%s", [library_error.localizedDescription UTF8String]);
+        return false;
+    }
+
+    NSString* func_name = [[NSString alloc] initWithUTF8String:desc.shaders[DM_PIPELINE_SHADER_STAGE_VERTEX].shader_function];
+
+    internal_pipe.vertex_func = [internal_pipe.library newFunctionWithName:func_name];
+
+    if(!internal_pipe.vertex_func)
+    {
+        DM_LOG_FATAL("Failed to create Metal vertex function");
+        return false;
+    }
+
+    [func_name release];
+
+    func_name = [[NSString alloc] initWithUTF8String:desc.shaders[DM_PIPELINE_SHADER_STAGE_PIXEL].shader_function];
+
+    internal_pipe.fragment_func = [internal_pipe.library newFunctionWithName:func_name];
+    if(!internal_pipe.fragment_func)
+    {
+        DM_LOG_FATAL("Failed to create Metal fragment function");
+        return false;
+    }
+
+    [func_name release];
+
+    // pipeline state
+    MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor alloc];
+    pipe_desc.vertexFunction                  = internal_pipe.vertex_func;
+    pipe_desc.fragmentFunction                = internal_pipe.fragment_func;
+    pipe_desc.colorAttachments[0].pixelFormat = MTLPixelFormatRGBA8Unorm;
+    pipe_desc.depthAttachmentPixelFormat      = MTLPixelFormatDepth32Float_Stencil8;
+
+    if(desc.flags && DM_PIPELINE_FLAG_BLEND)
+    {
+        MTLBlendOperation blend_op    = dm_blend_eq_to_metal_blend_op(desc.blend_desc.eq);
+        MTLBlendFactor    src_factor  = dm_blend_func_to_metal_blend_factor(desc.blend_desc.src_func);
+        MTLBlendFactor    dest_factor = dm_blend_func_to_metal_blend_factor(desc.blend_desc.dest_func);
+
+        MTLBlendOperation blend_alpha_op    = dm_blend_eq_to_metal_blend_op(desc.blend_alpha_desc.eq);
+        MTLBlendFactor    src_alpha_factor  = dm_blend_func_to_metal_blend_factor(desc.blend_alpha_desc.src_func);
+        MTLBlendFactor    dest_alpha_factor = dm_blend_func_to_metal_blend_factor(desc.blend_alpha_desc.dest_func);
+
+        pipe_desc.colorAttachments[0].blendingEnabled             = YES;
+        pipe_desc.colorAttachments[0].rgbBlendOperation           = blend_op;
+        pipe_desc.colorAttachments[0].sourceRGBBlendFactor        = src_factor;
+        pipe_desc.colorAttachments[0].destinationRGBBlendFactor   = dest_factor;
+        pipe_desc.colorAttachments[0].alphaBlendOperation         = blend_alpha_op;
+        pipe_desc.colorAttachments[0].sourceAlphaBlendFactor      = src_alpha_factor;
+        pipe_desc.colorAttachments[0].destinationAlphaBlendFactor = dest_alpha_factor;
+    }
+
+    NSError* error = NULL;
+    internal_pipe.pipeline_state = [metal_renderer->device newRenderPipelineStateWithDescriptor:pipe_desc error:&error];
+    if(!internal_pipe.pipeline_state)
+    {
+        DM_LOG_FATAL("Creating Metal pipeline state failed");
+        DM_LOG_ERROR("%s", [error.localizedDescription UTF8String]);
+        return false;
+    }
+
+    //
+    dm_memcpy(metal_renderer->pipelines + metal_renderer->pipeline_count, &internal_pipe, sizeof(internal_pipe));
+    DM_RENDER_HANDLE_SET_INDEX(*handle, metal_renderer->pipeline_count++);
+
     return true;
 }
 

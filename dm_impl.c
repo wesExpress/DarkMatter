@@ -624,6 +624,25 @@ extern bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_st
 extern bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 #endif
 
+void dm_renderer_pipeline_add_vertex_attrib(const char* name, dm_vertex_attrib_class attrib_class, dm_vertex_data data_type, uint8_t count, size_t stride, size_t offset, dm_pipeline_desc* pipe_desc)
+{
+    const uint8_t attrib_count = pipe_desc->vertex_attrib_count;
+
+    dm_vertex_attrib_desc* attrib = &pipe_desc->vertex_attribs[attrib_count];
+
+    dm_strcpy(attrib->name, name);
+
+    attrib->data_t = data_type;
+    attrib->count = count;
+    
+    attrib->stride = stride;
+    attrib->offset = offset;
+
+    attrib->attrib_class = attrib_class;
+
+    pipe_desc->vertex_attrib_count++;
+}
+
 bool dm_renderer_create_vertex_buffer(const dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context)
 {
     DM_RENDER_HANDLE_SET_TYPE(*handle, DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER);
