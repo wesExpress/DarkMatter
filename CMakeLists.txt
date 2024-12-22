@@ -1,0 +1,34 @@
+cmake_minimum_required(VERSION 3.20)
+SET(CMAKE_C_STANDARD 99)
+
+PROJECT(DarkMatter)
+
+if(APPLE)
+    SET(VAR_SOURCES platform/dm_platform_mac.m)
+    SET(VAR_SOURCES rendering/dm_renderer_metal.m)
+elseif(WIN32)
+    SET(VAR_SOURCES platform/dm_platform_win32.c)
+    if(VULKAN)
+        SET(VAR_SOURCES ${VAR_SOURCES} rendering/dm_renderer_vulkan.c)
+        ADD_DEFINITIONS(-DDM_VULKAN)
+    else()
+        SET(VAR_SOURCES ${VAR_SOURCES} rendering/dm_renderer_dx12.c)
+    endif()
+endif()
+
+SET(SOURCES dm_impl.c)
+
+ADD_LIBRARY(${PROJECT_NAME} ${SOURCES} ${VAR_SOURCES})
+
+TARGET_INCLUDE_DIRECTORIES(${PROJECT_NAME} PUBLIC /* lib/)
+
+if(APPLE)
+    FIND_LIBRARY(APPLE_FWK_COCOA Cocoa REQUIRED)
+    FIND_LIBRARY(APPLE_FWK_METAL Metal REQUIRED)
+    FIND_LIBRARY(APPLE_FWK_QUARTZ_CORE QuartzCore REQUIRED)
+    FIND_LIBRARY(APPLE_FWK_FOUNDATION Foundation REQUIRED)
+
+    TARGET_LINK_LIBRARIES(${PROJECT_NAME} PUBLIC ${APPLE_FWK_COCOA} ${APPLE_FWK_METAL} ${APPLE_FWK_QUARTZ_CORE} ${APPLE_FWK_FOUNDATION})
+elseif(WIN32)
+    TARGET_LINK_LIBRARIES(${PROJECT_NAME} PUBLIC d3d12 dxgi dxguid d3dcompiler)
+endif()
