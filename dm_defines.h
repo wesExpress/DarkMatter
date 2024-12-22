@@ -13,18 +13,9 @@ DETERMINE PLATFORM AND RENDERING BACKEND
 #define DM_PLATFORM_WIN32
 #define DM_INLINE __forceinline
 
-#ifdef DM_RAYTRACING
-#ifdef DM_DIRECTX11     // raytracing ONLY SUPPORTED by DX12
-#undef DM_DIRECTX11
-#endif
+#ifndef DM_VULKAN
 #define DM_DIRECTX12
-#else
-#if !defined(DM_DIRECTX11) || !defined(DM_DIRECTX12)   // we DEFAULT to DX11 (meaning nothing is specified)
-#define DM_DIRECTX11
 #endif
-#endif
-
-#define DM_DIRECTX
 
 #elif __linux__ || __gnu_linux__
 #define DM_PLATFORM_LINUX
@@ -32,16 +23,11 @@ DETERMINE PLATFORM AND RENDERING BACKEND
 #define DM_VULKAN
 #define _GNU_SOURCE
 
-#else
-#define DM_PLATFORM_GLFW
-#define DM_INLINE
-#define DM_OPENGL
 #endif
 
 /*********
 ALIGNMENT
 ***********/
-//#ifdef DM_PLATFORM_WIN32
 #ifdef __MSC_VER_
 #define DM_ALIGN(X) __declspec(align(X))
 #else
