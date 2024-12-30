@@ -51,4 +51,8 @@ MISC
 #define DM_ARRAY_LEN(ARRAY) sizeof(ARRAY) / sizeof(ARRAY[0])
 #define DM_ALIGN_BYTES(SIZE, ALIGNMENT) ((SIZE + (ALIGNMENT-1)) & ~(ALIGNMENT-1))
 
+#ifdef _DEBUG
+#define DM_DEBUG
+#endif
+
 #endif

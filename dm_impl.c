@@ -723,6 +723,8 @@ void dm_shutdown(dm_context* context)
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
     
+    dm_free((void**)&context->renderer.internal_renderer);
+    dm_free((void**)&context->platform_data.internal_data);
     dm_free((void**)&context);
 }
 

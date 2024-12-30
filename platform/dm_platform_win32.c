@@ -4,17 +4,6 @@
 
 #include <stdio.h>
 
-#ifdef DM_OPENGL
-#include "glad/glad_wgl.h"
-
-bool dm_win32_load_opengl_functions(WNDCLASSEX window_class, dm_platform_data* platform_data);
-typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int* attribList);
-
-#elif defined(DM_VULKAN)
-#include <vulkan/vulkan.h>
-#include <vulkan/vulkan_win32.h>
-#endif
-
 #define DM_WIN32_GET_DATA dm_internal_w32_data* w32_data = platform_data->internal_data
 
 LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam);
@@ -33,23 +22,6 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* 
     
 	const char* window_class_name = "dm_window_class";
     
-#ifdef DM_OPENGL
-	WNDCLASSEX wcex = { 0 };
-	wcex.cbSize = sizeof(wcex);
-	wcex.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-	wcex.lpfnWndProc = window_callback;
-	wcex.hInstance = w32_data->h_instance;
-	wcex.hIcon = LoadIcon(w32_data->h_instance, IDI_APPLICATION);
-	wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-	wcex.lpszClassName = window_class_name;
-    
-	if (!dm_win32_load_opengl_functions(wcex, platform_data)) 
-    {
-        DM_LOG_FATAL("Win32 load OpenGL functions failed");
-        return false;
-    }
-#else
 	HICON icon = LoadIcon(w32_data->h_instance, IDI_APPLICATION);
 	WNDCLASSA wc = { 0 };
 	wc.style = CS_DBLCLKS | CS_HREDRAW | CS_OWNDC | CS_VREDRAW;
@@ -67,7 +39,6 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* 
         printf("Window registration failed");
         return false;
     }
-#endif
     
 	// Adjust client window to be appropriate
 	uint32_t client_x = window_x_pos;
@@ -111,11 +82,7 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* 
     // attach platform data to hwnd
     if(!SetPropA(w32_data->hwnd, "platform_data", platform_data)) return false;
     
-#ifndef DM_OPENGL
 	ShowWindow(w32_data->hwnd, SW_SHOW);
-#endif
-    
-    //ShowCursor(FALSE);
     
 	// clock
 	LARGE_INTEGER frequency;
@@ -149,8 +116,6 @@ void dm_platform_shutdown(dm_platform_data* platform_data)
 		DestroyWindow(w32_data->hwnd);
 		w32_data->hwnd = 0;
 	}
-    
-    dm_free(&platform_data->internal_data);
 }
 
 bool dm_platform_pump_events(dm_platform_data* platform_data)
