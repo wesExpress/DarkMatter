@@ -49,10 +49,10 @@ typedef struct dm_vulkan_device_t
     VkPhysicalDeviceFeatures         features;
     VkPhysicalDeviceMemoryProperties memory_properties;
 
-    dm_vulkan_family graphics_queue;
-    dm_vulkan_family compute_queue;
-    dm_vulkan_family present_queue;
-    dm_vulkan_family transfer_queue;
+    dm_vulkan_family graphics_family;
+    dm_vulkan_family compute_family;
+    dm_vulkan_family present_family;
+    dm_vulkan_family transfer_family;
 
     dm_vulkan_swapchain_details swapchain_details;
 } dm_vulkan_device;
@@ -201,16 +201,16 @@ bool dm_vulkan_is_device_suitable(VkPhysicalDevice physical_device, const char**
     {
         if(family_properties[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)
         {
-            device.graphics_queue.index = i;
+            device.graphics_family.index = i;
         }
         else if(family_properties[i].queueFlags & VK_QUEUE_TRANSFER_BIT)
         {
-            device.transfer_queue.index = i;
+            device.transfer_family.index = i;
         }
 
         VkBool32 present_support = VK_FALSE;
         vkGetPhysicalDeviceSurfaceSupportKHR(device.physical, i, vulkan_renderer->surface, &present_support);
-        if(present_support) device.present_queue.index = i;
+        if(present_support) device.present_family.index = i;
     }
 
     dm_free((void**)&family_properties);
@@ -471,7 +471,7 @@ bool dm_renderer_backend_init(dm_context* context)
 
         VkDeviceQueueCreateInfo queue_create_infos[4] = { 0 };
 
-        uint32_t families[] = { vulkan_renderer->device.graphics_queue.index, vulkan_renderer->device.present_queue.index };
+        uint32_t families[] = { vulkan_renderer->device.graphics_family.index, vulkan_renderer->device.present_family.index };
 
         const float queue_priority = 1.f;
         for(uint8_t i=0; i<_countof(families); i++)
@@ -498,8 +498,8 @@ bool dm_renderer_backend_init(dm_context* context)
             return false;
         }
 
-        vkGetDeviceQueue(vulkan_renderer->device.logical, vulkan_renderer->device.graphics_queue.index, 0, &vulkan_renderer->device.graphics_queue.queue);
-        vkGetDeviceQueue(vulkan_renderer->device.logical, vulkan_renderer->device.present_queue.index, 0, &vulkan_renderer->device.present_queue.queue);
+        vkGetDeviceQueue(vulkan_renderer->device.logical, vulkan_renderer->device.graphics_family.index, 0, &vulkan_renderer->device.graphics_family.queue);
+        vkGetDeviceQueue(vulkan_renderer->device.logical, vulkan_renderer->device.present_family.index, 0, &vulkan_renderer->device.present_family.queue);
     }
 
     // swapchain
@@ -560,9 +560,9 @@ bool dm_renderer_backend_init(dm_context* context)
         create_info.imageArrayLayers = 1;
         create_info.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 
-        const uint32_t indices[] = { vulkan_renderer->device.graphics_queue.index, vulkan_renderer->device.present_queue.index };
+        const uint32_t indices[] = { vulkan_renderer->device.graphics_family.index, vulkan_renderer->device.present_family.index };
 
-        if(vulkan_renderer->device.graphics_queue.index != vulkan_renderer->device.present_queue.index)
+        if(vulkan_renderer->device.graphics_family.index != vulkan_renderer->device.present_family.index)
         {
             create_info.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
             create_info.queueFamilyIndexCount = 2;
@@ -713,9 +713,9 @@ bool dm_renderer_backend_init(dm_context* context)
         VkCommandPoolCreateInfo create_info = { 0 };
         create_info.sType            = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
         create_info.flags            = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-        create_info.queueFamilyIndex = vulkan_renderer->device.graphics_queue.index;
+        create_info.queueFamilyIndex = vulkan_renderer->device.graphics_family.index;
 
-        vr = vkCreateCommandPool(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->device.graphics_queue.pool);
+        vr = vkCreateCommandPool(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->device.graphics_family.pool);
         if(vr != VK_SUCCESS)
         {
             DM_LOG_FATAL("vkCreateCommandPool failed");
@@ -727,13 +727,13 @@ bool dm_renderer_backend_init(dm_context* context)
     {
         VkCommandBufferAllocateInfo allocate_info = { 0 };
         allocate_info.sType              = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-        allocate_info.commandPool        = vulkan_renderer->device.graphics_queue.pool;
+        allocate_info.commandPool        = vulkan_renderer->device.graphics_family.pool;
         allocate_info.level              = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
         allocate_info.commandBufferCount = 1;
 
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
-            vr = vkAllocateCommandBuffers(vulkan_renderer->device.logical, &allocate_info, &vulkan_renderer->device.graphics_queue.buffer[i]);
+            vr = vkAllocateCommandBuffers(vulkan_renderer->device.logical, &allocate_info, &vulkan_renderer->device.graphics_family.buffer[i]);
             if(vr != VK_SUCCESS)
             {
                 DM_LOG_FATAL("vkAllocateCommandBuffers failed");
@@ -820,7 +820,7 @@ void dm_renderer_backend_shutdown(dm_context* context)
     }
 
 
-    vkDestroyCommandPool(device, vulkan_renderer->device.graphics_queue.pool, allocator);
+    vkDestroyCommandPool(device, vulkan_renderer->device.graphics_family.pool, allocator);
 
     vkDestroySwapchainKHR(device, vulkan_renderer->swapchain.swapchain, allocator);
     vkDestroyDevice(vulkan_renderer->device.logical, allocator);
@@ -846,7 +846,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 
     const uint8_t current_frame = vulkan_renderer->current_frame;
 
-    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[current_frame];
+    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_family.buffer[current_frame];
 
     vkResetCommandBuffer(cmd_buffer, 0);
 
@@ -882,7 +882,7 @@ bool dm_renderer_backend_end_frame(dm_context* context)
 
     const uint32_t current_frame = vulkan_renderer->current_frame;
 
-    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[current_frame];
+    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_family.buffer[current_frame];
 
     vkCmdEndRenderPass(cmd_buffer);
 
@@ -909,7 +909,7 @@ bool dm_renderer_backend_end_frame(dm_context* context)
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores    = signal_semaphores;
 
-    vr = vkQueueSubmit(vulkan_renderer->device.graphics_queue.queue, 1, &submit_info, vulkan_renderer->fences[vulkan_renderer->current_frame].fence);
+    vr = vkQueueSubmit(vulkan_renderer->device.graphics_family.queue, 1, &submit_info, vulkan_renderer->fences[vulkan_renderer->current_frame].fence);
     if(vr != VK_SUCCESS)
     {
         DM_LOG_FATAL("vkQueueSubmit failed");
@@ -927,7 +927,7 @@ bool dm_renderer_backend_end_frame(dm_context* context)
     present_info.pSwapchains        = swapchains;
     present_info.pImageIndices      = &vulkan_renderer->current_frame;
 
-    vkQueuePresentKHR(vulkan_renderer->device.present_queue.queue, &present_info);
+    vkQueuePresentKHR(vulkan_renderer->device.present_family.queue, &present_info);
 
     vulkan_renderer->current_frame = (vulkan_renderer->current_frame + 1) % DM_VULKAN_MAX_FRAMES_IN_FLIGHT;
 
