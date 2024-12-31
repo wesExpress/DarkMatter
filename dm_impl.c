@@ -604,7 +604,6 @@ void dm_renderer_shutdown(dm_context* context)
     dm_renderer_backend_shutdown(context);
 }
 
-// backend resource creation
 /***************
 RENDER COMMANDS
 *****************/
@@ -776,6 +775,7 @@ bool dm_poll_events(dm_context* context)
             break;
             
             case DM_EVENT_WINDOW_RESIZE:
+            //DM_LOG_INFO("Window resize event received");
             context->platform_data.window_data.width  = e.new_rect[0];
             context->platform_data.window_data.height = e.new_rect[1];
             

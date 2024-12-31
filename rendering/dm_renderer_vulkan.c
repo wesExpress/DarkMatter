@@ -89,8 +89,8 @@ typedef struct dm_vulkan_renderer_t
     dm_vulkan_swapchain swapchain;
 
     dm_vulkan_fence fences[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
-    VkSemaphore wait_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
-    VkSemaphore signal_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    VkSemaphore image_available_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    VkSemaphore render_finished_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
 
     dm_vulkan_renderpass renderpasses[DM_VULKAN_MAX_RENDERPASSES];
     uint32_t             rp_count;
@@ -98,7 +98,7 @@ typedef struct dm_vulkan_renderer_t
     dm_vulkan_raster_pipeline raster_pipes[DM_VULKAN_MAX_RASTER_PIPES];
     uint32_t                  raster_pipe_count;
 
-    uint32_t current_frame;
+    uint32_t current_frame, image_index;
 
 #ifdef DM_DEBUG
     VkDebugUtilsMessengerEXT debug_messenger;
@@ -110,6 +110,8 @@ typedef struct dm_vulkan_renderer_t
 #ifdef DM_DEBUG
 VKAPI_ATTR VkBool32 VKAPI_CALL dm_vulkan_debug_callback(VkDebugUtilsMessageSeverityFlagBitsEXT severity, VkDebugUtilsMessageTypeFlagsEXT types, const VkDebugUtilsMessengerCallbackDataEXT* callback_data, void* user_data);
 #endif
+
+bool dm_vulkan_decode_vr(VkResult vr);
 
 #ifndef DM_DEBUG
 DM_INLINE
@@ -134,21 +136,21 @@ dm_vulkan_swapchain_details dm_vulkan_query_swapchain_support(VkPhysicalDevice d
     dm_vulkan_swapchain_details details;
 
     vr = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, surface, &details.capabilities);
-    if(vr!=VK_SUCCESS)
+    if(!dm_vulkan_decode_vr(vr))
     {
         DM_LOG_ERROR("vkGetPhysicalDeviceSurfaceCapabilitiesKHR failed");
         return (dm_vulkan_swapchain_details){ 0 };
     }
 
     vr = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &details.format_count, NULL);
-    if(vr!=VK_SUCCESS)
+    if(!dm_vulkan_decode_vr(vr))
     {
         DM_LOG_ERROR("vkGetPhysicalDeviceSurfaceFormatsKHR failed");
         return (dm_vulkan_swapchain_details){ 0 };
     }
 
     vr = vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &details.present_mode_count, NULL);
-    if(vr!=VK_SUCCESS)
+    if(!dm_vulkan_decode_vr(vr))
     {
         DM_LOG_ERROR("vkGetPhysicalDeviceSurfacePresentModesKHR failed");
         return (dm_vulkan_swapchain_details){ 0 };
@@ -157,16 +159,16 @@ dm_vulkan_swapchain_details dm_vulkan_query_swapchain_support(VkPhysicalDevice d
     if(details.format_count)
     {
         vr = vkGetPhysicalDeviceSurfaceFormatsKHR(device, surface, &details.format_count, details.formats);
-        if(vr!=VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
-            DM_LOG_ERROR("vkGetPhysicalDeviceSurfaceCapabilitiesKHR failed");
+            DM_LOG_ERROR("vkGetPhysicalDeviceSurfaceFormatsKHR failed");
             return (dm_vulkan_swapchain_details){ 0 };
         }
     }
     if(details.present_mode_count)
     {
         vr = vkGetPhysicalDeviceSurfacePresentModesKHR(device, surface, &details.present_mode_count, details.present_modes);
-        if(vr!=VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_ERROR("vkGetPhysicalDeviceSurfacePresentModesKHR failed");
             return (dm_vulkan_swapchain_details){ 0 };
@@ -253,6 +255,190 @@ bool dm_vulkan_is_device_suitable(VkPhysicalDevice physical_device, const char**
     return true;
 }
 
+/************
+ * SWAPCHAIN
+ * ***********/
+bool dm_vulkan_create_swapchain(dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    vulkan_renderer->device.swapchain_details = dm_vulkan_query_swapchain_support(vulkan_renderer->device.physical, vulkan_renderer->surface);
+    if(vulkan_renderer->device.swapchain_details.present_mode_count==0 && vulkan_renderer->device.swapchain_details.present_mode_count==0) return false;
+
+    const dm_vulkan_swapchain_details swapchain_details = vulkan_renderer->device.swapchain_details;
+
+    VkSurfaceFormatKHR surface_format;
+    bool found = false;
+    for(uint32_t i=0; i<swapchain_details.format_count; i++)
+    {
+        VkSurfaceFormatKHR format = swapchain_details.formats[i];
+
+        if(format.format==VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace==VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        {
+            found = true;
+            surface_format = format;
+            break;
+        }
+    }
+
+    if(!found)
+    {
+        DM_LOG_FATAL("Desired surface_format not found on device");
+        return false;
+    }
+
+    VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
+    found = false;
+    for(uint32_t i=0; i<swapchain_details.present_mode_count; i++)
+    {
+        VkPresentModeKHR mode = swapchain_details.present_modes[i];
+
+        if(mode == VK_PRESENT_MODE_MAILBOX_KHR)
+        {
+            present_mode = mode;
+            found = true;
+            break;
+        }
+    }
+
+    if(swapchain_details.capabilities.currentExtent.width==UINT_MAX || swapchain_details.capabilities.currentExtent.height==UINT_MAX)
+    {
+        DM_LOG_FATAL("Swapchain extents are invalid");
+        return false;
+    }
+
+    VkExtent2D extents = { 0 };
+    extents.height = swapchain_details.capabilities.currentExtent.height;
+    extents.width  = swapchain_details.capabilities.currentExtent.width;
+
+    VkSwapchainCreateInfoKHR create_info = { 0 };
+    create_info.sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+    create_info.surface          = vulkan_renderer->surface;
+    create_info.minImageCount    = DM_VULKAN_MAX_FRAMES_IN_FLIGHT;
+    create_info.imageFormat      = surface_format.format;
+    create_info.imageColorSpace  = surface_format.colorSpace;
+    create_info.imageExtent      = extents;
+    create_info.imageArrayLayers = 1;
+    create_info.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+
+    const uint32_t indices[] = { vulkan_renderer->device.graphics_family.index, vulkan_renderer->device.present_family.index };
+
+    if(vulkan_renderer->device.graphics_family.index != vulkan_renderer->device.present_family.index)
+    {
+        create_info.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
+        create_info.queueFamilyIndexCount = 2;
+        create_info.pQueueFamilyIndices   = indices;
+    }
+    else
+    {
+        create_info.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
+        create_info.queueFamilyIndexCount = 0;
+        create_info.pQueueFamilyIndices   = NULL;
+    }
+
+    create_info.preTransform   = swapchain_details.capabilities.currentTransform;
+    create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+    create_info.presentMode    = present_mode;
+    create_info.clipped        = VK_TRUE;
+    create_info.oldSwapchain   = VK_NULL_HANDLE;
+
+    vr = vkCreateSwapchainKHR(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->swapchain.swapchain);
+    if(!dm_vulkan_decode_vr(vr))
+    {
+        DM_LOG_FATAL("vkCreateSwapchainKHR failed");
+        return false;
+    }
+
+    vulkan_renderer->swapchain.format  = surface_format.format;
+    vulkan_renderer->swapchain.extents = extents;
+
+    return true;
+}
+
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_vulkan_create_rendertargets(dm_vulkan_renderer* vulkan_renderer)
+{
+    VkResult vr;
+
+    uint32_t image_count = DM_VULKAN_MAX_FRAMES_IN_FLIGHT;
+    vr = vkGetSwapchainImagesKHR(vulkan_renderer->device.logical, vulkan_renderer->swapchain.swapchain, &image_count, NULL);
+    if(!dm_vulkan_decode_vr(vr))
+    {
+        DM_LOG_FATAL("vkGetSwapchainImagesKHR failed");
+        return false;
+    }
+
+    vr = vkGetSwapchainImagesKHR(vulkan_renderer->device.logical, vulkan_renderer->swapchain.swapchain, &image_count, vulkan_renderer->swapchain.render_targets);
+    if(!dm_vulkan_decode_vr(vr))
+    {
+        DM_LOG_FATAL("vkGetSwapchainImagesKHR failed");
+        return false;
+    }
+
+    for(uint32_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VkImageViewCreateInfo create_info = { 0 };
+        create_info.sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        create_info.image    = vulkan_renderer->swapchain.render_targets[i];
+        create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        create_info.format   = vulkan_renderer->swapchain.format;
+
+        create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+        create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+        create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+        create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+
+        create_info.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+        create_info.subresourceRange.baseMipLevel   = 0;
+        create_info.subresourceRange.levelCount     = 1;
+        create_info.subresourceRange.baseArrayLayer = 0;
+        create_info.subresourceRange.layerCount     = 1;
+
+        vr = vkCreateImageView(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->swapchain.views[i]);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkCreateImageView failed");
+            return false;
+        }
+    }
+
+    return true;
+}
+
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_vulkan_create_framebuffers(dm_vulkan_renderer* vulkan_renderer)
+{
+    VkResult vr;
+
+    for(uint32_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VkImageView attachments[] = { vulkan_renderer->swapchain.views[i] };
+
+        VkFramebufferCreateInfo create_info = { 0 };
+        create_info.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        create_info.renderPass      = vulkan_renderer->renderpasses[DM_VULKAN_DEFAULT_RENDERPASS].renderpass;
+        create_info.attachmentCount = 1;
+        create_info.pAttachments    = attachments;
+        create_info.width           = vulkan_renderer->swapchain.extents.width;
+        create_info.height          = vulkan_renderer->swapchain.extents.height;
+        create_info.layers          = 1;
+
+        vr = vkCreateFramebuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->swapchain.frame_buffers[i]);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkCreateFrameBuffer failed");
+            return false;
+        }
+    }
+
+    return true;
+}
+
 bool dm_renderer_backend_init(dm_context* context)
 {
     DM_LOG_INFO("Initializing vulkan backend...");
@@ -272,7 +458,7 @@ bool dm_renderer_backend_init(dm_context* context)
 #ifdef DM_DEBUG
         uint32_t extension_count;
         vr = vkEnumerateInstanceExtensionProperties(NULL, &extension_count, NULL);
-        if(vr!=VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkEnumerateInstanceExtensionProperties failed");
             return false;
@@ -280,7 +466,7 @@ bool dm_renderer_backend_init(dm_context* context)
 
         VkExtensionProperties* available_extensions = dm_alloc(sizeof(VkExtensionProperties) * extension_count);
         vr = vkEnumerateInstanceExtensionProperties(NULL, &extension_count, available_extensions);
-        if(vr!=VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkEnumerateInstanceExtensionProperties failed");
             return false;
@@ -314,7 +500,7 @@ bool dm_renderer_backend_init(dm_context* context)
 
         uint32_t available_count;
         vr = vkEnumerateInstanceLayerProperties(&available_count, NULL);
-        if(vr != VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkEnumerateInstanceLayerProperties failed");
             return false;
@@ -323,7 +509,7 @@ bool dm_renderer_backend_init(dm_context* context)
         VkLayerProperties* available_layers = dm_alloc(sizeof(VkLayerProperties) * available_count);
 
         vr = vkEnumerateInstanceLayerProperties(&available_count, available_layers);
-        if(vr != VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkEnumerateInstanceLayerProperties failed");
             return false;
@@ -375,7 +561,7 @@ bool dm_renderer_backend_init(dm_context* context)
 #endif
 
         vr = vkCreateInstance(&create_info, vulkan_renderer->allocator, &vulkan_renderer->instance);
-        if(vr != VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateInstance failed");
             return false;
@@ -403,7 +589,7 @@ bool dm_renderer_backend_init(dm_context* context)
         }
 
         vr = func(vulkan_renderer->instance, &debug_create_info, vulkan_renderer->allocator, &vulkan_renderer->debug_messenger);
-        if(vr != VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("Failed to create Vulkan debug messenger");
             return false;
@@ -422,7 +608,7 @@ bool dm_renderer_backend_init(dm_context* context)
         create_info.hinstance = w32_data->h_instance;
 
         vr = vkCreateWin32SurfaceKHR(vulkan_renderer->instance, &create_info, vulkan_renderer->allocator, &vulkan_renderer->surface);
-        if(vr != VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateWin32SurfaceKHR failed");
             return false;
@@ -492,7 +678,7 @@ bool dm_renderer_backend_init(dm_context* context)
         create_info.enabledLayerCount       = 0;
 
         vr = vkCreateDevice(vulkan_renderer->device.physical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->device.logical);
-        if(vr != VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateDevice failed");
             return false;
@@ -504,136 +690,19 @@ bool dm_renderer_backend_init(dm_context* context)
 
     // swapchain
     {
-        const dm_vulkan_swapchain_details swapchain_details = vulkan_renderer->device.swapchain_details;
-
-        VkSurfaceFormatKHR surface_format;
-        bool found = false;
-        for(uint32_t i=0; i<swapchain_details.format_count; i++)
+        if(!dm_vulkan_create_swapchain(&context->renderer)) 
         {
-            VkSurfaceFormatKHR format = swapchain_details.formats[i];
-
-            if(format.format==VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace==VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
-            {
-                found = true;
-                surface_format = format;
-                break;
-            }
-        }
-
-        if(!found)
-        {
-            DM_LOG_FATAL("Desired surface_format not found on device");
+            DM_LOG_FATAL("Creating swapchain failed");
             return false;
         }
-
-        VkPresentModeKHR present_mode = VK_PRESENT_MODE_FIFO_KHR;
-        found = false;
-        for(uint32_t i=0; i<swapchain_details.present_mode_count; i++)
-        {
-            VkPresentModeKHR mode = swapchain_details.present_modes[i];
-
-            if(mode == VK_PRESENT_MODE_MAILBOX_KHR)
-            {
-                present_mode = mode;
-                found = true;
-                break;
-            }
-        }
-
-        if(swapchain_details.capabilities.currentExtent.width==UINT_MAX || swapchain_details.capabilities.currentExtent.height==UINT_MAX)
-        {
-            DM_LOG_FATAL("Swapchain extents are invalid");
-            return false;
-        }
-
-        VkExtent2D extents = { 0 };
-        extents.height = swapchain_details.capabilities.currentExtent.height;
-        extents.width  = swapchain_details.capabilities.currentExtent.width;
-
-        VkSwapchainCreateInfoKHR create_info = { 0 };
-        create_info.sType            = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-        create_info.surface          = vulkan_renderer->surface;
-        create_info.minImageCount    = DM_VULKAN_MAX_FRAMES_IN_FLIGHT;
-        create_info.imageFormat      = surface_format.format;
-        create_info.imageColorSpace  = surface_format.colorSpace;
-        create_info.imageExtent      = extents;
-        create_info.imageArrayLayers = 1;
-        create_info.imageUsage       = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
-
-        const uint32_t indices[] = { vulkan_renderer->device.graphics_family.index, vulkan_renderer->device.present_family.index };
-
-        if(vulkan_renderer->device.graphics_family.index != vulkan_renderer->device.present_family.index)
-        {
-            create_info.imageSharingMode      = VK_SHARING_MODE_CONCURRENT;
-            create_info.queueFamilyIndexCount = 2;
-            create_info.pQueueFamilyIndices   = indices;
-        }
-        else
-        {
-            create_info.imageSharingMode      = VK_SHARING_MODE_EXCLUSIVE;
-            create_info.queueFamilyIndexCount = 0;
-            create_info.pQueueFamilyIndices   = NULL;
-        }
-
-        create_info.preTransform   = swapchain_details.capabilities.currentTransform;
-        create_info.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
-        create_info.presentMode    = present_mode;
-        create_info.clipped        = VK_TRUE;
-        create_info.oldSwapchain   = VK_NULL_HANDLE;
-
-        vr = vkCreateSwapchainKHR(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->swapchain.swapchain);
-        if(vr != VK_SUCCESS)
-        {
-            DM_LOG_FATAL("vkCreateSwapchainKHR failed");
-            return false;
-        }
-
-        vulkan_renderer->swapchain.format  = surface_format.format;
-        vulkan_renderer->swapchain.extents = extents;
     }
 
     // render targets
     {
-        uint32_t image_count = DM_VULKAN_MAX_FRAMES_IN_FLIGHT;
-        vr = vkGetSwapchainImagesKHR(vulkan_renderer->device.logical, vulkan_renderer->swapchain.swapchain, &image_count, NULL);
-        if(vr != VK_SUCCESS)
+        if(!dm_vulkan_create_rendertargets(vulkan_renderer))
         {
-            DM_LOG_FATAL("vkGetSwapchainImagesKHR failed");
+            DM_LOG_FATAL("Creating rendertargets failed");
             return false;
-        }
-
-        vr = vkGetSwapchainImagesKHR(vulkan_renderer->device.logical, vulkan_renderer->swapchain.swapchain, &image_count, vulkan_renderer->swapchain.render_targets);
-        if(vr != VK_SUCCESS)
-        {
-            DM_LOG_FATAL("vkGetSwapchainImagesKHR failed");
-            return false;
-        }
-
-        for(uint32_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
-        {
-            VkImageViewCreateInfo create_info = { 0 };
-            create_info.sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-            create_info.image    = vulkan_renderer->swapchain.render_targets[i];
-            create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-            create_info.format   = vulkan_renderer->swapchain.format;
-
-            create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-            create_info.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-            create_info.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-            create_info.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-
-            create_info.subresourceRange.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-            create_info.subresourceRange.baseMipLevel   = 0;
-            create_info.subresourceRange.levelCount     = 1;
-            create_info.subresourceRange.baseArrayLayer = 0;
-            create_info.subresourceRange.layerCount     = 1;
-
-            vr = vkCreateImageView(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->swapchain.views[i]);
-            if(vr != VK_SUCCESS)
-            {
-                DM_LOG_FATAL("vkCreateImageView failed");
-                return false;
-            }
         }
     }
 
@@ -676,7 +745,7 @@ bool dm_renderer_backend_init(dm_context* context)
         create_info.pDependencies   = &dependency;
 
         vr = vkCreateRenderPass(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->renderpasses[DM_VULKAN_DEFAULT_RENDERPASS].renderpass);
-        if(vr != VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateRenderPass failed");
             return false;
@@ -686,25 +755,10 @@ bool dm_renderer_backend_init(dm_context* context)
 
     // framebuffers
     {
-        for(uint32_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+        if(!dm_vulkan_create_framebuffers(vulkan_renderer))
         {
-            VkImageView attachments[] = { vulkan_renderer->swapchain.views[i] };
-
-            VkFramebufferCreateInfo create_info = { 0 };
-            create_info.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-            create_info.renderPass      = vulkan_renderer->renderpasses[DM_VULKAN_DEFAULT_RENDERPASS].renderpass;
-            create_info.attachmentCount = 1;
-            create_info.pAttachments    = attachments;
-            create_info.width           = vulkan_renderer->swapchain.extents.width;
-            create_info.height          = vulkan_renderer->swapchain.extents.height;
-            create_info.layers          = 1;
-
-            vr = vkCreateFramebuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->swapchain.frame_buffers[i]);
-            if(vr != VK_SUCCESS)
-            {
-                DM_LOG_FATAL("vkCreateFrameBuffer failed");
-                return false;
-            }
+            DM_LOG_FATAL("Creating framebuffers failed");
+            return false;
         }
     }
 
@@ -716,7 +770,7 @@ bool dm_renderer_backend_init(dm_context* context)
         create_info.queueFamilyIndex = vulkan_renderer->device.graphics_family.index;
 
         vr = vkCreateCommandPool(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->device.graphics_family.pool);
-        if(vr != VK_SUCCESS)
+        if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateCommandPool failed");
             return false;
@@ -734,7 +788,7 @@ bool dm_renderer_backend_init(dm_context* context)
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
             vr = vkAllocateCommandBuffers(vulkan_renderer->device.logical, &allocate_info, &vulkan_renderer->device.graphics_family.buffer[i]);
-            if(vr != VK_SUCCESS)
+            if(!dm_vulkan_decode_vr(vr))
             {
                 DM_LOG_FATAL("vkAllocateCommandBuffers failed");
                 return false;
@@ -749,15 +803,15 @@ bool dm_renderer_backend_init(dm_context* context)
 
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
-            vr = vkCreateSemaphore(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->wait_semaphore[i]);
-            if(vr != VK_SUCCESS)
+            vr = vkCreateSemaphore(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->image_available_semaphore[i]);
+            if(!dm_vulkan_decode_vr(vr))
             {
                 DM_LOG_FATAL("vkCreateSemaphore failed");
                 return false;
             }
 
-            vr = vkCreateSemaphore(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->signal_semaphore[i]);
-            if(vr != VK_SUCCESS)
+            vr = vkCreateSemaphore(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->render_finished_semaphore[i]);
+            if(!dm_vulkan_decode_vr(vr))
             {
                 DM_LOG_FATAL("vkCreateSemaphore failed");
                 return false;
@@ -798,6 +852,12 @@ void dm_renderer_backend_shutdown(dm_context* context)
     const VkDevice device                  = vulkan_renderer->device.logical;
     const VkAllocationCallbacks* allocator = vulkan_renderer->allocator;
 
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vulkan_renderer->current_frame = i;
+        dm_vulkan_wait_for_previous_frame(vulkan_renderer);
+    }
+
     vkDeviceWaitIdle(device);
 
     for(uint8_t i=0; i<vulkan_renderer->raster_pipe_count; i++)
@@ -813,12 +873,11 @@ void dm_renderer_backend_shutdown(dm_context* context)
     for(uint32_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
         vkDestroyFence(device, vulkan_renderer->fences[i].fence, allocator);
-        vkDestroySemaphore(device, vulkan_renderer->signal_semaphore[i], allocator);
-        vkDestroySemaphore(device, vulkan_renderer->wait_semaphore[i], allocator);
+        vkDestroySemaphore(device, vulkan_renderer->image_available_semaphore[i], allocator);
+        vkDestroySemaphore(device, vulkan_renderer->render_finished_semaphore[i], allocator);
         vkDestroyFramebuffer(device, vulkan_renderer->swapchain.frame_buffers[i], allocator);
         vkDestroyImageView(device, vulkan_renderer->swapchain.views[i], allocator);
     }
-
 
     vkDestroyCommandPool(device, vulkan_renderer->device.graphics_family.pool, allocator);
 
@@ -837,14 +896,69 @@ void dm_renderer_backend_shutdown(dm_context* context)
     vkDestroyInstance(vulkan_renderer->instance, vulkan_renderer->allocator);
 }
 
+bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    const VkDevice device = vulkan_renderer->device.logical;
+
+    vkDeviceWaitIdle(device);
+
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vkDestroyFramebuffer(device, vulkan_renderer->swapchain.frame_buffers[i], vulkan_renderer->allocator);
+        vkDestroyImageView(device, vulkan_renderer->swapchain.views[i], vulkan_renderer->allocator);
+    }
+
+    vkDestroySwapchainKHR(device, vulkan_renderer->swapchain.swapchain, vulkan_renderer->allocator);
+
+    if(!dm_vulkan_create_swapchain(renderer))
+    {
+        DM_LOG_FATAL("Recreating swapchain failed");
+        return false;
+    }
+
+    if(!dm_vulkan_create_rendertargets(vulkan_renderer))
+    {
+        DM_LOG_FATAL("Recreating rendertargets failed");
+        return false;
+    }
+
+    if(!dm_vulkan_create_framebuffers(vulkan_renderer))
+    {
+        DM_LOG_FATAL("Recreating framebuffers failed");
+        return false;
+    }
+
+    return true;
+}
+
 bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 {
     DM_VULKAN_GET_RENDERER;
     VkResult vr;
 
-    dm_vulkan_wait_for_previous_frame(vulkan_renderer);
+    VkDevice device = vulkan_renderer->device.logical;
 
     const uint8_t current_frame = vulkan_renderer->current_frame;
+
+    vkWaitForFences(device, 1, &vulkan_renderer->fences[current_frame].fence, VK_TRUE, UINT64_MAX);
+
+    vr = vkAcquireNextImageKHR(device, vulkan_renderer->swapchain.swapchain, UINT64_MAX, vulkan_renderer->image_available_semaphore[current_frame], VK_NULL_HANDLE, &vulkan_renderer->image_index);
+    if(vr == VK_ERROR_OUT_OF_DATE_KHR)
+    {
+        return dm_renderer_backend_resize(renderer->width, renderer->height, renderer);
+    }
+    
+    else if(vr != VK_SUCCESS && vr != VK_SUBOPTIMAL_KHR)
+    {
+        dm_vulkan_decode_vr(vr);
+        DM_LOG_FATAL("vkAcquireNextImageKHR failed");
+        return false;
+    }
+
+    vkResetFences(device, 1, &vulkan_renderer->fences[current_frame].fence);
 
     VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_family.buffer[current_frame];
 
@@ -854,7 +968,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
     vr = vkBeginCommandBuffer(cmd_buffer, &begin_info);
-    if(vr != VK_SUCCESS)
+    if(!dm_vulkan_decode_vr(vr))
     {
         DM_LOG_FATAL("vkBeginCommandBuffer failed");
         return false;
@@ -865,7 +979,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     VkRenderPassBeginInfo renderpass_begin_info = { 0 };
     renderpass_begin_info.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderpass_begin_info.renderPass        = vulkan_renderer->renderpasses[DM_VULKAN_DEFAULT_RENDERPASS].renderpass;
-    renderpass_begin_info.framebuffer       = vulkan_renderer->swapchain.frame_buffers[current_frame];
+    renderpass_begin_info.framebuffer       = vulkan_renderer->swapchain.frame_buffers[vulkan_renderer->image_index];
     renderpass_begin_info.renderArea.extent = vulkan_renderer->swapchain.extents;
     renderpass_begin_info.clearValueCount   = 1;
     renderpass_begin_info.pClearValues      = &clear_color;
@@ -887,16 +1001,14 @@ bool dm_renderer_backend_end_frame(dm_context* context)
     vkCmdEndRenderPass(cmd_buffer);
 
     vr = vkEndCommandBuffer(cmd_buffer);
-    if(vr != VK_SUCCESS)
+    if(!dm_vulkan_decode_vr(vr))
     {
         DM_LOG_FATAL("vkEndCommandBuffer failed");
         return false;
     }
 
-    vkAcquireNextImageKHR(vulkan_renderer->device.logical, vulkan_renderer->swapchain.swapchain, UINT64_MAX, vulkan_renderer->wait_semaphore[vulkan_renderer->current_frame], VK_NULL_HANDLE, &vulkan_renderer->current_frame);
-
-    VkSemaphore wait_semaphores[] = { vulkan_renderer->wait_semaphore[vulkan_renderer->current_frame] };
-    VkSemaphore signal_semaphores[] = { vulkan_renderer->signal_semaphore[vulkan_renderer->current_frame] };
+    VkSemaphore wait_semaphores[] = { vulkan_renderer->image_available_semaphore[vulkan_renderer->current_frame] };
+    VkSemaphore signal_semaphores[] = { vulkan_renderer->render_finished_semaphore[vulkan_renderer->current_frame] };
     VkPipelineStageFlags wait_stages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
     
     VkSubmitInfo submit_info = { 0 };
@@ -909,8 +1021,8 @@ bool dm_renderer_backend_end_frame(dm_context* context)
     submit_info.signalSemaphoreCount = 1;
     submit_info.pSignalSemaphores    = signal_semaphores;
 
-    vr = vkQueueSubmit(vulkan_renderer->device.graphics_family.queue, 1, &submit_info, vulkan_renderer->fences[vulkan_renderer->current_frame].fence);
-    if(vr != VK_SUCCESS)
+    vr = vkQueueSubmit(vulkan_renderer->device.graphics_family.queue, 1, &submit_info, vulkan_renderer->fences[current_frame].fence);
+    if(!dm_vulkan_decode_vr(vr))
     {
         DM_LOG_FATAL("vkQueueSubmit failed");
         return false;
@@ -925,19 +1037,23 @@ bool dm_renderer_backend_end_frame(dm_context* context)
     present_info.pWaitSemaphores    = signal_semaphores; 
     present_info.swapchainCount     = 1;
     present_info.pSwapchains        = swapchains;
-    present_info.pImageIndices      = &vulkan_renderer->current_frame;
+    present_info.pImageIndices      = &vulkan_renderer->image_index;
 
-    vkQueuePresentKHR(vulkan_renderer->device.present_family.queue, &present_info);
+    vr = vkQueuePresentKHR(vulkan_renderer->device.present_family.queue, &present_info);
+    if(vr==VK_ERROR_OUT_OF_DATE_KHR || vr==VK_SUBOPTIMAL_KHR)
+    {
+        if(!dm_renderer_backend_resize(context->renderer.width, context->renderer.height, &context->renderer)) return false;
+    }
+    else if(!dm_vulkan_decode_vr(vr))
+    {
+        return false;
+    }
 
     vulkan_renderer->current_frame = (vulkan_renderer->current_frame + 1) % DM_VULKAN_MAX_FRAMES_IN_FLIGHT;
 
     return true;
 }
 
-bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
-{
-    return true;
-}
 
 /***************
  * VULKAN DEBUG
@@ -983,6 +1099,89 @@ VKAPI_ATTR VkBool32 VKAPI_CALL dm_vulkan_debug_callback(VkDebugUtilsMessageSever
     }
     
     return VK_FALSE;
+}
+
+
+bool dm_vulkan_decode_vr(VkResult vr)
+{
+    if(vr==VK_SUCCESS) return true;
+    
+    switch(vr)
+    {
+        case VK_NOT_READY:
+        DM_LOG_ERROR("VK_NOT_READY: fence or query has not yet completed");
+        break;
+
+        case VK_TIMEOUT:
+        DM_LOG_ERROR("VK_TIMEOUT: a wait operation has not completed in the specified time");
+        break;
+
+        case VK_EVENT_SET:
+        DM_LOG_ERROR("VK_EVENT_SET: an event is signaled");
+        break;
+
+        case VK_EVENT_RESET:
+        DM_LOG_ERROR("VK_EVENT_RESET: an event is unsignaled");
+        break;
+        
+        case VK_INCOMPLETE:
+        DM_LOG_ERROR("VK_INCOMPLETE: a return array was too small for the result");
+        break;
+
+        case VK_ERROR_OUT_OF_HOST_MEMORY:
+        DM_LOG_ERROR("VK_ERROR_OUT_OF_HOST_MEMORY: a host memory allocation has failed");
+        break;
+
+        case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+        DM_LOG_ERROR("VK_ERROR_OUT_OF_DEVICE_MEMORY: a device memory allocation has failed");
+        break;
+
+        case VK_ERROR_INITIALIZATION_FAILED:
+        DM_LOG_ERROR("VK_ERROR_INITIALIZATION_FAILED: initialization of an object could not be completed for implementation-specific reasons");
+        break;
+
+        case VK_ERROR_DEVICE_LOST:
+        DM_LOG_ERROR("VK_ERROR_DEVICE_LOST: the logical or physical device has been lost");
+        break;
+
+        case VK_ERROR_MEMORY_MAP_FAILED:
+        DM_LOG_ERROR("VK_ERROR_MEMORY_MAP_FAILED: mapping of a memory object has failed");
+        break;
+
+        case VK_ERROR_LAYER_NOT_PRESENT:
+        DM_LOG_ERROR("VK_ERROR_LAYER_NOT_PRESENT: a requested layer is not present or could not be loade");
+        break;
+
+        case VK_ERROR_EXTENSION_NOT_PRESENT:
+        DM_LOG_ERROR("VK_ERROR_EXTENSION_NOT_PRESENT: a requested extension is not supported");
+        break;
+
+        case VK_ERROR_FEATURE_NOT_PRESENT:
+        DM_LOG_ERROR("VK_ERROR_FEATURE_NOT_PRESENT: a requested features is not supported");
+        break;
+
+        case VK_ERROR_INCOMPATIBLE_DRIVER:
+        DM_LOG_ERROR("VK_ERROR_INCOMPATIBLE_DRIVER: the requested version of Vulkan is not supported by the driver or is otherwise incompatible for implementation-specific reasons");    
+        break;
+
+        case VK_ERROR_TOO_MANY_OBJECTS:
+        DM_LOG_ERROR("VK_ERROR_TOO_MANY_OBJECTS: too many objects of the type have already been created");
+        break;
+
+        case VK_ERROR_FORMAT_NOT_SUPPORTED:
+        DM_LOG_ERROR("VK_ERROR_FORMAT_NOT_SUPPORTED: a requested format is not supported on this device");
+        break;
+
+        case VK_ERROR_FRAGMENTED_POOL:
+        DM_LOG_ERROR("VK_ERROR_FRAGMENTED_POOL: A pool allocation has failed due to fragmentation of the pool’s memory. This must only be returned if no attempt to allocate host or device memory was made to accommodate the new allocation. This should be returned in preference to VK_ERROR_OUT_OF_POOL_MEMORY, but only if the implementation is certain that the pool allocation failure was due to fragmentation.");
+        break;
+
+        default:
+        DM_LOG_FATAL("Unknown error");
+        break;
+    }
+
+    return false;
 }
 
 #endif
