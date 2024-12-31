@@ -127,7 +127,7 @@ bool dm_vulkan_wait_for_previous_frame(dm_vulkan_renderer* vulkan_renderer)
 }
 
 #ifndef DM_DEBUG
-#DM_INLINE
+DM_INLINE
 #endif
 dm_vulkan_swapchain_details dm_vulkan_query_swapchain_support(VkPhysicalDevice device, VkSurfaceKHR surface)
 {
@@ -516,7 +516,7 @@ bool dm_renderer_backend_init(dm_context* context)
         }
 
         const char* required_layers[] = {
-            "VK_LAYER_KHRONOS_validation"
+            "VK_LAYER_KHRONOS_validation",
         };
 
         for(uint32_t i=0; i<_countof(required_layers); i++)
@@ -950,7 +950,6 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     {
         return dm_renderer_backend_resize(renderer->width, renderer->height, renderer);
     }
-    
     else if(vr != VK_SUCCESS && vr != VK_SUBOPTIMAL_KHR)
     {
         dm_vulkan_decode_vr(vr);
@@ -962,11 +961,10 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 
     VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_family.buffer[current_frame];
 
-    vkResetCommandBuffer(cmd_buffer, 0);
-
     VkCommandBufferBeginInfo begin_info = { 0 };
     begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
+    vkResetCommandBuffer(cmd_buffer, 0);
     vr = vkBeginCommandBuffer(cmd_buffer, &begin_info);
     if(!dm_vulkan_decode_vr(vr))
     {
@@ -1039,7 +1037,11 @@ bool dm_renderer_backend_end_frame(dm_context* context)
     present_info.pSwapchains        = swapchains;
     present_info.pImageIndices      = &vulkan_renderer->image_index;
 
-    vr = vkQueuePresentKHR(vulkan_renderer->device.present_family.queue, &present_info);
+    // this causes a memory leak with my NVIDIA 4070 Super on Windows 11
+    // issues is caused by validation layers, so only affected in debug
+    {
+        vr = vkQueuePresentKHR(vulkan_renderer->device.present_family.queue, &present_info);
+    }
     if(vr==VK_ERROR_OUT_OF_DATE_KHR || vr==VK_SUBOPTIMAL_KHR)
     {
         if(!dm_renderer_backend_resize(context->renderer.width, context->renderer.height, &context->renderer)) return false;
@@ -1048,6 +1050,16 @@ bool dm_renderer_backend_end_frame(dm_context* context)
     {
         return false;
     }
+#ifdef DM_DEBUG
+    // this fixes memory leak from present, not sure why, but is taken from this github post from 2018(!!!!!!!!!)
+    // https://github.com/KhronosGroup/Vulkan-LoaderAndValidationLayers/issues/2468
+    vr = vkQueueWaitIdle(vulkan_renderer->device.present_family.queue);
+    if(!dm_vulkan_decode_vr(vr))
+    {
+        DM_LOG_FATAL("vkQueueWaitIdle failed");
+        return false;
+    }
+#endif
 
     vulkan_renderer->current_frame = (vulkan_renderer->current_frame + 1) % DM_VULKAN_MAX_FRAMES_IN_FLIGHT;
 
