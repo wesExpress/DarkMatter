@@ -55,4 +55,6 @@ MISC
 #define DM_DEBUG
 #endif
 
+#define DM_MAX_FRAMES_IN_FLIGHT 3
+
 #endif

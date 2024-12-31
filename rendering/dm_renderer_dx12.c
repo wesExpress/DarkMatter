@@ -14,7 +14,7 @@
 #include <d3dcompiler.h>
 #undef COBJMACROS
 
-#define DM_DX12_MAX_FRAMES 3
+#define DM_DX12_MAX_FRAMES DM_MAX_FRAMES_IN_FLIGHT 
 
 typedef struct dm_dx12_cpu_heap_handle_t
 {
@@ -74,7 +74,6 @@ DM_INLINE
 bool dm_dx12_wait_for_previous_frame(dm_dx12_renderer* dx12_renderer)
 {
     HRESULT hr;
-
 
     dm_dx12_fence* fence = &dx12_renderer->fences[dx12_renderer->current_frame];
 
@@ -248,7 +247,6 @@ bool dm_renderer_backend_init(dm_context* context)
         dx12_renderer->command_list = temp;
         temp = NULL;
 
-        ID3D12GraphicsCommandList7_Close(dx12_renderer->command_list);
     }
 
     // rtv heap
@@ -321,6 +319,11 @@ bool dm_renderer_backend_init(dm_context* context)
 
 bool dm_renderer_backend_finish_init(dm_context* context)
 {
+    dm_dx12_renderer* dx12_renderer = context->renderer.internal_renderer;
+    HRESULT hr;
+
+    ID3D12GraphicsCommandList7_Close(dx12_renderer->command_list);
+
     return true;
 }
 
