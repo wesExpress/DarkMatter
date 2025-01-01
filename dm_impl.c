@@ -1047,8 +1047,8 @@ typedef enum dm_exit_code_t
 
 #define DM_DEFAULT_SCREEN_X      100
 #define DM_DEFAULT_SCREEN_Y      100
-#define DM_DEFAULT_SCREEN_WIDTH  1280
-#define DM_DEFAULT_SCREEN_HEIGHT 720
+#define DM_DEFAULT_SCREEN_WIDTH  1920
+#define DM_DEFAULT_SCREEN_HEIGHT 1080
 #define DM_DEFAULT_TITLE         "DarkMatter Application"
 #define DM_DEFAULT_ASSETS_FOLDER "assets"
 int main(int argc, char** argv)

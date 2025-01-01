@@ -70,14 +70,17 @@ typedef struct dm_dx12_renderer_t
 
 #define DM_DX12_GET_RENDERER dm_dx12_renderer* dx12_renderer = renderer->internal_renderer
 
+#ifndef DM_DEBUG
 DM_INLINE
+#endif
 bool dm_dx12_wait_for_previous_frame(dm_dx12_renderer* dx12_renderer)
 {
     HRESULT hr;
 
     dm_dx12_fence* fence = &dx12_renderer->fences[dx12_renderer->current_frame];
 
-    if(ID3D12Fence_GetCompletedValue(fence->fence) < fence->value)
+    const uint64_t v = ID3D12Fence_GetCompletedValue(fence->fence);
+    if(v < fence->value)
     {
         hr = ID3D12Fence_SetEventOnCompletion(fence->fence, fence->value, dx12_renderer->fence_event);
         if(!dm_platform_win32_decode_hresult(hr))
@@ -286,7 +289,11 @@ bool dm_renderer_backend_init(dm_context* context)
             dx12_renderer->render_targets[i] = temp;
             temp = NULL;
 
-            ID3D12Device5_CreateRenderTargetView(dx12_renderer->device, dx12_renderer->render_targets[i], NULL, dx12_renderer->rtv_heap.cpu_handle.current);
+            D3D12_RENDER_TARGET_VIEW_DESC view_desc = { 0 };
+            view_desc.Format        = DXGI_FORMAT_R8G8B8A8_UNORM;
+            view_desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+
+            ID3D12Device5_CreateRenderTargetView(dx12_renderer->device, dx12_renderer->render_targets[i], &view_desc, dx12_renderer->rtv_heap.cpu_handle.current);
 
             dx12_renderer->rtv_heap.cpu_handle.current.ptr += dx12_renderer->rtv_heap.size;
         }
@@ -335,6 +342,7 @@ void dm_renderer_backend_shutdown(dm_context* context)
     for(uint8_t i=0; i<DM_DX12_MAX_FRAMES; i++)
     {
         dx12_renderer->current_frame = i;
+        ID3D12CommandQueue_Signal(dx12_renderer->command_queue, dx12_renderer->fences[i].fence, dx12_renderer->fences[i].value);
         if(!dm_dx12_wait_for_previous_frame(dx12_renderer))
         {
             DM_LOG_ERROR("Waiting for previous frame failed");
@@ -382,12 +390,6 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
-
-    if(!dm_dx12_wait_for_previous_frame(dx12_renderer))
-    {
-        DM_LOG_FATAL("Waiting for previous frame failed");
-        return false;
-    }
 
     const uint8_t frame_index = dx12_renderer->current_frame;
 
@@ -466,8 +468,14 @@ bool dm_renderer_backend_end_frame(dm_context* context)
         return false;
     }
 
-    dx12_renderer->current_frame = IDXGISwapChain4_GetCurrentBackBufferIndex(dx12_renderer->swap_chain);
+    if(!dm_dx12_wait_for_previous_frame(dx12_renderer))
+    {
+        DM_LOG_FATAL("Waiting for previous frame failed");
+        return false;
+    }
 
+    dx12_renderer->current_frame = IDXGISwapChain4_GetCurrentBackBufferIndex(dx12_renderer->swap_chain);
+    
     return true;
 }
 
@@ -475,6 +483,50 @@ bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* re
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
+
+    for(uint8_t i=0; i<DM_DX12_MAX_FRAMES; i++)
+    {
+        dx12_renderer->current_frame = i;
+        dm_dx12_fence* fence = &dx12_renderer->fences[i];
+        ID3D12CommandQueue_Signal(dx12_renderer->command_queue, fence->fence, fence->value);
+        dm_dx12_wait_for_previous_frame(dx12_renderer);
+    }
+
+    for(uint8_t i=0; i<DM_DX12_MAX_FRAMES; i++)
+    {
+        ID3D12Resource_Release(dx12_renderer->render_targets[i]);
+    }
+
+    hr = IDXGISwapChain4_ResizeBuffers(dx12_renderer->swap_chain, DM_DX12_MAX_FRAMES, width, height, DXGI_FORMAT_UNKNOWN, 0);
+    if(!dm_platform_win32_decode_hresult(hr))
+    {
+        DM_LOG_FATAL("IDXGISwapChain4_ResizeBuffers failed");
+        return false;
+    }
+
+    void* temp = NULL;
+    D3D12_CPU_DESCRIPTOR_HANDLE handle = dx12_renderer->rtv_heap.cpu_handle.begin;
+
+    for(uint8_t i=0; i<DM_DX12_MAX_FRAMES; i++)
+    {
+        hr = IDXGISwapChain4_GetBuffer(dx12_renderer->swap_chain, i, &IID_ID3D12Resource, &temp);
+        if(!dm_platform_win32_decode_hresult(hr) || !temp)
+        {
+            DM_LOG_FATAL("IDXGISwapChain4_GetBuffer failed");
+            return false;
+        }
+        dx12_renderer->render_targets[i] = temp;
+        temp = NULL;
+
+        D3D12_RENDER_TARGET_VIEW_DESC desc = { 0 };
+        desc.Format        = DXGI_FORMAT_R8G8B8A8_UNORM;
+        desc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+
+        ID3D12Device_CreateRenderTargetView(dx12_renderer->device, dx12_renderer->render_targets[i], &desc, handle);
+        handle.ptr += dx12_renderer->rtv_heap.size;
+    }
+
+    dx12_renderer->current_frame = IDXGISwapChain4_GetCurrentBackBufferIndex(dx12_renderer->swap_chain);
 
     return true;
 }
