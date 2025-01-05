@@ -604,9 +604,92 @@ void dm_renderer_shutdown(dm_context* context)
     dm_renderer_backend_shutdown(context);
 }
 
+// render resources
+extern bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
+
+bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_context* context)
+{
+    handle->type = DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE;
+
+    if(dm_renderer_backend_create_raster_pipeline(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Could not create raster pipeline");
+    return false;
+}
+
+bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context)
+{
+    handle->type = DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER;
+
+    if(dm_renderer_backend_create_vertex_buffer(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating vertex buffer failed");
+    return false;
+}
+
 /***************
 RENDER COMMANDS
 *****************/
+extern bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer);
+
+void _dm_render_command_submit(dm_render_command command, dm_render_command_manager* manager)
+{
+    if(!manager->commands)
+    {
+        manager->capacity = 16;
+        manager->commands = dm_alloc(sizeof(dm_render_command) * manager->capacity);
+    }
+
+    manager->commands[manager->count++] = command;
+
+    if((float)manager->count / (float)manager->capacity > 0.75f)
+    {
+        manager->capacity *= 2;
+        manager->commands = dm_realloc(manager->commands, sizeof(dm_render_command) * manager->capacity);
+    }
+}
+
+#define DM_RENDER_COMMAND_SUBMIT _dm_render_command_submit(command, &context->renderer.command_manager)
+
+void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context)
+{
+    dm_render_command command = { 0 };
+    
+    command.type = DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE;
+
+    command.params[0].render_handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* context)
+{
+    dm_render_command command = { 0 };
+
+    command.type = DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER;
+
+    command.params[0].render_handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context)
+{
+    dm_render_command command = { 0 };
+
+    command.type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED;
+
+    command.params[0].uint32_val = instance_count;
+    command.params[1].uint32_val = instance_offset;
+    command.params[2].uint32_val = vertex_count;
+    command.params[3].uint32_val = vertex_offset;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
 bool dm_renderer_submit_commands(dm_context* context)
 {
     dm_timer t = { 0 };
@@ -620,6 +703,21 @@ bool dm_renderer_submit_commands(dm_context* context)
         
         switch(command.type)
         {
+            case DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE:
+            if(dm_render_command_backend_bind_raster_pipeline(command.params[0].render_handle_val, renderer)) continue;
+            DM_LOG_FATAL("Bind raster pipeline failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER:
+            if(dm_render_command_backend_bind_vertex_buffer(command.params[0].render_handle_val, renderer)) continue;
+            DM_LOG_FATAL("Bind vertex buffer failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED:
+            if(dm_render_command_backend_draw_instanced(command.params[0].uint32_val, command.params[1].uint32_val, command.params[2].uint32_val, command.params[3].uint32_val, renderer)) continue;
+            DM_LOG_FATAL("Draw instanced failed");
+            return false;
+
             default:
             DM_LOG_ERROR("Unknown render command! Shouldn't be here...");
             // TODO: do we kill here? Probably not, just ignore...
@@ -711,12 +809,16 @@ dm_context* dm_init(dm_context_init_packet init_packet)
     // misc
     context->delta = 1.0f / 60.f;
     context->flags |= DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+
+    if(init_packet.app_data_size) context->app_data = dm_alloc(init_packet.app_data_size);
     
     return context;
 }
 
 void dm_shutdown(dm_context* context)
 {
+    if(context->app_data) dm_free((void**)&context->app_data);
+
     dm_free((void**)&context->renderer.command_manager.commands);
     
     dm_renderer_shutdown(context);
@@ -781,7 +883,7 @@ bool dm_poll_events(dm_context* context)
             
             context->renderer.width = e.new_rect[0];
             context->renderer.height = e.new_rect[1];
-            
+
             if(!dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer))
             {
                 DM_LOG_FATAL("Resize failed");
@@ -884,6 +986,8 @@ void* dm_read_bytes(const char* path, const char* mode, size_t* size)
         buffer = dm_alloc(*size);
         
         size_t t = fread(buffer, *size, 1, fp);
+        char d[512];
+        dm_memcpy(d, buffer, 512);
         if(t!=1) 
         {
             DM_LOG_ERROR("Something bad happened with fread");
@@ -1033,6 +1137,12 @@ extern bool dm_application_init(dm_context* context);
 extern bool dm_application_update(dm_context* context);
 extern bool dm_application_render(dm_context* context);
 extern void dm_application_shutdown(dm_context* context);
+
+void dm_kill(dm_context* context)
+{
+    DM_LOG_FATAL("DarkMatter kill received");
+    context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+}
 
 #ifdef DM_MATH_TESTS
 void dm_math_tests();

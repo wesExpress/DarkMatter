@@ -29,8 +29,18 @@ typedef struct dm_vulkan_renderpass_t
 
 typedef struct dm_vulkan_raster_pipeline_t
 {
+    VkPipeline       pipeline;
     VkPipelineLayout layout;
+
+    VkViewport viewport;
+    VkRect2D   scissor;
 } dm_vulkan_raster_pipeline;
+
+typedef struct dm_vulkan_vertex_buffer_t
+{
+    VkBuffer       buffer[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    VkDeviceMemory memory[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+} dm_vulkan_vertex_buffer;
 
 typedef struct dm_vulkan_family_t
 {
@@ -76,6 +86,7 @@ typedef struct dm_vulkan_swapchain_t
 
 #define DM_VULKAN_MAX_RENDERPASSES   10
 #define DM_VULKAN_MAX_RASTER_PIPES   10
+#define DM_VULKAN_MAX_VERTEX_BUFFERS 100
 #define DM_VULKAN_DEFAULT_RENDERPASS 0
 typedef struct dm_vulkan_renderer_t
 {
@@ -97,6 +108,9 @@ typedef struct dm_vulkan_renderer_t
 
     dm_vulkan_raster_pipeline raster_pipes[DM_VULKAN_MAX_RASTER_PIPES];
     uint32_t                  raster_pipe_count;
+
+    dm_vulkan_vertex_buffer vertex_buffers[DM_VULKAN_MAX_VERTEX_BUFFERS];
+    uint32_t                vb_count;
 
     uint32_t current_frame, image_index;
 
@@ -580,6 +594,7 @@ bool dm_renderer_backend_init(dm_context* context)
         debug_create_info.messageSeverity = message_severity;
         debug_create_info.messageType     = message_type;
         debug_create_info.pfnUserCallback = dm_vulkan_debug_callback;
+        debug_create_info.pUserData       = context;
 
         PFN_vkCreateDebugUtilsMessengerEXT func = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vulkan_renderer->instance, "vkCreateDebugUtilsMessengerEXT");
         if(!func)
@@ -860,9 +875,19 @@ void dm_renderer_backend_shutdown(dm_context* context)
 
     vkDeviceWaitIdle(device);
 
+    for(uint32_t i=0; i<vulkan_renderer->vb_count; i++)
+    {
+        for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
+        {
+            vkDestroyBuffer(device, vulkan_renderer->vertex_buffers[i].buffer[j], allocator);
+            vkFreeMemory(device, vulkan_renderer->vertex_buffers[i].memory[j], allocator);
+        }
+    }
+
     for(uint8_t i=0; i<vulkan_renderer->raster_pipe_count; i++)
     {
         vkDestroyPipelineLayout(device, vulkan_renderer->raster_pipes[i].layout, allocator);
+        vkDestroyPipeline(device, vulkan_renderer->raster_pipes[i].pipeline, allocator);
     }
 
     for(uint8_t i=0; i<vulkan_renderer->rp_count; i++)
@@ -1066,6 +1091,464 @@ bool dm_renderer_backend_end_frame(dm_context* context)
     return true;
 }
 
+/*******************
+ * RENDER RESOURCES
+ * ******************/
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_vulkan_create_shader_module(const char* path, VkShaderModule* module, VkDevice device)
+{
+    VkResult vr;
+
+    DM_LOG_INFO("Loading shader: %s", path);
+    
+    size_t size;
+    void* shader_data = dm_read_bytes(path, "rb", &size);
+    if(!shader_data) return false;
+
+    VkShaderModuleCreateInfo create_info = { 0 };
+    create_info.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+    create_info.pCode    = shader_data;
+    create_info.codeSize = size;
+
+    vr = vkCreateShaderModule(device, &create_info, NULL, module);
+    dm_free((void**)&shader_data);
+
+    if(!dm_vulkan_decode_vr(vr))
+    {
+        DM_LOG_FATAL("vkCreateShaderModule failed");
+        return false;
+    }
+
+    return true;
+}
+
+bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    dm_vulkan_raster_pipeline pipeline = { 0 };
+
+    VkPipelineInputAssemblyStateCreateInfo input_assembly_create_info = { 0 };
+    VkPipelineVertexInputStateCreateInfo vertex_input_create_info = { 0 };
+    VkVertexInputBindingDescription bind_descriptions[2] = { 0 };
+    VkVertexInputAttributeDescription vertex_attr_create_info[DM_RENDER_MAX_INPUT_ELEMENTS] = { 0 };
+    VkShaderModule vs, ps;
+    VkPipelineShaderStageCreateInfo vs_create_info = { 0 };
+    VkPipelineShaderStageCreateInfo ps_create_info = { 0 };
+    VkPipelineColorBlendStateCreateInfo blend_create_info = { 0 };
+    VkPipelineColorBlendAttachmentState blend_state = { 0 };
+    VkPipelineMultisampleStateCreateInfo multi_create_info = { 0 };
+    VkPipelineRasterizationStateCreateInfo raster_create_info = { 0 };
+    VkPipelineViewportStateCreateInfo viewport_state_info = { 0 };
+    VkPipelineDynamicStateCreateInfo  dynamic_state_info  = { 0 };
+
+    // === input assembler ===
+    {
+        input_assembly_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        switch(desc.input_assembler.topology)
+        {
+            case DM_INPUT_TOPOLOGY_TRIANGLE_LIST:
+            input_assembly_create_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            break;
+
+            default:
+            DM_LOG_ERROR("Unknown topology. Assuming VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST");
+            input_assembly_create_info.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+            break;
+        }
+    }
+
+    // === vertex input ===
+    {
+        vertex_input_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+
+        bind_descriptions[0].binding   = 0;
+        bind_descriptions[0].inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+        bind_descriptions[1].binding   = 1;
+        bind_descriptions[1].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+        
+        for(uint8_t i=0; i<desc.input_assembler.input_element_count; i++)
+        {
+            dm_input_element_desc d = desc.input_assembler.input_elements[i];
+            VkVertexInputAttributeDescription* input = &vertex_attr_create_info[i];
+            input->offset   = d.offset;
+            input->location = i;
+
+            switch(d.format)
+            {
+                case DM_INPUT_ELEMENT_FORMAT_FLOAT_2:
+                input->format = VK_FORMAT_R32G32_SFLOAT;
+                break;
+                        
+                case DM_INPUT_ELEMENT_FORMAT_FLOAT_3:
+                input->format = VK_FORMAT_R32G32B32_SFLOAT;
+                break;
+
+                default:
+                DM_LOG_ERROR("Unknown input format. Assuming VK_FORMAT_R32G32B32_SFLOAT");
+                input->format = VK_FORMAT_R32G32B32_SFLOAT;
+                break;
+            }
+
+            switch(d.class)
+            {
+                case DM_INPUT_ELEMENT_CLASS_PER_VERTEX:
+                input->binding = 0;
+                bind_descriptions[0].stride = d.stride;
+                break;
+
+                case DM_INPUT_ELEMENT_CLASS_PER_INSTANCE:
+                input->binding = 1;
+                bind_descriptions[1].stride = d.stride;
+                break;
+
+                default:
+                DM_LOG_ERROR("Unknown input element class. Assuming per vertex");
+                input->binding = 0;
+                bind_descriptions[0].stride = d.stride;
+                break;
+            }
+        }
+
+        vertex_input_create_info.vertexBindingDescriptionCount = 1;
+        vertex_input_create_info.pVertexBindingDescriptions    = bind_descriptions;
+
+        vertex_input_create_info.vertexAttributeDescriptionCount = desc.input_assembler.input_element_count;
+        vertex_input_create_info.pVertexAttributeDescriptions    = vertex_attr_create_info;
+    }
+
+    // === shaders ===
+    {
+        if(!dm_vulkan_create_shader_module(desc.rasterizer.vertex_shader_desc.path, &vs, vulkan_renderer->device.logical)) return false;
+        if(!dm_vulkan_create_shader_module(desc.rasterizer.pixel_shader_desc.path, &ps, vulkan_renderer->device.logical)) return false;
+
+        vs_create_info.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        vs_create_info.stage  = VK_SHADER_STAGE_VERTEX_BIT;
+        vs_create_info.module = vs;
+        vs_create_info.pName  = "main";
+
+        ps_create_info.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        ps_create_info.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
+        ps_create_info.module = ps;
+        ps_create_info.pName  = "main";
+    }
+    VkPipelineShaderStageCreateInfo shader_stages[] = { vs_create_info, ps_create_info };
+
+    // === layout ===
+    {
+        // TODO: needs to be configurable
+        VkPipelineLayoutCreateInfo create_info = { 0 };
+        create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+
+        vr = vkCreatePipelineLayout(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &pipeline.layout);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkCreatePipelineLayout failed");
+            return false;
+        }
+    }
+
+    // === blend === 
+    {   
+        blend_state.blendEnable = VK_FALSE;
+
+        blend_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+
+        blend_create_info.sType   = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+        blend_create_info.logicOp = VK_LOGIC_OP_COPY;
+
+        blend_create_info.attachmentCount = 1;
+        blend_create_info.pAttachments    = &blend_state;
+    }
+
+    // === multisampling ===
+    {
+        multi_create_info.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+        multi_create_info.sampleShadingEnable  = VK_FALSE;
+        multi_create_info.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    }
+
+    // === rasterizer ===
+    {
+        raster_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+        raster_create_info.lineWidth = 1.f;
+        
+        switch(desc.rasterizer.polygon_fill)
+        {
+            case DM_RASTERIZER_POLYGON_FILL_FILL:
+            raster_create_info.polygonMode = VK_POLYGON_MODE_FILL;
+            break;
+
+            case DM_RASTERIZER_POLYGON_FILL_WIREFRAME:
+            raster_create_info.polygonMode = VK_POLYGON_MODE_LINE;
+            break;
+
+            default:
+            DM_LOG_ERROR("Unknown polygon fill mode. Assuming VK_POLYGON_MODE_FILL");
+            raster_create_info.polygonMode = VK_POLYGON_MODE_FILL;
+            break;
+        }
+
+        switch(desc.rasterizer.cull_mode)
+        {
+            case DM_RASTERIZER_CULL_MODE_BACK:
+            raster_create_info.cullMode = VK_CULL_MODE_BACK_BIT;
+            break;
+
+            case DM_RASTERIZER_CULL_MODE_FRONT:
+            raster_create_info.cullMode = VK_CULL_MODE_FRONT_BIT;
+            break;
+
+            default:
+            DM_LOG_ERROR("Unknown cull mode. Assuming VK_CULL_MODE_BIT");
+            raster_create_info.cullMode = VK_CULL_MODE_BACK_BIT;
+            break;
+        }
+
+        switch(desc.rasterizer.front_face)
+        {
+            case DM_RASTERIZER_FRONT_FACE_CLOCKWISE:
+            raster_create_info.frontFace = VK_FRONT_FACE_CLOCKWISE;
+            break;
+
+            case DM_RASTERIZER_FRONT_FACE_COUNTER_CLOCKWISE:
+            raster_create_info.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+            break;
+
+            default:
+            DM_LOG_ERROR("Unknown front face. Assuming VK_FRONT_FACE_CLOCKWISE");
+            break;
+        }
+    }
+
+    // === viewport and scissor ===
+    {
+        viewport_state_info.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+        viewport_state_info.viewportCount = 1;
+        viewport_state_info.scissorCount  = 1;
+        
+        switch(desc.viewport.type)
+        {
+            case DM_VIEWPORT_TYPE_DEFAULT:
+            default:
+            pipeline.viewport.x        = 0;
+            pipeline.viewport.y        = (float)renderer->height;
+            pipeline.viewport.width    = (float)renderer->width;
+            pipeline.viewport.height   = -(float)renderer->height;
+            pipeline.viewport.minDepth = 0.f;
+            pipeline.viewport.maxDepth = 1.f;
+            break;
+
+            case DM_VIEWPORT_TYPE_CUSTOM:
+            DM_LOG_FATAL("Not supported yet");
+            return false;
+        }
+
+        switch(desc.scissor.type)
+        {
+            case DM_SCISSOR_TYPE_DEFAULT:
+            default:
+            pipeline.scissor.offset.x      = 0;
+            pipeline.scissor.offset.y      = 0;
+            pipeline.scissor.extent.width  = renderer->width;
+            pipeline.scissor.extent.height = renderer->height;
+            break;
+
+            case DM_SCISSOR_TYPE_CUSTOM:
+            DM_LOG_FATAL("Not supported yet");
+            return false;
+        }
+
+        viewport_state_info.pViewports = &pipeline.viewport;
+        viewport_state_info.pScissors  = &pipeline.scissor;
+    }
+
+    // === dynamic states ===
+    VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
+    {
+        dynamic_state_info.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+        dynamic_state_info.dynamicStateCount = 2;
+        dynamic_state_info.pDynamicStates    = dynamic_states;
+    }
+
+    // === pipeline object ===
+    {
+        VkGraphicsPipelineCreateInfo create_info = { 0 };
+        create_info.sType      = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+        create_info.stageCount = 2;
+        create_info.pStages    = shader_stages;
+        create_info.renderPass = vulkan_renderer->renderpasses[DM_VULKAN_DEFAULT_RENDERPASS].
+        renderpass;
+
+        create_info.pVertexInputState   = &vertex_input_create_info;
+        create_info.pInputAssemblyState = &input_assembly_create_info;
+        create_info.layout              = pipeline.layout;
+        create_info.pColorBlendState    = &blend_create_info;
+        create_info.pMultisampleState   = &multi_create_info;
+        create_info.pRasterizationState = &raster_create_info;
+        create_info.pViewportState      = &viewport_state_info;
+        create_info.pDynamicState       = &dynamic_state_info;
+
+        vr = vkCreateGraphicsPipelines(vulkan_renderer->device.logical, VK_NULL_HANDLE, 1, &create_info, vulkan_renderer->allocator, &pipeline.pipeline);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkCreateGraphicsPipeline failed");
+            return false;
+        }
+    }
+
+    // === cleanup ===
+    vkDestroyShaderModule(vulkan_renderer->device.logical, vs, vulkan_renderer->allocator);
+    vkDestroyShaderModule(vulkan_renderer->device.logical, ps, vulkan_renderer->allocator);
+
+    //
+    {
+        dm_memcpy(vulkan_renderer->raster_pipes + vulkan_renderer->raster_pipe_count, &pipeline, sizeof(pipeline));
+        handle->index = vulkan_renderer->raster_pipe_count++;
+    }
+
+    return true;
+}
+
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_vulkan_find_memory_type(uint32_t type_filter, VkPhysicalDeviceMemoryProperties properties, VkMemoryPropertyFlags flags, uint32_t* index)
+{
+    for(uint8_t i=0; i<properties.memoryTypeCount; i++)
+    {
+        if((type_filter & (1 << i)) && (properties.memoryTypes[i].propertyFlags & flags)==flags)
+        {
+            *index = i;
+            return true;
+        }
+    }
+    
+    DM_LOG_FATAL("Could not find suitable memory");
+    return false;
+}
+
+bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    dm_vulkan_vertex_buffer buffer = { 0 }; 
+
+    VkBufferCreateInfo create_info = { 0 };
+    create_info.sType       = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    create_info.size        = desc.size;
+    create_info.usage       = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+    create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        vr = vkCreateBuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &buffer.buffer[i]);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkCreateBuffer failed");
+            return false;
+        }
+
+        VkMemoryRequirements memory_reqs ={ 0 };
+        vkGetBufferMemoryRequirements(vulkan_renderer->device.logical, buffer.buffer[i], &memory_reqs);
+
+        VkMemoryAllocateInfo allocate_info = { 0 };
+        allocate_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocate_info.allocationSize  = memory_reqs.size;
+        if(!dm_vulkan_find_memory_type(memory_reqs.memoryTypeBits, vulkan_renderer->device.memory_properties, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &allocate_info.memoryTypeIndex)) return false;
+
+        vr = vkAllocateMemory(vulkan_renderer->device.logical, &allocate_info, vulkan_renderer->allocator, &buffer.memory[i]);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkAllocateMemory failed");
+            return false;
+        }
+        vkBindBufferMemory(vulkan_renderer->device.logical, buffer.buffer[i], buffer.memory[i], 0);
+
+        if(!desc.data) continue;
+
+        void* temp = NULL;
+
+        vkMapMemory(vulkan_renderer->device.logical, buffer.memory[i], 0, desc.size, 0, &temp);
+        if(!temp)
+        {
+            DM_LOG_FATAL("vkMapMemory failed");
+            return false;
+        }
+        dm_memcpy(temp, desc.data, desc.size);
+        vkUnmapMemory(vulkan_renderer->device.logical, buffer.memory[i]);
+    }
+
+    //
+    {
+        dm_memcpy(vulkan_renderer->vertex_buffers + vulkan_renderer->vb_count, &buffer, sizeof(buffer));
+        handle->index = vulkan_renderer->vb_count++;
+    }
+
+    return true;
+}
+
+/******************
+ * RENDER COMMANDS
+ * *****************/
+bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    if(handle.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE)
+    {
+        DM_LOG_FATAL("Trying to bind a resource that is not a raster pipeline");
+        return false;
+    }
+
+    const uint8_t current_frame = vulkan_renderer->current_frame;
+
+    dm_vulkan_raster_pipeline pipeline = vulkan_renderer->raster_pipes[handle.index];
+
+    vkCmdBindPipeline(vulkan_renderer->device.graphics_family.buffer[current_frame], 0, pipeline.pipeline);
+    vkCmdSetViewport(vulkan_renderer->device.graphics_family.buffer[current_frame], 0,1, &pipeline.viewport);
+    vkCmdSetScissor(vulkan_renderer->device.graphics_family.buffer[current_frame], 0,1, &pipeline.scissor);
+
+    return true;
+}
+
+bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+
+    if(handle.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER)
+    {
+        DM_LOG_FATAL("Trying to bind a resource that is not a vertex buffer");
+        return false;
+    }
+
+    const uint8_t current_frame = vulkan_renderer->current_frame;
+    dm_vulkan_vertex_buffer buffer = vulkan_renderer->vertex_buffers[handle.index];
+    
+    VkBuffer buffers[]     = { buffer.buffer[current_frame] };
+    VkDeviceSize offsets[] = { 0 };
+
+    const uint32_t count = 1;
+    const uint32_t binding = 0;
+    vkCmdBindVertexBuffers(vulkan_renderer->device.graphics_family.buffer[current_frame], binding,count,buffers, offsets);
+
+    return true;
+}
+
+bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+
+    vkCmdDraw(vulkan_renderer->device.graphics_family.buffer[vulkan_renderer->current_frame], vertex_count, instance_count, vertex_offset, instance_offset);
+
+    return true;
+}
 
 /***************
  * VULKAN DEBUG
@@ -1110,6 +1593,8 @@ VKAPI_ATTR VkBool32 VKAPI_CALL dm_vulkan_debug_callback(VkDebugUtilsMessageSever
         break;
     }
     
+    //dm_kill(user_data);
+
     return VK_FALSE;
 }
 

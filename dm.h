@@ -298,7 +298,11 @@ RENDERING
 ***********/
 typedef enum dm_render_resource_type_t
 {
-    DM_RENDER_RESOURCE_TYPE_UNKNOWN
+    DM_RENDER_RESOURCE_TYPE_UNKNOWN,
+    DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE,
+    DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER,
+    DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER,
+    DM_RENDER_RESOURCE_TYPE_TEXTURE,
 } dm_render_resource_type;
 
 typedef struct dm_render_handle_t
@@ -307,10 +311,131 @@ typedef struct dm_render_handle_t
     uint32_t                index;
 } dm_render_handle;
 
+typedef enum dm_input_element_format_t
+{
+    DM_INPUT_ELEMENT_FORMAT_UNKNOWN,
+    DM_INPUT_ELEMENT_FORMAT_FLOAT_2,
+    DM_INPUT_ELEMENT_FORMAT_FLOAT_3,
+} dm_input_element_format;
+
+typedef enum dm_input_element_class_t
+{
+    DM_INPUT_ELEMENT_CLASS_UNKNOWN,
+    DM_INPUT_ELEMENT_CLASS_PER_VERTEX,
+    DM_INPUT_ELEMENT_CLASS_PER_INSTANCE,
+} dm_input_element_class;
+
+#define DM_RENDER_INPUT_ELEMENT_DESC_NAME_SIZE 512
+typedef struct dm_input_element_desc_t
+{
+    char                    name[DM_RENDER_INPUT_ELEMENT_DESC_NAME_SIZE];
+    uint8_t                 index;
+    dm_input_element_format format; 
+    uint8_t                 slot;
+    uint32_t                offset;
+    size_t                  stride;
+    dm_input_element_class  class;
+} dm_input_element_desc;
+
+typedef enum dm_input_topology_t
+{
+    DM_INPUT_TOPOLOGY_UNKNOWN,
+    DM_INPUT_TOPOLOGY_TRIANGLE_LIST,
+} dm_input_topology;
+
+typedef enum dm_rasterizer_polygon_fill_t
+{
+    DM_RASTERIZER_POLYGON_FILL_UNKNOWN,
+    DM_RASTERIZER_POLYGON_FILL_FILL,
+    DM_RASTERIZER_POLYGON_FILL_WIREFRAME,
+} dm_rasterizer_polygon_fill;
+
+typedef enum dm_rasterizer_cull_mode_t
+{
+    DM_RASTERIZER_CULL_MODE_UNKNOWN,
+    DM_RASTERIZER_CULL_MODE_BACK,
+    DM_RASTERIZER_CULL_MODE_FRONT,
+} dm_rasterizer_cull_mode;
+
+typedef enum dm_rasterizer_front_face_t
+{
+    DM_RASTERIZER_FRONT_FACE_UNKNOWN,
+    DM_RASTERIZER_FRONT_FACE_CLOCKWISE,
+    DM_RASTERIZER_FRONT_FACE_COUNTER_CLOCKWISE,
+} dm_rasterizer_front_face;
+
+#define DM_RENDER_MAX_INPUT_ELEMENTS 10
+typedef struct dm_raster_input_assembler_desc_t
+{
+    dm_input_element_desc input_elements[DM_RENDER_MAX_INPUT_ELEMENTS];
+    uint8_t               input_element_count;
+
+    dm_input_topology topology;
+} dm_raster_input_assembler_desc;
+
+typedef struct dm_shader_desc_t
+{
+    char path[512];
+} dm_shader_desc;
+
+typedef struct dm_rasterizer_desc_t
+{
+    dm_shader_desc vertex_shader_desc;
+    dm_shader_desc pixel_shader_desc;
+
+    dm_rasterizer_cull_mode    cull_mode;
+    dm_rasterizer_polygon_fill polygon_fill;
+    dm_rasterizer_front_face   front_face;
+} dm_rasterizer_desc;
+
+typedef enum dm_viewport_type_t
+{
+    DM_VIEWPORT_TYPE_UNKNOWN,
+    DM_VIEWPORT_TYPE_DEFAULT,
+    DM_VIEWPORT_TYPE_CUSTOM
+} dm_viewport_type;
+
+typedef struct dm_viewport_t
+{
+    dm_viewport_type type;
+    uint32_t left, right, top, bottom;
+} dm_viewport;
+
+typedef enum dm_scissor_type_t
+{
+    DM_SCISSOR_TYPE_UNKNOWN,
+    DM_SCISSOR_TYPE_DEFAULT,
+    DM_SCISSOR_TYPE_CUSTOM
+} dm_scissor_type;
+
+typedef struct dm_scissor_t
+{
+    dm_scissor_type type;
+    uint32_t offset, extents;
+} dm_scissor;
+
+typedef struct dm_raster_pipeline_desc_t
+{
+    dm_raster_input_assembler_desc input_assembler;
+    dm_rasterizer_desc             rasterizer;
+
+    dm_viewport viewport;
+    dm_scissor  scissor;
+} dm_raster_pipeline_desc;
+
+typedef struct dm_vertex_buffer_desc_t
+{
+    size_t size, stride, element_size;
+    void*  data;
+} dm_vertex_buffer_desc;
+
 // commands
 typedef enum dm_render_command_type_t
 {
-    DM_RENDER_COMMAND_UNKNOWN
+    DM_RENDER_COMMAND_TYPE_UNKNOWN,
+    DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE,
+    DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
 } dm_render_command_type;
 
 typedef enum dm_render_command_param_type_t
@@ -330,8 +455,6 @@ typedef enum dm_render_command_param_type_t
 
 typedef struct dm_render_command_param_t
 {
-    dm_render_command_param_type type;
-    
     union
     {
         bool              bool_val;
@@ -352,7 +475,6 @@ typedef struct dm_render_command_t
 {
     dm_render_command_type  type;
     dm_render_command_param params[DM_RENDER_COMMAND_MAX_PARAMS];
-    uint8_t                 param_count;
 } dm_render_command;
 
 typedef struct dm_render_command_manager_t
@@ -484,6 +606,7 @@ typedef struct dm_context_init_packet_t
     char     window_title[512];
     char     asset_folder[512];
     bool     vsync;
+    size_t   app_data_size;
 } dm_context_init_packet;
 
 typedef struct dm_context_t
@@ -602,6 +725,12 @@ float dm_random_float_normal(float mu, float sigma, dm_context* context);
 void dm_platform_sleep(uint64_t ms, dm_context* context);
 
 // rendering
+bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
+
+void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context);
+void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* context);
+void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
 
 // physics
 bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);
@@ -623,6 +752,8 @@ bool        dm_update_end(dm_context* context);
 bool        dm_renderer_begin_frame(dm_context* context);
 bool        dm_renderer_end_frame(dm_context* context);
 bool        dm_context_is_running(dm_context* context);
+
+void dm_kill(dm_context* context);
 
 void* dm_read_bytes(const char* path, const char* mode, size_t* size);
 

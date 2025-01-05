@@ -11,6 +11,7 @@ LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 void* dm_win32_thread_start_func(void* args);
 void  dm_win32_thread_execute_task(dm_thread_task* task);
+const char* dm_win32_get_last_error();
 
 bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* context)
 {
@@ -22,67 +23,95 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* 
     
 	const char* window_class_name = "dm_window_class";
     
-	HICON icon = LoadIcon(w32_data->h_instance, IDI_APPLICATION);
-	WNDCLASSA wc = { 0 };
-	wc.style = CS_DBLCLKS | CS_HREDRAW | CS_OWNDC | CS_VREDRAW;
-	wc.lpfnWndProc = window_callback;
-	wc.hInstance = w32_data->h_instance;
-	wc.hIcon = icon;
-	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
+	WNDCLASSEXW wc = { 0 };
+	wc.style         = CS_DBLCLKS | CS_HREDRAW | CS_OWNDC | CS_VREDRAW;
+	wc.lpfnWndProc   = window_callback;
+	wc.hInstance     = w32_data->h_instance;
+	wc.hIcon         = LoadIcon(NULL, IDI_APPLICATION);
+    wc.hIconSm       = LoadIcon(NULL, IDI_APPLICATION);
+	wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
 	wc.hbrBackground = NULL;
-	wc.lpszClassName = window_class_name;
+	wc.lpszClassName = (LPCWSTR)window_class_name;
 	wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+    wc.cbSize        = sizeof(WNDCLASSEX);
     
-	if (!RegisterClassA(&wc)) 
+	if (!RegisterClassExW(&wc)) 
     {
-        //DM_LOG_FATAL("Window registering failed");
-        printf("Window registration failed");
+        printf("Window registration failed\n");
+
+        printf("%s", dm_win32_get_last_error());
+
         return false;
     }
+
+    uint32_t window_width, window_height, window_x, window_y;
     
-	// Adjust client window to be appropriate
-	uint32_t client_x = window_x_pos;
-	uint32_t client_y = window_y_pos;
-	uint32_t client_width = platform_data->window_data.width;
-	uint32_t client_height = platform_data->window_data.height;
+#if 1
+    uint32_t window_style    = WS_OVERLAPPEDWINDOW | WS_VISIBLE; 
+    uint32_t window_ex_style = WS_EX_OVERLAPPEDWINDOW | WS_EX_APPWINDOW;
+
+    RECT border_rect = { 0,0,0,0 };
+    AdjustWindowRectEx(&border_rect, window_style, 0, window_ex_style);
+
+    // Adjust client window to be appropriate
+    uint32_t client_x = window_x_pos;
+    uint32_t client_y = window_y_pos;
+    uint32_t client_width = platform_data->window_data.width;
+    uint32_t client_height = platform_data->window_data.height;
+
+    window_x = client_x;
+    window_y = client_y;
+    window_width = client_width;
+    window_height = client_height;
+
+    window_x += border_rect.left;
+    window_y += border_rect.top;
+    window_width += (border_rect.right - border_rect.left);
+    window_height += (border_rect.bottom - border_rect.top);
+#else
+    uint32_t window_style    = WS_POPUP | WS_VISIBLE;
+    uint32_t window_ex_style = WS_EX_APPWINDOW | WS_EX_TOPMOST;
     
-	uint32_t window_x = client_x;
-	uint32_t window_y = client_y;
-	uint32_t window_width = client_width;
-	uint32_t window_height = client_height;
-    
-	uint32_t window_style = WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME;
-	uint32_t window_ex_style = WS_EX_APPWINDOW;
-    
-	RECT border_rect = { 0,0,0,0 };
-	AdjustWindowRectEx(&border_rect, window_style, 0, window_ex_style);
-    
-	window_x += border_rect.left;
-	window_y += border_rect.top;
-	window_width += (border_rect.right - border_rect.left);
-	window_height += (border_rect.bottom - border_rect.top);
+    HMONITOR monitor = MonitorFromWindow(w32_data->hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO info = { 0 };
+    info.cbSize = sizeof(info);
+    if(GetMonitorInfoW(monitor, &info))
+    {
+        window_x = info.rcMonitor.left;
+        window_y = info.rcMonitor.top;
+        window_width = info.rcWork.right - info.rcWork.left;
+        window_height = info.rcWork.bottom - info.rcWork.top;
+    }
+#endif
     
 	// create the window
-	w32_data->hwnd = CreateWindowExA(window_ex_style, 
-                                     window_class_name, platform_data->window_data.title,
-                                     window_style,
-                                     window_x, window_y, 
-                                     window_width, window_height,
-                                     NULL, NULL, 
-                                     w32_data->h_instance, 
-                                     NULL);
+    wchar_t d[512];
+    swprintf(d, 512, L"%hs", platform_data->window_data.title);
+	w32_data->hwnd = CreateWindowExW(window_ex_style, 
+                                    (LPCWSTR)window_class_name, 
+                                    d, 
+                                    window_style,
+                                    window_x, window_y, 
+                                    window_width, window_height,
+                                    NULL, NULL, 
+                                    w32_data->h_instance, 
+                                    NULL);
     
 	if (!w32_data->hwnd) 
     {
-        //DM_LOG_FATAL("Window creation failed");
-        printf("Window creation failed");
+        printf("Window creation failed\n");
+
+        printf("%s", dm_win32_get_last_error());
+
         return false;
     }
     
     // attach platform data to hwnd
-    if(!SetPropA(w32_data->hwnd, "platform_data", platform_data)) return false;
+    if(!SetPropW(w32_data->hwnd, L"platform_data", platform_data)) return false;
     
-	ShowWindow(w32_data->hwnd, SW_SHOW);
+    SetWindowLongW(w32_data->hwnd, GWL_STYLE,   window_style);
+    SetWindowLongW(w32_data->hwnd, GWL_EXSTYLE, window_ex_style);
+	//ShowWindow(w32_data->hwnd, SW_SHOW);
     
 	// clock
 	LARGE_INTEGER frequency;
@@ -123,10 +152,10 @@ bool dm_platform_pump_events(dm_platform_data* platform_data)
     DM_WIN32_GET_DATA;
     
     MSG message;
-    while (PeekMessageA(&message, w32_data->hwnd, 0, 0, PM_REMOVE))
+    while (PeekMessageW(&message, w32_data->hwnd, 0, 0, PM_REMOVE))
     {
         TranslateMessage(&message);
-        DispatchMessageA(&message);
+        DispatchMessageW(&message);
     }
     
     return true;
@@ -146,7 +175,9 @@ void dm_platform_write(const char* message, uint8_t color)
 
 LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam)
 {
-    dm_platform_data* platform_data = GetPropA(hwnd, "platform_data");
+    dm_platform_data* platform_data = GetPropW(hwnd, L"platform_data");
+
+	if(!platform_data) return DefWindowProcW(hwnd, umsg, wparam, lparam);
     
     switch (umsg)
 	{
@@ -267,7 +298,7 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
         break;
 	}
     
-	return DefWindowProcA(hwnd, umsg, wparam, lparam);
+	return DefWindowProcW(hwnd, umsg, wparam, lparam);
 }
 
 LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -428,24 +459,12 @@ void* dm_win32_thread_start_func(void* args)
 /***************
 ERROR MESSAGING
 *****************/
-const char* dm_get_win32_error_msg(HRESULT hr)
-{
-	char* message = NULL;
-    
-	DWORD msg_len = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,NULL, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)(&message), 0, NULL);
-    
-	if (msg_len == 0) return "Unidentified Error Code";
-    
-	return message;
-}
-
-const char* dm_get_win32_last_error()
+const char* dm_win32_get_last_error()
 {
 	DWORD error_message_id = GetLastError();
 	LPSTR message = NULL;
     
-	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                  NULL, error_message_id, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)(&message), 0, NULL);
+	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, error_message_id, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)(&message), 0, NULL);
     
 	return message;
 }
