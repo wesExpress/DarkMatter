@@ -264,6 +264,8 @@ bool dm_vulkan_is_device_suitable(VkPhysicalDevice physical_device, const char**
     device.swapchain_details = dm_vulkan_query_swapchain_support(device.physical, vulkan_renderer->surface);
     if(device.swapchain_details.present_mode_count==0 && device.swapchain_details.present_mode_count==0) return false;
 
+    DM_LOG_INFO("Vulkan API Version: %u.%u.%u", VK_API_VERSION_MAJOR(device.properties.apiVersion), VK_API_VERSION_MINOR(device.properties.apiVersion), VK_API_VERSION_PATCH(device.properties.apiVersion));
+
     vulkan_renderer->device = device;
 
     return true;
@@ -1336,9 +1338,9 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
             case DM_VIEWPORT_TYPE_DEFAULT:
             default:
             pipeline.viewport.x        = 0;
-            pipeline.viewport.y        = (float)renderer->height;
+            pipeline.viewport.y        = 0;
             pipeline.viewport.width    = (float)renderer->width;
-            pipeline.viewport.height   = -(float)renderer->height;
+            pipeline.viewport.height   = (float)renderer->height;
             pipeline.viewport.minDepth = 0.f;
             pipeline.viewport.maxDepth = 1.f;
             break;
@@ -1593,7 +1595,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL dm_vulkan_debug_callback(VkDebugUtilsMessageSever
         break;
     }
     
-    //dm_kill(user_data);
+    dm_kill(user_data);
 
     return VK_FALSE;
 }
