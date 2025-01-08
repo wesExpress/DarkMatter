@@ -472,12 +472,16 @@ EVENT
 *******/
 void dm_add_window_close_event(dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_WINDOW_CLOSE;
 }
 
 void dm_add_window_resize_event(uint32_t new_width, uint32_t new_height, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_WINDOW_RESIZE;
     e->new_rect[0] = new_width;
@@ -486,6 +490,8 @@ void dm_add_window_resize_event(uint32_t new_width, uint32_t new_height, dm_even
 
 void dm_add_mousebutton_down_event(dm_mousebutton_code button, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSEBUTTON_DOWN;
     e->button = button;
@@ -493,6 +499,8 @@ void dm_add_mousebutton_down_event(dm_mousebutton_code button, dm_event_list* ev
 
 void dm_add_mousebutton_up_event(dm_mousebutton_code button, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSEBUTTON_UP;
     e->button = button;
@@ -500,6 +508,8 @@ void dm_add_mousebutton_up_event(dm_mousebutton_code button, dm_event_list* even
 
 void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSE_MOVE;
     
@@ -509,6 +519,8 @@ void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* 
 
 void dm_add_mouse_scroll_event(float delta, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSE_SCROLL;
     e->delta = delta;
@@ -516,6 +528,8 @@ void dm_add_mouse_scroll_event(float delta, dm_event_list* event_list)
 
 void dm_add_key_down_event(dm_key_code key, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_KEY_DOWN;
     e->key = key;
@@ -523,6 +537,8 @@ void dm_add_key_down_event(dm_key_code key, dm_event_list* event_list)
 
 void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_KEY_UP;
     e->key = key;
@@ -829,10 +845,9 @@ void dm_shutdown(dm_context* context)
     dm_free((void**)&context);
 }
 
-// also pass through nuklear inputs
 bool dm_poll_events(dm_context* context)
 {
-    for(uint32_t i=0; i<context->platform_data.event_list.num; i++)
+    for(uint32_t i=0; i<context->platform_data.event_list.num && i<DM_MAX_EVENTS_PER_FRAME; i++)
     {
         dm_event e = context->platform_data.event_list.events[i];
         switch(e.type)
@@ -928,6 +943,7 @@ bool dm_update_begin(dm_context* context)
         context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
         return false;
     }
+    context->platform_data.event_list.num = 0;
     
     return true;
 }
@@ -1150,9 +1166,16 @@ void dm_math_tests();
 
 typedef enum dm_exit_code_t
 {
-    DM_EXIT_CODE_SUCCESS,
-    DM_EXIT_CODE_INIT_FAIL,
-    DM_EXIT_CODE_UNKNOWN
+    DM_EXIT_CODE_SUCCESS                 =  0,
+    DM_EXIT_CODE_INIT_FAIL               = -1,
+    DM_EXIT_CODE_APPLICATION_INIT_FAIL   = -2,
+    DM_EXIT_CODE_BEGIN_UPDATE_FAIL       = -3,
+    DM_EXIT_CODE_APPLICATION_UPDATE_FAIL = -4,
+    DM_EXIT_CODE_END_UPDATE_FAIL         = -5,
+    DM_EXIT_CODE_BEGIN_FRAME_FAIL        = -6,
+    DM_EXIT_CODE_APPLICATION_RENDER_FAIL = -7,
+    DM_EXIT_CODE_END_FRAME_FAIL          = -8,
+    DM_EXIT_CODE_UNKNOWN                 = -9
 } dm_exit_code;
 
 #define DM_DEFAULT_SCREEN_X      100
@@ -1163,10 +1186,8 @@ typedef enum dm_exit_code_t
 #define DM_DEFAULT_ASSETS_FOLDER "assets"
 int main(int argc, char** argv)
 {
-#ifdef DM_MATH_TESTS
-    dm_math_tests();
-#endif
-    
+    int exit_code = DM_EXIT_CODE_SUCCESS;
+
     dm_context_init_packet init_packet = {
         DM_DEFAULT_SCREEN_X, DM_DEFAULT_SCREEN_Y,
         DM_DEFAULT_SCREEN_WIDTH, DM_DEFAULT_SCREEN_HEIGHT,
@@ -1180,24 +1201,24 @@ int main(int argc, char** argv)
     if(!context) 
     {
         int r = getchar();
-        return DM_EXIT_CODE_INIT_FAIL;
+        exit_code = DM_EXIT_CODE_INIT_FAIL;
+        goto DM_EXIT;
     }
     
     if(!dm_application_init(context)) 
     {
         DM_LOG_FATAL("Application init failed");
         
-        dm_shutdown(context);
-        int r = getchar();
-        return DM_EXIT_CODE_INIT_FAIL;
+        exit_code = DM_EXIT_CODE_APPLICATION_INIT_FAIL;
+        goto DM_EXIT;
     }
    
     if(!dm_renderer_backend_finish_init(context))
     {
         DM_LOG_FATAL("Renderer backend finish init failed");
 
-        int r = getchar();
-        return DM_EXIT_CODE_INIT_FAIL;
+        exit_code = DM_EXIT_CODE_INIT_FAIL;
+        goto DM_EXIT;
     }
 
     while(dm_context_is_running(context))
@@ -1205,13 +1226,27 @@ int main(int argc, char** argv)
         dm_start(context);
         
         // updating
-        if(!dm_update_begin(context)) break;
+        if(!dm_update_begin(context)) 
+        {
+            DM_LOG_FATAL("DarkMatter begin update failed");
+
+            exit_code = DM_EXIT_CODE_BEGIN_UPDATE_FAIL;
+            goto DM_EXIT;
+        }
         if(!dm_application_update(context))
         {
             DM_LOG_FATAL("Application update failed");
-            break;
+
+            exit_code = DM_EXIT_CODE_APPLICATION_UPDATE_FAIL;
+            goto DM_EXIT;
         }
-        if(!dm_update_end(context)) break;
+        if(!dm_update_end(context))
+        {
+            DM_LOG_FATAL("DarkMatter end update failed");
+
+            exit_code = DM_EXIT_CODE_END_UPDATE_FAIL;
+            goto DM_EXIT;
+        }
         
         // rendering
         if(dm_renderer_begin_frame(context))
@@ -1220,18 +1255,36 @@ int main(int argc, char** argv)
             {
                 DM_LOG_FATAL("Application render failed");
                 
-                break;
+                exit_code = DM_EXIT_CODE_APPLICATION_RENDER_FAIL;
+                goto DM_EXIT;
             }
-            if(!dm_renderer_end_frame(context)) break;
+            if(!dm_renderer_end_frame(context)) 
+            {
+                DM_LOG_FATAL("DarkMatter end fram failed");
+
+                exit_code = DM_EXIT_CODE_END_FRAME_FAIL;
+                goto DM_EXIT;
+            }
+        }
+        else
+        {
+            DM_LOG_FATAL("DarkMatter begin frame failed");
+
+            exit_code = DM_EXIT_CODE_BEGIN_FRAME_FAIL;
+            goto DM_EXIT;
         }
         
         dm_end(context);
     }
     
+DM_EXIT:
     dm_application_shutdown(context);
     dm_shutdown(context);
     
+#ifdef DM_DEBUG
+    DM_LOG_WARN("Press any key to exit...");
+#endif
     int r = getchar();
     
-    return DM_EXIT_CODE_SUCCESS;
+    return exit_code;
 }

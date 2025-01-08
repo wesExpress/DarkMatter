@@ -1107,7 +1107,11 @@ bool dm_vulkan_create_shader_module(const char* path, VkShaderModule* module, Vk
     
     size_t size;
     void* shader_data = dm_read_bytes(path, "rb", &size);
-    if(!shader_data) return false;
+    if(!shader_data) 
+    {
+        DM_LOG_ERROR("Could not load shader: %s", path);
+        return false;
+    }
 
     VkShaderModuleCreateInfo create_info = { 0 };
     create_info.sType    = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
@@ -1225,8 +1229,16 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
 
     // === shaders ===
     {
-        if(!dm_vulkan_create_shader_module(desc.rasterizer.vertex_shader_desc.path, &vs, vulkan_renderer->device.logical)) return false;
-        if(!dm_vulkan_create_shader_module(desc.rasterizer.pixel_shader_desc.path, &ps, vulkan_renderer->device.logical)) return false;
+        if(!dm_vulkan_create_shader_module(desc.rasterizer.vertex_shader_desc.path, &vs, vulkan_renderer->device.logical)) 
+        {
+            DM_LOG_ERROR("Could not load vertex shader");
+            return false;
+        }
+        if(!dm_vulkan_create_shader_module(desc.rasterizer.pixel_shader_desc.path, &ps, vulkan_renderer->device.logical)) 
+        { 
+            DM_LOG_ERROR("Could not load pixel shader");
+            return false;
+        }
 
         vs_create_info.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         vs_create_info.stage  = VK_SHADER_STAGE_VERTEX_BIT;
@@ -1297,6 +1309,8 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
 
         switch(desc.rasterizer.cull_mode)
         {
+            default:
+            DM_LOG_ERROR("Unknown cull mode. Assuming VK_CULL_MODE_BIT");
             case DM_RASTERIZER_CULL_MODE_BACK:
             raster_create_info.cullMode = VK_CULL_MODE_BACK_BIT;
             break;
@@ -1305,10 +1319,8 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
             raster_create_info.cullMode = VK_CULL_MODE_FRONT_BIT;
             break;
 
-            default:
-            DM_LOG_ERROR("Unknown cull mode. Assuming VK_CULL_MODE_BIT");
-            raster_create_info.cullMode = VK_CULL_MODE_BACK_BIT;
-            break;
+            case DM_RASTERIZER_CULL_MODE_NONE:
+            raster_create_info.cullMode = VK_CULL_MODE_NONE;
         }
 
         switch(desc.rasterizer.front_face)

@@ -235,11 +235,17 @@ typedef struct dm_event_t
     };
 } dm_event;
 
-#define DM_MAX_EVENTS_PER_FRAME 1000
+#ifdef DM_MORE_EVENTS
+typedef uint16_t dm_event_count;
+#define DM_MAX_EVENTS_PER_FRAME UINT16_MAX
+#else
+typedef uint8_t dm_event_count;
+#define DM_MAX_EVENTS_PER_FRAME UINT8_MAX
+#endif
 typedef struct dm_event_list_t
 {
-    dm_event events[DM_MAX_EVENTS_PER_FRAME];
-    size_t   num;
+    dm_event       events[DM_MAX_EVENTS_PER_FRAME];
+    dm_event_count num;
 } dm_event_list;
 
 /*******
@@ -355,6 +361,7 @@ typedef enum dm_rasterizer_cull_mode_t
     DM_RASTERIZER_CULL_MODE_UNKNOWN,
     DM_RASTERIZER_CULL_MODE_BACK,
     DM_RASTERIZER_CULL_MODE_FRONT,
+    DM_RASTERIZER_CULL_MODE_NONE,
 } dm_rasterizer_cull_mode;
 
 typedef enum dm_rasterizer_front_face_t

@@ -165,10 +165,13 @@ void dm_platform_write(const char* message, uint8_t color)
 {
 	HANDLE console_handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	static uint8_t levels[6] = { 8, 1, 2, 6, 4, 64 };
+
 	SetConsoleTextAttribute(console_handle, levels[color]);
 	size_t len = strlen(message);
 	LPDWORD number_written = 0;
+
 	WriteConsoleA(console_handle, message, (DWORD)len, number_written, 0);
+
 	// resets to white
 	SetConsoleTextAttribute(console_handle, 7);
 }
@@ -184,15 +187,11 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
         case WM_ERASEBKGND:
 		return 1;
         case WM_CLOSE:
-        {
-            dm_add_window_close_event(&platform_data->event_list);
-            return 0;
-        } break;
+        dm_add_window_close_event(&platform_data->event_list);
+        return 0;
         case WM_DESTROY:
-        {
-            PostQuitMessage(0);
-            return 0;
-        } break;
+        PostQuitMessage(0);
+        return 0;
         
         case WM_SIZE:
         {
@@ -306,9 +305,7 @@ LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	switch (message)
 	{
         case WM_CREATE:
-        {
-            return 0;
-        } 
+        return 0;
         case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;

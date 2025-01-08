@@ -2,6 +2,8 @@
 
 #ifdef DM_DIRECTX12
 
+#define DM_DEBUG
+
 #include "../platform/dm_platform_win32.h"
 
 #include <stdio.h>
@@ -48,6 +50,11 @@ typedef struct dm_dx12_fence_t
 typedef struct dm_dx12_raster_pipeline_t
 {
     ID3D12PipelineState* state;
+    ID3D12RootSignature* root_signature;
+
+    D3D_PRIMITIVE_TOPOLOGY topology;
+    D3D12_VIEWPORT viewport;
+    D3D12_RECT     scissor;
 } dm_dx12_raster_pipeline;
 
 typedef struct dm_dx12_buffer_indices_t
@@ -96,12 +103,20 @@ typedef struct dm_dx12_renderer_t
 
 #ifdef DM_DEBUG
     ID3D12Debug* debug;
+    IDXGIDebug1* dxgi_debug;
+    IDXGIInfoQueue* info_queue;
 #endif
 
     uint8_t current_frame;
 } dm_dx12_renderer;
 
 #define DM_DX12_GET_RENDERER dm_dx12_renderer* dx12_renderer = renderer->internal_renderer
+
+#ifdef DM_DEBUG
+void dm_dx12_get_debug_message(dm_dx12_renderer* dx12_renderer);
+#else
+void dm_dx12_get_debug_message(dm_dx12_renderer* dx12_renderer) {}
+#endif
 
 #ifndef DM_DEBUG
 DM_INLINE
@@ -159,6 +174,24 @@ bool dm_renderer_backend_init(dm_context* context)
         temp = NULL;
 
         ID3D12Debug_EnableDebugLayer(dx12_renderer->debug);
+
+        hr = DXGIGetDebugInterface1(0, &IID_IDXGIDebug1, &temp);
+        if(!dm_platform_win32_decode_hresult(hr) || !temp)
+        {
+            DM_LOG_FATAL("DXGIGetDebugInterface failed");
+            return false;
+        }
+        dx12_renderer->dxgi_debug = temp;
+        temp = NULL;
+
+        hr = IDXGIDebug1_QueryInterface(dx12_renderer->dxgi_debug, &IID_IDXGIInfoQueue, &temp);
+        if(!dm_platform_win32_decode_hresult(hr) || !temp)
+        {
+            DM_LOG_FATAL("IDXGIDebug1_QueryInterface failed");
+            return false;
+        }
+        dx12_renderer->info_queue = temp;
+        temp = NULL;
 #endif
 
         hr = CreateDXGIFactory1(&IID_IDXGIFactory4, &temp);
@@ -244,7 +277,8 @@ bool dm_renderer_backend_init(dm_context* context)
         swap_desc.SwapEffect   = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         swap_desc.SampleDesc   = sample_desc;
         swap_desc.Format       = DXGI_FORMAT_R8G8B8A8_UNORM;
-        
+        //swap_desc.Flags        = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;        
+
         HWND hwnd = w32_data->hwnd;
 
         hr = IDXGIFactory4_CreateSwapChainForHwnd(dx12_renderer->factory, (IUnknown*)dx12_renderer->command_queue, hwnd, &swap_desc, NULL,NULL, (IDXGISwapChain1**)&dx12_renderer->swap_chain);
@@ -406,6 +440,12 @@ void dm_renderer_backend_shutdown(dm_context* context)
         ID3D12Resource_Release(dx12_renderer->resources[i]);
     }
 
+    for(uint32_t i=0; i<dx12_renderer->rast_pipe_count; i++)
+    {
+        ID3D12RootSignature_Release(dx12_renderer->rast_pipelines[i].root_signature);
+        ID3D12PipelineState_Release(dx12_renderer->rast_pipelines[i].state);
+    }
+
     for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
     {
         ID3D12Resource_Release(dx12_renderer->render_targets[i]);
@@ -524,7 +564,7 @@ bool dm_renderer_backend_end_frame(dm_context* context)
         return false;
     }
 
-    hr = IDXGISwapChain4_Present(dx12_renderer->swap_chain, 0,0);
+    hr = IDXGISwapChain4_Present(dx12_renderer->swap_chain, context->renderer.vsync,0);
     if(!dm_platform_win32_decode_hresult(hr))
     {
         DM_LOG_FATAL("IDXGISwapChain4_Present failed");
@@ -607,6 +647,7 @@ bool dm_dx12_load_shader_data(const char* path, ID3D10Blob** blob)
     if(!dm_platform_win32_decode_hresult(hr))
     {
         DM_LOG_FATAL("D3DReadFileToBlob failed");
+        DM_LOG_ERROR("Could not load shader: %s", path);
         return false;
     }
 
@@ -620,87 +661,230 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
 
     dm_dx12_raster_pipeline pipeline = { 0 };
 
+    void* temp = NULL;
+
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = { 0 };
     pso_desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 
-    // === shaders ===
+    // === root signature ===
+    D3D12_ROOT_SIGNATURE_DESC root_desc = { 0 };
+    ID3D10Blob* root_blob = NULL;
+
+    root_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+
+    hr = D3D12SerializeRootSignature(&root_desc, D3D_ROOT_SIGNATURE_VERSION_1, &root_blob, NULL);
+    if(!dm_platform_win32_decode_hresult(hr))
     {
-        uint32_t flags = D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
-
-        ID3DBlob* vs = NULL;
-        ID3DBlob* ps = NULL;
-
-        const char* vertex_path = desc.rasterizer.vertex_shader_desc.path;
-        const char* pixel_path = desc.rasterizer.pixel_shader_desc.path;
-
-        if(!dm_dx12_load_shader_data(vertex_path, &vs)) return false;
-        if(!dm_dx12_load_shader_data(pixel_path,  &ps)) return false;
-        
-        pso_desc.VS.pShaderBytecode = ID3D10Blob_GetBufferPointer(vs);
-        pso_desc.VS.BytecodeLength  = ID3D10Blob_GetBufferSize(vs);
-
-        pso_desc.PS.pShaderBytecode = ID3D10Blob_GetBufferPointer(ps);
-        pso_desc.PS.BytecodeLength  = ID3D10Blob_GetBufferSize(ps);
-
-        ID3D10Blob_Release(vs);
-        ID3D10Blob_Release(ps);
+        DM_LOG_FATAL("D3D12SerializeRootSignature failed");
+        dm_dx12_get_debug_message(dx12_renderer);
+        return false;
     }
+
+    hr = ID3D12Device5_CreateRootSignature(dx12_renderer->device, 0, ID3D10Blob_GetBufferPointer(root_blob), ID3D10Blob_GetBufferSize(root_blob), &IID_ID3D12RootSignature, &temp);
+    if(!dm_platform_win32_decode_hresult(hr) || !temp)
+    {
+        DM_LOG_FATAL("ID3D12Device5_CreateRootSignature failed");
+        dm_dx12_get_debug_message(dx12_renderer);
+        return false;
+    }
+
+    // === rasterizer ===
+    switch(desc.rasterizer.cull_mode)
+    {
+        default:
+        DM_LOG_ERROR("Unknown cull mode. Assuming D3D12_CULL_MODE_BACK");
+        case DM_RASTERIZER_CULL_MODE_BACK:
+        pso_desc.RasterizerState.CullMode = D3D12_CULL_MODE_BACK;
+        break;
+
+        case DM_RASTERIZER_CULL_MODE_FRONT:
+        pso_desc.RasterizerState.CullMode = D3D12_CULL_MODE_FRONT;
+        break;
+
+        case DM_RASTERIZER_CULL_MODE_NONE:
+        pso_desc.RasterizerState.CullMode = D3D12_CULL_MODE_NONE;
+        break;
+    }
+
+    switch(desc.rasterizer.polygon_fill)
+    {
+        default:
+        DM_LOG_ERROR("Unknown polygon fill mode. Assuming D3D12_FILL_MODE_SOLID");
+        case DM_RASTERIZER_POLYGON_FILL_FILL:
+        pso_desc.RasterizerState.FillMode = D3D12_FILL_MODE_SOLID;
+        break;
+
+        case DM_RASTERIZER_POLYGON_FILL_WIREFRAME:
+        pso_desc.RasterizerState.FillMode = D3D12_FILL_MODE_WIREFRAME;
+        break;
+    }
+
+    switch(desc.rasterizer.front_face)
+    {
+        case DM_RASTERIZER_FRONT_FACE_CLOCKWISE:
+        pso_desc.RasterizerState.FrontCounterClockwise = FALSE;
+        break;
+
+        default:
+        DM_LOG_ERROR("Unknown front face. Assuming counter clockwise");
+        case DM_RASTERIZER_FRONT_FACE_COUNTER_CLOCKWISE:
+        pso_desc.RasterizerState.FrontCounterClockwise = TRUE;
+        break;
+    }
+
+    // TODO: needs to be configurable
+    // === blending ===
+    D3D12_RENDER_TARGET_BLEND_DESC blend_desc = { 0 };
+    
+    blend_desc.BlendEnable    = FALSE;
+    blend_desc.LogicOpEnable  = FALSE;
+    blend_desc.SrcBlend       = D3D12_BLEND_ONE;
+    blend_desc.DestBlend      = D3D12_BLEND_ZERO;
+    blend_desc.BlendOp        = D3D12_BLEND_OP_ADD;
+    blend_desc.SrcBlendAlpha  = D3D12_BLEND_ONE;
+    blend_desc.DestBlendAlpha = D3D12_BLEND_ZERO;
+    blend_desc.BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+    blend_desc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+    // === shaders ===
+    ID3DBlob* vs = NULL;
+    ID3DBlob* ps = NULL;
+    
+    const char* vertex_path = desc.rasterizer.vertex_shader_desc.path;
+    const char* pixel_path  = desc.rasterizer.pixel_shader_desc.path;
+
+    if(!dm_dx12_load_shader_data(vertex_path, &vs)) 
+    {
+        DM_LOG_ERROR("Could not load vertex shader");
+        return false;
+    }
+    if(!dm_dx12_load_shader_data(pixel_path,  &ps)) 
+    {
+        DM_LOG_ERROR("Could not load pixel shader");
+        return false;
+    }
+    
+    pso_desc.VS.pShaderBytecode = ID3D10Blob_GetBufferPointer(vs);
+    pso_desc.VS.BytecodeLength  = ID3D10Blob_GetBufferSize(vs);
+
+    pso_desc.PS.pShaderBytecode = ID3D10Blob_GetBufferPointer(ps);
+    pso_desc.PS.BytecodeLength  = ID3D10Blob_GetBufferSize(ps);
 
     // === input assembler ===
+    D3D12_INPUT_ELEMENT_DESC input_element_descs[DM_RENDER_MAX_INPUT_ELEMENTS] = { 0 };
+
+    for(uint8_t i=0; i<desc.input_assembler.input_element_count; i++)
     {
-        D3D12_INPUT_ELEMENT_DESC input_element_descs[DM_RENDER_MAX_INPUT_ELEMENTS];
-        for(uint8_t i=0; i<desc.input_assembler.input_element_count; i++)
+        const dm_input_element_desc element   = desc.input_assembler.input_elements[i];
+
+        input_element_descs[i].SemanticName      = element.name; 
+        input_element_descs[i].InputSlot         = element.slot;
+        input_element_descs[i].AlignedByteOffset = i==0 ? 0 : D3D12_APPEND_ALIGNED_ELEMENT;
+
+        switch(element.format)
         {
-            D3D12_INPUT_ELEMENT_DESC* input = &input_element_descs[i];
-            dm_input_element_desc element   = desc.input_assembler.input_elements[i];
+            case DM_INPUT_ELEMENT_FORMAT_FLOAT_2:
+            input_element_descs[i].Format = DXGI_FORMAT_R32G32_FLOAT;
+            break;
 
-            input->SemanticName      = element.name; 
-            input->InputSlot         = element.slot;
-            //input->AlignedByteOffset = element.offset;
-            input->AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-
-            switch(element.format)
-            {
-                case DM_INPUT_ELEMENT_FORMAT_FLOAT_2:
-                input->Format = DXGI_FORMAT_R32G32_FLOAT;
-                break;
-
-                case DM_INPUT_ELEMENT_FORMAT_FLOAT_3:
-                input->Format = DXGI_FORMAT_R32G32B32_FLOAT;
-                break;
-
-                default:
-                DM_LOG_ERROR("Unknown input element format. Assuming DXGI_FORMAT_R32G32B32_FLOAT");
-                input->Format = DXGI_FORMAT_R32G32B32_FLOAT;
-                break;
-            }
-
-            switch(element.class)
-            {
-                case DM_INPUT_ELEMENT_CLASS_PER_VERTEX:
-                input->InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
-                break;
-
-                case DM_INPUT_ELEMENT_CLASS_PER_INSTANCE:
-                input->InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
-                break;
-
-                default:
-                DM_LOG_ERROR("Unknown input element class. Assuming D3D12_INPUT_CLASSIFICATION_PER_VERTEX");
-                input->InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX;
-                break;
-            }
+            default:
+            DM_LOG_ERROR("Unknown input element format. Assuming DXGI_FORMAT_R32G32B32_FLOAT");
+            case DM_INPUT_ELEMENT_FORMAT_FLOAT_3:
+            input_element_descs[i].Format = DXGI_FORMAT_R32G32B32_FLOAT;
+            break;
         }
 
-        pso_desc.InputLayout.pInputElementDescs = input_element_descs;
-        pso_desc.InputLayout.NumElements        = desc.input_assembler.input_element_count;
+        switch(element.class)
+        {
+            default:
+            DM_LOG_ERROR("Unknown input element class. Assuming D3D12_INPUT_CLASSIFICATION_PER_VERTEX");
+            case DM_INPUT_ELEMENT_CLASS_PER_VERTEX:
+            input_element_descs[i].InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+            break;
+
+            case DM_INPUT_ELEMENT_CLASS_PER_INSTANCE:
+            input_element_descs[i].InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA;
+            break;
+        }
     }
 
-    // 
+    pso_desc.InputLayout.pInputElementDescs = input_element_descs;
+    pso_desc.InputLayout.NumElements        = desc.input_assembler.input_element_count;
+
+    switch(desc.input_assembler.topology)
     {
-        dm_memcpy(dx12_renderer->rast_pipelines + dx12_renderer->rast_pipe_count, &pipeline, sizeof(pipeline));
-        handle->index = dx12_renderer->rast_pipe_count++;
+        case DM_INPUT_TOPOLOGY_TRIANGLE_LIST:
+        pipeline.topology              = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+        pso_desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        break;
+
+        default:
+        DM_LOG_ERROR("Unknow primitive topology. Assuming D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST");
+        break;
     }
+
+    // === viewport and scissor ===
+    switch(desc.viewport.type)
+    {
+        default:
+        DM_LOG_ERROR("Unknown viewport type. Assumin DM_VIEWPORT_TYPE_DEFAULT");
+        case DM_VIEWPORT_TYPE_DEFAULT:
+        pipeline.viewport.Width    = (float)renderer->width;
+        pipeline.viewport.Height   = (float)renderer->height;
+        pipeline.viewport.MaxDepth = 1.f;
+        break;
+
+        case DM_VIEWPORT_TYPE_CUSTOM:
+        DM_LOG_FATAL("Custom viewport for dx12 pipeline not supported yet");
+        return false;
+    }
+
+    switch(desc.scissor.type)
+    {
+        default:
+        DM_LOG_ERROR("Unknown scissor type. Assuming DM_SCISSOR_TYPE_DEFAULT");
+        case DM_SCISSOR_TYPE_DEFAULT:
+        pipeline.scissor.right  = (float)renderer->width;
+        pipeline.scissor.bottom = (float)renderer->height;
+        break;
+
+        case DM_SCISSOR_TYPE_CUSTOM:
+        DM_LOG_FATAL("Custom scissor for dx12 not supported yet");
+        return false;
+    }
+
+    
+    pipeline.root_signature = temp;
+    temp = NULL;
+
+    // === pipeline state ===
+    pso_desc.RTVFormats[0]              = DXGI_FORMAT_R8G8B8A8_UNORM;
+    pso_desc.SampleDesc.Count           = 1;
+    pso_desc.SampleMask                 = 0xffffffff;
+    pso_desc.NumRenderTargets           = 1;
+    pso_desc.BlendState.RenderTarget[0] = blend_desc;
+    pso_desc.pRootSignature             = pipeline.root_signature;
+
+    hr = ID3D12Device5_CreateGraphicsPipelineState(dx12_renderer->device, &pso_desc, &IID_ID3D12PipelineState, &temp);
+    if(!dm_platform_win32_decode_hresult(hr) || !temp)
+    {
+        // must release root signature since count won't increment
+        ID3D12RootSignature_Release(pipeline.root_signature);
+
+        DM_LOG_FATAL("ID3D12Device5_CreatePipelineState failed");
+        dm_dx12_get_debug_message(dx12_renderer);
+        return false;
+    }
+    pipeline.state = temp;
+    temp = NULL;
+    
+    ID3D10Blob_Release(vs);
+    ID3D10Blob_Release(ps);
+    ID3D10Blob_Release(root_blob);
+
+    // 
+    dm_memcpy(dx12_renderer->rast_pipelines + dx12_renderer->rast_pipe_count, &pipeline, sizeof(pipeline));
+    handle->index = dx12_renderer->rast_pipe_count++;
 
     return true;
 }
@@ -781,7 +965,13 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_ren
 
         // upload buffer
         dx12_renderer->resources[dx12_renderer->resource_count] = dm_dx12_create_upload_resource(rd, dx12_renderer->device);
-        if(!dx12_renderer->resources[dx12_renderer->resource_count]) return false;
+        if(!dx12_renderer->resources[dx12_renderer->resource_count])         
+        { 
+            // must release default buffer here
+            ID3D12Resource_Release(dx12_renderer->resources[buffer.indices.buffer[i]]);
+            
+            return false;
+        }
 
         buffer.indices.upload[i] = dx12_renderer->resource_count++;
 
@@ -825,9 +1015,21 @@ bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
     dm_dx12_raster_pipeline pipeline = dx12_renderer->rast_pipelines[handle.index];
 
-    // TODO: needs to be configurable
-    ID3D12GraphicsCommandList7_IASetPrimitiveTopology(command_list, D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    // reset viewport and scissors
+    {
+        pipeline.viewport.Height = renderer->height;
+        pipeline.viewport.Width  = renderer->width;
 
+        pipeline.scissor.right  = renderer->width;
+        pipeline.scissor.bottom = renderer->height;
+    }
+
+    ID3D12GraphicsCommandList7_SetGraphicsRootSignature(command_list, pipeline.root_signature);
+    ID3D12GraphicsCommandList7_SetPipelineState(command_list, pipeline.state);
+    ID3D12GraphicsCommandList7_RSSetViewports(command_list, 1, &pipeline.viewport);
+    ID3D12GraphicsCommandList7_RSSetScissorRects(command_list, 1, &pipeline.scissor);
+    ID3D12GraphicsCommandList7_IASetPrimitiveTopology(command_list, pipeline.topology);
+    
     return true;
 }
 
@@ -864,5 +1066,26 @@ bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t 
         
     return true;
 }
+
+/********
+ * DEBUG
+**********/
+
+#ifdef DM_DEBUG
+void dm_dx12_get_debug_message(dm_dx12_renderer* dx12_renderer)
+{
+    const uint32_t num_messages = IDXGIInfoQueue_GetNumStoredMessages(dx12_renderer->info_queue, DXGI_DEBUG_ALL);
+    for(uint32_t i=0; i<num_messages; i++)
+    {
+        size_t len = 0;
+        IDXGIInfoQueue_GetMessage(dx12_renderer->info_queue, DXGI_DEBUG_ALL, i, NULL, &len);
+        DXGI_INFO_QUEUE_MESSAGE* buffer = dm_alloc(len);
+        IDXGIInfoQueue_GetMessage(dx12_renderer->info_queue, DXGI_DEBUG_ALL, i, buffer, &len);
+
+        DM_LOG_ERROR("%s\n", buffer->pDescription);
+        dm_free((void**)&buffer);
+    }
+}
+#endif
 
 #endif
