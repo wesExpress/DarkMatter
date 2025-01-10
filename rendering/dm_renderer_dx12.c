@@ -2,8 +2,6 @@
 
 #ifdef DM_DIRECTX12
 
-#define DM_DEBUG
-
 #include "../platform/dm_platform_win32.h"
 
 #include <stdio.h>
@@ -59,8 +57,8 @@ typedef struct dm_dx12_raster_pipeline_t
 
 typedef struct dm_dx12_buffer_indices_t
 {
-    uint8_t buffer[DM_DX12_MAX_FRAMES_IN_FLIGHT];
-    uint8_t upload[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    uint8_t host_buffer[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    uint8_t device_buffer[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 } dm_dx12_buffer_indices;
 
 typedef struct dm_dx12_vertex_buffer_t
@@ -277,7 +275,7 @@ bool dm_renderer_backend_init(dm_context* context)
         swap_desc.SwapEffect   = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         swap_desc.SampleDesc   = sample_desc;
         swap_desc.Format       = DXGI_FORMAT_R8G8B8A8_UNORM;
-        //swap_desc.Flags        = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;        
+        swap_desc.Flags        = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;        
 
         HWND hwnd = w32_data->hwnd;
 
@@ -564,7 +562,7 @@ bool dm_renderer_backend_end_frame(dm_context* context)
         return false;
     }
 
-    hr = IDXGISwapChain4_Present(dx12_renderer->swap_chain, context->renderer.vsync,0);
+    hr = IDXGISwapChain4_Present(dx12_renderer->swap_chain, context->renderer.vsync, DXGI_PRESENT_ALLOW_TEARING);
     if(!dm_platform_win32_decode_hresult(hr))
     {
         DM_LOG_FATAL("IDXGISwapChain4_Present failed");
@@ -775,13 +773,11 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
 
     for(uint8_t i=0; i<desc.input_assembler.input_element_count; i++)
     {
-        const dm_input_element_desc element   = desc.input_assembler.input_elements[i];
-
-        input_element_descs[i].SemanticName      = element.name; 
-        input_element_descs[i].InputSlot         = element.slot;
+        input_element_descs[i].SemanticName      = desc.input_assembler.input_elements[i].name; 
+        input_element_descs[i].InputSlot         = desc.input_assembler.input_elements[i].slot;
         input_element_descs[i].AlignedByteOffset = i==0 ? 0 : D3D12_APPEND_ALIGNED_ELEMENT;
 
-        switch(element.format)
+        switch(desc.input_assembler.input_elements[i].format)
         {
             case DM_INPUT_ELEMENT_FORMAT_FLOAT_2:
             input_element_descs[i].Format = DXGI_FORMAT_R32G32_FLOAT;
@@ -792,9 +788,13 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
             case DM_INPUT_ELEMENT_FORMAT_FLOAT_3:
             input_element_descs[i].Format = DXGI_FORMAT_R32G32B32_FLOAT;
             break;
+
+            case DM_INPUT_ELEMENT_FORMAT_FLOAT_4:
+            input_element_descs[i].Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+            break;
         }
 
-        switch(element.class)
+        switch(desc.input_assembler.input_elements[i].class)
         {
             default:
             DM_LOG_ERROR("Unknown input element class. Assuming D3D12_INPUT_CLASSIFICATION_PER_VERTEX");
@@ -895,38 +895,65 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-ID3D12Resource* dm_dx12_create_committed_resource(D3D12_HEAP_PROPERTIES properties, D3D12_RESOURCE_DESC desc, D3D12_HEAP_FLAGS flags, D3D12_RESOURCE_STATES state, ID3D12Device5* device)
+bool dm_dx12_create_committed_resource(D3D12_HEAP_PROPERTIES properties, D3D12_RESOURCE_DESC desc, D3D12_HEAP_FLAGS flags, D3D12_RESOURCE_STATES state, ID3D12Resource** resource, ID3D12Device5* device)
 {
     void* temp = NULL;
     HRESULT hr = ID3D12Device5_CreateCommittedResource(device, &properties, flags, &desc, state, 0, &IID_ID3D12Resource, &temp);
     if(!dm_platform_win32_decode_hresult(hr) || !temp)
     {
         DM_LOG_FATAL("ID3D12Device5_CreateCommittedResource failed");
+        return false;
     }
 
-    return temp;
+    *resource = temp;
+    temp = NULL;
+
+    return true;
 }
 
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-ID3D12Resource* dm_dx12_create_upload_resource(D3D12_RESOURCE_DESC desc, ID3D12Device5* device)
+bool dm_dx12_create_upload_resource(D3D12_RESOURCE_DESC desc, ID3D12Resource** resource, ID3D12Device5* device)
 {
     D3D12_HEAP_PROPERTIES properties = { 0 };
     properties.Type = D3D12_HEAP_TYPE_UPLOAD;
 
-    return dm_dx12_create_committed_resource(properties, desc, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, device);
+    return dm_dx12_create_committed_resource(properties, desc, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, resource, device);
 }
 
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-ID3D12Resource* dm_dx12_create_default_resource(D3D12_RESOURCE_DESC desc, ID3D12Device5* device)
+bool dm_dx12_create_default_resource(D3D12_RESOURCE_DESC desc, ID3D12Resource** resource, ID3D12Device5* device)
 {
     D3D12_HEAP_PROPERTIES properties = { 0 };
     properties.Type = D3D12_HEAP_TYPE_DEFAULT;
 
-    return dm_dx12_create_committed_resource(properties, desc, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, device);
+    return dm_dx12_create_committed_resource(properties, desc, D3D12_HEAP_FLAG_NONE, D3D12_RESOURCE_STATE_COMMON, resource, device);
+}
+
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_dx12_copy_memory(ID3D12Resource* resource, void* data, size_t size)
+{
+    void* temp = NULL;
+
+    D3D12_RANGE range = { 0 };
+    range.End = size-1;
+    
+    ID3D12Resource_Map(resource, 0, &range, &temp);
+    if(!temp)
+    {
+        DM_LOG_FATAL("ID3D12Resource_Map failed");
+        return false;
+    }
+
+    dm_memcpy(temp, data, size);
+    ID3D12Resource_Unmap(resource, 0, &range);
+    
+    return true;
 }
 
 bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer)
@@ -953,38 +980,24 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_ren
 
     for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        // default buffer
-        dx12_renderer->resources[dx12_renderer->resource_count] = dm_dx12_create_default_resource(rd, dx12_renderer->device);
-        if(!dx12_renderer->resources[dx12_renderer->resource_count]) return false;
+        // host buffer 
+        if(!dm_dx12_create_upload_resource(rd, &dx12_renderer->resources[dx12_renderer->resource_count], dx12_renderer->device)) return false;
+        buffer.indices.host_buffer[i] = dx12_renderer->resource_count++;
 
-        buffer.indices.buffer[i] = dx12_renderer->resource_count++;
+        // device buffer
+        if(!dm_dx12_create_default_resource(rd, &dx12_renderer->resources[dx12_renderer->resource_count], dx12_renderer->device)) return false;
+        buffer.indices.device_buffer[i] = dx12_renderer->resource_count++;
 
-        buffer.view[i].BufferLocation = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[buffer.indices.buffer[i]]);
+        buffer.view[i].BufferLocation = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[buffer.indices.device_buffer[i]]);
         buffer.view[i].SizeInBytes   = desc.size;
         buffer.view[i].StrideInBytes = desc.stride;
 
-        // upload buffer
-        dx12_renderer->resources[dx12_renderer->resource_count] = dm_dx12_create_upload_resource(rd, dx12_renderer->device);
-        if(!dx12_renderer->resources[dx12_renderer->resource_count])         
-        { 
-            // must release default buffer here
-            ID3D12Resource_Release(dx12_renderer->resources[buffer.indices.buffer[i]]);
-            
-            return false;
-        }
-
-        buffer.indices.upload[i] = dx12_renderer->resource_count++;
-
         if(!desc.data) continue;
 
-        D3D12_RANGE range = { 0 };
-        range.End = desc.size-1;
-        ID3D12Resource_Map(dx12_renderer->resources[buffer.indices.upload[i]], 0, &range, &temp);
-        dm_memcpy(temp, desc.data, desc.size);
-        ID3D12Resource_Unmap(dx12_renderer->resources[buffer.indices.upload[i]], 0, &range);
+        if(!dm_dx12_copy_memory(dx12_renderer->resources[buffer.indices.host_buffer[i]], desc.data, desc.size)) return false;
 
-        ID3D12Resource* src_buffer = dx12_renderer->resources[buffer.indices.upload[i]];
-        ID3D12Resource* dst_buffer = dx12_renderer->resources[buffer.indices.buffer[i]];
+        ID3D12Resource* src_buffer = dx12_renderer->resources[buffer.indices.host_buffer[i]];
+        ID3D12Resource* dst_buffer = dx12_renderer->resources[buffer.indices.device_buffer[i]];
 
         ID3D12GraphicsCommandList7_CopyBufferRegion(command_list, dst_buffer, 0, src_buffer, 0, desc.size);
     } 
@@ -1050,6 +1063,22 @@ bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_re
     dm_dx12_vertex_buffer vb = dx12_renderer->vertex_buffers[handle.index];
 
     ID3D12GraphicsCommandList7_IASetVertexBuffers(command_list, 0, 1, &vb.view[current_frame]);
+
+    return true;
+}
+
+bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+
+    if(handle.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER)
+    {
+        DM_LOG_FATAL("Trying to bind a resource that is not a vertex buffer");
+        return false;
+    }
+
+    dm_dx12_vertex_buffer buffer = dx12_renderer->vertex_buffers[handle.index];
 
     return true;
 }

@@ -649,6 +649,7 @@ RENDER COMMANDS
 *****************/
 extern bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_render_handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer);
 
 void _dm_render_command_submit(dm_render_command command, dm_render_command_manager* manager)
@@ -692,6 +693,19 @@ void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* c
     DM_RENDER_COMMAND_SUBMIT;
 }
 
+void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context)
+{
+    dm_render_command command = { 0 };
+
+    command.type = DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER;
+
+    command.params[0].void_val          = data;
+    command.params[1].size_t_val        = size;
+    command.params[2].render_handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context)
 {
     dm_render_command command = { 0 };
@@ -727,6 +741,10 @@ bool dm_renderer_submit_commands(dm_context* context)
             case DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER:
             if(dm_render_command_backend_bind_vertex_buffer(command.params[0].render_handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind vertex buffer failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER:
+            if(dm_render_command_backend_update_vertex_buffer(command.params[0].void_val, command.params[1].size_t_val, command.params[2].render_handle_val, renderer)) continue;
+            DM_LOG_FATAL("Update vertex buffer failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED:
@@ -790,45 +808,36 @@ typedef enum dm_context_flags_t
     DM_CONTEXT_FLAG_UNKNOWN
 } dm_context_flags;
 
-dm_context* dm_init(dm_context_init_packet init_packet)
+bool dm_init(dm_context_init_packet init_packet, dm_context** context)
 {
-    dm_context* context = dm_alloc(sizeof(dm_context));
+    *context = dm_alloc(sizeof(dm_context));
     
-    context->platform_data.window_data.width = init_packet.window_width;
-    context->platform_data.window_data.height = init_packet.window_height;
-    dm_strcpy(context->platform_data.window_data.title, init_packet.window_title);
-    dm_strcpy(context->platform_data.asset_path, init_packet.asset_folder);
+    (*context)->platform_data.window_data.width = init_packet.window_width;
+    (*context)->platform_data.window_data.height = init_packet.window_height;
+    dm_strcpy((*context)->platform_data.window_data.title, init_packet.window_title);
+    dm_strcpy((*context)->platform_data.asset_path, init_packet.asset_folder);
     
-    if(!dm_platform_init(init_packet.window_x, init_packet.window_y, context))
-    {
-        dm_free((void**)&context);
-        return NULL;
-    }
+    if(!dm_platform_init(init_packet.window_x, init_packet.window_y, *context)) return false;
     
-    context->renderer.width  = context->platform_data.window_data.width;
-    context->renderer.height = context->platform_data.window_data.height;
-    if(!dm_renderer_init(context))
-    {
-        dm_platform_shutdown(&context->platform_data);
-        dm_free((void**)&context);
-        return NULL;
-    }
+    (*context)->renderer.width  = (*context)->platform_data.window_data.width;
+    (*context)->renderer.height = (*context)->platform_data.window_data.height;
+    if(!dm_renderer_init(*context)) return false;
     
-    context->renderer.width  = init_packet.window_width;
-    context->renderer.height = init_packet.window_height;
-    context->renderer.vsync  = init_packet.vsync;
+    (*context)->renderer.width  = init_packet.window_width;
+    (*context)->renderer.height = init_packet.window_height;
+    (*context)->renderer.vsync  = init_packet.vsync;
     
     // random init
-    init_genrand(&context->random, (uint32_t)dm_platform_get_time(&context->platform_data));
-    init_genrand64(&context->random_64, (uint64_t)dm_platform_get_time(&context->platform_data));
+    init_genrand(&(*context)->random, (uint32_t)dm_platform_get_time(&(*context)->platform_data));
+    init_genrand64(&(*context)->random_64, (uint64_t)dm_platform_get_time(&(*context)->platform_data));
     
     // misc
-    context->delta = 1.0f / 60.f;
-    context->flags |= DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+    (*context)->delta = 1.0f / 60.f;
+    (*context)->flags |= DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
 
-    if(init_packet.app_data_size) context->app_data = dm_alloc(init_packet.app_data_size);
+    if(init_packet.app_data_size) (*context)->app_data = dm_alloc(init_packet.app_data_size);
     
-    return context;
+    return true;
 }
 
 void dm_shutdown(dm_context* context)
@@ -1197,10 +1206,10 @@ int main(int argc, char** argv)
     
     dm_application_setup(&init_packet);
     
-    dm_context* context = dm_init(init_packet);
-    if(!context) 
+    dm_context* context = NULL;
+
+    if(!dm_init(init_packet, &context))
     {
-        int r = getchar();
         exit_code = DM_EXIT_CODE_INIT_FAIL;
         goto DM_EXIT;
     }

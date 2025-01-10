@@ -322,6 +322,7 @@ typedef enum dm_input_element_format_t
     DM_INPUT_ELEMENT_FORMAT_UNKNOWN,
     DM_INPUT_ELEMENT_FORMAT_FLOAT_2,
     DM_INPUT_ELEMENT_FORMAT_FLOAT_3,
+    DM_INPUT_ELEMENT_FORMAT_FLOAT_4,
 } dm_input_element_format;
 
 typedef enum dm_input_element_class_t
@@ -442,6 +443,7 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_UNKNOWN,
     DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE,
     DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
 } dm_render_command_type;
 
@@ -737,6 +739,7 @@ bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_hand
 
 void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* context);
+void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_handle, dm_context* context);
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
 
 // physics
@@ -748,6 +751,7 @@ void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_m
 void dm_physics_apply_constraints(dm_contact_manifold* manifold);
 
 // framework funcs
+#if 0
 dm_context* dm_init(dm_context_init_packet init_packet);
 void        dm_shutdown(dm_context* context);
 
@@ -758,6 +762,7 @@ bool        dm_update_begin(dm_context* context);
 bool        dm_update_end(dm_context* context);
 bool        dm_renderer_begin_frame(dm_context* context);
 bool        dm_renderer_end_frame(dm_context* context);
+#endif
 bool        dm_context_is_running(dm_context* context);
 
 void dm_kill(dm_context* context);
