@@ -437,14 +437,22 @@ typedef struct dm_vertex_buffer_desc_t
     void*  data;
 } dm_vertex_buffer_desc;
 
+typedef struct dm_index_buffer_desc_t
+{
+    size_t size, element_size;
+    void* data;
+} dm_index_buffer_desc;
+
 // commands
 typedef enum dm_render_command_type_t
 {
     DM_RENDER_COMMAND_TYPE_UNKNOWN,
     DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE,
     DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
+    DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED
 } dm_render_command_type;
 
 typedef enum dm_render_command_param_type_t
@@ -736,11 +744,14 @@ void dm_platform_sleep(uint64_t ms, dm_context* context);
 // rendering
 bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 
 void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* context);
+void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* context);
 void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_handle, dm_context* context);
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
+void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);
 
 // physics
 bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);

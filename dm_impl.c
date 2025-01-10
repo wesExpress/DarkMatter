@@ -623,6 +623,7 @@ void dm_renderer_shutdown(dm_context* context)
 // render resources
 extern bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 
 bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_context* context)
 {
@@ -644,13 +645,25 @@ bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_hand
     return false;
 }
 
+bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context)
+{
+    handle->type = DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER;
+
+    if(dm_renderer_backend_create_index_buffer(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating index buffer failed");
+    return false;
+}
+
 /***************
 RENDER COMMANDS
 *****************/
 extern bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_render_handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer);
+extern bool dm_render_command_backend_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
 
 void _dm_render_command_submit(dm_render_command command, dm_render_command_manager* manager)
 {
@@ -693,6 +706,17 @@ void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* c
     DM_RENDER_COMMAND_SUBMIT;
 }
 
+void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* context)
+{
+    dm_render_command command = { 0 };
+
+    command.type = DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER;
+
+    command.params[0].render_handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
 void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context)
 {
     dm_render_command command = { 0 };
@@ -716,6 +740,21 @@ void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance
     command.params[1].uint32_val = instance_offset;
     command.params[2].uint32_val = vertex_count;
     command.params[3].uint32_val = vertex_offset;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context)
+{
+    dm_render_command command = { 0 };
+
+    command.type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED;
+
+    command.params[0].uint32_val = instance_count;
+    command.params[1].uint32_val = instance_offset;
+    command.params[2].uint32_val = index_count;
+    command.params[3].uint32_val = index_offset;
+    command.params[4].uint32_val = vertex_offset;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -747,9 +786,18 @@ bool dm_renderer_submit_commands(dm_context* context)
             DM_LOG_FATAL("Update vertex buffer failed");
             return false;
 
+            case DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER:
+            if(dm_render_command_backend_bind_index_buffer(command.params[0].render_handle_val, renderer)) continue;
+            DM_LOG_FATAL("Bind index buffer failed");
+            return false;
+
             case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED:
             if(dm_render_command_backend_draw_instanced(command.params[0].uint32_val, command.params[1].uint32_val, command.params[2].uint32_val, command.params[3].uint32_val, renderer)) continue;
             DM_LOG_FATAL("Draw instanced failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED:
+            if(dm_render_command_backend_draw_instanced_indexed(command.params[0].uint32_val, command.params[1].uint32_val, command.params[2].uint32_val, command.params[3].uint32_val, command.params[5].uint32_val, renderer)) continue;
+            DM_LOG_FATAL("Draw instanced indexed failed");
             return false;
 
             default:
