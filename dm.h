@@ -437,9 +437,17 @@ typedef struct dm_vertex_buffer_desc_t
     void*  data;
 } dm_vertex_buffer_desc;
 
+typedef enum dm_index_buffer_index_type_t
+{
+    DM_INDEX_BUFFER_INDEX_TYPE_UNKNOWN,
+    DM_INDEX_BUFFER_INDEX_TYPE_UINT16,
+    DM_INDEX_BUFFER_INDEX_TYPE_UINT32
+} dm_index_buffer_index_type;
+
 typedef struct dm_index_buffer_desc_t
 {
     size_t size, element_size;
+    dm_index_buffer_index_type index_type;
     void* data;
 } dm_index_buffer_desc;
 

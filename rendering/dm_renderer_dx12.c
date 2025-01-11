@@ -71,6 +71,7 @@ typedef struct dm_dx12_index_buffer_t
 {
     D3D12_INDEX_BUFFER_VIEW view[DM_DX12_MAX_FRAMES_IN_FLIGHT];
     dm_dx12_buffer_indices  indices;
+    DXGI_FORMAT             index_format;
 } dm_dx12_index_buffer;
 
 #define DM_DX12_MAX_RAST_PIPES 10
@@ -1046,6 +1047,19 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_rende
 
     dm_dx12_index_buffer buffer = { 0 };
     
+    switch(desc.index_type)
+    {
+        case DM_INDEX_BUFFER_INDEX_TYPE_UINT16:
+        buffer.index_format = DXGI_FORMAT_R16_UINT;
+        break;
+
+        default:
+        DM_LOG_ERROR("Unknown index type. Assuming uint32");
+        case DM_INDEX_BUFFER_INDEX_TYPE_UINT32:
+        buffer.index_format = DXGI_FORMAT_R32_UINT;
+        break;
+    }
+
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[dx12_renderer->current_frame];
 
     for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
@@ -1062,7 +1076,7 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_rende
 
         buffer.view[i].BufferLocation = ID3D12Resource_GetGPUVirtualAddress(*device_buffer);
         buffer.view[i].SizeInBytes    = desc.size;
-        buffer.view[i].Format         = DXGI_FORMAT_R32_UINT; // TODO: need some check for what size of indices are actually here rather than just assume
+        buffer.view[i].Format         = buffer.index_format;
 
         // data copy
         if(!desc.data) continue;
@@ -1087,13 +1101,6 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_rende
 bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
-    HRESULT hr;
-
-    if(handle.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE)
-    {
-        DM_LOG_FATAL("Trying to bind resource that is not a raster pipeline");
-        return false;
-    }
 
     const uint8_t current_frame = dx12_renderer->current_frame;
 
@@ -1121,13 +1128,6 @@ bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_
 bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
-    HRESULT hr;
-
-    if(handle.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER)
-    {
-        DM_LOG_FATAL("Trying to bind a resource that is not a vertex buffer");
-        return false;
-    }
 
     const uint8_t current_frame = dx12_renderer->current_frame;
 
@@ -1142,13 +1142,6 @@ bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_re
 bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
-    HRESULT hr;
-
-    if(handle.type != DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER)
-    {
-        DM_LOG_FATAL("Trying to bind a resource that is not an index buffer");
-        return false;
-    }
 
     const uint8_t current_frame = dx12_renderer->current_frame;
 
@@ -1163,13 +1156,6 @@ bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, dm_ren
 bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
-    HRESULT hr;
-
-    if(handle.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER)
-    {
-        DM_LOG_FATAL("Trying to bind a resource that is not a vertex buffer");
-        return false;
-    }
 
     dm_dx12_vertex_buffer buffer = dx12_renderer->vertex_buffers[handle.index];
 
@@ -1179,7 +1165,6 @@ bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_
 bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
-    HRESULT hr;
 
     const uint8_t current_frame = dx12_renderer->current_frame;
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
@@ -1192,7 +1177,6 @@ bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t 
 bool dm_render_command_backend_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
-    HRESULT hr;
 
     const uint8_t current_frame = dx12_renderer->current_frame;
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[dx12_renderer->current_frame];

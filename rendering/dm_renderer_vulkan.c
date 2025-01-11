@@ -48,6 +48,14 @@ typedef struct dm_vulkan_vertex_buffer_t
     dm_vulkan_buffer device_buffer;
 } dm_vulkan_vertex_buffer;
 
+typedef struct dm_vulkan_index_buffer_t
+{
+    dm_vulkan_buffer host_buffer;
+    dm_vulkan_buffer device_buffer;
+
+    VkIndexType index_type;
+} dm_vulkan_index_buffer;
+
 #define DM_VULKAN_INVALID_QUEUE_INDEX UINT16_MAX
 typedef struct dm_vulkan_family_t
 {
@@ -94,6 +102,7 @@ typedef struct dm_vulkan_swapchain_t
 #define DM_VULKAN_MAX_RENDERPASSES   10
 #define DM_VULKAN_MAX_RASTER_PIPES   10
 #define DM_VULKAN_MAX_VERTEX_BUFFERS 100
+#define DM_VULKAN_MAX_INDEX_BUFFERS  100
 #define DM_VULKAN_DEFAULT_RENDERPASS 0
 typedef struct dm_vulkan_renderer_t
 {
@@ -118,6 +127,9 @@ typedef struct dm_vulkan_renderer_t
 
     dm_vulkan_vertex_buffer vertex_buffers[DM_VULKAN_MAX_VERTEX_BUFFERS];
     uint32_t                vb_count;
+
+    dm_vulkan_index_buffer index_buffers[DM_VULKAN_MAX_INDEX_BUFFERS];
+    uint32_t               ib_count;
 
     uint32_t current_frame, image_index;
 
@@ -969,6 +981,18 @@ void dm_renderer_backend_shutdown(dm_context* context)
         }
     }
 
+    for(uint32_t i=0; i<vulkan_renderer->ib_count; i++)
+    {
+        for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
+        {
+            vkDestroyBuffer(device, vulkan_renderer->index_buffers[i].host_buffer.buffer[j], allocator);
+            vkFreeMemory(device, vulkan_renderer->index_buffers[i].host_buffer.memory[j], allocator);
+
+            vkDestroyBuffer(device, vulkan_renderer->index_buffers[i].device_buffer.buffer[j], allocator);
+            vkFreeMemory(device, vulkan_renderer->index_buffers[i].device_buffer.memory[j], allocator);
+        }
+    }
+
     for(uint8_t i=0; i<vulkan_renderer->raster_pipe_count; i++)
     {
         vkDestroyPipelineLayout(device, vulkan_renderer->raster_pipes[i].layout, allocator);
@@ -1657,6 +1681,62 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_ren
     return true;
 }
 
+bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    dm_vulkan_index_buffer buffer = { 0 }; 
+
+    switch(desc.index_type)
+    {
+        case DM_INDEX_BUFFER_INDEX_TYPE_UINT16:
+        buffer.index_type = VK_INDEX_TYPE_UINT16;
+        break;
+
+        default:
+        DM_LOG_ERROR("Unknown index buffer index type, assuming uint32");
+        case DM_INDEX_BUFFER_INDEX_TYPE_UINT32:
+        buffer.index_type = VK_INDEX_TYPE_UINT32;
+        break;
+    }
+
+    VkBufferUsageFlagBits host_buffer_usage   = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VkBufferUsageFlagBits device_buffer_usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+
+    VkMemoryPropertyFlagBits host_memory_flags   = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    VkMemoryPropertyFlagBits device_memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+    
+    VkSharingMode sharing_mode = VK_SHARING_MODE_CONCURRENT;
+    
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        // host buffer
+        if(!dm_vulkan_create_buffer(desc.size, host_buffer_usage, host_memory_flags, sharing_mode, &buffer.host_buffer.buffer[i], &buffer.host_buffer.memory[i], vulkan_renderer)) return false;
+
+        // device buffer
+        if(!dm_vulkan_create_buffer(desc.size, device_buffer_usage, device_memory_flags, sharing_mode, &buffer.device_buffer.buffer[i], &buffer.device_buffer.memory[i], vulkan_renderer)) return false;
+
+        // buffer data
+        if(!desc.data) continue;
+
+        if(!dm_vulkan_copy_memory(&buffer.host_buffer.memory[i], desc.data, desc.size, vulkan_renderer)) return false;
+
+        VkBufferCopy copy_region = { 0 };
+        copy_region.size = desc.size;
+
+        vkCmdCopyBuffer(vulkan_renderer->device.transient_family.buffer[vulkan_renderer->current_frame], buffer.host_buffer.buffer[i], buffer.device_buffer.buffer[i], 1, &copy_region);
+    }
+
+    //
+    {
+        dm_memcpy(vulkan_renderer->index_buffers + vulkan_renderer->ib_count, &buffer, sizeof(buffer));
+        handle->index = vulkan_renderer->ib_count++;
+    }
+
+    return true;
+}
+
 /******************
  * RENDER COMMANDS
  * *****************/
@@ -1664,12 +1744,6 @@ bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_
 {
     DM_VULKAN_GET_RENDERER;
     VkResult vr;
-
-    if(handle.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE)
-    {
-        DM_LOG_FATAL("Trying to bind a resource that is not a raster pipeline");
-        return false;
-    }
 
     const uint8_t current_frame = vulkan_renderer->current_frame;
 
@@ -1686,12 +1760,6 @@ bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_re
 {
     DM_VULKAN_GET_RENDERER;
 
-    if(handle.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER)
-    {
-        DM_LOG_FATAL("Trying to bind a resource that is not a vertex buffer");
-        return false;
-    }
-
     const uint8_t current_frame = vulkan_renderer->current_frame;
     dm_vulkan_vertex_buffer buffer = vulkan_renderer->vertex_buffers[handle.index];
     
@@ -1705,15 +1773,21 @@ bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_re
     return true;
 }
 
-bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_renderer* renderer)
+bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, dm_renderer* renderer)
 {
     DM_VULKAN_GET_RENDERER;
 
-    if(handle.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER)
-    {
-        DM_LOG_FATAL("Trying to udpate a resource that is not a vertex buffer");
-        return false;
-    }
+    const uint8_t current_frame = vulkan_renderer->current_frame;
+    dm_vulkan_index_buffer buffer = vulkan_renderer->index_buffers[handle.index];
+
+    vkCmdBindIndexBuffer(vulkan_renderer->device.graphics_family.buffer[current_frame], buffer.device_buffer.buffer[current_frame], 0, buffer.index_type);
+
+    return true;
+}
+
+bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
 
     const uint8_t current_frame = vulkan_renderer->current_frame;
     dm_vulkan_vertex_buffer buffer = vulkan_renderer->vertex_buffers[handle.index];
@@ -1726,6 +1800,15 @@ bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t 
     DM_VULKAN_GET_RENDERER;
 
     vkCmdDraw(vulkan_renderer->device.graphics_family.buffer[vulkan_renderer->current_frame], vertex_count, instance_count, vertex_offset, instance_offset);
+
+    return true;
+}
+
+bool dm_render_command_backend_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+
+    vkCmdDrawIndexed(vulkan_renderer->device.graphics_family.buffer[vulkan_renderer->current_frame], index_count, instance_count, index_offset, vertex_offset, instance_offset);
 
     return true;
 }

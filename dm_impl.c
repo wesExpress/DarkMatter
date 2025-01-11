@@ -773,20 +773,24 @@ bool dm_renderer_submit_commands(dm_context* context)
         switch(command.type)
         {
             case DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE:
+            if(command.params[0].render_handle_val.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE) return false;
             if(dm_render_command_backend_bind_raster_pipeline(command.params[0].render_handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind raster pipeline failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER:
+            if(command.params[0].render_handle_val.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER) return false;
             if(dm_render_command_backend_bind_vertex_buffer(command.params[0].render_handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind vertex buffer failed");
             return false;
             case DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER:
+            if(command.params[2].render_handle_val.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER) return false;
             if(dm_render_command_backend_update_vertex_buffer(command.params[0].void_val, command.params[1].size_t_val, command.params[2].render_handle_val, renderer)) continue;
             DM_LOG_FATAL("Update vertex buffer failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER:
+            if(command.params[0].render_handle_val.type != DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER) return false;
             if(dm_render_command_backend_bind_index_buffer(command.params[0].render_handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind index buffer failed");
             return false;
