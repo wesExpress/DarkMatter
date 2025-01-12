@@ -308,6 +308,7 @@ typedef enum dm_render_resource_type_t
     DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE,
     DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER,
     DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER,
+    DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER,
     DM_RENDER_RESOURCE_TYPE_TEXTURE,
 } dm_render_resource_type;
 
@@ -422,10 +423,28 @@ typedef struct dm_scissor_t
     uint32_t offset, extents;
 } dm_scissor;
 
+typedef enum dm_shader_resource_stages_t
+{
+    DM_SHADER_RESOURCE_STAGES_VERTEX  = 0x01,
+    DM_SHADER_RESOURCE_STAGES_PIXEL   = 0x02,
+    DM_SHADER_RESOURCE_STAGES_UNKNOWN = 0xff
+} dm_shader_resource_stages;
+
+#define DM_MAX_SHADER_RESOURCES 10
+typedef struct dm_shader_resources_t
+{
+    dm_render_handle          handles[DM_MAX_SHADER_RESOURCES];
+    dm_shader_resource_stages stages[DM_MAX_SHADER_RESOURCES];
+    uint8_t                   bindings[DM_MAX_SHADER_RESOURCES];
+    uint8_t                   count;
+} dm_shader_resources;
+
 typedef struct dm_raster_pipeline_desc_t
 {
     dm_raster_input_assembler_desc input_assembler;
     dm_rasterizer_desc             rasterizer;
+
+    dm_shader_resources resources;
 
     dm_viewport viewport;
     dm_scissor  scissor;
@@ -451,6 +470,12 @@ typedef struct dm_index_buffer_desc_t
     void* data;
 } dm_index_buffer_desc;
 
+typedef struct dm_constant_buffer_desc_t
+{
+    size_t size;
+    void*  data;
+} dm_constant_buffer_desc;
+
 // commands
 typedef enum dm_render_command_type_t
 {
@@ -459,6 +484,7 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED
 } dm_render_command_type;
@@ -753,11 +779,15 @@ void dm_platform_sleep(uint64_t ms, dm_context* context);
 bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 
 void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* context);
-void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_handle, dm_context* context);
+
+void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);
+void dm_render_command_update_constant_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);
+
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
 void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);
 

@@ -27,10 +27,15 @@ typedef struct dm_vulkan_renderpass_t
     VkRenderPass renderpass;
 } dm_vulkan_renderpass;
 
+#define DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS 4
 typedef struct dm_vulkan_raster_pipeline_t
 {
     VkPipeline       pipeline;
     VkPipelineLayout layout;
+
+    VkDescriptorSetLayout descriptor_set_layout[DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS];
+    VkDescriptorSet       descriptor_set[DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS][DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    uint8_t               descriptor_set_count;
 
     VkViewport viewport;
     VkRect2D   scissor;
@@ -55,6 +60,13 @@ typedef struct dm_vulkan_index_buffer_t
 
     VkIndexType index_type;
 } dm_vulkan_index_buffer;
+
+typedef struct dm_vulkan_constant_buffer_t
+{
+    dm_vulkan_buffer buffer;
+    void*            mapped_memory[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    size_t           size;
+} dm_vulkan_constant_buffer;
 
 #define DM_VULKAN_INVALID_QUEUE_INDEX UINT16_MAX
 typedef struct dm_vulkan_family_t
@@ -99,11 +111,12 @@ typedef struct dm_vulkan_swapchain_t
     VkExtent2D     extents;
 } dm_vulkan_swapchain;
 
-#define DM_VULKAN_MAX_RENDERPASSES   10
-#define DM_VULKAN_MAX_RASTER_PIPES   10
-#define DM_VULKAN_MAX_VERTEX_BUFFERS 100
-#define DM_VULKAN_MAX_INDEX_BUFFERS  100
-#define DM_VULKAN_DEFAULT_RENDERPASS 0
+#define DM_VULKAN_MAX_RENDERPASSES     10
+#define DM_VULKAN_MAX_RASTER_PIPES     10
+#define DM_VULKAN_MAX_VERTEX_BUFFERS   100
+#define DM_VULKAN_MAX_INDEX_BUFFERS    100
+#define DM_VULKAN_MAX_CONSTANT_BUFFERS 100
+#define DM_VULKAN_DEFAULT_RENDERPASS   0
 typedef struct dm_vulkan_renderer_t
 {
     VkInstance             instance;
@@ -119,6 +132,8 @@ typedef struct dm_vulkan_renderer_t
     VkSemaphore image_available_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     VkSemaphore render_finished_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
 
+    VkDescriptorPool resource_pool[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+
     dm_vulkan_renderpass renderpasses[DM_VULKAN_MAX_RENDERPASSES];
     uint32_t             rp_count;
 
@@ -130,6 +145,9 @@ typedef struct dm_vulkan_renderer_t
 
     dm_vulkan_index_buffer index_buffers[DM_VULKAN_MAX_INDEX_BUFFERS];
     uint32_t               ib_count;
+
+    dm_vulkan_constant_buffer constant_buffers[DM_VULKAN_MAX_CONSTANT_BUFFERS];
+    uint32_t                  cb_count;
 
     uint32_t current_frame, image_index;
 
@@ -932,6 +950,30 @@ bool dm_renderer_backend_init(dm_context* context)
         }
     }
 
+    // descriptor pools
+    {
+        // TODO: this needs work
+        VkDescriptorPoolSize pool_size = { 0 };
+        pool_size.type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        pool_size.descriptorCount = 1;
+        
+        VkDescriptorPoolCreateInfo pool_create_info = { 0 };
+        pool_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+        pool_create_info.poolSizeCount = 1;
+        pool_create_info.pPoolSizes    = &pool_size;
+        pool_create_info.maxSets       = 1;
+
+        for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            vr = vkCreateDescriptorPool(vulkan_renderer->device.logical, &pool_create_info, vulkan_renderer->allocator, &vulkan_renderer->resource_pool[i]);
+            if(!dm_vulkan_decode_vr(vr))
+            {
+                DM_LOG_FATAL("vkCreateDescriptorPool failed");
+                return false;
+            }
+        }
+    }
+
     return true;
 }
 
@@ -993,8 +1035,22 @@ void dm_renderer_backend_shutdown(dm_context* context)
         }
     }
 
+    for(uint32_t i=0; i<vulkan_renderer->cb_count; i++)
+    {
+        for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
+        {
+            vkUnmapMemory(device, vulkan_renderer->constant_buffers[i].buffer.memory[j]);
+            vkDestroyBuffer(device, vulkan_renderer->constant_buffers[i].buffer.buffer[j], allocator);
+            vkFreeMemory(device, vulkan_renderer->constant_buffers[i].buffer.memory[j], allocator);
+        }
+    }
+
     for(uint8_t i=0; i<vulkan_renderer->raster_pipe_count; i++)
     {
+        for(uint8_t j=0; j<vulkan_renderer->raster_pipes[i].descriptor_set_count; j++)
+        {
+            vkDestroyDescriptorSetLayout(device, vulkan_renderer->raster_pipes[i].descriptor_set_layout[j], allocator);
+        }
         vkDestroyPipelineLayout(device, vulkan_renderer->raster_pipes[i].layout, allocator);
         vkDestroyPipeline(device, vulkan_renderer->raster_pipes[i].pipeline, allocator);
     }
@@ -1006,6 +1062,7 @@ void dm_renderer_backend_shutdown(dm_context* context)
 
     for(uint32_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
+        vkDestroyDescriptorPool(device, vulkan_renderer->resource_pool[i], allocator);
         vkDestroyFence(device, vulkan_renderer->fences[i].fence, allocator);
         vkDestroySemaphore(device, vulkan_renderer->image_available_semaphore[i], allocator);
         vkDestroySemaphore(device, vulkan_renderer->render_finished_semaphore[i], allocator);
@@ -1240,6 +1297,14 @@ bool dm_vulkan_create_shader_module(const char* path, VkShaderModule* module, Vk
     return true;
 }
 
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_vulkan_create_descriptor_set()
+{
+    return true;
+}
+
 bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer)
 {
     DM_VULKAN_GET_RENDERER;
@@ -1260,6 +1325,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     VkPipelineRasterizationStateCreateInfo raster_create_info = { 0 };
     VkPipelineViewportStateCreateInfo viewport_state_info = { 0 };
     VkPipelineDynamicStateCreateInfo  dynamic_state_info  = { 0 };
+    VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 
     // === input assembler ===
     {
@@ -1363,11 +1429,71 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     }
     VkPipelineShaderStageCreateInfo shader_stages[] = { vs_create_info, ps_create_info };
 
+    // === descriptor set ===
+    // TODO: this needs to be fully configurable from app
+    // this is just to get something working here and in dx12 first
+    VkDescriptorSetLayoutBinding descriptor_binding = { 0 };
+    VkDescriptorSetLayoutCreateInfo descriptor_layout_create_info = { 0 };
+    {
+        descriptor_binding.binding         = 0;
+        descriptor_binding.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        descriptor_binding.stageFlags      = VK_SHADER_STAGE_VERTEX_BIT;
+        descriptor_binding.descriptorCount = 1;
+
+        descriptor_layout_create_info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptor_layout_create_info.bindingCount = 1;
+        descriptor_layout_create_info.pBindings    = &descriptor_binding;
+
+        vr = vkCreateDescriptorSetLayout(vulkan_renderer->device.logical, &descriptor_layout_create_info, vulkan_renderer->allocator, &pipeline.descriptor_set_layout[0]);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkCreateDescriptorSetLayout failed");
+            return false;
+        }
+
+        pipeline.descriptor_set_count++;
+
+        // allocate descriptor set and attach resources
+        // TODO: again, this needs to be configurable. right now just hardcoding things
+        const dm_vulkan_constant_buffer cb = vulkan_renderer->constant_buffers[desc.resources.handles[0].index];
+
+        for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            VkDescriptorSetAllocateInfo allocate_info = { 0 };
+            allocate_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+            allocate_info.descriptorPool     = vulkan_renderer->resource_pool[i];
+            allocate_info.descriptorSetCount = 1;
+            allocate_info.pSetLayouts        = &pipeline.descriptor_set_layout[0];
+
+            vr = vkAllocateDescriptorSets(vulkan_renderer->device.logical, &allocate_info, &pipeline.descriptor_set[0][i]);
+            if(!dm_vulkan_decode_vr(vr))
+            {
+                DM_LOG_FATAL("vkAllocateDescriptorSets failed");
+                return false;
+            }
+
+            VkDescriptorBufferInfo buffer_info = { 0 };
+            buffer_info.buffer = cb.buffer.buffer[i];
+            buffer_info.range  = VK_WHOLE_SIZE;
+
+            VkWriteDescriptorSet write_info = { 0 };
+            write_info.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            write_info.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+            write_info.descriptorCount = 1;
+            write_info.dstSet          = pipeline.descriptor_set[0][i];
+            write_info.pBufferInfo     = &buffer_info;
+
+            vkUpdateDescriptorSets(vulkan_renderer->device.logical, 1, &write_info, 0, NULL);
+        }
+    }   
+
     // === layout ===
     {
         // TODO: needs to be configurable
         VkPipelineLayoutCreateInfo create_info = { 0 };
-        create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        create_info.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+        create_info.pSetLayouts    = pipeline.descriptor_set_layout;
+        create_info.setLayoutCount = 1;
 
         vr = vkCreatePipelineLayout(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &pipeline.layout);
         if(!dm_vulkan_decode_vr(vr))
@@ -1493,12 +1619,12 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     }
 
     // === dynamic states ===
-    VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
     {
         dynamic_state_info.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
         dynamic_state_info.dynamicStateCount = 2;
         dynamic_state_info.pDynamicStates    = dynamic_states;
     }
+
 
     // === pipeline object ===
     {
@@ -1525,6 +1651,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
             return false;
         }
     }
+
 
     // === cleanup ===
     vkDestroyShaderModule(vulkan_renderer->device.logical, vs, vulkan_renderer->allocator);
@@ -1737,6 +1864,44 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_rende
     return true;
 }
 
+bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    dm_vulkan_constant_buffer buffer = { 0 };
+    
+    VkBufferUsageFlagBits    buffer_usage   = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    VkMemoryPropertyFlagBits memory_flags   = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
+    
+    VkSharingMode sharing_mode = VK_SHARING_MODE_CONCURRENT;
+    
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        if(!dm_vulkan_create_buffer(desc.size, buffer_usage, memory_flags, sharing_mode, &buffer.buffer.buffer[i], &buffer.buffer.memory[i], vulkan_renderer)) return false;
+
+        // buffer data
+        if(!desc.data) continue;
+
+        if(!dm_vulkan_copy_memory(&buffer.buffer.memory[i], desc.data, desc.size, vulkan_renderer)) return false;
+
+        vkMapMemory(vulkan_renderer->device.logical, buffer.buffer.memory[i], 0, desc.size, 0, &buffer.mapped_memory[i]);
+        if(!buffer.mapped_memory[i])
+        {
+            DM_LOG_FATAL("vkMapMemory failed");
+            return false;
+        }
+    }
+
+    //
+    {
+        dm_memcpy(vulkan_renderer->constant_buffers + vulkan_renderer->cb_count, &buffer, sizeof(buffer));
+        handle->index = vulkan_renderer->cb_count++;
+    }
+
+    return true;
+}
+
 /******************
  * RENDER COMMANDS
  * *****************/
@@ -1746,12 +1911,15 @@ bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_
     VkResult vr;
 
     const uint8_t current_frame = vulkan_renderer->current_frame;
+    const VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_family.buffer[current_frame];
 
     dm_vulkan_raster_pipeline pipeline = vulkan_renderer->raster_pipes[handle.index];
 
-    vkCmdBindPipeline(vulkan_renderer->device.graphics_family.buffer[current_frame], 0, pipeline.pipeline);
-    vkCmdSetViewport(vulkan_renderer->device.graphics_family.buffer[current_frame], 0,1, &pipeline.viewport);
-    vkCmdSetScissor(vulkan_renderer->device.graphics_family.buffer[current_frame], 0,1, &pipeline.scissor);
+    vkCmdBindPipeline(cmd_buffer, 0, pipeline.pipeline);
+    vkCmdSetViewport(cmd_buffer, 0,1, &pipeline.viewport);
+    vkCmdSetScissor(cmd_buffer, 0,1, &pipeline.scissor);
+
+    vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0,1, &pipeline.descriptor_set[0][current_frame], 0, NULL);
 
     return true;
 }
@@ -1792,6 +1960,24 @@ bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_
     const uint8_t current_frame = vulkan_renderer->current_frame;
     dm_vulkan_vertex_buffer buffer = vulkan_renderer->vertex_buffers[handle.index];
         
+    return true;
+}
+
+bool dm_render_command_backend_update_constant_buffer(void* data, size_t size, dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+
+    const uint8_t current_frame = vulkan_renderer->current_frame;
+    dm_vulkan_constant_buffer buffer = vulkan_renderer->constant_buffers[handle.index];
+
+    if(!buffer.mapped_memory[current_frame])
+    {
+        DM_LOG_FATAL("Constant buffer has invalid mapped memory for frame: %d", current_frame);
+        return false;
+    }
+
+    dm_memcpy(buffer.mapped_memory[current_frame], data, size);
+
     return true;
 }
 
