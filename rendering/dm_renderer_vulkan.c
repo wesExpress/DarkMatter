@@ -953,14 +953,18 @@ bool dm_renderer_backend_init(dm_context* context)
     // descriptor pools
     {
         // TODO: this needs work
-        VkDescriptorPoolSize pool_size = { 0 };
-        pool_size.type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        pool_size.descriptorCount = 1;
-        
+        VkDescriptorPoolSize pool_size[2] = { 0 };
+
+        pool_size[0].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        pool_size[0].descriptorCount = 1;
+
+        pool_size[1].type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        pool_size[1].descriptorCount = 1;
+
         VkDescriptorPoolCreateInfo pool_create_info = { 0 };
         pool_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        pool_create_info.poolSizeCount = 1;
-        pool_create_info.pPoolSizes    = &pool_size;
+        pool_create_info.poolSizeCount = 2;
+        pool_create_info.pPoolSizes    = pool_size;
         pool_create_info.maxSets       = 1;
 
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
@@ -1430,60 +1434,139 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     VkPipelineShaderStageCreateInfo shader_stages[] = { vs_create_info, ps_create_info };
 
     // === descriptor set ===
-    // TODO: this needs to be fully configurable from app
-    // this is just to get something working here and in dx12 first
-    VkDescriptorSetLayoutBinding descriptor_binding = { 0 };
-    VkDescriptorSetLayoutCreateInfo descriptor_layout_create_info = { 0 };
+    // this is probably really terrible
     {
-        descriptor_binding.binding         = 0;
-        descriptor_binding.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptor_binding.stageFlags      = VK_SHADER_STAGE_VERTEX_BIT;
-        descriptor_binding.descriptorCount = 1;
-
-        descriptor_layout_create_info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        descriptor_layout_create_info.bindingCount = 1;
-        descriptor_layout_create_info.pBindings    = &descriptor_binding;
-
-        vr = vkCreateDescriptorSetLayout(vulkan_renderer->device.logical, &descriptor_layout_create_info, vulkan_renderer->allocator, &pipeline.descriptor_set_layout[0]);
-        if(!dm_vulkan_decode_vr(vr))
+        for(uint8_t i=0; i<desc.descriptor_group_count; i++)
         {
-            DM_LOG_FATAL("vkCreateDescriptorSetLayout failed");
-            return false;
-        }
+            dm_descriptor_group group = desc.descriptor_group[i];
 
-        pipeline.descriptor_set_count++;
+            VkDescriptorSetLayoutBinding bindings[DM_DESCRIPTOR_GROUP_MAX_RANGES] = { 0 };
+            VkDescriptorSetLayoutCreateInfo layout_create_info = { 0 };
 
-        // allocate descriptor set and attach resources
-        // TODO: again, this needs to be configurable. right now just hardcoding things
-        const dm_vulkan_constant_buffer cb = vulkan_renderer->constant_buffers[desc.resources.handles[0].index];
+           for(uint8_t j=0; j<group.range_count; j++)
+            {
+                bindings[j].binding         = j; 
+                bindings[j].descriptorCount = group.ranges[j].count;
 
-        for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
-        {
-            VkDescriptorSetAllocateInfo allocate_info = { 0 };
-            allocate_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-            allocate_info.descriptorPool     = vulkan_renderer->resource_pool[i];
-            allocate_info.descriptorSetCount = 1;
-            allocate_info.pSetLayouts        = &pipeline.descriptor_set_layout[0];
+                switch(group.ranges[j].type)
+                {
+                    case DM_DESCRIPTOR_RANGE_TYPE_CONSTANT_BUFFER:
+                    bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                    break;
 
-            vr = vkAllocateDescriptorSets(vulkan_renderer->device.logical, &allocate_info, &pipeline.descriptor_set[0][i]);
+                    case DM_DESCRIPTOR_RANGE_TYPE_SAMPLER:
+                    bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                    break;
+
+                    default:
+                    DM_LOG_FATAL("Unsupported or uncreated resource for descriptor set");
+                    return false;
+                }
+
+                if(group.ranges[j].flags & DM_DESCRIPTOR_FLAG_VERTEX_SHADER) bindings[j].stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
+                if(group.ranges[j].flags & DM_DESCRIPTOR_FLAG_PIXEL_SHADER) bindings[j].stageFlags  |= VK_SHADER_STAGE_FRAGMENT_BIT;
+            }
+
+            layout_create_info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+            layout_create_info.bindingCount = 1;
+            layout_create_info.pBindings    = bindings;
+
+            vr = vkCreateDescriptorSetLayout(vulkan_renderer->device.logical, &layout_create_info, vulkan_renderer->allocator, &pipeline.descriptor_set_layout[i]);
             if(!dm_vulkan_decode_vr(vr))
             {
-                DM_LOG_FATAL("vkAllocateDescriptorSets failed");
+                DM_LOG_FATAL("vkCreateDescriptorSetLayout failed");
                 return false;
             }
 
-            VkDescriptorBufferInfo buffer_info = { 0 };
-            buffer_info.buffer = cb.buffer.buffer[i];
-            buffer_info.range  = VK_WHOLE_SIZE;
+            pipeline.descriptor_set_count++;
+        }
 
-            VkWriteDescriptorSet write_info = { 0 };
-            write_info.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-            write_info.descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-            write_info.descriptorCount = 1;
-            write_info.dstSet          = pipeline.descriptor_set[0][i];
-            write_info.pBufferInfo     = &buffer_info;
+        // allocate descriptor sets and attach resources
+        for(uint8_t i=0; i<desc.descriptor_group_count; i++)
+        {
+            for(uint8_t f=0; f<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; f++)
+            {
+                VkDescriptorSetAllocateInfo allocate_info = { 0 };
+                allocate_info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+                allocate_info.descriptorPool     = vulkan_renderer->resource_pool[f];
+                allocate_info.descriptorSetCount = 1;
+                allocate_info.pSetLayouts        = pipeline.descriptor_set_layout;
 
-            vkUpdateDescriptorSets(vulkan_renderer->device.logical, 1, &write_info, 0, NULL);
+                vr = vkAllocateDescriptorSets(vulkan_renderer->device.logical, &allocate_info, &pipeline.descriptor_set[i][f]);
+                if(!dm_vulkan_decode_vr(vr))
+                {
+                    DM_LOG_FATAL("vkAllocateDescriptorSets failed");
+                    return false;
+                }
+            }
+        }
+
+        // attach resources
+        // for all frames
+        for(uint8_t f=0; f<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; f++)
+        {
+            // for all descriptor groups
+            for(uint8_t i=0; i<desc.descriptor_group_count; i++)
+            {
+                VkWriteDescriptorSet write_info[2] = { 0 };
+
+                dm_descriptor_group group = desc.descriptor_group[i];
+                if(group.range_count >= 2) { DM_LOG_FATAL("Too many descriptor ranges"); return false; }
+
+                // for all ranges
+                for(uint8_t j=0; j<group.range_count; j++)
+                {
+                    dm_descriptor_range range = group.ranges[j];
+                 
+                    write_info[j].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+                    write_info[j].descriptorCount = range.count;
+                    write_info[j].dstSet          = pipeline.descriptor_set[i][f];
+
+                    switch(range.type)
+                    {
+                        case DM_DESCRIPTOR_RANGE_TYPE_CONSTANT_BUFFER:
+                        write_info[j].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                        break;
+
+                        default:
+                        DM_LOG_FATAL("Unknown or unsupported descriptor range type");
+                        return false;
+                    }
+
+                    VkDescriptorBufferInfo buffer_info[5] = { 0 };
+                    VkDescriptorImageInfo  image_info[5]  = { 0 };
+
+                    // for all resources
+                    for(uint8_t k=0; k<range.count; k++)
+                    {
+                        switch(range.handles[k].type)
+                        {
+                            case DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER:
+                            buffer_info[k].buffer = vulkan_renderer->constant_buffers[range.handles[k].index].buffer.buffer[f];
+                            buffer_info[k].range  = VK_WHOLE_SIZE;
+                            break;
+
+                            default:
+                            DM_LOG_FATAL("Unsupported render resource for descriptor set");
+                            return false;
+                        }
+                    }
+                    
+                    switch(range.type)
+                    {
+                        case DM_DESCRIPTOR_RANGE_TYPE_CONSTANT_BUFFER:
+                        write_info[j].pBufferInfo = buffer_info;
+                        break;
+
+                        default:
+                        DM_LOG_FATAL("Unknown or unsupported descriptor range type. Shouldn't be here...");
+                        return false;
+                    }
+                }
+
+                // finally write
+                vkUpdateDescriptorSets(vulkan_renderer->device.logical, group.range_count, write_info, 0, NULL);
+            }
         }
     }   
 
@@ -1651,7 +1734,6 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
             return false;
         }
     }
-
 
     // === cleanup ===
     vkDestroyShaderModule(vulkan_renderer->device.logical, vs, vulkan_renderer->allocator);
@@ -1910,7 +1992,7 @@ bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_
     DM_VULKAN_GET_RENDERER;
     VkResult vr;
 
-    const uint8_t current_frame = vulkan_renderer->current_frame;
+    const uint8_t current_frame      = vulkan_renderer->current_frame;
     const VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_family.buffer[current_frame];
 
     dm_vulkan_raster_pipeline pipeline = vulkan_renderer->raster_pipes[handle.index];
@@ -1919,7 +2001,20 @@ bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_
     vkCmdSetViewport(cmd_buffer, 0,1, &pipeline.viewport);
     vkCmdSetScissor(cmd_buffer, 0,1, &pipeline.scissor);
 
-    vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0,1, &pipeline.descriptor_set[0][current_frame], 0, NULL);
+    return true;
+}
+
+bool dm_render_command_backend_bind_descriptor_group(dm_render_handle handle, uint8_t group_index, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    const uint8_t current_frame      = vulkan_renderer->current_frame;
+    const VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_family.buffer[current_frame];
+
+    dm_vulkan_raster_pipeline pipeline = vulkan_renderer->raster_pipes[handle.index];
+
+    vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.layout, 0,1, &pipeline.descriptor_set[group_index][current_frame], 0, NULL);
 
     return true;
 }

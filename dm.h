@@ -397,6 +397,36 @@ typedef struct dm_rasterizer_desc_t
     dm_rasterizer_front_face   front_face;
 } dm_rasterizer_desc;
 
+typedef enum dm_descriptor_flags_t
+{
+    DM_DESCRIPTOR_FLAG_UNKNOWN       = 0x00,
+    DM_DESCRIPTOR_FLAG_VERTEX_SHADER = 0x01,
+    DM_DESCRIPTOR_FLAG_PIXEL_SHADER  = 0x02,
+} dm_descriptor_flags;
+
+typedef enum dm_descriptor_range_type_t
+{
+    DM_DESCRIPTOR_RANGE_TYPE_UNKNOWN,
+    DM_DESCRIPTOR_RANGE_TYPE_CONSTANT_BUFFER,
+    DM_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+} dm_descriptor_range_type;
+
+#define DM_DESCRIPTOR_RANGE_MAX_RESOURCES 5
+typedef struct dm_descriptor_range_t
+{
+    dm_descriptor_range_type type;
+    dm_descriptor_flags      flags;
+    dm_render_handle         handles[DM_DESCRIPTOR_RANGE_MAX_RESOURCES];
+    uint8_t                  count;
+} dm_descriptor_range;
+
+#define DM_DESCRIPTOR_GROUP_MAX_RANGES 5
+typedef struct dm_descriptor_group_t
+{
+    dm_descriptor_range ranges[DM_DESCRIPTOR_GROUP_MAX_RANGES];
+    uint8_t             range_count;
+} dm_descriptor_group;
+
 typedef enum dm_viewport_type_t
 {
     DM_VIEWPORT_TYPE_UNKNOWN,
@@ -423,28 +453,14 @@ typedef struct dm_scissor_t
     uint32_t offset, extents;
 } dm_scissor;
 
-typedef enum dm_shader_resource_stages_t
-{
-    DM_SHADER_RESOURCE_STAGES_VERTEX  = 0x01,
-    DM_SHADER_RESOURCE_STAGES_PIXEL   = 0x02,
-    DM_SHADER_RESOURCE_STAGES_UNKNOWN = 0xff
-} dm_shader_resource_stages;
-
-#define DM_MAX_SHADER_RESOURCES 10
-typedef struct dm_shader_resources_t
-{
-    dm_render_handle          handles[DM_MAX_SHADER_RESOURCES];
-    dm_shader_resource_stages stages[DM_MAX_SHADER_RESOURCES];
-    uint8_t                   bindings[DM_MAX_SHADER_RESOURCES];
-    uint8_t                   count;
-} dm_shader_resources;
-
+#define DM_MAX_DESCRIPTOR_GROUPS 2
 typedef struct dm_raster_pipeline_desc_t
 {
     dm_raster_input_assembler_desc input_assembler;
     dm_rasterizer_desc             rasterizer;
 
-    dm_shader_resources resources;
+    dm_descriptor_group            descriptor_group[DM_MAX_DESCRIPTOR_GROUPS];
+    uint8_t                        descriptor_group_count;
 
     dm_viewport viewport;
     dm_scissor  scissor;
@@ -481,6 +497,7 @@ typedef enum dm_render_command_type_t
 {
     DM_RENDER_COMMAND_TYPE_UNKNOWN,
     DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE,
+    DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP,
     DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
@@ -782,6 +799,7 @@ bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle
 bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 
 void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context);
+void dm_render_command_bind_descriptor_group(dm_render_handle handle, uint8_t group_index, dm_context* context);
 void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* context);
 
