@@ -74,11 +74,21 @@ typedef struct dm_dx12_index_buffer_t
     DXGI_FORMAT             index_format;
 } dm_dx12_index_buffer;
 
+typedef struct dm_dx12_constant_buffer_t
+{
+    dm_dx12_buffer_indices indices;
+    size_t                 size;
+    void*                  mapped_addresses[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+} dm_dx12_constant_buffer;
+
 #define DM_DX12_MAX_RAST_PIPES 10
 #define DM_DX12_MAX_VBS        100
 #define DM_DX12_MAX_IBS        100
+#define DM_DX12_MAX_CBS        100
+#define DM_DX12_MAX_BUFFERS    (DM_DX12_MAX_VBS + DM_DX12_MAX_IBS + DM_DX12_MAX_CBS)
 #define DM_DX12_MAX_TEXTURES   100
-#define DM_DX12_MAX_RESOURCES  ((DM_DX12_MAX_VBS + DM_DX12_MAX_IBS + DM_DX12_MAX_TEXTURES) * 2 * DM_DX12_MAX_FRAMES_IN_FLIGHT)
+#define DM_DX12_MAX_RESOURCES_PER_FRAME ((DM_DX12_MAX_BUFFERS + DM_DX12_MAX_TEXTURES) * 2)
+#define DM_DX12_MAX_RESOURCES  (DM_DX12_MAX_RESOURCES_PER_FRAME * DM_DX12_MAX_FRAMES_IN_FLIGHT)
 typedef struct dm_dx12_renderer_t
 {
     ID3D12Device5*   device;
@@ -93,6 +103,7 @@ typedef struct dm_dx12_renderer_t
 
     ID3D12Resource*         render_targets[DM_DX12_MAX_FRAMES_IN_FLIGHT];
     dm_dx12_descriptor_heap rtv_heap;
+    dm_dx12_descriptor_heap resource_heap;
     
     IDXGIFactory4* factory;
     IDXGIAdapter1* adapter;
@@ -105,6 +116,9 @@ typedef struct dm_dx12_renderer_t
 
     dm_dx12_index_buffer  index_buffers[DM_DX12_MAX_IBS];
     uint32_t              ib_count;
+
+    dm_dx12_constant_buffer constant_buffers[DM_DX12_MAX_CBS];
+    uint32_t                cb_count;
 
     ID3D12Resource* resources[DM_DX12_MAX_RESOURCES];
     uint32_t        resource_count;
@@ -348,6 +362,31 @@ bool dm_renderer_backend_init(dm_context* context)
         dx12_renderer->rtv_heap.cpu_handle.current = dx12_renderer->rtv_heap.cpu_handle.begin;
     }
 
+    // resource heap
+    {
+        D3D12_DESCRIPTOR_HEAP_DESC desc = { 0 };
+        desc.Type            = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+        desc.NumDescriptors  = DM_DX12_MAX_RESOURCES;
+        desc.Flags          |= D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+
+        hr = ID3D12Device5_CreateDescriptorHeap(dx12_renderer->device, &desc, &IID_ID3D12DescriptorHeap, &temp);
+        if(!dm_platform_win32_decode_hresult(hr) || !temp)
+        {
+            DM_LOG_FATAL("ID3D12Device5_CreateDescriptorHeap failed");
+            return false;
+        }
+        dx12_renderer->resource_heap.heap = temp;
+        temp = NULL;
+
+        dx12_renderer->resource_heap.size = ID3D12Device5_GetDescriptorHandleIncrementSize(dx12_renderer->device, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+        ID3D12DescriptorHeap_GetCPUDescriptorHandleForHeapStart(dx12_renderer->resource_heap.heap, &dx12_renderer->resource_heap.cpu_handle.begin);
+        dx12_renderer->resource_heap.cpu_handle.current = dx12_renderer->resource_heap.cpu_handle.begin;
+
+        ID3D12DescriptorHeap_GetGPUDescriptorHandleForHeapStart(dx12_renderer->resource_heap.heap, &dx12_renderer->resource_heap.gpu_handle.begin);
+        dx12_renderer->resource_heap.gpu_handle.current = dx12_renderer->resource_heap.gpu_handle.begin;
+    }
+
     // render targets
     {
         for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
@@ -443,6 +482,15 @@ void dm_renderer_backend_shutdown(dm_context* context)
         }
     }
 
+    for(uint32_t i=0; i<dx12_renderer->cb_count; i++)
+    {
+        for(uint8_t j=0; j<DM_DX12_MAX_FRAMES_IN_FLIGHT; j++)
+        {
+            ID3D12Resource_Unmap(dx12_renderer->resources[dx12_renderer->constant_buffers[i].indices.device_buffer[j]], 0,0);
+            dx12_renderer->constant_buffers[i].mapped_addresses[j] = NULL;
+        }
+    }
+
     for(uint32_t i=0; i<dx12_renderer->resource_count; i++)
     {
         ID3D12Resource_Release(dx12_renderer->resources[i]);
@@ -464,6 +512,7 @@ void dm_renderer_backend_shutdown(dm_context* context)
 
     CloseHandle(dx12_renderer->fence_event);
 
+    ID3D12DescriptorHeap_Release(dx12_renderer->resource_heap.heap);
     ID3D12DescriptorHeap_Release(dx12_renderer->rtv_heap.heap);
     IDXGISwapChain4_Release(dx12_renderer->swap_chain);
     ID3D12CommandQueue_Release(dx12_renderer->command_queue);
@@ -529,6 +578,10 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 
     ID3D12GraphicsCommandList7_OMSetRenderTargets(command_list, 1, &rtv_handle, FALSE, NULL);
     ID3D12GraphicsCommandList7_ClearRenderTargetView(command_list, rtv_handle, clear_color, 0, NULL);
+
+    // resource heap
+    ID3D12DescriptorHeap* heaps[] = { dx12_renderer->resource_heap.heap };
+    ID3D12GraphicsCommandList7_SetDescriptorHeaps(command_list, _countof(heaps), heaps);
 
     return true;
 }
@@ -674,8 +727,28 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = { 0 };
     pso_desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 
+    // === descriptors ===
+    // TODO: configure
+    D3D12_DESCRIPTOR_RANGE range = { 0 };
+    range.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+    range.NumDescriptors                    = 1;
+    range.OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+
+    D3D12_ROOT_DESCRIPTOR_TABLE table = { 0 };
+    table.NumDescriptorRanges = 1;
+    table.pDescriptorRanges   = &range;
+
+    D3D12_ROOT_PARAMETER param = { 0 };
+    param.ParameterType    = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
+    param.DescriptorTable  = table;
+    param.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+
     // === root signature ===
     D3D12_ROOT_SIGNATURE_DESC root_desc = { 0 };
+    
+    root_desc.NumParameters = 1;
+    root_desc.pParameters   = &param;
+
     ID3D10Blob* root_blob = NULL;
 
     root_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
@@ -866,6 +939,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     
     pipeline.root_signature = temp;
     temp = NULL;
+
 
     // === pipeline state ===
     pso_desc.RTVFormats[0]              = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -1095,6 +1169,48 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_rende
     return true;
 }
 
+bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+
+    dm_dx12_constant_buffer buffer = { 0 };
+    const size_t aligned_size = (desc.size + 255) & ~255;
+    const size_t big_size = 1024 * 64;
+        
+    for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        ID3D12Resource** device_buffer = &dx12_renderer->resources[dx12_renderer->resource_count];
+        if(!dm_dx12_create_buffer(big_size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, device_buffer, dx12_renderer)) return false;
+        buffer.indices.device_buffer[i] = dx12_renderer->resource_count++;
+        buffer.size = aligned_size; 
+
+        D3D12_CONSTANT_BUFFER_VIEW_DESC view_desc = { 0 };
+        view_desc.SizeInBytes    = aligned_size;
+        view_desc.BufferLocation = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[buffer.indices.device_buffer[i]]);
+
+        ID3D12Device5_CreateConstantBufferView(dx12_renderer->device, &view_desc, dx12_renderer->resource_heap.cpu_handle.current);
+        dx12_renderer->resource_heap.cpu_handle.current.ptr += dx12_renderer->resource_heap.size;
+
+        if(!desc.data) continue;
+
+        hr = ID3D12Resource_Map(dx12_renderer->resources[buffer.indices.device_buffer[i]], 0,NULL, &buffer.mapped_addresses[i]);
+        if(!dm_platform_win32_decode_hresult(hr) || !buffer.mapped_addresses[i])
+        {
+            DM_LOG_FATAL("ID3D12Resource_Map failed");
+            return false;
+        }
+
+        dm_memcpy(buffer.mapped_addresses[i], desc.data, desc.size);
+    }
+
+    //
+    dm_memcpy(dx12_renderer->constant_buffers + dx12_renderer->cb_count, &buffer, sizeof(buffer));
+    handle->index = dx12_renderer->cb_count++;
+
+    return true;
+}
+
 /******************
  * RENDER COMMANDS
 * ******************/
@@ -1139,6 +1255,23 @@ bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_re
     return true;
 }
 
+bool dm_render_command_backend_update_constant_buffer(void* data, size_t size, dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+
+    const uint8_t current_frame = dx12_renderer->current_frame;
+
+    if(!dx12_renderer->constant_buffers[handle.index].mapped_addresses[current_frame])
+    {
+        DM_LOG_FATAL("Constant buffer has an invalid address");
+        return false;
+    }
+
+    dm_memcpy(dx12_renderer->constant_buffers[handle.index].mapped_addresses[current_frame], data, size);
+
+    return true;
+}
+
 bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
@@ -1149,6 +1282,19 @@ bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, dm_ren
     dm_dx12_index_buffer ib = dx12_renderer->index_buffers[handle.index];
 
     ID3D12GraphicsCommandList7_IASetIndexBuffer(command_list, &ib.view[current_frame]);
+
+    return true;
+}
+
+bool dm_render_command_backend_bind_descriptor_group(dm_render_handle handle, uint8_t group_index, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+
+    const uint8_t current_frame = dx12_renderer->current_frame;
+
+    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
+
+    ID3D12GraphicsCommandList7_SetGraphicsRootDescriptorTable(command_list, group_index, dx12_renderer->resource_heap.gpu_handle.begin);
 
     return true;
 }
