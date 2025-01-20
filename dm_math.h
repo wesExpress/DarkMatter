@@ -1168,6 +1168,11 @@ void dm_mat4_from_mat3(dm_mat3 mat, dm_mat4 out)
     out[2][1] = mat[2][1];
     out[2][2] = mat[2][2];
     out[2][3] = 0;
+
+    out[3][0] = 0;
+    out[3][1] = 0;
+    out[3][2] = 0;
+    out[3][3] = 0;
 }
 
 DM_INLINE
