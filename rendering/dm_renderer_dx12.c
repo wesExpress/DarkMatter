@@ -625,7 +625,10 @@ bool dm_renderer_backend_end_frame(dm_context* context)
         return false;
     }
 
-    hr = IDXGISwapChain4_Present(dx12_renderer->swap_chain, context->renderer.vsync, DXGI_PRESENT_ALLOW_TEARING);
+    UINT present_flag = 0;
+    present_flag = DXGI_PRESENT_ALLOW_TEARING;
+
+    hr = IDXGISwapChain4_Present(dx12_renderer->swap_chain, context->renderer.vsync, present_flag);
     if(!dm_platform_win32_decode_hresult(hr))
     {
         DM_LOG_FATAL("IDXGISwapChain4_Present failed");
@@ -729,6 +732,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
 
     // === descriptors ===
     // TODO: configure
+
     D3D12_DESCRIPTOR_RANGE range = { 0 };
     range.RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
     range.NumDescriptors                    = 1;
