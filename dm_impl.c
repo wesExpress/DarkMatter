@@ -625,6 +625,7 @@ extern bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc d
 extern bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_renderer* renderer);
 
 bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_context* context)
 {
@@ -666,6 +667,16 @@ bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_
     return false;
 }
 
+bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_context* context)
+{
+    handle->type = DM_RENDER_RESOURCE_TYPE_TEXTURE;
+
+    if(dm_renderer_backend_create_texture(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating texture failed");
+    return false;
+}
+
 /***************
 RENDER COMMANDS
 *****************/
@@ -677,6 +688,8 @@ extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t si
 extern bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_constant_buffer(void* data, size_t size, dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uint8_t slot, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_texture(dm_render_handle texture, uint8_t slot, dm_renderer* renderer);
 
 void _dm_render_command_submit(dm_render_command command, dm_render_command_manager* manager)
 {
@@ -703,7 +716,7 @@ void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context*
     
     command.type = DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE;
 
-    command.params[0].render_handle_val = handle;
+    command.params[0].handle_val = handle;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -714,8 +727,32 @@ void dm_render_command_bind_descriptor_group(dm_render_handle handle, uint8_t gr
 
     command.type = DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP;
 
-    command.params[0].render_handle_val = handle;
-    command.params[1].uint8_val         = group_index;
+    command.params[0].handle_val = handle;
+    command.params[1].u8_val     = group_index;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_bind_constant_buffer(dm_render_handle buffer, uint8_t slot, dm_context* context)
+{
+    dm_render_command command = { 0 };
+
+    command.type = DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER;
+
+    command.params[0].handle_val = buffer;
+    command.params[1].u8_val     = slot;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_bind_texture(dm_render_handle texture, uint8_t slot, dm_context* context)
+{
+    dm_render_command command = { 0 };
+
+    command.type = DM_RENDER_COMMAND_TYPE_BIND_TEXTURE;
+
+    command.params[0].handle_val = texture;
+    command.params[1].u8_val     = slot;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -726,7 +763,7 @@ void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* c
 
     command.type = DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER;
 
-    command.params[0].render_handle_val = handle;
+    command.params[0].handle_val = handle;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -737,7 +774,7 @@ void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* co
 
     command.type = DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER;
 
-    command.params[0].render_handle_val = handle;
+    command.params[0].handle_val = handle;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -748,9 +785,9 @@ void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_h
 
     command.type = DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER;
 
-    command.params[0].void_val          = data;
-    command.params[1].size_t_val        = size;
-    command.params[2].render_handle_val = handle;
+    command.params[0].void_val   = data;
+    command.params[1].size_t_val = size;
+    command.params[2].handle_val = handle;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -763,7 +800,7 @@ void dm_render_command_update_constant_buffer(void* data, size_t size, dm_render
 
     command.params[0].void_val          = data;
     command.params[1].size_t_val        = size;
-    command.params[2].render_handle_val = handle;
+    command.params[2].handle_val = handle;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -774,10 +811,10 @@ void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance
 
     command.type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED;
 
-    command.params[0].uint32_val = instance_count;
-    command.params[1].uint32_val = instance_offset;
-    command.params[2].uint32_val = vertex_count;
-    command.params[3].uint32_val = vertex_offset;
+    command.params[0].u32_val = instance_count;
+    command.params[1].u32_val = instance_offset;
+    command.params[2].u32_val = vertex_count;
+    command.params[3].u32_val = vertex_offset;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -788,11 +825,11 @@ void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t 
 
     command.type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED;
 
-    command.params[0].uint32_val = instance_count;
-    command.params[1].uint32_val = instance_offset;
-    command.params[2].uint32_val = index_count;
-    command.params[3].uint32_val = index_offset;
-    command.params[4].uint32_val = vertex_offset;
+    command.params[0].u32_val = instance_count;
+    command.params[1].u32_val = instance_offset;
+    command.params[2].u32_val = index_count;
+    command.params[3].u32_val = index_offset;
+    command.params[4].u32_val = vertex_offset;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -807,49 +844,58 @@ bool dm_renderer_submit_commands(dm_context* context)
     for(uint32_t i=0; i<context->renderer.command_manager.count; i++)
     {
         dm_render_command command = context->renderer.command_manager.commands[i];
+        dm_render_command_param* params = command.params;
         
         switch(command.type)
         {
             case DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE:
-            if(command.params[0].render_handle_val.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE) return false;
-            if(dm_render_command_backend_bind_raster_pipeline(command.params[0].render_handle_val, renderer)) continue;
+            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE) return false;
+            if(dm_render_command_backend_bind_raster_pipeline(params[0].handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind raster pipeline failed");
             return false;
             case DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP:
-            if(command.params[0].render_handle_val.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE) return false;
-            if(dm_render_command_backend_bind_descriptor_group(command.params[0].render_handle_val, command.params[1].uint8_val, renderer)) continue;
+            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE) return false;
+            if(dm_render_command_backend_bind_descriptor_group(params[0].handle_val, params[1].u8_val, renderer)) continue;
             DM_LOG_FATAL("Binding descriptor group failed");
             return false;
 
+            case DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER:
+            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER) return false;
+            if(dm_render_command_backend_bind_constant_buffer(params[0].handle_val, params[1].u8_val, renderer)) continue;
+
+            case DM_RENDER_COMMAND_TYPE_BIND_TEXTURE:
+            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_TEXTURE) return false;
+            if(dm_render_command_backend_bind_texture(params[0].handle_val, params[1].u8_val, renderer)) continue;
+
             case DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER:
-            if(command.params[0].render_handle_val.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER) return false;
-            if(dm_render_command_backend_bind_vertex_buffer(command.params[0].render_handle_val, renderer)) continue;
+            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER) return false;
+            if(dm_render_command_backend_bind_vertex_buffer(params[0].handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind vertex buffer failed");
             return false;
             case DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER:
-            if(command.params[2].render_handle_val.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER) return false;
-            if(dm_render_command_backend_update_vertex_buffer(command.params[0].void_val, command.params[1].size_t_val, command.params[2].render_handle_val, renderer)) continue;
+            if(params[2].handle_val.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER) return false;
+            if(dm_render_command_backend_update_vertex_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
             DM_LOG_FATAL("Update vertex buffer failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER:
-            if(command.params[0].render_handle_val.type != DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER) return false;
-            if(dm_render_command_backend_bind_index_buffer(command.params[0].render_handle_val, renderer)) continue;
+            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER) return false;
+            if(dm_render_command_backend_bind_index_buffer(params[0].handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind index buffer failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER:
-            if(command.params[2].render_handle_val.type != DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER) return false;
-            if(dm_render_command_backend_update_constant_buffer(command.params[0].void_val, command.params[1].size_t_val, command.params[2].render_handle_val, renderer)) continue;
+            if(params[2].handle_val.type != DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER) return false;
+            if(dm_render_command_backend_update_constant_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
             DM_LOG_FATAL("Update constant buffer failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED:
-            if(dm_render_command_backend_draw_instanced(command.params[0].uint32_val, command.params[1].uint32_val, command.params[2].uint32_val, command.params[3].uint32_val, renderer)) continue;
+            if(dm_render_command_backend_draw_instanced(params[0].u32_val, params[1].u32_val, params[2].u32_val, params[3].u32_val, renderer)) continue;
             DM_LOG_FATAL("Draw instanced failed");
             return false;
             case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED:
-            if(dm_render_command_backend_draw_instanced_indexed(command.params[0].uint32_val, command.params[1].uint32_val, command.params[2].uint32_val, command.params[3].uint32_val, command.params[5].uint32_val, renderer)) continue;
+            if(dm_render_command_backend_draw_instanced_indexed(params[0].u32_val, params[1].u32_val, params[2].u32_val, params[3].u32_val, params[5].u32_val, renderer)) continue;
             DM_LOG_FATAL("Draw instanced indexed failed");
             return false;
 
@@ -861,6 +907,77 @@ bool dm_renderer_submit_commands(dm_context* context)
         }
     }
     
+    return true;
+    dm_font font = { 0 };
+}
+
+/***************
+ * FONT LOADING
+ ****************/
+bool dm_renderer_load_font(const char* path, int font_size, dm_font* font, dm_context* context)
+{
+    DM_LOG_INFO("Loading font: %s", path);
+    
+    size_t size = 0;
+    void* buffer = dm_read_bytes(path, "rb", &size);
+    
+    if(!buffer) 
+    {
+        DM_LOG_FATAL("Font file '%s' not found");
+        return false;
+    }
+    
+    stbtt_fontinfo info;
+    if(!stbtt_InitFont(&info, buffer, 0))
+    {
+        DM_LOG_FATAL("Could not initialize font: %s", path);
+        return false;
+    }
+    
+    uint16_t w = 512;
+    uint16_t h = 512;
+    uint8_t n_channels = 4;
+    
+    unsigned char* alpha_bitmap = dm_alloc(w * h);
+    unsigned char* bitmap = dm_alloc(w * h * n_channels);
+    dm_memzero(alpha_bitmap, w * h);
+    dm_memzero(bitmap, w * h * n_channels);
+    
+    stbtt_BakeFontBitmap(buffer, 0, font_size, alpha_bitmap, w,h, 32, 96, (stbtt_bakedchar*)font->glyphs);
+    
+    // bitmaps are single alpha values, so make 4 channel texture
+    for(uint16_t y=0; y<h; y++)
+    {
+        for(uint16_t x=0; x<w; x++)
+        {
+            uint32_t index = y * w + x;
+            uint32_t bitmap_index = index * n_channels;
+            unsigned char a = alpha_bitmap[index];
+            
+            bitmap[bitmap_index]     = 255;
+            bitmap[bitmap_index + 1] = 255;
+            bitmap[bitmap_index + 2] = 255;
+            bitmap[bitmap_index + 3] = a;
+        }
+    }
+    
+    dm_texture_desc desc = { 0 };
+    desc.width      = w;
+    desc.height     = h;
+    desc.n_channels = n_channels;
+    desc.data       = bitmap;
+    desc.format     = DM_TEXTURE_FORMAT_BYTE_4;
+
+    if(!dm_renderer_create_texture(desc, &font->texture_handle, context))
+    { 
+        DM_LOG_FATAL("Could not create texture for font: %s"); 
+        return false; 
+    }
+
+    dm_free((void**)&alpha_bitmap);
+    dm_free((void**)&bitmap);
+    dm_free(&buffer);
+
     return true;
 }
 
@@ -1370,7 +1487,7 @@ int main(int argc, char** argv)
             }
             if(!dm_renderer_end_frame(context)) 
             {
-                DM_LOG_FATAL("DarkMatter end fram failed");
+                DM_LOG_FATAL("DarkMatter end frame failed");
 
                 exit_code = DM_EXIT_CODE_END_FRAME_FAIL;
                 goto DM_EXIT;

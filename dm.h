@@ -7,8 +7,6 @@ DEFINES
 #include "dm_defines.h"
 #include "dm_app_defines.h"
 
-#include "dm_math_types.h"
-
 /********
 INCLUDES
 **********/
@@ -397,34 +395,34 @@ typedef struct dm_rasterizer_desc_t
     dm_rasterizer_front_face   front_face;
 } dm_rasterizer_desc;
 
-typedef enum dm_descriptor_flags_t
+typedef enum dm_descriptor_group_flags_t
 {
-    DM_DESCRIPTOR_FLAG_UNKNOWN       = 0x00,
-    DM_DESCRIPTOR_FLAG_VERTEX_SHADER = 0x01,
-    DM_DESCRIPTOR_FLAG_PIXEL_SHADER  = 0x02,
-} dm_descriptor_flags;
+    DM_DESCRIPTOR_GROUP_FLAG_UNKNOWN       = 0x00,
+    DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER = 0x01,
+    DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER  = 0x02,
+} dm_descriptor_group_flags;
 
 typedef enum dm_descriptor_range_type_t
 {
     DM_DESCRIPTOR_RANGE_TYPE_UNKNOWN,
     DM_DESCRIPTOR_RANGE_TYPE_CONSTANT_BUFFER,
-    DM_DESCRIPTOR_RANGE_TYPE_SAMPLER,
+    DM_DESCRIPTOR_RANGE_TYPE_TEXTURE,
 } dm_descriptor_range_type;
 
 #define DM_DESCRIPTOR_RANGE_MAX_RESOURCES 5
 typedef struct dm_descriptor_range_t
 {
     dm_descriptor_range_type type;
-    dm_descriptor_flags      flags;
-    dm_render_handle         handles[DM_DESCRIPTOR_RANGE_MAX_RESOURCES];
+    //dm_render_handle         handles[DM_DESCRIPTOR_RANGE_MAX_RESOURCES];
     uint8_t                  count;
 } dm_descriptor_range;
 
 #define DM_DESCRIPTOR_GROUP_MAX_RANGES 5
 typedef struct dm_descriptor_group_t
 {
-    dm_descriptor_range ranges[DM_DESCRIPTOR_GROUP_MAX_RANGES];
-    uint8_t             range_count;
+    dm_descriptor_range       ranges[DM_DESCRIPTOR_GROUP_MAX_RANGES];
+    dm_descriptor_group_flags flags;
+    uint8_t                   range_count;
 } dm_descriptor_group;
 
 typedef enum dm_viewport_type_t
@@ -492,6 +490,21 @@ typedef struct dm_constant_buffer_desc_t
     void*  data;
 } dm_constant_buffer_desc;
 
+typedef enum dm_texture_format_t
+{
+    DM_TEXTURE_FORMAT_UNKNOWN,
+    DM_TEXTURE_FORMAT_BYTE_4,
+    DM_TEXTURE_FORMAT_FLOAT_3,
+    DM_TEXTURE_FORMAT_FLOAT_4,
+} dm_texture_format;
+
+typedef struct dm_texture_desc_t
+{
+    uint32_t          width, height, n_channels;
+    dm_texture_format format;
+    void*             data;
+} dm_texture_desc;
+
 // commands
 typedef enum dm_render_command_type_t
 {
@@ -500,26 +513,13 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP,
     DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER,
+    DM_RENDER_COMMAND_TYPE_BIND_TEXTURE,
     DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED
 } dm_render_command_type;
-
-typedef enum dm_render_command_param_type_t
-{
-    DM_RENDER_COMMAND_PARAM_TYPE_BOOL,
-    DM_RENDER_COMMAND_PARAM_TYPE_INT,
-    DM_RENDER_COMMAND_PARAM_TYPE_UINT8,
-    DM_RENDER_COMMAND_PARAM_TYPE_UINT16,
-    DM_RENDER_COMMAND_PARAM_TYPE_UINT32,
-    DM_RENDER_COMMAND_PARAM_TYPE_UINT64,
-    DM_RENDER_COMMAND_PARAM_TYPE_SIZE_T,
-    DM_RENDER_COMMAND_PARAM_TYPE_FLOAT,
-    DM_RENDER_COMMAND_PARAM_TYPE_RENDER_HANDLE,
-    DM_RENDER_COMMAND_PARAM_TYPE_VOID,
-    DM_RENDER_COMMAND_PARAM_TYPE_UNKNOWN
-} dm_render_command_param_type;
 
 typedef struct dm_render_command_param_t
 {
@@ -527,13 +527,13 @@ typedef struct dm_render_command_param_t
     {
         bool              bool_val;
         int               int_val;
-        uint8_t           uint8_val;
-        uint16_t          uint16_val;
-        uint32_t          uint32_val;
-        uint64_t          uint64_val;
+        uint8_t           u8_val;
+        uint16_t          u16_val;
+        uint32_t          u32_val;
+        uint64_t          u64_val;
         size_t            size_t_val;
         float             float_val;
-        dm_render_handle  render_handle_val;
+        dm_render_handle  handle_val;
         void*             void_val;
     };
 } dm_render_command_param;
@@ -557,112 +557,24 @@ typedef struct dm_renderer_t
     dm_render_command_manager command_manager;
     
     uint32_t width, height;
-#ifdef DM_OPENGL
-    uint32_t uniform_bindings;
-#endif
-    
     bool vsync;
     
     void* internal_renderer;
 } dm_renderer;
 
-/*******
-PHYSICS
-*********/
-#define DM_PHYSICS_MAX_GJK_ITER      64
-#define DM_PHYSICS_EPA_MAX_FACES     64
-#define DM_PHYSICS_EPA_MAX_ITER      64
-
-#define DM_PHYSICS_FIXED_DT          0.00833f // 1 / 120
-#define DM_PHYSICS_FIXED_DT_INV      120
-
-// movement types
-typedef enum dm_physics_movement_type_t
+// font loading
+typedef struct dm_bakedchar
 {
-    DM_PHYSICS_MOVEMENT_TYPE_KINEMATIC,
-    DM_PHYSICS_MOVEMENT_TYPE_STATIC,
-    DM_PHYSICS_MOVEMENT_TYPE_UNKNOWN
-} dm_physics_movement_type;
+    uint16_t x0, x1, y0, y1;
+    float    x_off, y_off;
+    float    advance;
+} dm_bakedchar;
 
-typedef struct dm_plane
+typedef struct dm_font_t
 {
-    dm_vec3 normal;
-    float   distance;
-} dm_plane;
-
-typedef struct dm_simplex
-{
-    dm_vec3  points[4];
-    uint32_t size;
-} dm_simplex;
-
-typedef struct dm_contact_constraint
-{
-    dm_vec3 jacobian[4];
-    dm_vec3 delta_v[4];
-    float   b;
-    double  lambda, warm_lambda, impulse_sum, impulse_min, impulse_max;
-} dm_contact_constraint;
-
-typedef struct dm_contact_point
-{
-    dm_contact_constraint normal;
-    dm_contact_constraint friction_a, friction_b;
-    
-    dm_vec3 global_pos[2];
-    dm_vec3 local_pos[2];
-    float   penetration;
-} dm_contact_point;
-
-typedef struct dm_contact_data_t
-{
-    float mass, inv_mass;
-    float i_body_inv_00, i_body_inv_11, i_body_inv_22;
-    float v_damp, w_damp;
-    
-    float vel_x, vel_y, vel_z;
-    float w_x, w_y, w_z;
-    
-    dm_physics_movement_type movement_type;
-} dm_contact_data;
-
-#define DM_PHYSICS_CLIP_MAX_PTS 15
-typedef struct dm_contact_manifold
-{
-    dm_vec3 normal;
-    dm_vec3 tangent_a; 
-    dm_vec3 tangent_b;
-    dm_vec3 orientation_a;
-    dm_vec3 orientation_b;
-    
-    dm_contact_data contact_data[2];
-    
-    dm_contact_point points[DM_PHYSICS_CLIP_MAX_PTS];
-    uint32_t         point_count;
-    
-#ifdef DM_PHYSICS_DEBUG
-    dm_vec3  clipped_face[DM_PHYSICS_CLIP_MAX_PTS];
-    uint32_t clipped_point_count;
-    
-    uint32_t face_count_a, face_count_b;
-    dm_vec3  face_a[DM_PHYSICS_CLIP_MAX_PTS];
-    dm_vec3  face_b[DM_PHYSICS_CLIP_MAX_PTS];
-    
-    uint32_t plane_count_a, plane_count_b;
-    dm_plane planes_a[DM_PHYSICS_CLIP_MAX_PTS];
-    dm_plane planes_b[DM_PHYSICS_CLIP_MAX_PTS];
-#endif
-    
-    uint32_t  entity_a, entity_b;
-} dm_contact_manifold;
-
-// supported collision shapes
-typedef enum dm_collision_shape_t
-{
-    DM_COLLISION_SHAPE_SPHERE,
-    DM_COLLISION_SHAPE_BOX,
-    DM_COLLISION_SHAPE_UNKNOWN
-} dm_collision_shape;
+    dm_bakedchar     glyphs[96];
+    dm_render_handle texture_handle;
+} dm_font;
 
 /******************
 DARKMATTER CONTEXT
@@ -797,11 +709,15 @@ bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_
 bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_context* context);
 
 void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_descriptor_group(dm_render_handle handle, uint8_t group_index, dm_context* context);
 void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* context);
+
+void dm_render_command_bind_constant_buffer(dm_render_handle buffer, uint8_t slot, dm_context* context);
+void dm_render_command_bind_texture(dm_render_handle texture, uint8_t slot, dm_context* context);
 
 void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);
 void dm_render_command_update_constant_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);
@@ -809,27 +725,10 @@ void dm_render_command_update_constant_buffer(void* data, size_t size, dm_render
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
 void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);
 
-// physics
-bool dm_physics_gjk(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float supports[2][3], dm_simplex* simplex);
-void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const dm_collision_shape shapes[2], float penetration[3], float polytope[DM_PHYSICS_EPA_MAX_FACES][3][3], float polytope_normals[DM_PHYSICS_EPA_MAX_FACES][3], uint32_t* polytope_count, dm_simplex* simplex);
-bool dm_physics_collide_entities(const float pos[2][3], const float rots[2][4], const float cens[2][3], const float internals[2][6], const float vels[2][3], const float ws[2][3], const dm_collision_shape shapes[2], dm_simplex* simplex, dm_contact_manifold* manifold);
-void dm_physics_constraint_lambda(dm_contact_constraint* constraint, dm_contact_manifold* manifold);
-void dm_physics_constraint_apply(dm_contact_constraint* constraint, dm_contact_manifold* manifold);
-void dm_physics_apply_constraints(dm_contact_manifold* manifold);
+// font loading
+bool dm_renderer_load_font(const char* path, int font_size, dm_font* font, dm_context* context);
 
 // framework funcs
-#if 0
-dm_context* dm_init(dm_context_init_packet init_packet);
-void        dm_shutdown(dm_context* context);
-
-void        dm_start(dm_context* context);
-void        dm_end(dm_context* context);
-
-bool        dm_update_begin(dm_context* context);
-bool        dm_update_end(dm_context* context);
-bool        dm_renderer_begin_frame(dm_context* context);
-bool        dm_renderer_end_frame(dm_context* context);
-#endif
 bool        dm_context_is_running(dm_context* context);
 
 void dm_kill(dm_context* context);
