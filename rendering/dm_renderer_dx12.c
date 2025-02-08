@@ -54,7 +54,7 @@ typedef struct dm_dx12_raster_pipeline_t
     D3D12_VIEWPORT viewport;
     D3D12_RECT     scissor;
 
-    D3D12_GPU_DESCRIPTOR_HANDLE table_handle[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    D3D12_GPU_DESCRIPTOR_HANDLE table_handle[DM_MAX_DESCRIPTOR_GROUPS][DM_DX12_MAX_FRAMES_IN_FLIGHT];
 } dm_dx12_raster_pipeline;
 
 typedef struct dm_dx12_vertex_buffer_t
@@ -350,11 +350,11 @@ bool dm_renderer_backend_init(dm_context* context)
         swap_desc.BufferCount  = DM_DX12_MAX_FRAMES_IN_FLIGHT;
         swap_desc.Width        = context->renderer.width;
         swap_desc.Height       = context->renderer.height;
-        swap_desc.BufferUsage  = DXGI_USAGE_RENDER_TARGET_OUTPUT;
+        swap_desc.BufferUsage  = DXGI_USAGE_BACK_BUFFER | DXGI_USAGE_RENDER_TARGET_OUTPUT;
         swap_desc.SwapEffect   = DXGI_SWAP_EFFECT_FLIP_DISCARD;
         swap_desc.SampleDesc   = sample_desc;
         swap_desc.Format       = DXGI_FORMAT_R8G8B8A8_UNORM;
-        swap_desc.Flags        = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;        
+        swap_desc.Flags        = DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH | DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;        
 
         HWND hwnd = w32_data->hwnd;
 
@@ -806,12 +806,12 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
         params[i].DescriptorTable  = tables[i];
         if(group.flags == DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER) params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
         else if(group.flags == DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER) params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    }
 
-    for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        pipeline.table_handle[i] = dx12_renderer->binding_heap[i].gpu_handle.current;
-        dx12_renderer->binding_heap[i].gpu_handle.current.ptr += descriptor_count * dx12_renderer->binding_heap[i].size;
+        for(uint8_t j=0; j<DM_DX12_MAX_FRAMES_IN_FLIGHT; j++)
+        {
+            pipeline.table_handle[i][j] = dx12_renderer->binding_heap[j].gpu_handle.current;
+            dx12_renderer->binding_heap[j].gpu_handle.current.ptr += descriptor_count * dx12_renderer->binding_heap[j].size;
+        }
     }
 
     // === sampler ===
@@ -833,9 +833,12 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     root_desc.NumStaticSamplers = 1;
     root_desc.pStaticSamplers   = &sampler;
 
-    ID3D10Blob* root_blob = NULL;
+    root_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-    root_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;
+    ID3D10Blob* root_blob = NULL;
 
     hr = D3D12SerializeRootSignature(&root_desc, D3D_ROOT_SIGNATURE_VERSION_1, &root_blob, NULL);
     if(!dm_platform_win32_decode_hresult(hr))
@@ -901,15 +904,16 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     // === blending ===
     D3D12_RENDER_TARGET_BLEND_DESC blend_desc = { 0 };
     
-    blend_desc.BlendEnable    = FALSE;
-    blend_desc.LogicOpEnable  = FALSE;
-    blend_desc.SrcBlend       = D3D12_BLEND_ONE;
-    blend_desc.DestBlend      = D3D12_BLEND_ZERO;
-    blend_desc.BlendOp        = D3D12_BLEND_OP_ADD;
-    blend_desc.SrcBlendAlpha  = D3D12_BLEND_ONE;
-    blend_desc.DestBlendAlpha = D3D12_BLEND_ZERO;
-    blend_desc.BlendOpAlpha   = D3D12_BLEND_OP_ADD;
+    blend_desc.BlendEnable           = TRUE;
+    blend_desc.SrcBlend              = D3D12_BLEND_SRC_ALPHA;
+    blend_desc.DestBlend             = D3D12_BLEND_INV_SRC_ALPHA;
+    blend_desc.BlendOp               = D3D12_BLEND_OP_ADD;
+    blend_desc.SrcBlendAlpha         = D3D12_BLEND_SRC_ALPHA;
+    blend_desc.DestBlendAlpha        = D3D12_BLEND_INV_SRC_ALPHA;
+    blend_desc.BlendOpAlpha          = D3D12_BLEND_OP_ADD;
     blend_desc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+    blend_desc.LogicOpEnable         = FALSE;
+    blend_desc.LogicOp               = D3D12_LOGIC_OP_NOOP;
 
     // === shaders ===
     ID3DBlob* vs = NULL;
@@ -1301,8 +1305,12 @@ bool dm_dx12_create_texture(const size_t width, const size_t height, const dm_te
         desc.Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
         break;
 
-        case DM_TEXTURE_FORMAT_BYTE_4:
+        case DM_TEXTURE_FORMAT_BYTE_4_UINT:
         desc.Format = DXGI_FORMAT_R8G8B8A8_UINT;
+        break;
+
+        case DM_TEXTURE_FORMAT_BYTE_4_UNORM:
+        desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
         break;
 
         default:
@@ -1332,8 +1340,12 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_render_handle* 
     DXGI_FORMAT format;
     switch(desc.format)
     {
-        case DM_TEXTURE_FORMAT_BYTE_4:
+        case DM_TEXTURE_FORMAT_BYTE_4_UINT:
         format = DXGI_FORMAT_R8G8B8A8_UINT;
+        break;
+
+        case DM_TEXTURE_FORMAT_BYTE_4_UNORM:
+        format = DXGI_FORMAT_R8G8B8A8_UNORM;
         break;
 
         case DM_TEXTURE_FORMAT_FLOAT_3:
@@ -1532,7 +1544,7 @@ bool dm_render_command_backend_bind_descriptor_group(dm_render_handle handle, ui
     dm_dx12_raster_pipeline pipeline = dx12_renderer->rast_pipelines[handle.index];
 
     const uint8_t current_frame = dx12_renderer->current_frame;
-    const D3D12_GPU_DESCRIPTOR_HANDLE table_handle = pipeline.table_handle[current_frame];
+    const D3D12_GPU_DESCRIPTOR_HANDLE table_handle = pipeline.table_handle[group_index][current_frame];
 
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
 

@@ -912,7 +912,7 @@ bool dm_renderer_submit_commands(dm_context* context)
 }
 
 /***************
- * FONT LOADING
+ * FONT 
  ****************/
 bool dm_renderer_load_font(const char* path, int font_size, dm_font* font, dm_context* context)
 {
@@ -966,7 +966,7 @@ bool dm_renderer_load_font(const char* path, int font_size, dm_font* font, dm_co
     desc.height     = h;
     desc.n_channels = n_channels;
     desc.data       = bitmap;
-    desc.format     = DM_TEXTURE_FORMAT_BYTE_4;
+    desc.format     = DM_TEXTURE_FORMAT_BYTE_4_UNORM;
 
     if(!dm_renderer_create_texture(desc, &font->texture_handle, context))
     { 
@@ -979,6 +979,14 @@ bool dm_renderer_load_font(const char* path, int font_size, dm_font* font, dm_co
     dm_free(&buffer);
 
     return true;
+}
+
+dm_font_aligned_quad dm_font_get_aligned_quad(dm_font font, const char text, float* xf, float* yf)
+{
+    stbtt_aligned_quad q;
+    stbtt_GetBakedQuad((stbtt_bakedchar*)font.glyphs, 512,512, text-32, xf,yf, &q, 1);
+
+    return *(dm_font_aligned_quad*)&q;
 }
 
 /*********

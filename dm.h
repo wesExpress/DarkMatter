@@ -493,7 +493,8 @@ typedef struct dm_constant_buffer_desc_t
 typedef enum dm_texture_format_t
 {
     DM_TEXTURE_FORMAT_UNKNOWN,
-    DM_TEXTURE_FORMAT_BYTE_4,
+    DM_TEXTURE_FORMAT_BYTE_4_UINT,
+    DM_TEXTURE_FORMAT_BYTE_4_UNORM,
     DM_TEXTURE_FORMAT_FLOAT_3,
     DM_TEXTURE_FORMAT_FLOAT_4,
 } dm_texture_format;
@@ -563,17 +564,23 @@ typedef struct dm_renderer_t
 } dm_renderer;
 
 // font loading
-typedef struct dm_bakedchar
+typedef struct dm_font_baked_char
 {
     uint16_t x0, x1, y0, y1;
     float    x_off, y_off;
     float    advance;
-} dm_bakedchar;
+} dm_font_baked_char;
+
+typedef struct dm_font_aligned_quad_t
+{
+    float x0,y0,s0,t0;
+    float x1,y1,s1,t1;
+} dm_font_aligned_quad;
 
 typedef struct dm_font_t
 {
-    dm_bakedchar     glyphs[96];
-    dm_render_handle texture_handle;
+    dm_font_baked_char glyphs[96];
+    dm_render_handle   texture_handle;
 } dm_font;
 
 /******************
@@ -727,6 +734,7 @@ void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t 
 
 // font loading
 bool dm_renderer_load_font(const char* path, int font_size, dm_font* font, dm_context* context);
+dm_font_aligned_quad dm_font_get_aligned_quad(dm_font font, const char text, float* xf, float* yf);
 
 // framework funcs
 bool        dm_context_is_running(dm_context* context);
