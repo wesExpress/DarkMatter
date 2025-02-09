@@ -942,6 +942,8 @@ bool dm_renderer_load_font(const char* path, int font_size, dm_font* font, dm_co
             bitmap[bitmap_index + 3] = a;
         }
     }
+
+    bitmap[0] = 1.f;
     
     dm_texture_desc desc = { 0 };
     desc.width      = w;
