@@ -681,7 +681,6 @@ bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, 
 RENDER COMMANDS
 *****************/
 extern bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_descriptor_group(dm_render_handle handle, uint8_t group_index, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_render_handle, dm_renderer* renderer);
@@ -717,18 +716,6 @@ void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context*
     command.type = DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE;
 
     command.params[0].handle_val = handle;
-
-    DM_RENDER_COMMAND_SUBMIT;
-}
-
-void dm_render_command_bind_descriptor_group(dm_render_handle handle, uint8_t group_index, dm_context* context)
-{
-    dm_render_command command = { 0 };
-
-    command.type = DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP;
-
-    command.params[0].handle_val = handle;
-    command.params[1].u8_val     = group_index;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -852,11 +839,6 @@ bool dm_renderer_submit_commands(dm_context* context)
             if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE) return false;
             if(dm_render_command_backend_bind_raster_pipeline(params[0].handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind raster pipeline failed");
-            return false;
-            case DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP:
-            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE) return false;
-            if(dm_render_command_backend_bind_descriptor_group(params[0].handle_val, params[1].u8_val, renderer)) continue;
-            DM_LOG_FATAL("Binding descriptor group failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER:
