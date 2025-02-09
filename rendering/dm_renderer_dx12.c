@@ -53,9 +53,6 @@ typedef struct dm_dx12_raster_pipeline_t
     D3D_PRIMITIVE_TOPOLOGY topology;
     D3D12_VIEWPORT viewport;
     D3D12_RECT     scissor;
-
-    D3D12_GPU_DESCRIPTOR_HANDLE root_param_handle[DM_MAX_DESCRIPTOR_GROUPS][DM_DX12_MAX_FRAMES_IN_FLIGHT];
-    uint8_t                     root_param_count;
 } dm_dx12_raster_pipeline;
 
 typedef struct dm_dx12_vertex_buffer_t
@@ -610,6 +607,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     // binding heap (reset its ptr back to the start)
     dm_dx12_descriptor_heap* binding_heap = &dx12_renderer->binding_heap[current_frame];
     binding_heap->cpu_handle.current = binding_heap->cpu_handle.begin;
+    binding_heap->gpu_handle.current = binding_heap->gpu_handle.begin;
     
     ID3D12DescriptorHeap* heaps[] = { binding_heap->heap };
     ID3D12GraphicsCommandList7_SetDescriptorHeaps(command_list, _countof(heaps), heaps);
@@ -807,15 +805,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
         params[i].DescriptorTable  = tables[i];
         if(group.flags == DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER) params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
         else if(group.flags == DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER) params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-        for(uint8_t j=0; j<DM_DX12_MAX_FRAMES_IN_FLIGHT; j++)
-        {
-            pipeline.root_param_handle[i][j] = dx12_renderer->binding_heap[j].gpu_handle.current;
-            dx12_renderer->binding_heap[j].gpu_handle.current.ptr += descriptor_count * dx12_renderer->binding_heap[j].size;
-        }
     }
-
-    pipeline.root_param_count = desc.descriptor_group_count;
 
     // === sampler ===
     D3D12_STATIC_SAMPLER_DESC sampler = { 0 };
@@ -1458,12 +1448,6 @@ bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_
     ID3D12GraphicsCommandList7_RSSetViewports(command_list, 1, &pipeline.viewport);
     ID3D12GraphicsCommandList7_RSSetScissorRects(command_list, 1, &pipeline.scissor);
     ID3D12GraphicsCommandList7_IASetPrimitiveTopology(command_list, pipeline.topology);
-    
-    for(uint8_t i=0; i<pipeline.root_param_count; i++)
-    {
-        const D3D12_GPU_DESCRIPTOR_HANDLE table_handle = pipeline.root_param_handle[i][current_frame];
-        ID3D12GraphicsCommandList7_SetGraphicsRootDescriptorTable(command_list, i, table_handle);
-    }
 
     return true;
 }
@@ -1559,6 +1543,7 @@ bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uin
     ID3D12Device5_CopyDescriptorsSimple(dx12_renderer->device, 1, binding_heap->cpu_handle.current, constant_buffer.handle[current_frame], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     binding_heap->cpu_handle.current.ptr += binding_heap->size; 
+    binding_heap->gpu_handle.current.ptr += binding_heap->size;
 
     return true;
 }
@@ -1576,6 +1561,22 @@ bool dm_render_command_backend_bind_texture(dm_render_handle texture, uint8_t sl
     ID3D12Device5_CopyDescriptorsSimple(dx12_renderer->device, 1, binding_heap->cpu_handle.current, t.handle[current_frame], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
 
     binding_heap->cpu_handle.current.ptr += binding_heap->size;
+    binding_heap->gpu_handle.current.ptr += binding_heap->size;
+
+    return true;
+}
+
+bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    
+    const uint8_t current_frame = dx12_renderer->current_frame;
+    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
+
+    D3D12_GPU_DESCRIPTOR_HANDLE handle = dx12_renderer->binding_heap[current_frame].gpu_handle.current;
+    handle.ptr -= descriptor_count * dx12_renderer->binding_heap[current_frame].size;
+
+    ID3D12GraphicsCommandList7_SetGraphicsRootDescriptorTable(command_list, group_index, handle);
 
     return true;
 }

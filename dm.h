@@ -517,6 +517,7 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_BIND_TEXTURE,
     DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER,
+    DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED
 } dm_render_command_type;
@@ -718,7 +719,7 @@ bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_
 bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_context* context);
 
 void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context);
-void dm_render_command_bind_descriptor_group(dm_render_handle handle, uint8_t group_index, dm_context* context);
+void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, dm_context* context);
 void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* context);
 
