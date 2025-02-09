@@ -857,10 +857,14 @@ bool dm_renderer_submit_commands(dm_context* context)
             case DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER:
             if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER) return false;
             if(dm_render_command_backend_bind_constant_buffer(params[0].handle_val, params[1].u8_val, renderer)) continue;
+            DM_LOG_FATAL("Bind constant buffer failed");
+            return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_TEXTURE:
             if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_TEXTURE) return false;
             if(dm_render_command_backend_bind_texture(params[0].handle_val, params[1].u8_val, renderer)) continue;
+            DM_LOG_FATAL("Bind texture failed");
+            return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER:
             if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER) return false;
