@@ -681,7 +681,7 @@ bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, 
 RENDER COMMANDS
 *****************/
 extern bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, uint8_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_render_handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer);
@@ -757,13 +757,14 @@ void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t descri
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* context)
+void dm_render_command_bind_vertex_buffer(dm_render_handle handle, uint8_t slot, dm_context* context)
 {
     dm_render_command command = { 0 };
 
     command.type = DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER;
 
     command.params[0].handle_val = handle;
+    command.params[1].u8_val     = slot;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -868,7 +869,7 @@ bool dm_renderer_submit_commands(dm_context* context)
 
             case DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER:
             if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER) return false;
-            if(dm_render_command_backend_bind_vertex_buffer(params[0].handle_val, renderer)) continue;
+            if(dm_render_command_backend_bind_vertex_buffer(params[0].handle_val, params[1].u8_val, renderer)) continue;
             DM_LOG_FATAL("Bind vertex buffer failed");
             return false;
             case DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER:

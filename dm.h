@@ -322,6 +322,7 @@ typedef enum dm_input_element_format_t
     DM_INPUT_ELEMENT_FORMAT_FLOAT_2,
     DM_INPUT_ELEMENT_FORMAT_FLOAT_3,
     DM_INPUT_ELEMENT_FORMAT_FLOAT_4,
+    DM_INPUT_ELEMENT_FORMAT_MATRIX_4x4
 } dm_input_element_format;
 
 typedef enum dm_input_element_class_t
@@ -371,7 +372,7 @@ typedef enum dm_rasterizer_front_face_t
     DM_RASTERIZER_FRONT_FACE_COUNTER_CLOCKWISE,
 } dm_rasterizer_front_face;
 
-#define DM_RENDER_MAX_INPUT_ELEMENTS 10
+#define DM_RENDER_MAX_INPUT_ELEMENTS 20
 typedef struct dm_raster_input_assembler_desc_t
 {
     dm_input_element_desc input_elements[DM_RENDER_MAX_INPUT_ELEMENTS];
@@ -451,11 +452,17 @@ typedef struct dm_scissor_t
     uint32_t offset, extents;
 } dm_scissor;
 
+typedef struct dm_depth_stencil_desc_t
+{
+    bool depth, stencil;
+} dm_depth_stencil_desc;
+
 #define DM_MAX_DESCRIPTOR_GROUPS 2
 typedef struct dm_raster_pipeline_desc_t
 {
     dm_raster_input_assembler_desc input_assembler;
     dm_rasterizer_desc             rasterizer;
+    dm_depth_stencil_desc          depth_stencil;
 
     dm_descriptor_group            descriptor_group[DM_MAX_DESCRIPTOR_GROUPS];
     uint8_t                        descriptor_group_count;
@@ -720,7 +727,7 @@ bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, 
 
 void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, dm_context* context);
-void dm_render_command_bind_vertex_buffer(dm_render_handle handle, dm_context* context);
+void dm_render_command_bind_vertex_buffer(dm_render_handle handle, uint8_t slot, dm_context* context);
 void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* context);
 
 void dm_render_command_bind_constant_buffer(dm_render_handle buffer, uint8_t slot, dm_context* context);
