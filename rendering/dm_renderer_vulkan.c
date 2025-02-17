@@ -41,6 +41,7 @@ typedef struct dm_vulkan_raster_pipeline_t
 
     VkDescriptorSetLayout descriptor_set_layout[DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS];
     size_t                descriptor_set_layout_sizes[DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS];
+    size_t                descriptor_set_layout_offsets[DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS];
     uint8_t               descriptor_set_layout_count;
 
     VkViewport viewport;
@@ -92,6 +93,8 @@ typedef struct dm_vulkan_device_t
     VkPhysicalDeviceProperties2                   properties2;
     VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptor_buffer_props;
     VkPhysicalDeviceDescriptorBufferFeaturesEXT   descriptor_buffer_feats;
+    VkPhysicalDeviceVulkan12Properties            vulkan_12_props;
+    VkPhysicalDeviceVulkan12Features              vulkan_12_feats;
 
     VkPhysicalDeviceFeatures         features;
     VkPhysicalDeviceFeatures2        features2;
@@ -122,11 +125,18 @@ typedef struct dm_vulkan_swapchain_t
     VkExtent2D     extents;
 } dm_vulkan_swapchain;
 
+typedef struct dm_vulkan_descriptor_buffer_t
+{
+    dm_vulkan_buffer buffer;
+    size_t           offset[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+} dm_vulkan_descriptor_buffer;
+
 #define DM_VULKAN_MAX_RENDERPASSES     10
 #define DM_VULKAN_MAX_RASTER_PIPES     10
 #define DM_VULKAN_MAX_VERTEX_BUFFERS   100
 #define DM_VULKAN_MAX_INDEX_BUFFERS    100
 #define DM_VULKAN_MAX_CONSTANT_BUFFERS 100
+#define DM_VULKAN_MAX_TEXTURES         100
 #define DM_VULKAN_DEFAULT_RENDERPASS   0
 typedef struct dm_vulkan_renderer_t
 {
@@ -143,7 +153,8 @@ typedef struct dm_vulkan_renderer_t
     VkSemaphore image_available_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     VkSemaphore render_finished_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
 
-    VkDescriptorPool resource_pool[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    dm_vulkan_descriptor_buffer ubo_buffer;
+    dm_vulkan_descriptor_buffer sampler_buffer;
 
     dm_vulkan_renderpass renderpasses[DM_VULKAN_MAX_RENDERPASSES];
     uint32_t             rp_count;
@@ -174,6 +185,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL dm_vulkan_debug_callback(VkDebugUtilsMessageSever
 #endif
 
 bool dm_vulkan_decode_vr(VkResult vr);
+bool dm_vulkan_allocate_memory(VkMemoryRequirements memory_reqs, VkMemoryPropertyFlagBits memory_flags, VkBufferUsageFlagBits usage_flags, VkDeviceMemory* memory, dm_vulkan_renderer* vulkan_renderer);
 
 #ifndef DM_DEBUG
 DM_INLINE
@@ -255,12 +267,15 @@ bool dm_vulkan_is_device_suitable(VkPhysicalDevice physical_device, const char**
     vkGetPhysicalDeviceMemoryProperties(device.physical, &device.memory_properties);
 
     device.descriptor_buffer_feats.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT;
+    device.vulkan_12_feats.sType         = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    device.descriptor_buffer_feats.pNext = &device.vulkan_12_feats;
 
     device.features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     device.features2.pNext = &device.descriptor_buffer_feats;
     vkGetPhysicalDeviceFeatures2(device.physical, &device.features2);
 
     if(device.descriptor_buffer_feats.descriptorBuffer==0) return false;
+    if(device.vulkan_12_feats.bufferDeviceAddress==0)      return false;
 
     if(device.properties.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) return false;
 
@@ -832,6 +847,8 @@ bool dm_renderer_backend_init(dm_context* context)
             queue_create_infos[i].pQueuePriorities = &queue_priority;
         }
 
+        vulkan_renderer->device.descriptor_buffer_feats.pNext = &vulkan_renderer->device.vulkan_12_feats;
+
         VkDeviceCreateInfo create_info = { 0 };
         create_info.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         create_info.pQueueCreateInfos       = queue_create_infos;
@@ -1008,31 +1025,52 @@ bool dm_renderer_backend_init(dm_context* context)
         }
     }
 
-    // descriptor pools
+    // descriptor buffers
     {
-        // TODO: this needs work
-        VkDescriptorPoolSize pool_size[2] = { 0 };
+        VkBufferCreateInfo create_info = { 0 };
+        create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        create_info.usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+        //create_info. = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+        create_info.size  = vulkan_renderer->device.descriptor_buffer_props.uniformBufferDescriptorSize * DM_VULKAN_MAX_CONSTANT_BUFFERS;
 
-        pool_size[0].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        pool_size[0].descriptorCount = 1;
-
-        pool_size[1].type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        pool_size[1].descriptorCount = 1;
-
-        VkDescriptorPoolCreateInfo pool_create_info = { 0 };
-        pool_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-        pool_create_info.poolSizeCount = 2;
-        pool_create_info.pPoolSizes    = pool_size;
-        pool_create_info.maxSets       = 1;
-
+#if 0 
+        VkMemoryRequirements memReqs;
+		VkMemoryAllocateInfo memAlloc = vks::initializers::memoryAllocateInfo();
+		vkGetBufferMemoryRequirements(logicalDevice, buffer->buffer, &memReqs);
+		memAlloc.allocationSize = memReqs.size;
+		// Find a memory type index that fits the properties of the buffer
+		memAlloc.memoryTypeIndex = getMemoryType(memReqs.memoryTypeBits, memoryPropertyFlags);
+		// If the buffer has VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT set we also need to enable the appropriate flag during allocation
+		VkMemoryAllocateFlagsInfoKHR allocFlagsInfo{};
+		if (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) {
+			allocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO_KHR;
+			allocFlagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT_KHR;
+			memAlloc.pNext = &allocFlagsInfo;
+		}
+		VK_CHECK_RESULT(vkAllocateMemory(logicalDevice, &memAlloc, nullptr, &buffer->memory));
+#endif
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
-            vr = vkCreateDescriptorPool(vulkan_renderer->device.logical, &pool_create_info, vulkan_renderer->allocator, &vulkan_renderer->resource_pool[i]);
+            vr = vkCreateBuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->ubo_buffer.buffer.buffer[i]);
             if(!dm_vulkan_decode_vr(vr))
             {
-                DM_LOG_FATAL("vkCreateDescriptorPool failed");
+                DM_LOG_FATAL("vkCreateBuffer failed");
+                DM_LOG_ERROR("Could not create descriptor buffer");
                 return false;
             }
+
+            VkMemoryRequirements mem_reqs = { 0 };
+            vkGetBufferMemoryRequirements(vulkan_renderer->device.logical, vulkan_renderer->ubo_buffer.buffer.buffer[i], &mem_reqs);
+
+            if(!dm_vulkan_allocate_memory(mem_reqs, VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT, create_info.usage, &vulkan_renderer->ubo_buffer.buffer.memory[i], vulkan_renderer)) return false;
+        }
+
+        create_info.usage |= VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
+        create_info.size = vulkan_renderer->device.descriptor_buffer_props.combinedImageSamplerDescriptorSize * DM_VULKAN_MAX_TEXTURES;
+        
+        for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+        {
+            vr = vkCreateBuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->sampler_buffer.buffer.buffer[i]);
         }
     }
 
@@ -1124,7 +1162,10 @@ void dm_renderer_backend_shutdown(dm_context* context)
 
     for(uint32_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        vkDestroyDescriptorPool(device, vulkan_renderer->resource_pool[i], allocator);
+        vkDestroyBuffer(device, vulkan_renderer->ubo_buffer.buffer.buffer[i], allocator);
+        vkFreeMemory(device, vulkan_renderer->ubo_buffer.buffer.memory[i], allocator);
+        vkDestroyBuffer(device, vulkan_renderer->sampler_buffer.buffer.buffer[i], allocator);
+        vkFreeMemory(device, vulkan_renderer->sampler_buffer.buffer.memory[i], allocator);
         vkDestroyFence(device, vulkan_renderer->fences[i].fence, allocator);
         vkDestroySemaphore(device, vulkan_renderer->image_available_semaphore[i], allocator);
         vkDestroySemaphore(device, vulkan_renderer->render_finished_semaphore[i], allocator);
@@ -1555,6 +1596,8 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
         pipeline.descriptor_set_layout_sizes[i] = (pipeline.descriptor_set_layout_sizes[i] + vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
         pipeline.descriptor_set_layout_sizes[i] &= ~(vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
 
+        vkGetDescriptorSetLayoutBindingOffsetEXT(vulkan_renderer->device.logical, pipeline.descriptor_set_layout[i], i, &pipeline.descriptor_set_layout_offsets[i]);
+
         pipeline.descriptor_set_layout_count++;
     }
 
@@ -1739,9 +1782,6 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
 /*************
  *  RESOURCES
  * ************/
-#ifndef DM_DEBUG
-DM_INLINE
-#endif
 bool dm_vulkan_find_memory_type(uint32_t type_filter, VkPhysicalDeviceMemoryProperties properties, VkMemoryPropertyFlags flags, uint32_t* index)
 {
     for(uint8_t i=0; i<properties.memoryTypeCount; i++)
@@ -1757,16 +1797,27 @@ bool dm_vulkan_find_memory_type(uint32_t type_filter, VkPhysicalDeviceMemoryProp
     return false;
 }
 
-#ifndef DM_DEBUG
-DM_INLINE
-#endif
-bool dm_vulkan_allocate_memory(VkMemoryRequirements memory_reqs, VkMemoryPropertyFlagBits memory_flags, VkDeviceMemory* memory, dm_vulkan_renderer* vulkan_renderer)
+bool dm_vulkan_allocate_memory(VkMemoryRequirements memory_reqs, VkMemoryPropertyFlagBits memory_flags, VkBufferUsageFlagBits usage_flags, VkDeviceMemory* memory, dm_vulkan_renderer* vulkan_renderer)
 {
     VkMemoryAllocateInfo allocate_info = { 0 };
     allocate_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocate_info.allocationSize  = memory_reqs.size;
-    //if(!dm_vulkan_find_memory_type(memory_reqs.memoryTypeBits, vulkan_renderer->device.memory_properties, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, &allocate_info.memoryTypeIndex)) return false;
     if(!dm_vulkan_find_memory_type(memory_reqs.memoryTypeBits, vulkan_renderer->device.memory_properties, memory_flags, &allocate_info.memoryTypeIndex)) return false;
+#if 0 
+		VkMemoryAllocateFlagsInfoKHR allocFlagsInfo{};
+		if (usageFlags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT) {
+			allocFlagsInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO_KHR;
+			allocFlagsInfo.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT_KHR;
+			memAlloc.pNext = &allocFlagsInfo;
+#endif
+
+    VkMemoryAllocateFlagsInfoKHR allocate_flags_info = { 0 };
+    if(usage_flags & VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT)
+    {
+        allocate_flags_info.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO_KHR;
+        allocate_flags_info.flags = VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT_KHR;
+        allocate_info.pNext       = &allocate_flags_info;
+    }
 
     if(!dm_vulkan_decode_vr(vkAllocateMemory(vulkan_renderer->device.logical, &allocate_info, vulkan_renderer->allocator, memory)))
     {
@@ -1828,7 +1879,7 @@ bool dm_vulkan_create_buffer(const size_t size, VkBufferUsageFlagBits buffer_typ
     VkMemoryRequirements memory_reqs ={ 0 };
     vkGetBufferMemoryRequirements(vulkan_renderer->device.logical, *buffer, &memory_reqs);
 
-    if(!dm_vulkan_allocate_memory(memory_reqs, memory_flags, memory, vulkan_renderer)) return false;
+    if(!dm_vulkan_allocate_memory(memory_reqs, memory_flags, create_info.usage, memory, vulkan_renderer)) return false;
 
     vkBindBufferMemory(vulkan_renderer->device.logical, *buffer, *memory, 0);
 
