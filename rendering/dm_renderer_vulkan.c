@@ -1304,34 +1304,6 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
         return false;
     }
 
-    VkClearValue clear_color = {{{ 0.2f,0.5f,0.7f,1.f }}};
-
-    VkRenderPassBeginInfo renderpass_begin_info = { 0 };
-    renderpass_begin_info.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderpass_begin_info.renderPass        = vulkan_renderer->renderpasses[DM_VULKAN_DEFAULT_RENDERPASS].renderpass;
-    renderpass_begin_info.framebuffer       = vulkan_renderer->swapchain.frame_buffers[vulkan_renderer->image_index];
-    renderpass_begin_info.renderArea.extent = vulkan_renderer->swapchain.extents;
-    renderpass_begin_info.clearValueCount   = 1;
-    renderpass_begin_info.pClearValues      = &clear_color;
-
-    vkCmdBeginRenderPass(cmd_buffer, &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
-
-    // descriptor buffers
-    VkDescriptorBufferBindingInfoEXT binding_infos[2] = { 0 };
-
-    binding_infos[0].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
-    binding_infos[0].address = vulkan_renderer->ubo_buffer.buffer_address[current_frame].deviceAddress; 
-    binding_infos[0].usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-
-    binding_infos[1].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
-    binding_infos[1].address = vulkan_renderer->sampler_buffer.buffer_address[current_frame].deviceAddress;
-    binding_infos[1].usage   = VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
-
-    vkCmdBindDescriptorBuffersEXT(cmd_buffer, _countof(binding_infos), binding_infos);
-
-    vulkan_renderer->ubo_buffer.mapped_memory[current_frame].current = vulkan_renderer->ubo_buffer.mapped_memory[current_frame].begin;
-    vulkan_renderer->sampler_buffer.mapped_memory[current_frame].current = vulkan_renderer->sampler_buffer.mapped_memory[current_frame].begin;
-
     return true;
 }
 
@@ -1343,8 +1315,6 @@ bool dm_renderer_backend_end_frame(dm_context* context)
     const uint32_t current_frame = vulkan_renderer->current_frame;
 
     VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_family.buffer[current_frame];
-
-    vkCmdEndRenderPass(cmd_buffer);
 
     vr = vkEndCommandBuffer(cmd_buffer);
     if(!dm_vulkan_decode_vr(vr))
@@ -2078,6 +2048,57 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_render_handle* 
 /******************
  * RENDER COMMANDS
  * *****************/
+bool dm_render_command_backend_begin_render_pass(float r, float g, float b, float a, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+
+    const uint8_t current_frame = vulkan_renderer->current_frame;
+    VkCommandBuffer cmd_buffer  = vulkan_renderer->device.graphics_family.buffer[current_frame];
+
+    VkClearValue clear_color = {{{ r,g,b,a }}};
+
+    VkRenderPassBeginInfo renderpass_begin_info = { 0 };
+    renderpass_begin_info.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    renderpass_begin_info.renderPass        = vulkan_renderer->renderpasses[DM_VULKAN_DEFAULT_RENDERPASS].renderpass;
+    renderpass_begin_info.framebuffer       = vulkan_renderer->swapchain.frame_buffers[vulkan_renderer->image_index];
+    renderpass_begin_info.renderArea.extent = vulkan_renderer->swapchain.extents;
+    renderpass_begin_info.clearValueCount   = 1;
+    renderpass_begin_info.pClearValues      = &clear_color;
+
+    vkCmdBeginRenderPass(cmd_buffer, &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
+
+    // descriptor buffers
+    VkDescriptorBufferBindingInfoEXT binding_infos[2] = { 0 };
+
+    binding_infos[0].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+    binding_infos[0].address = vulkan_renderer->ubo_buffer.buffer_address[current_frame].deviceAddress; 
+    binding_infos[0].usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+
+    binding_infos[1].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
+    binding_infos[1].address = vulkan_renderer->sampler_buffer.buffer_address[current_frame].deviceAddress;
+    binding_infos[1].usage   = VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
+
+    vkCmdBindDescriptorBuffersEXT(cmd_buffer, _countof(binding_infos), binding_infos);
+
+    vulkan_renderer->ubo_buffer.mapped_memory[current_frame].current = vulkan_renderer->ubo_buffer.mapped_memory[current_frame].begin;
+    vulkan_renderer->sampler_buffer.mapped_memory[current_frame].current = vulkan_renderer->sampler_buffer.mapped_memory[current_frame].begin;
+
+    return true;
+}
+
+bool dm_render_command_backend_end_render_pass(dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+
+    const uint32_t current_frame = vulkan_renderer->current_frame;
+
+    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_family.buffer[current_frame];
+
+    vkCmdEndRenderPass(cmd_buffer);
+
+    return true;
+}
+
 bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_renderer* renderer)
 {
     DM_VULKAN_GET_RENDERER;

@@ -642,35 +642,6 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
         return false;
     }
 
-    D3D12_RESOURCE_BARRIER barrier = { 0 };
-    barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource   = dx12_renderer->resources[current_frame][dx12_renderer->render_targets[current_frame]];
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-    barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-
-    ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
-    
-    // rtv heap
-    D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = dx12_renderer->rtv_heap.cpu_handle.begin;
-    rtv_handle.ptr += current_frame * dx12_renderer->rtv_heap.size;
-
-    // depth stencil heap
-    D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = dx12_renderer->depth_stencil_heap.cpu_handle.begin;
-    dsv_handle.ptr += current_frame * dx12_renderer->depth_stencil_heap.size;
-
-    float clear_color[] = { 0.2f,0.5f,0.7f,1.f };
-
-    ID3D12GraphicsCommandList7_OMSetRenderTargets(command_list, 1, &rtv_handle, FALSE, &dsv_handle);
-    ID3D12GraphicsCommandList7_ClearRenderTargetView(command_list, rtv_handle, clear_color, 0, NULL);
-    ID3D12GraphicsCommandList7_ClearDepthStencilView(command_list, dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f,0, 0, NULL);
-
-    // binding heap (reset its ptr back to the start)
-    dm_dx12_descriptor_heap* binding_heap = &dx12_renderer->binding_heap[current_frame];
-    binding_heap->cpu_handle.current = binding_heap->cpu_handle.begin;
-    binding_heap->gpu_handle.current = binding_heap->gpu_handle.begin;
-    
-    ID3D12DescriptorHeap* heaps[] = { binding_heap->heap };
-    ID3D12GraphicsCommandList7_SetDescriptorHeaps(command_list, _countof(heaps), heaps);
 
     return true;
 }
@@ -686,13 +657,6 @@ bool dm_renderer_backend_end_frame(dm_context* context)
     ID3D12CommandAllocator*     command_allocator = dx12_renderer->command_allocator[current_frame];
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
 
-    D3D12_RESOURCE_BARRIER barrier = { 0 };
-    barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barrier.Transition.pResource   = dx12_renderer->resources[current_frame][dx12_renderer->render_targets[current_frame]];
-    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT;
-
-    ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
 
     hr = ID3D12GraphicsCommandList7_Close(command_list);
     if(!dm_platform_win32_decode_hresult(hr))
@@ -1509,6 +1473,64 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_render_handle* 
 /******************
  * RENDER COMMANDS
 * ******************/
+bool dm_render_command_backend_begin_render_pass(float r, float g, float b, float a, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+
+    const uint8_t current_frame = dx12_renderer->current_frame;
+    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
+
+    D3D12_RESOURCE_BARRIER barrier = { 0 };
+    barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource   = dx12_renderer->resources[current_frame][dx12_renderer->render_targets[current_frame]];
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
+    barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+    ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
+    
+    // rtv heap
+    D3D12_CPU_DESCRIPTOR_HANDLE rtv_handle = dx12_renderer->rtv_heap.cpu_handle.begin;
+    rtv_handle.ptr += current_frame * dx12_renderer->rtv_heap.size;
+
+    // depth stencil heap
+    D3D12_CPU_DESCRIPTOR_HANDLE dsv_handle = dx12_renderer->depth_stencil_heap.cpu_handle.begin;
+    dsv_handle.ptr += current_frame * dx12_renderer->depth_stencil_heap.size;
+
+    float clear_color[] = { r,g,b,a };
+
+    ID3D12GraphicsCommandList7_OMSetRenderTargets(command_list, 1, &rtv_handle, FALSE, &dsv_handle);
+    ID3D12GraphicsCommandList7_ClearRenderTargetView(command_list, rtv_handle, clear_color, 0, NULL);
+    ID3D12GraphicsCommandList7_ClearDepthStencilView(command_list, dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f,0, 0, NULL);
+
+    // binding heap (reset its ptr back to the start)
+    dm_dx12_descriptor_heap* binding_heap = &dx12_renderer->binding_heap[current_frame];
+    binding_heap->cpu_handle.current = binding_heap->cpu_handle.begin;
+    binding_heap->gpu_handle.current = binding_heap->gpu_handle.begin;
+    
+    ID3D12DescriptorHeap* heaps[] = { binding_heap->heap };
+    ID3D12GraphicsCommandList7_SetDescriptorHeaps(command_list, _countof(heaps), heaps);
+
+    return true;
+}
+
+bool dm_render_command_backend_end_render_pass(dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+
+    const uint8_t current_frame = dx12_renderer->current_frame;
+    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
+    
+    D3D12_RESOURCE_BARRIER barrier = { 0 };
+    barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    barrier.Transition.pResource   = dx12_renderer->resources[current_frame][dx12_renderer->render_targets[current_frame]];
+    barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT;
+
+    ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
+
+    return true;
+}
+
 bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;

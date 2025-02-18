@@ -517,6 +517,8 @@ typedef struct dm_texture_desc_t
 typedef enum dm_render_command_type_t
 {
     DM_RENDER_COMMAND_TYPE_UNKNOWN,
+    DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS,
+    DM_RENDER_COMMAND_TYPE_END_RENDER_PASS,
     DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE,
     DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER,
@@ -724,6 +726,9 @@ bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_hand
 bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_context* context);
+
+void dm_render_command_begin_render_pass(float r, float g, float b, float a, dm_context* context);
+void dm_render_command_end_render_pass(dm_context* context);
 
 void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context);
 void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, dm_context* context);

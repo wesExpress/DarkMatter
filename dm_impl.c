@@ -680,6 +680,8 @@ bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, 
 /***************
 RENDER COMMANDS
 *****************/
+extern bool dm_render_command_backend_begin_render_pass(float r, float g, float b, float a, dm_renderer* renderer);
+extern bool dm_render_command_backend_end_render_pass(dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, uint8_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, dm_renderer* renderer);
@@ -709,6 +711,29 @@ void _dm_render_command_submit(dm_render_command command, dm_render_command_mana
 }
 
 #define DM_RENDER_COMMAND_SUBMIT _dm_render_command_submit(command, &context->renderer.command_manager)
+
+void dm_render_command_begin_render_pass(float r, float g, float b, float a, dm_context* context)
+{
+    dm_render_command command = { 0 };
+
+    command.type = DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS;
+
+    command.params[0].float_val = r;
+    command.params[1].float_val = g;
+    command.params[2].float_val = b;
+    command.params[3].float_val = a;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_end_render_pass(dm_context* context)
+{
+    dm_render_command command = { 0 };
+
+    command.type = DM_RENDER_COMMAND_TYPE_END_RENDER_PASS;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
 
 void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context)
 {
@@ -849,6 +874,16 @@ bool dm_renderer_submit_commands(dm_context* context)
         
         switch(command.type)
         {
+            case DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS:
+            if(dm_render_command_backend_begin_render_pass(params[0].float_val, params[1].float_val, params[2].float_val, params[3].float_val, renderer)) continue;
+            DM_LOG_FATAL("Begin renderpass failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_END_RENDER_PASS:
+            if(dm_render_command_backend_end_render_pass(renderer)) continue;
+            DM_LOG_FATAL("End renderpass failed");
+            return false;
+
             case DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE:
             if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE) return false;
             if(dm_render_command_backend_bind_raster_pipeline(params[0].handle_val, renderer)) continue;
