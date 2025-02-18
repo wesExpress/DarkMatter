@@ -1494,17 +1494,20 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
                 {
                     case DM_INPUT_ELEMENT_FORMAT_FLOAT_2:
                     input->format = VK_FORMAT_R32G32_SFLOAT;
+                    d.offset += 8;
                     break;
 
                     default:
                     DM_LOG_ERROR("Unknown input format. Assuming VK_FORMAT_R32G32B32_SFLOAT");
                     case DM_INPUT_ELEMENT_FORMAT_FLOAT_3:
                     input->format = VK_FORMAT_R32G32B32_SFLOAT;
+                    d.offset += 12;
                     break;
 
                     case DM_INPUT_ELEMENT_FORMAT_MATRIX_4x4:
                     case DM_INPUT_ELEMENT_FORMAT_FLOAT_4:
                     input->format = VK_FORMAT_R32G32B32A32_SFLOAT;
+                    d.offset += 16;
                     break;
                 }
 
