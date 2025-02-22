@@ -157,6 +157,10 @@ typedef struct dm_vulkan_renderer_t
 
     dm_vulkan_swapchain swapchain;
 
+    VkImage        depth_stencil_target;
+    VkDeviceMemory depth_stencil_memory;
+    VkImageView    depth_stencil_view;
+
     dm_vulkan_fence fences[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     VkSemaphore image_available_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     VkSemaphore render_finished_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
@@ -195,6 +199,7 @@ VKAPI_ATTR VkBool32 VKAPI_CALL dm_vulkan_debug_callback(VkDebugUtilsMessageSever
 #endif
 
 bool dm_vulkan_decode_vr(VkResult vr);
+bool dm_vulkan_find_memory_type(uint32_t type_filter, VkPhysicalDeviceMemoryProperties properties, VkMemoryPropertyFlags flags, uint32_t* index);
 bool dm_vulkan_allocate_memory(VkMemoryRequirements memory_reqs, VkMemoryPropertyFlagBits memory_flags, VkBufferUsageFlagBits usage_flags, VkDeviceMemory* memory, dm_vulkan_renderer* vulkan_renderer);
 
 #ifndef DM_DEBUG
@@ -545,12 +550,12 @@ bool dm_vulkan_create_framebuffers(dm_vulkan_renderer* vulkan_renderer)
 
     for(uint32_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        VkImageView attachments[] = { vulkan_renderer->swapchain.views[i] };
+        VkImageView attachments[] = { vulkan_renderer->swapchain.views[i], vulkan_renderer->depth_stencil_view };
 
         VkFramebufferCreateInfo create_info = { 0 };
         create_info.sType           = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
         create_info.renderPass      = vulkan_renderer->renderpasses[DM_VULKAN_DEFAULT_RENDERPASS].renderpass;
-        create_info.attachmentCount = 1;
+        create_info.attachmentCount = _countof(attachments);
         create_info.pAttachments    = attachments;
         create_info.width           = vulkan_renderer->swapchain.extents.width;
         create_info.height          = vulkan_renderer->swapchain.extents.height;
@@ -910,6 +915,70 @@ bool dm_renderer_backend_init(dm_context* context)
         }
     }
 
+    // depth stencil targets
+    {
+        VkImageCreateInfo create_info = { 0 };
+        create_info.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+        create_info.format        = VK_FORMAT_D32_SFLOAT;
+        create_info.imageType     = VK_IMAGE_TYPE_2D;
+        create_info.extent.width  = context->renderer.width;
+        create_info.extent.height = context->renderer.height;
+        create_info.extent.depth  = 1;
+        create_info.mipLevels     = 1;
+        create_info.arrayLayers   = 1;
+        create_info.samples       = VK_SAMPLE_COUNT_1_BIT;
+        create_info.tiling        = VK_IMAGE_TILING_OPTIMAL;
+        create_info.usage         = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+        create_info.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+        create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+        vr = vkCreateImage(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->depth_stencil_target);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkCreateImage failed");
+            DM_LOG_ERROR("Could not create depth stencil target");
+            return false;
+        }
+
+        VkMemoryRequirements mem_reqs = { 0 };
+        vkGetImageMemoryRequirements(vulkan_renderer->device.logical, vulkan_renderer->depth_stencil_target, &mem_reqs);
+
+        uint32_t mem_index;
+        if(!dm_vulkan_find_memory_type(mem_reqs.memoryTypeBits, vulkan_renderer->device.memory_properties, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &mem_index)) return false;
+
+        VkMemoryAllocateInfo allocate_info = { 0 };
+        allocate_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocate_info.allocationSize  = mem_reqs.size;
+        allocate_info.memoryTypeIndex = mem_index; 
+
+        vr = vkAllocateMemory(vulkan_renderer->device.logical, &allocate_info, vulkan_renderer->allocator, &vulkan_renderer->depth_stencil_memory);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkAllocateMemory failed");
+            DM_LOG_ERROR("Could not allocate depth stencil memory");
+            return false;
+        }
+
+        vkBindImageMemory(vulkan_renderer->device.logical, vulkan_renderer->depth_stencil_target, vulkan_renderer->depth_stencil_memory, 0);
+
+        VkImageViewCreateInfo view_create_info = { 0 };
+        view_create_info.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        view_create_info.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
+        view_create_info.format                      = VK_FORMAT_D32_SFLOAT;
+        view_create_info.subresourceRange.levelCount = 1;
+        view_create_info.subresourceRange.layerCount = 1;
+        view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+        view_create_info.image                       = vulkan_renderer->depth_stencil_target;
+
+        vr = vkCreateImageView(vulkan_renderer->device.logical, &view_create_info, vulkan_renderer->allocator, &vulkan_renderer->depth_stencil_view);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkCreateImageView failed");
+            DM_LOG_ERROR("Could not create depth stencil view");
+            return false;
+        }
+    }
+
     // default renderpass
     {
         VkAttachmentDescription color_attachment = { 0 };
@@ -926,23 +995,40 @@ bool dm_renderer_backend_init(dm_context* context)
         color_attachment_ref.attachment = 0;
         color_attachment_ref.layout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 
+        VkAttachmentDescription depth_attachment = { 0 };
+        depth_attachment.format         = VK_FORMAT_D32_SFLOAT;
+        depth_attachment.samples        = VK_SAMPLE_COUNT_1_BIT;
+        depth_attachment.loadOp         = VK_ATTACHMENT_LOAD_OP_CLEAR;
+        depth_attachment.storeOp        = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depth_attachment.stencilLoadOp  = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+        depth_attachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+        depth_attachment.initialLayout  = VK_IMAGE_LAYOUT_UNDEFINED;
+        depth_attachment.finalLayout    = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+
+        VkAttachmentReference depth_reference = { 0 };
+        depth_reference.attachment = 1;
+        depth_reference.layout     = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    
+        VkAttachmentDescription attachments[] = { color_attachment, depth_attachment }; 
+
         VkSubpassDescription subpass = { 0 };
-        subpass.pipelineBindPoint    = VK_PIPELINE_BIND_POINT_GRAPHICS;
-        subpass.colorAttachmentCount = 1;
-        subpass.pColorAttachments    = &color_attachment_ref;
+        subpass.pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS;
+        subpass.colorAttachmentCount    = 1;
+        subpass.pColorAttachments       = &color_attachment_ref;
+        subpass.pDepthStencilAttachment = &depth_reference;
 
         VkSubpassDependency dependency = { 0 };
         dependency.srcSubpass    = VK_SUBPASS_EXTERNAL;
         dependency.dstSubpass    = 0;
-        dependency.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        dependency.srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
         dependency.srcAccessMask = 0;
-        dependency.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        dependency.dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT | VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+        dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 
         VkRenderPassCreateInfo create_info = { 0 };
         create_info.sType           = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-        create_info.attachmentCount = 1;
-        create_info.pAttachments    = &color_attachment;
+        create_info.attachmentCount = _countof(attachments);
+        create_info.pAttachments    = attachments;
         create_info.subpassCount    = 1;
         create_info.pSubpasses      = &subpass;
         create_info.dependencyCount = 1;
@@ -1181,6 +1267,10 @@ void dm_renderer_backend_shutdown(dm_context* context)
         vkDestroyPipelineLayout(device, vulkan_renderer->raster_pipes[i].layout, allocator);
         vkDestroyPipeline(device, vulkan_renderer->raster_pipes[i].pipeline, allocator);
     }
+
+    vkDestroyImage(device, vulkan_renderer->depth_stencil_target, allocator);
+    vkDestroyImageView(device, vulkan_renderer->depth_stencil_view, allocator);
+    vkFreeMemory(device, vulkan_renderer->depth_stencil_memory, allocator);
 
     for(uint8_t i=0; i<vulkan_renderer->rp_count; i++)
     {
@@ -1448,6 +1538,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     VkPipelineRasterizationStateCreateInfo raster_create_info = { 0 };
     VkPipelineViewportStateCreateInfo viewport_state_info = { 0 };
     VkPipelineDynamicStateCreateInfo  dynamic_state_info  = { 0 };
+    VkPipelineDepthStencilStateCreateInfo depth_stencil_state_info = { 0 };
     VkDynamicState dynamic_states[] = { VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR };
 
     // === input assembler ===
@@ -1640,6 +1731,16 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
         }
     }
 
+    // === depth stencil state ===
+    // TODO: needs to be configurable
+    {
+        depth_stencil_state_info.sType             = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO; 
+        depth_stencil_state_info.depthTestEnable   = desc.depth_stencil.depth;
+        depth_stencil_state_info.depthWriteEnable  = desc.depth_stencil.depth;
+        depth_stencil_state_info.stencilTestEnable = desc.depth_stencil.stencil;
+        depth_stencil_state_info.depthCompareOp    = VK_COMPARE_OP_LESS;
+    }
+
     // === blend === 
     {   
         blend_state.blendEnable = VK_FALSE;
@@ -1780,6 +1881,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
         create_info.pRasterizationState = &raster_create_info;
         create_info.pViewportState      = &viewport_state_info;
         create_info.pDynamicState       = &dynamic_state_info;
+        create_info.pDepthStencilState  = &depth_stencil_state_info;
         create_info.flags               = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 
         vr = vkCreateGraphicsPipelines(vulkan_renderer->device.logical, VK_NULL_HANDLE, 1, &create_info, vulkan_renderer->allocator, &pipeline.pipeline);
@@ -2058,15 +2160,22 @@ bool dm_render_command_backend_begin_render_pass(float r, float g, float b, floa
     const uint8_t current_frame = vulkan_renderer->current_frame;
     VkCommandBuffer cmd_buffer  = vulkan_renderer->device.graphics_family.buffer[current_frame];
 
-    VkClearValue clear_color = {{{ r,g,b,a }}};
+    VkClearValue clear_colors[2] = { 0 };
+
+    clear_colors[0].color.float32[0] = r;
+    clear_colors[0].color.float32[1] = g;
+    clear_colors[0].color.float32[2] = b;
+    clear_colors[0].color.float32[3] = a;
+
+    clear_colors[1].depthStencil.depth = 1.f;
 
     VkRenderPassBeginInfo renderpass_begin_info = { 0 };
     renderpass_begin_info.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     renderpass_begin_info.renderPass        = vulkan_renderer->renderpasses[DM_VULKAN_DEFAULT_RENDERPASS].renderpass;
     renderpass_begin_info.framebuffer       = vulkan_renderer->swapchain.frame_buffers[vulkan_renderer->image_index];
     renderpass_begin_info.renderArea.extent = vulkan_renderer->swapchain.extents;
-    renderpass_begin_info.clearValueCount   = 1;
-    renderpass_begin_info.pClearValues      = &clear_color;
+    renderpass_begin_info.clearValueCount   = _countof(clear_colors);
+    renderpass_begin_info.pClearValues      = clear_colors;
 
     vkCmdBeginRenderPass(cmd_buffer, &renderpass_begin_info, VK_SUBPASS_CONTENTS_INLINE);
 
@@ -2119,16 +2228,13 @@ bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_
     return true;
 }
 
-bool dm_render_command_backend_bind_descriptor_group(dm_render_handle handle, uint8_t group_index, dm_renderer* renderer)
+bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, dm_renderer* renderer)
 {
     DM_VULKAN_GET_RENDERER;
     VkResult vr;
 
     const uint8_t current_frame      = vulkan_renderer->current_frame;
     const VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_family.buffer[current_frame];
-
-    dm_vulkan_raster_pipeline pipeline = vulkan_renderer->raster_pipes[handle.index];
-
 
     return true;
 }
