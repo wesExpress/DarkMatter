@@ -1636,7 +1636,7 @@ bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, dm_ren
     return true;
 }
 
-bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uint8_t slot, dm_renderer* renderer)
+bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uint8_t slot, uint8_t descriptor_group, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
 
@@ -1654,7 +1654,7 @@ bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uin
     return true;
 }
 
-bool dm_render_command_backend_bind_texture(dm_render_handle texture, uint8_t slot, dm_renderer* renderer)
+bool dm_render_command_backend_bind_texture(dm_render_handle texture, uint8_t slot, uint8_t descriptor_group, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
 

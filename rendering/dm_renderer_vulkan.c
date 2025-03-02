@@ -33,7 +33,8 @@ typedef struct dm_vulkan_renderpass_t
     VkRenderPass renderpass;
 } dm_vulkan_renderpass;
 
-#define DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS 4
+#define DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS     4
+#define DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_BINDINGS 10
 typedef struct dm_vulkan_raster_pipeline_t
 {
     VkPipeline       pipeline;
@@ -41,7 +42,7 @@ typedef struct dm_vulkan_raster_pipeline_t
 
     VkDescriptorSetLayout descriptor_set_layout[DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS];
     size_t                descriptor_set_layout_sizes[DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS];
-    size_t                descriptor_set_layout_offsets[DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS];
+    size_t                descriptor_set_layout_offsets[DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_SETS][DM_VULKAN_RAST_PIPE_MAX_DESCRIPTOR_BINDINGS];
     uint8_t               descriptor_set_layout_count;
 
     VkViewport viewport;
@@ -165,7 +166,7 @@ typedef struct dm_vulkan_renderer_t
     VkSemaphore image_available_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     VkSemaphore render_finished_semaphore[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
 
-    dm_vulkan_descriptor_buffer ubo_buffer;
+    dm_vulkan_descriptor_buffer resource_buffer;
     dm_vulkan_descriptor_buffer sampler_buffer;
 
     dm_vulkan_renderpass renderpasses[DM_VULKAN_MAX_RENDERPASSES];
@@ -1133,7 +1134,7 @@ bool dm_renderer_backend_init(dm_context* context)
 
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
-            vr = vkCreateBuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->ubo_buffer.buffer.buffer[i]);
+            vr = vkCreateBuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->resource_buffer.buffer.buffer[i]);
             if(!dm_vulkan_decode_vr(vr))
             {
                 DM_LOG_FATAL("vkCreateBuffer failed");
@@ -1142,18 +1143,18 @@ bool dm_renderer_backend_init(dm_context* context)
             }
 
             VkMemoryRequirements mem_reqs = { 0 };
-            vkGetBufferMemoryRequirements(vulkan_renderer->device.logical, vulkan_renderer->ubo_buffer.buffer.buffer[i], &mem_reqs);
+            vkGetBufferMemoryRequirements(vulkan_renderer->device.logical, vulkan_renderer->resource_buffer.buffer.buffer[i], &mem_reqs);
 
-            if(!dm_vulkan_allocate_memory(mem_reqs, mem_flags, create_info.usage, &vulkan_renderer->ubo_buffer.buffer.memory[i], vulkan_renderer)) return false;
-            vkBindBufferMemory(vulkan_renderer->device.logical, vulkan_renderer->ubo_buffer.buffer.buffer[i], vulkan_renderer->ubo_buffer.buffer.memory[i], 0);
+            if(!dm_vulkan_allocate_memory(mem_reqs, mem_flags, create_info.usage, &vulkan_renderer->resource_buffer.buffer.memory[i], vulkan_renderer)) return false;
+            vkBindBufferMemory(vulkan_renderer->device.logical, vulkan_renderer->resource_buffer.buffer.buffer[i], vulkan_renderer->resource_buffer.buffer.memory[i], 0);
 
-            vkMapMemory(vulkan_renderer->device.logical, vulkan_renderer->ubo_buffer.buffer.memory[i], 0, create_info.size, 0, &vulkan_renderer->ubo_buffer.mapped_memory[i].begin);
-            vulkan_renderer->ubo_buffer.mapped_memory[i].current = vulkan_renderer->ubo_buffer.mapped_memory[i].begin;
+            vkMapMemory(vulkan_renderer->device.logical, vulkan_renderer->resource_buffer.buffer.memory[i], 0, create_info.size, 0, &vulkan_renderer->resource_buffer.mapped_memory[i].begin);
+            vulkan_renderer->resource_buffer.mapped_memory[i].current = vulkan_renderer->resource_buffer.mapped_memory[i].begin;
 
             VkBufferDeviceAddressInfoKHR address_info = { 0 };
             address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-            address_info.buffer = vulkan_renderer->ubo_buffer.buffer.buffer[i];
-            vulkan_renderer->ubo_buffer.buffer_address[i].deviceAddress = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &address_info);
+            address_info.buffer = vulkan_renderer->resource_buffer.buffer.buffer[i];
+            vulkan_renderer->resource_buffer.buffer_address[i].deviceAddress = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &address_info);
         }
 
         // combined image buffer
@@ -1279,11 +1280,11 @@ void dm_renderer_backend_shutdown(dm_context* context)
 
     for(uint32_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        vkUnmapMemory(device, vulkan_renderer->ubo_buffer.buffer.memory[i]);
-        vulkan_renderer->ubo_buffer.mapped_memory[i].begin   = NULL;
-        vulkan_renderer->ubo_buffer.mapped_memory[i].current = NULL;
-        vkDestroyBuffer(device, vulkan_renderer->ubo_buffer.buffer.buffer[i], allocator);
-        vkFreeMemory(device, vulkan_renderer->ubo_buffer.buffer.memory[i], allocator);
+        vkUnmapMemory(device, vulkan_renderer->resource_buffer.buffer.memory[i]);
+        vulkan_renderer->resource_buffer.mapped_memory[i].begin   = NULL;
+        vulkan_renderer->resource_buffer.mapped_memory[i].current = NULL;
+        vkDestroyBuffer(device, vulkan_renderer->resource_buffer.buffer.buffer[i], allocator);
+        vkFreeMemory(device, vulkan_renderer->resource_buffer.buffer.memory[i], allocator);
 
         vkUnmapMemory(device, vulkan_renderer->sampler_buffer.buffer.memory[i]);
         vulkan_renderer->sampler_buffer.mapped_memory[i].begin   = NULL;
@@ -1710,7 +1711,10 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
         pipeline.descriptor_set_layout_sizes[i] = (pipeline.descriptor_set_layout_sizes[i] + vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
         pipeline.descriptor_set_layout_sizes[i] &= ~(vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
 
-        vkGetDescriptorSetLayoutBindingOffsetEXT(vulkan_renderer->device.logical, pipeline.descriptor_set_layout[i], i, &pipeline.descriptor_set_layout_offsets[i]);
+        for(uint8_t j=0; j<group.range_count; j++)
+        {
+            vkGetDescriptorSetLayoutBindingOffsetEXT(vulkan_renderer->device.logical, pipeline.descriptor_set_layout[i], j, &pipeline.descriptor_set_layout_offsets[i][j]);
+        }
 
         pipeline.descriptor_set_layout_count++;
     }
@@ -1742,10 +1746,17 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     }
 
     // === blend === 
+    // TODO: needs to be configurable
     {   
-        blend_state.blendEnable = VK_FALSE;
+        blend_state.blendEnable = VK_TRUE;
 
         blend_state.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+        blend_state.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        blend_state.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        blend_state.colorBlendOp        = VK_BLEND_OP_ADD;
+        blend_state.srcAlphaBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+        blend_state.dstAlphaBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        blend_state.alphaBlendOp        = VK_BLEND_OP_ADD;
 
         blend_create_info.sType   = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
         blend_create_info.logicOp = VK_LOGIC_OP_COPY;
@@ -1825,9 +1836,9 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
             case DM_VIEWPORT_TYPE_DEFAULT:
             default:
             pipeline.viewport.x        = 0;
-            pipeline.viewport.y        = 0;
+            pipeline.viewport.y        = (float)renderer->height;
             pipeline.viewport.width    = (float)renderer->width;
-            pipeline.viewport.height   = (float)renderer->height;
+            pipeline.viewport.height   = -(float)renderer->height;
             pipeline.viewport.minDepth = 0.f;
             pipeline.viewport.maxDepth = 1.f;
             break;
@@ -2183,7 +2194,7 @@ bool dm_render_command_backend_begin_render_pass(float r, float g, float b, floa
     VkDescriptorBufferBindingInfoEXT binding_infos[2] = { 0 };
 
     binding_infos[0].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
-    binding_infos[0].address = vulkan_renderer->ubo_buffer.buffer_address[current_frame].deviceAddress; 
+    binding_infos[0].address = vulkan_renderer->resource_buffer.buffer_address[current_frame].deviceAddress; 
     binding_infos[0].usage   = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT;
 
     binding_infos[1].sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_BUFFER_BINDING_INFO_EXT;
@@ -2192,8 +2203,10 @@ bool dm_render_command_backend_begin_render_pass(float r, float g, float b, floa
 
     vkCmdBindDescriptorBuffersEXT(cmd_buffer, _countof(binding_infos), binding_infos);
 
-    vulkan_renderer->ubo_buffer.mapped_memory[current_frame].current = vulkan_renderer->ubo_buffer.mapped_memory[current_frame].begin;
+    vulkan_renderer->resource_buffer.mapped_memory[current_frame].current = vulkan_renderer->resource_buffer.mapped_memory[current_frame].begin;
     vulkan_renderer->sampler_buffer.mapped_memory[current_frame].current = vulkan_renderer->sampler_buffer.mapped_memory[current_frame].begin;
+
+    vulkan_renderer->resource_buffer.offset[current_frame] = 0;
 
     return true;
 }
@@ -2235,6 +2248,14 @@ bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_
 
     const uint8_t current_frame      = vulkan_renderer->current_frame;
     const VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_family.buffer[current_frame];
+
+    dm_vulkan_raster_pipeline bound_pipeline = vulkan_renderer->raster_pipes[vulkan_renderer->bound_pipeline.index];
+
+    const uint32_t buffer_index = 0;
+
+    vkCmdSetDescriptorBufferOffsetsEXT(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bound_pipeline.layout, group_index, 1, &buffer_index, &vulkan_renderer->resource_buffer.offset[current_frame]);
+
+    vulkan_renderer->resource_buffer.offset[current_frame] += bound_pipeline.descriptor_set_layout_sizes[group_index];
 
     return true;
 }
@@ -2301,7 +2322,7 @@ bool dm_render_command_backend_update_constant_buffer(void* data, size_t size, d
     return true;
 }
 
-bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uint8_t slot, dm_renderer* renderer)
+bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uint8_t slot, uint8_t descriptor_group, dm_renderer* renderer)
 {
     DM_VULKAN_GET_RENDERER;
 
@@ -2312,8 +2333,6 @@ bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uin
     dm_vulkan_raster_pipeline bound_pipeline = vulkan_renderer->raster_pipes[vulkan_renderer->bound_pipeline.index];
 
     uint32_t index = slot;
-
-    char* buffer_ptr = vulkan_renderer->ubo_buffer.mapped_memory[current_frame].current;
 
     VkBufferDeviceAddressInfo buffer_address_info = { 0 };
     buffer_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -2330,12 +2349,18 @@ bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uin
     descriptor_info.type                = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     descriptor_info.data.pUniformBuffer = &address_info;
 
+    // each descriptor layout has an offset for each of its bindings
+    size_t offset = bound_pipeline.descriptor_set_layout_offsets[descriptor_group][slot];
+    offset += vulkan_renderer->resource_buffer.offset[current_frame];
+
+    // move buffer pointer to this offset
+    char* buffer_ptr = vulkan_renderer->resource_buffer.mapped_memory[current_frame].begin + offset;
     vkGetDescriptorEXT(vulkan_renderer->device.logical, &descriptor_info, vulkan_renderer->device.descriptor_buffer_props.uniformBufferDescriptorSize, buffer_ptr);
 
-    vkCmdSetDescriptorBufferOffsetsEXT(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bound_pipeline.layout, 0, 1, &index, &vulkan_renderer->ubo_buffer.offset[current_frame]);
 
+    //buffer_ptr += bound_pipeline.descriptor_set_layout_sizes[descriptor_group];
     buffer_ptr += vulkan_renderer->device.descriptor_buffer_props.uniformBufferDescriptorSize;
-    vulkan_renderer->ubo_buffer.mapped_memory[current_frame].current = buffer_ptr;
+    vulkan_renderer->resource_buffer.mapped_memory[current_frame].current = buffer_ptr;
 
     return true;
 }
