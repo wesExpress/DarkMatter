@@ -7,17 +7,21 @@ This is a cross-platform rendering framework for the purpose of learning. It is 
   - for OSX specific code and Metal renderer
   - this means you need to include 'dm_platform_mac.m' and 'dm_renderer_metal.m' when building!
   
-## Features
+## Framework  
 - Render backend agnostic:
-  - DirectX 11
   - DirectX 12
   - Metal
-  - TBD: Vulkan
+  - Vulkan
 - Platform backend agnostic:
   - Windows
   - MacOS
   - TBD: Linux
-- Initial implementation of full 3D physics collision and resolution
-  - Sort and sweep on AABB for broadphase
-  - GJK, EPA, collision manifolds, constraint Jacobian solving
-- Rudimentary support for DXR
+
+## Current Progress
+DarkMatter has parity between with DX12 and Vulkan with:
+  - Descriptors: uses DescriptorBuffer with Vulkan to mimic ID3D12DescriptorHeap. Current implementation isn't great, but can handle uniforms and textures between both
+  - Raster Pipelines: basic raster pipeline features handled between both. Still needs some configuration with blending, depth stencil, etc.
+
+## Future Goal
+- Raytracing pipelines between both
+- Better texture handling
