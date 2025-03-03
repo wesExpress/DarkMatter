@@ -149,6 +149,7 @@ typedef struct dm_vulkan_descriptor_buffer_t
     VkDeviceOrHostAddressConstKHR             buffer_address[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     dm_vulkan_descriptor_buffer_mapped_memory mapped_memory[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     size_t                                    offset[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    size_t                                    size;
 } dm_vulkan_descriptor_buffer;
 
 #define DM_VULKAN_MAX_RENDERPASSES     10
@@ -1137,6 +1138,15 @@ bool dm_renderer_backend_init(dm_context* context)
         }
     }
 
+
+    return true;
+}
+
+bool dm_renderer_backend_finish_init(dm_context* context)
+{
+    dm_vulkan_renderer* vulkan_renderer = context->renderer.internal_renderer;
+    VkResult vr;
+
     // descriptor buffers
     {
         VkMemoryPropertyFlagBits mem_flags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
@@ -1145,7 +1155,7 @@ bool dm_renderer_backend_init(dm_context* context)
         VkBufferCreateInfo create_info = { 0 };
         create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         create_info.usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-        create_info.size  = vulkan_renderer->device.descriptor_buffer_props.uniformBufferDescriptorSize * DM_VULKAN_MAX_CONSTANT_BUFFERS;
+        create_info.size  = vulkan_renderer->resource_buffer.size;
 
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
@@ -1174,7 +1184,7 @@ bool dm_renderer_backend_init(dm_context* context)
 
         // combined image sampler buffer
         create_info.usage |= VK_BUFFER_USAGE_SAMPLER_DESCRIPTOR_BUFFER_BIT_EXT;
-        create_info.size = vulkan_renderer->device.descriptor_buffer_props.combinedImageSamplerDescriptorSize * DM_VULKAN_MAX_TEXTURES;
+        create_info.size  = vulkan_renderer->sampler_buffer.size;
         
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
@@ -1201,13 +1211,6 @@ bool dm_renderer_backend_init(dm_context* context)
             vulkan_renderer->sampler_buffer.buffer_address[i].deviceAddress = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &address_info);
         }
     }
-
-    return true;
-}
-
-bool dm_renderer_backend_finish_init(dm_context* context)
-{
-    dm_vulkan_renderer* vulkan_renderer = context->renderer.internal_renderer;
 
     // close and submit transient command buffer
     vkEndCommandBuffer(vulkan_renderer->device.transient_family.buffer[vulkan_renderer->current_frame]);
@@ -1749,6 +1752,10 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
         vkGetDescriptorSetLayoutSizeEXT(vulkan_renderer->device.logical, pipeline.descriptor_set_layout[i], &pipeline.descriptor_set_layout_sizes[i]);
         pipeline.descriptor_set_layout_sizes[i] = (pipeline.descriptor_set_layout_sizes[i] + vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
         pipeline.descriptor_set_layout_sizes[i] &= ~(vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
+
+        // TODO: this is bad! just a quick solution to fix incorrect buffer sizes
+        vulkan_renderer->resource_buffer.size += pipeline.descriptor_set_layout_sizes[i];
+        vulkan_renderer->sampler_buffer.size  += pipeline.descriptor_set_layout_sizes[i];
 
         for(uint8_t j=0; j<group.range_count; j++)
         {
