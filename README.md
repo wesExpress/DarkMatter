@@ -22,6 +22,9 @@ DarkMatter has parity between with DX12 and Vulkan with:
   - Descriptors: uses DescriptorBuffer with Vulkan to mimic ID3D12DescriptorHeap. Current implementation isn't great, but can handle uniforms and textures between both
   - Raster Pipelines: basic raster pipeline features handled between both. Still needs some configuration with blending, depth stencil, etc.
 
-## Future Goal
+## Future Goals
 - Raytracing pipelines between both
 - Better texture handling
+
+## Weird Bugs
+- Vulkan has incorrect colors for some reason
