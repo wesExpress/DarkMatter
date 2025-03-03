@@ -689,9 +689,9 @@ extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t si
 extern bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_constant_buffer(void* data, size_t size, dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uint8_t slot, uint8_t descriptor_group, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_texture(dm_render_handle texture, uint8_t slot, uint8_t descriptor_group, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_texture(dm_render_handle texture, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_renderer* renderer);
 
 void _dm_render_command_submit(dm_render_command command, dm_render_command_manager* manager)
 {
@@ -746,40 +746,41 @@ void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context*
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_constant_buffer(dm_render_handle buffer, uint8_t slot, uint8_t descriptor_group, dm_context* context)
+void dm_render_command_bind_constant_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context)
 {
     dm_render_command command = { 0 };
 
     command.type = DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER;
 
     command.params[0].handle_val = buffer;
-    command.params[1].u8_val     = slot;
+    command.params[1].u8_val     = binding;
     command.params[2].u8_val     = descriptor_group;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_texture(dm_render_handle texture, uint8_t slot, uint8_t descriptor_group, dm_context* context)
+void dm_render_command_bind_texture(dm_render_handle texture, uint8_t binding, uint8_t descriptor_group, dm_context* context)
 {
     dm_render_command command = { 0 };
 
     command.type = DM_RENDER_COMMAND_TYPE_BIND_TEXTURE;
 
     command.params[0].handle_val = texture;
-    command.params[1].u8_val     = slot;
+    command.params[1].u8_val     = binding;
     command.params[2].u8_val     = descriptor_group;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, dm_context* context)
+void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_context* context)
 {
     dm_render_command command = { 0 };
 
     command.type = DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP;
 
-    command.params[0].u8_val = group_index;
-    command.params[1].u8_val = descriptor_count;
+    command.params[0].u8_val  = group_index;
+    command.params[1].u8_val  = descriptor_count;
+    command.params[2].u32_val = descriptor_buffer_index;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -928,7 +929,7 @@ bool dm_renderer_submit_commands(dm_context* context)
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP:
-            if(dm_render_command_backend_bind_descriptor_group(params[0].u8_val, params[1].u8_val, renderer)) continue;
+            if(dm_render_command_backend_bind_descriptor_group(params[0].u8_val, params[1].u8_val, params[2].u32_val, renderer)) continue;
             DM_LOG_FATAL("Bind descriptor group failed");
             return false;
 

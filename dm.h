@@ -731,12 +731,12 @@ void dm_render_command_begin_render_pass(float r, float g, float b, float a, dm_
 void dm_render_command_end_render_pass(dm_context* context);
 
 void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context);
-void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, dm_context* context);
+void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, uint32_t descriptor_buffer_index, dm_context* context);
 void dm_render_command_bind_vertex_buffer(dm_render_handle handle, uint8_t slot, dm_context* context);
 void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* context);
 
-void dm_render_command_bind_constant_buffer(dm_render_handle buffer, uint8_t slot, uint8_t descriptor_group, dm_context* context);
-void dm_render_command_bind_texture(dm_render_handle texture, uint8_t slot, uint8_t descriptor_group, dm_context* context);
+void dm_render_command_bind_constant_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context);
+void dm_render_command_bind_texture(dm_render_handle texture, uint8_t binding, uint8_t descriptor_group, dm_context* context);
 
 void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);
 void dm_render_command_update_constant_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);

@@ -1672,7 +1672,7 @@ bool dm_render_command_backend_bind_texture(dm_render_handle texture, uint8_t sl
     return true;
 }
 
-bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, dm_renderer* renderer)
+bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
     
