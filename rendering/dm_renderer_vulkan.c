@@ -434,7 +434,7 @@ bool dm_vulkan_create_swapchain(dm_renderer* renderer)
     {
         VkSurfaceFormatKHR format = swapchain_details.formats[i];
 
-        if(format.format==VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace==VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+        if(format.format==VK_FORMAT_B8G8R8A8_UNORM && format.colorSpace==VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
         {
             found = true;
             surface_format = format;

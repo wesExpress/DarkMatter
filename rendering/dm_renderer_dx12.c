@@ -90,17 +90,28 @@ typedef struct dm_dx12_texture_t
     D3D12_CPU_DESCRIPTOR_HANDLE handle[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 } dm_dx12_texture;
 
+typedef struct dm_dx12_storage_buffer_t
+{
+    uint8_t host_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    uint8_t device_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+
+    D3D12_CPU_DESCRIPTOR_HANDLE handle[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    size_t                      size;
+    void*                       mapped_addresses[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+} dm_dx12_storage_buffer;
+
 #define DM_DX12_MAX_RAST_PIPES 10
 #define DM_DX12_MAX_VBS        100
 #define DM_DX12_MAX_IBS        100
 #define DM_DX12_MAX_CBS        100
-#define DM_DX12_MAX_BUFFERS    (DM_DX12_MAX_VBS + DM_DX12_MAX_IBS + DM_DX12_MAX_CBS)
+#define DM_DX12_MAX_SBS        100
+#define DM_DX12_MAX_BUFFERS    (DM_DX12_MAX_VBS + DM_DX12_MAX_IBS + DM_DX12_MAX_CBS + DM_DX12_MAX_SBS)
 #define DM_DX12_MAX_TEXTURES   100
 #define DM_DX12_MAX_RESOURCES ((DM_DX12_MAX_BUFFERS + DM_DX12_MAX_TEXTURES) * 2 + 2)
 
-#define DM_DX12_TABLE_MAX_CBV 7
-#define DM_DX12_TABLE_MAX_UBV 7
-#define DM_DX12_TABLE_MAX_SRV 15
+#define DM_DX12_TABLE_MAX_CBV 100
+#define DM_DX12_TABLE_MAX_UBV 100
+#define DM_DX12_TABLE_MAX_SRV 100 
 
 typedef struct dm_dx12_renderer_t
 {
@@ -136,6 +147,9 @@ typedef struct dm_dx12_renderer_t
 
     dm_dx12_texture textures[DM_DX12_MAX_TEXTURES];
     uint32_t        texture_count;
+
+    dm_dx12_storage_buffer storage_buffers[DM_DX12_MAX_SBS];
+    uint32_t               sb_count;
 
     ID3D12Resource* resources[DM_DX12_MAX_FRAMES_IN_FLIGHT][DM_DX12_MAX_RESOURCES];
     uint32_t        resource_count[DM_DX12_MAX_FRAMES_IN_FLIGHT];
@@ -566,6 +580,15 @@ void dm_renderer_backend_shutdown(dm_context* context)
         }
     }
 
+    for(uint32_t i=0; i<dx12_renderer->sb_count; i++)
+    {
+        for(uint8_t j=0; j<DM_DX12_MAX_FRAMES_IN_FLIGHT; j++)
+        {
+            ID3D12Resource_Unmap(dx12_renderer->resources[j][dx12_renderer->storage_buffers[i].host_buffers[j]], 0,0);
+            dx12_renderer->storage_buffers[i].mapped_addresses[j] = NULL;
+        }
+    }
+
     for(uint32_t f=0; f<DM_DX12_MAX_FRAMES_IN_FLIGHT; f++)
     {
         for(uint32_t i=0; i<dx12_renderer->resource_count[f]; i++)
@@ -807,8 +830,13 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
                 ranges[i][j].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
                 break;
 
+                case DM_DESCRIPTOR_RANGE_TYPE_READ_STORAGE_BUFFER:
                 case DM_DESCRIPTOR_RANGE_TYPE_TEXTURE:
                 ranges[i][j].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+                break;
+
+                case DM_DESCRIPTOR_RANGE_TYPE_WRITE_STORAGE_BUFFER:
+                ranges[i][j].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
                 break;
 
                 default:
@@ -1150,7 +1178,7 @@ bool dm_dx12_copy_memory(ID3D12Resource* resource, void* data, size_t size)
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_dx12_create_buffer(const size_t size, D3D12_HEAP_TYPE heap_type, D3D12_RESOURCE_STATES state, ID3D12Resource** resource, dm_dx12_renderer* dx12_renderer)
+bool dm_dx12_create_buffer(const size_t size, D3D12_HEAP_TYPE heap_type, D3D12_RESOURCE_STATES state, D3D12_RESOURCE_FLAGS flags, ID3D12Resource** resource, dm_dx12_renderer* dx12_renderer)
 {
     D3D12_RESOURCE_DESC desc = { 0 };
     desc.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -1162,7 +1190,7 @@ bool dm_dx12_create_buffer(const size_t size, D3D12_HEAP_TYPE heap_type, D3D12_R
     desc.Format           = DXGI_FORMAT_UNKNOWN;
     desc.SampleDesc.Count = 1;
     desc.Layout           = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-    desc.Flags            = D3D12_RESOURCE_FLAG_NONE;
+    desc.Flags            = flags;
 
     D3D12_HEAP_PROPERTIES heap_desc = { 0 };
     heap_desc.Type = heap_type;
@@ -1185,12 +1213,12 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_ren
     {
         // host buffer 
         ID3D12Resource** host_buffer   = &dx12_renderer->resources[i][dx12_renderer->resource_count[i]];
-        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, host_buffer, dx12_renderer)) return false;
+        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, host_buffer, dx12_renderer)) return false;
         buffer.host_buffers[i] = dx12_renderer->resource_count[i]++;
 
         // device buffer and its view
         ID3D12Resource** device_buffer = &dx12_renderer->resources[i][dx12_renderer->resource_count[i]];
-        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, device_buffer, dx12_renderer)) return false;
+        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_FLAG_NONE, device_buffer, dx12_renderer)) return false;
         buffer.device_buffers[i] = dx12_renderer->resource_count[i]++;
 
         buffer.view[i].BufferLocation = ID3D12Resource_GetGPUVirtualAddress(*device_buffer);
@@ -1247,12 +1275,12 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_rende
     {
         // host buffer 
         ID3D12Resource** host_buffer   = &dx12_renderer->resources[i][dx12_renderer->resource_count[i]];
-        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, host_buffer, dx12_renderer)) return false;
+        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, host_buffer, dx12_renderer)) return false;
         buffer.host_buffers[i] = dx12_renderer->resource_count[i]++;
 
         // device buffer and its view
         ID3D12Resource** device_buffer = &dx12_renderer->resources[i][dx12_renderer->resource_count[i]];
-        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, device_buffer, dx12_renderer)) return false;
+        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_FLAG_NONE, device_buffer, dx12_renderer)) return false;
         buffer.device_buffers[i] = dx12_renderer->resource_count[i]++;
 
         buffer.view[i].BufferLocation = ID3D12Resource_GetGPUVirtualAddress(*device_buffer);
@@ -1288,7 +1316,7 @@ bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm
     for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
     {
         ID3D12Resource** device_buffer = &dx12_renderer->resources[i][dx12_renderer->resource_count[i]];
-        if(!dm_dx12_create_buffer(big_size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, device_buffer, dx12_renderer)) return false;
+        if(!dm_dx12_create_buffer(big_size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, device_buffer, dx12_renderer)) return false;
         buffer.device_buffers[i] = dx12_renderer->resource_count[i]++;
         buffer.size     = aligned_size; 
         buffer.big_size = big_size;
@@ -1406,7 +1434,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_render_handle* 
     {
         // host texture is actually a buffer
         ID3D12Resource** host_resource = &dx12_renderer->resources[i][dx12_renderer->resource_count[i]];
-        if(!dm_dx12_create_buffer(size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, host_resource, dx12_renderer)) return false;
+        if(!dm_dx12_create_buffer(size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, host_resource, dx12_renderer)) return false;
         texture.host_textures[i] = dx12_renderer->resource_count[i]++;
 
         if(!desc.data)
@@ -1466,6 +1494,92 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_render_handle* 
     //
     dm_memcpy(dx12_renderer->textures + dx12_renderer->texture_count, &texture, sizeof(texture));
     handle->index = dx12_renderer->texture_count++;
+
+    return true;
+}
+
+bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+
+    if(!desc.data)
+    {
+        DM_LOG_FATAL("Storage buffers need data");
+        return false;
+    }
+
+    dm_dx12_storage_buffer buffer = { 0 };
+
+    D3D12_RESOURCE_FLAGS device_flags = D3D12_RESOURCE_FLAG_NONE;
+    if(desc.write) device_flags       = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+    D3D12_RESOURCE_STATES device_states = D3D12_RESOURCE_STATE_COMMON;
+    if(desc.write) device_states        = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        // host buffer 
+        ID3D12Resource** host_buffer   = &dx12_renderer->resources[i][dx12_renderer->resource_count[i]];
+        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, host_buffer, dx12_renderer)) return false;
+        buffer.host_buffers[i] = dx12_renderer->resource_count[i]++;
+
+        // device buffer and its view
+        ID3D12Resource** device_buffer = &dx12_renderer->resources[i][dx12_renderer->resource_count[i]];
+        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, device_flags, device_buffer, dx12_renderer)) return false;
+        buffer.device_buffers[i] = dx12_renderer->resource_count[i]++;
+
+        hr = ID3D12Resource_Map(*host_buffer, 0,NULL, &buffer.mapped_addresses[i]); 
+        if(!dm_platform_win32_decode_hresult(hr) || !buffer.mapped_addresses[i])
+        {
+            DM_LOG_FATAL("ID3D12Resource_Map failed");
+            return false;
+        }
+        
+        dm_memcpy(buffer.mapped_addresses[i], desc.data, desc.size);
+
+        ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[dx12_renderer->current_frame];
+
+        ID3D12GraphicsCommandList7_CopyBufferRegion(command_list, *device_buffer, 0, *host_buffer, 0, desc.size);
+
+        D3D12_RESOURCE_BARRIER barrier = { 0 };
+
+        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        barrier.Transition.StateAfter  = device_states;
+        barrier.Transition.pResource   = *device_buffer;
+
+        ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
+
+        // view
+        if(desc.write)
+        {
+            D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
+            view_desc.ViewDimension              = D3D12_UAV_DIMENSION_BUFFER;
+            view_desc.Buffer.NumElements         = desc.size / desc.stride;
+            view_desc.Buffer.StructureByteStride = desc.stride;
+
+            ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, *device_buffer, NULL, &view_desc, dx12_renderer->resource_heap[i].cpu_handle.current); 
+        }
+        else
+        {
+            D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
+            view_desc.Format                     = DXGI_FORMAT_UNKNOWN;
+            view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
+            view_desc.Buffer.NumElements         = desc.size / desc.stride;
+            view_desc.Buffer.StructureByteStride = desc.stride;
+            view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+            ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, NULL, &view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
+        }
+
+        buffer.handle[i] = dx12_renderer->resource_heap[i].cpu_handle.current;
+        dx12_renderer->resource_heap[i].cpu_handle.current.ptr += dx12_renderer->resource_heap[i].size;
+    }
+
+    //
+    dm_memcpy(dx12_renderer->storage_buffers + dx12_renderer->sb_count, &buffer, sizeof(buffer));
+    handle->index = dx12_renderer->sb_count++;
 
     return true;
 }
@@ -1668,6 +1782,33 @@ bool dm_render_command_backend_bind_texture(dm_render_handle texture, uint8_t sl
 
     binding_heap->cpu_handle.current.ptr += binding_heap->size;
     binding_heap->gpu_handle.current.ptr += binding_heap->size;
+
+    return true;
+}
+
+bool dm_render_command_backend_bind_storage_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
+
+    const dm_dx12_storage_buffer b = dx12_renderer->storage_buffers[buffer.index];
+
+    const uint8_t current_frame = dx12_renderer->current_frame;
+
+    dm_dx12_descriptor_heap* binding_heap = &dx12_renderer->binding_heap[current_frame];
+
+    ID3D12Device5_CopyDescriptorsSimple(dx12_renderer->device, 1, binding_heap->cpu_handle.current, b.handle[current_frame], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+
+    binding_heap->cpu_handle.current.ptr += binding_heap->size;
+    binding_heap->gpu_handle.current.ptr += binding_heap->size;
+
+    return true;
+}
+
+bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm_render_handle handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+    HRESULT hr;
 
     return true;
 }

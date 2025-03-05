@@ -307,6 +307,7 @@ typedef enum dm_render_resource_type_t
     DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER,
     DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER,
     DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER,
+    DM_RENDER_RESOURCE_TYPE_STORAGE_BUFFER,
     DM_RENDER_RESOURCE_TYPE_TEXTURE,
 } dm_render_resource_type;
 
@@ -408,6 +409,8 @@ typedef enum dm_descriptor_range_type_t
     DM_DESCRIPTOR_RANGE_TYPE_UNKNOWN,
     DM_DESCRIPTOR_RANGE_TYPE_CONSTANT_BUFFER,
     DM_DESCRIPTOR_RANGE_TYPE_TEXTURE,
+    DM_DESCRIPTOR_RANGE_TYPE_READ_STORAGE_BUFFER,
+    DM_DESCRIPTOR_RANGE_TYPE_WRITE_STORAGE_BUFFER
 } dm_descriptor_range_type;
 
 #define DM_DESCRIPTOR_RANGE_MAX_RESOURCES 5
@@ -497,6 +500,13 @@ typedef struct dm_constant_buffer_desc_t
     void*  data;
 } dm_constant_buffer_desc;
 
+typedef struct dm_storage_buffer_desc_t
+{
+    size_t size, element_size, stride;
+    void*  data;
+    bool   write;
+} dm_storage_buffer_desc;
+
 typedef enum dm_texture_format_t
 {
     DM_TEXTURE_FORMAT_UNKNOWN,
@@ -527,6 +537,8 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP,
+    DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER,
+    DM_RENDER_COMMAND_TYPE_BIND_STORAGE_BUFFER,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED
 } dm_render_command_type;
@@ -725,6 +737,7 @@ bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_
 bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_render_handle* handle, dm_context* context);
 bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_context* context);
 
 void dm_render_command_begin_render_pass(float r, float g, float b, float a, dm_context* context);
@@ -737,9 +750,11 @@ void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* co
 
 void dm_render_command_bind_constant_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context);
 void dm_render_command_bind_texture(dm_render_handle texture, uint8_t binding, uint8_t descriptor_group, dm_context* context);
+void dm_render_command_bind_storage_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context);
 
 void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);
 void dm_render_command_update_constant_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);
+void dm_render_command_update_storage_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);
 
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
 void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);
