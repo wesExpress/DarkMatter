@@ -302,20 +302,20 @@ RENDERING
 ***********/
 typedef enum dm_render_resource_type_t
 {
-    DM_RENDER_RESOURCE_TYPE_UNKNOWN,
-    DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE,
-    DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER,
-    DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER,
-    DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER,
-    DM_RENDER_RESOURCE_TYPE_STORAGE_BUFFER,
-    DM_RENDER_RESOURCE_TYPE_TEXTURE,
+    DM_RESOURCE_TYPE_UNKNOWN,
+    DM_RESOURCE_TYPE_RASTER_PIPELINE,
+    DM_RESOURCE_TYPE_VERTEX_BUFFER,
+    DM_RESOURCE_TYPE_INDEX_BUFFER,
+    DM_RESOURCE_TYPE_CONSTANT_BUFFER,
+    DM_RESOURCE_TYPE_STORAGE_BUFFER,
+    DM_RESOURCE_TYPE_TEXTURE,
 } dm_render_resource_type;
 
-typedef struct dm_render_handle_t
+typedef struct dm_resource_handle_t
 {
     dm_render_resource_type type;
     uint32_t                index;
-} dm_render_handle;
+} dm_resource_handle;
 
 typedef enum dm_input_element_format_t
 {
@@ -547,16 +547,16 @@ typedef struct dm_render_command_param_t
 {
     union
     {
-        bool              bool_val;
-        int               int_val;
-        uint8_t           u8_val;
-        uint16_t          u16_val;
-        uint32_t          u32_val;
-        uint64_t          u64_val;
-        size_t            size_t_val;
-        float             float_val;
-        dm_render_handle  handle_val;
-        void*             void_val;
+        bool                bool_val;
+        int                 int_val;
+        uint8_t             u8_val;
+        uint16_t            u16_val;
+        uint32_t            u32_val;
+        uint64_t            u64_val;
+        size_t              size_t_val;
+        float               float_val;
+        dm_resource_handle  handle_val;
+        void*               void_val;
     };
 } dm_render_command_param;
 
@@ -601,7 +601,7 @@ typedef struct dm_font_aligned_quad_t
 typedef struct dm_font_t
 {
     dm_font_baked_char glyphs[96];
-    dm_render_handle   texture_handle;
+    dm_resource_handle texture_handle;
 } dm_font;
 
 /******************
@@ -733,28 +733,28 @@ float dm_random_float_normal(float mu, float sigma, dm_context* context);
 void dm_platform_sleep(uint64_t ms, dm_context* context);
 
 // rendering
-bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_render_handle* handle, dm_context* context);
-bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_context* context);
+bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
 
 void dm_render_command_begin_render_pass(float r, float g, float b, float a, dm_context* context);
 void dm_render_command_end_render_pass(dm_context* context);
 
-void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context);
+void dm_render_command_bind_raster_pipeline(dm_resource_handle handle, dm_context* context);
 void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, uint32_t descriptor_buffer_index, dm_context* context);
-void dm_render_command_bind_vertex_buffer(dm_render_handle handle, uint8_t slot, dm_context* context);
-void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* context);
+void dm_render_command_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, dm_context* context);
+void dm_render_command_bind_index_buffer(dm_resource_handle handle, dm_context* context);
 
-void dm_render_command_bind_constant_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context);
-void dm_render_command_bind_texture(dm_render_handle texture, uint8_t binding, uint8_t descriptor_group, dm_context* context);
-void dm_render_command_bind_storage_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context);
+void dm_render_command_bind_constant_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context);
+void dm_render_command_bind_texture(dm_resource_handle texture, uint8_t binding, uint8_t descriptor_group, dm_context* context);
+void dm_render_command_bind_storage_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context);
 
-void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);
-void dm_render_command_update_constant_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);
-void dm_render_command_update_storage_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context);
+void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
+void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
+void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
 void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);

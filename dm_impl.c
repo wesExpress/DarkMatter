@@ -621,16 +621,16 @@ void dm_renderer_shutdown(dm_context* context)
 }
 
 // render resources
-extern bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_render_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 
-bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    handle->type = DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE;
+    handle->type = DM_RESOURCE_TYPE_RASTER_PIPELINE;
 
     if(dm_renderer_backend_create_raster_pipeline(desc, handle, &context->renderer)) return true;
 
@@ -638,9 +638,9 @@ bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_render_
     return false;
 }
 
-bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    handle->type = DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER;
+    handle->type = DM_RESOURCE_TYPE_VERTEX_BUFFER;
 
     if(dm_renderer_backend_create_vertex_buffer(desc, handle, &context->renderer)) return true;
 
@@ -648,9 +648,9 @@ bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_render_hand
     return false;
 }
 
-bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    handle->type = DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER;
+    handle->type = DM_RESOURCE_TYPE_INDEX_BUFFER;
 
     if(dm_renderer_backend_create_index_buffer(desc, handle, &context->renderer)) return true;
 
@@ -658,9 +658,9 @@ bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_render_handle
     return false;
 }
 
-bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    handle->type = DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER;
+    handle->type = DM_RESOURCE_TYPE_CONSTANT_BUFFER;
 
     if(dm_renderer_backend_create_constant_buffer(desc, handle, &context->renderer)) return true;
 
@@ -668,9 +668,9 @@ bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_render_
     return false;
 }
 
-bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    handle->type = DM_RENDER_RESOURCE_TYPE_TEXTURE;
+    handle->type = DM_RESOURCE_TYPE_TEXTURE;
 
     if(dm_renderer_backend_create_texture(desc, handle, &context->renderer)) return true;
 
@@ -678,9 +678,9 @@ bool dm_renderer_create_texture(dm_texture_desc desc, dm_render_handle* handle, 
     return false;
 }
 
-bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    handle->type = DM_RENDER_RESOURCE_TYPE_STORAGE_BUFFER;
+    handle->type = DM_RESOURCE_TYPE_STORAGE_BUFFER;
 
     if(dm_renderer_backend_create_storage_buffer(desc, handle, &context->renderer)) return true;
 
@@ -693,17 +693,17 @@ RENDER COMMANDS
 *****************/
 extern bool dm_render_command_backend_begin_render_pass(float r, float g, float b, float a, dm_renderer* renderer);
 extern bool dm_render_command_backend_end_render_pass(dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_raster_pipeline(dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_vertex_buffer(dm_render_handle handle, uint8_t slot, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_index_buffer(dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_render_handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_raster_pipeline(dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_index_buffer(dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
-extern bool dm_render_command_backend_update_constant_buffer(void* data, size_t size, dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_constant_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_texture(dm_render_handle texture, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_storage_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
-extern bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm_render_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_constant_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_texture(dm_resource_handle texture, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_storage_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_renderer* renderer);
 
 void _dm_render_command_submit(dm_render_command command, dm_render_command_manager* manager)
@@ -748,7 +748,7 @@ void dm_render_command_end_render_pass(dm_context* context)
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context* context)
+void dm_render_command_bind_raster_pipeline(dm_resource_handle handle, dm_context* context)
 {
     dm_render_command command = { 0 };
     
@@ -759,7 +759,7 @@ void dm_render_command_bind_raster_pipeline(dm_render_handle handle, dm_context*
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_constant_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context)
+void dm_render_command_bind_constant_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context)
 {
     dm_render_command command = { 0 };
 
@@ -772,7 +772,7 @@ void dm_render_command_bind_constant_buffer(dm_render_handle buffer, uint8_t bin
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_texture(dm_render_handle texture, uint8_t binding, uint8_t descriptor_group, dm_context* context)
+void dm_render_command_bind_texture(dm_resource_handle texture, uint8_t binding, uint8_t descriptor_group, dm_context* context)
 {
     dm_render_command command = { 0 };
 
@@ -798,7 +798,7 @@ void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t descri
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_vertex_buffer(dm_render_handle handle, uint8_t slot, dm_context* context)
+void dm_render_command_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, dm_context* context)
 {
     dm_render_command command = { 0 };
 
@@ -810,7 +810,7 @@ void dm_render_command_bind_vertex_buffer(dm_render_handle handle, uint8_t slot,
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* context)
+void dm_render_command_bind_index_buffer(dm_resource_handle handle, dm_context* context)
 {
     dm_render_command command = { 0 };
 
@@ -821,7 +821,7 @@ void dm_render_command_bind_index_buffer(dm_render_handle handle, dm_context* co
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context)
+void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
 {
     dm_render_command command = { 0 };
 
@@ -834,7 +834,7 @@ void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_render_h
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_update_constant_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context)
+void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
 {
     dm_render_command command = { 0 };
 
@@ -847,7 +847,7 @@ void dm_render_command_update_constant_buffer(void* data, size_t size, dm_render
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_storage_buffer(dm_render_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context)
+void dm_render_command_bind_storage_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context)
 {
     dm_render_command command = { 0 };
 
@@ -860,7 +860,7 @@ void dm_render_command_bind_storage_buffer(dm_render_handle buffer, uint8_t bind
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_update_storage_buffer(void* data, size_t size, dm_render_handle handle, dm_context* context)
+void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
 {
     dm_render_command command = { 0 };
 
@@ -927,35 +927,35 @@ bool dm_renderer_submit_commands(dm_context* context)
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE:
-            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_RASTER_PIPELINE) { DM_LOG_FATAL("Resource is not a raster pipeline."); return false; }
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_RASTER_PIPELINE) { DM_LOG_FATAL("Resource is not a raster pipeline."); return false; }
             if(dm_render_command_backend_bind_raster_pipeline(params[0].handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind raster pipeline failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER:
-            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER) { DM_LOG_FATAL("Resource is not a constant buffer."); return false; }
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_CONSTANT_BUFFER) { DM_LOG_FATAL("Resource is not a constant buffer."); return false; }
             if(dm_render_command_backend_bind_constant_buffer(params[0].handle_val, params[1].u8_val, params[2].u8_val, renderer)) continue;
             DM_LOG_FATAL("Bind constant buffer failed");
             return false;
             case DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER:
-            if(params[2].handle_val.type != DM_RENDER_RESOURCE_TYPE_CONSTANT_BUFFER) { DM_LOG_FATAL("Resource is not a constant buffer."); return false; }
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_CONSTANT_BUFFER) { DM_LOG_FATAL("Resource is not a constant buffer."); return false; }
             if(dm_render_command_backend_update_constant_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
             DM_LOG_FATAL("Update constant buffer failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_TEXTURE:
-            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_TEXTURE) { DM_LOG_FATAL("Resource is not a texture."); return false; }
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_TEXTURE) { DM_LOG_FATAL("Resource is not a texture."); return false; }
             if(dm_render_command_backend_bind_texture(params[0].handle_val, params[1].u8_val, params[2].u8_val, renderer)) continue;
             DM_LOG_FATAL("Bind texture failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_STORAGE_BUFFER:
-            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_STORAGE_BUFFER) { DM_LOG_FATAL("Resource is not a storage buffer"); return false; }
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_STORAGE_BUFFER) { DM_LOG_FATAL("Resource is not a storage buffer"); return false; }
             if(dm_render_command_backend_bind_storage_buffer(params[0].handle_val, params[1].u8_val, params[2].u8_val, renderer)) continue;
             DM_LOG_FATAL("Bind storage buffer failed");
             return false;
             case DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER:
-            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_STORAGE_BUFFER) { DM_LOG_FATAL("Resource is not a storage buffer"); return false; }
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_STORAGE_BUFFER) { DM_LOG_FATAL("Resource is not a storage buffer"); return false; }
             if(dm_render_command_backend_update_storage_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
             DM_LOG_FATAL("Update storage buffer failed");
             return false;
@@ -966,18 +966,18 @@ bool dm_renderer_submit_commands(dm_context* context)
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER:
-            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER) { DM_LOG_FATAL("Resource is not a vertex buffer"); return false; }
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_VERTEX_BUFFER) { DM_LOG_FATAL("Resource is not a vertex buffer"); return false; }
             if(dm_render_command_backend_bind_vertex_buffer(params[0].handle_val, params[1].u8_val, renderer)) continue;
             DM_LOG_FATAL("Bind vertex buffer failed");
             return false;
             case DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER:
-            if(params[2].handle_val.type != DM_RENDER_RESOURCE_TYPE_VERTEX_BUFFER) { DM_LOG_FATAL("Resource is not a vertex buffer."); return false; }
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_VERTEX_BUFFER) { DM_LOG_FATAL("Resource is not a vertex buffer."); return false; }
             if(dm_render_command_backend_update_vertex_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
             DM_LOG_FATAL("Update vertex buffer failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER:
-            if(params[0].handle_val.type != DM_RENDER_RESOURCE_TYPE_INDEX_BUFFER) { DM_LOG_FATAL("Resource is not an index buffer."); return false; }
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_INDEX_BUFFER) { DM_LOG_FATAL("Resource is not an index buffer."); return false; }
             if(dm_render_command_backend_bind_index_buffer(params[0].handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind index buffer failed");
             return false;
