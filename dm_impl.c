@@ -706,12 +706,12 @@ extern bool dm_render_command_backend_bind_storage_buffer(dm_resource_handle buf
 extern bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_renderer* renderer);
 
-void _dm_render_command_submit(dm_render_command command, dm_render_command_manager* manager)
+void _dm_render_command_submit(dm_command command, dm_command_manager* manager)
 {
     if(!manager->commands)
     {
         manager->capacity = 16;
-        manager->commands = dm_alloc(sizeof(dm_render_command) * manager->capacity);
+        manager->commands = dm_alloc(sizeof(dm_command) * manager->capacity);
     }
 
     manager->commands[manager->count++] = command;
@@ -719,17 +719,17 @@ void _dm_render_command_submit(dm_render_command command, dm_render_command_mana
     if((float)manager->count / (float)manager->capacity > 0.75f)
     {
         manager->capacity *= 2;
-        manager->commands = dm_realloc(manager->commands, sizeof(dm_render_command) * manager->capacity);
+        manager->commands = dm_realloc(manager->commands, sizeof(dm_command) * manager->capacity);
     }
 }
 
-#define DM_RENDER_COMMAND_SUBMIT _dm_render_command_submit(command, &context->renderer.command_manager)
+#define DM_RENDER_COMMAND_SUBMIT _dm_render_command_submit(command, &context->renderer.render_command_manager)
 
 void dm_render_command_begin_render_pass(float r, float g, float b, float a, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS;
+    command.r_type = DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS;
 
     command.params[0].float_val = r;
     command.params[1].float_val = g;
@@ -741,18 +741,18 @@ void dm_render_command_begin_render_pass(float r, float g, float b, float a, dm_
 
 void dm_render_command_end_render_pass(dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_END_RENDER_PASS;
+    command.r_type = DM_RENDER_COMMAND_TYPE_END_RENDER_PASS;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
 
 void dm_render_command_bind_raster_pipeline(dm_resource_handle handle, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
     
-    command.type = DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE;
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE;
 
     command.params[0].handle_val = handle;
 
@@ -761,9 +761,9 @@ void dm_render_command_bind_raster_pipeline(dm_resource_handle handle, dm_contex
 
 void dm_render_command_bind_constant_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER;
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER;
 
     command.params[0].handle_val = buffer;
     command.params[1].u8_val     = binding;
@@ -774,9 +774,9 @@ void dm_render_command_bind_constant_buffer(dm_resource_handle buffer, uint8_t b
 
 void dm_render_command_bind_texture(dm_resource_handle texture, uint8_t binding, uint8_t descriptor_group, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_BIND_TEXTURE;
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_TEXTURE;
 
     command.params[0].handle_val = texture;
     command.params[1].u8_val     = binding;
@@ -787,9 +787,9 @@ void dm_render_command_bind_texture(dm_resource_handle texture, uint8_t binding,
 
 void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP;
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP;
 
     command.params[0].u8_val  = group_index;
     command.params[1].u8_val  = descriptor_count;
@@ -800,9 +800,9 @@ void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t descri
 
 void dm_render_command_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER;
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER;
 
     command.params[0].handle_val = handle;
     command.params[1].u8_val     = slot;
@@ -812,9 +812,9 @@ void dm_render_command_bind_vertex_buffer(dm_resource_handle handle, uint8_t slo
 
 void dm_render_command_bind_index_buffer(dm_resource_handle handle, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER;
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER;
 
     command.params[0].handle_val = handle;
 
@@ -823,9 +823,9 @@ void dm_render_command_bind_index_buffer(dm_resource_handle handle, dm_context* 
 
 void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER;
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER;
 
     command.params[0].void_val   = data;
     command.params[1].size_t_val = size;
@@ -836,9 +836,9 @@ void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource
 
 void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER;
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER;
 
     command.params[0].void_val   = data;
     command.params[1].size_t_val = size;
@@ -849,9 +849,9 @@ void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resour
 
 void dm_render_command_bind_storage_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_BIND_STORAGE_BUFFER;
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_STORAGE_BUFFER;
 
     command.params[0].handle_val = buffer;
     command.params[1].u8_val     = binding;
@@ -862,9 +862,9 @@ void dm_render_command_bind_storage_buffer(dm_resource_handle buffer, uint8_t bi
 
 void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER;
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER;
 
     command.params[0].void_val   = data;
     command.params[1].size_t_val = size;
@@ -875,9 +875,9 @@ void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resourc
 
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED;
+    command.r_type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED;
 
     command.params[0].u32_val = instance_count;
     command.params[1].u32_val = instance_offset;
@@ -889,9 +889,9 @@ void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance
 
 void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context)
 {
-    dm_render_command command = { 0 };
+    dm_command command = { 0 };
 
-    command.type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED;
+    command.r_type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED;
 
     command.params[0].u32_val = instance_count;
     command.params[1].u32_val = instance_offset;
@@ -909,12 +909,12 @@ bool dm_renderer_submit_commands(dm_context* context)
     
     dm_renderer* renderer = &context->renderer;
     
-    for(uint32_t i=0; i<context->renderer.command_manager.count && dm_context_is_running(context); i++)
+    for(uint32_t i=0; i<context->renderer.render_command_manager.count && dm_context_is_running(context); i++)
     {
-        dm_render_command command = context->renderer.command_manager.commands[i];
-        dm_render_command_param* params = command.params;
+        dm_command command = context->renderer.render_command_manager.commands[i];
+        dm_command_param* params = command.params;
         
-        switch(command.type)
+        switch(command.r_type)
         {
             case DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS:
             if(dm_render_command_backend_begin_render_pass(params[0].float_val, params[1].float_val, params[2].float_val, params[3].float_val, renderer)) continue;
@@ -1001,6 +1001,70 @@ bool dm_renderer_submit_commands(dm_context* context)
     
     return true;
     dm_font font = { 0 };
+}
+
+/**********
+ * COMPUTE
+ ***********/
+extern bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+
+bool dm_compute_create_compute_pipeline(dm_compute_pipeline_desc desc, dm_resource_handle* handle, dm_context* context)
+{
+    handle->type = DM_RESOURCE_TYPE_COMPUTE_PIPELINE;
+
+    if(dm_compute_backend_create_compute_pipeline(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating compute pipeline failed");
+    return false;
+}
+
+extern bool dm_compute_command_backend_begin_recording(dm_renderer* renderer);
+extern bool dm_compute_command_backend_end_recording(dm_renderer* renderer);
+extern void dm_compute_command_backend_bind_compute_pipeline(dm_resource_handle handle, dm_renderer* renderer);
+extern void dm_compute_command_backend_bind_storage_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
+extern void dm_compute_command_backend_bind_constant_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
+extern void dm_compute_command_backend_bind_texture(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
+extern void dm_compute_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, uint32_t descriptor_buffer_index, dm_renderer* renderer);
+extern void dm_compute_command_backend_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_renderer* renderer);
+ 
+bool dm_compute_command_begin_recording(dm_context* context)
+{
+    return dm_compute_command_backend_begin_recording(&context->renderer);
+}
+
+bool dm_compute_command_end_recording(dm_context* context)
+{
+    return dm_compute_command_backend_end_recording(&context->renderer);
+}
+
+void dm_compute_command_bind_compute_pipeline(dm_resource_handle handle, dm_context* context)
+{
+    dm_compute_command_backend_bind_compute_pipeline(handle, &context->renderer);
+}
+
+void dm_compute_command_bind_storage_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context)
+{
+    dm_compute_command_backend_bind_storage_buffer(handle, binding, descriptor_group, &context->renderer);
+}
+
+void dm_compute_command_bind_constant_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context)
+{
+    dm_compute_command_backend_bind_constant_buffer(handle, binding, descriptor_group, &context->renderer);
+}
+
+void dm_compute_command_bind_texture(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context)
+{
+    dm_compute_command_backend_bind_texture(handle, binding, descriptor_group, &context->renderer);
+}
+
+void dm_compute_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, uint32_t descriptor_buffer_index, dm_context* context)
+{
+    dm_compute_command_backend_bind_descriptor_group(group_index, num_descriptors, descriptor_buffer_index, &context->renderer);
+}
+
+void dm_compute_command_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_context* context)
+{
+    dm_compute_command_backend_dispatch(x,y,z, &context->renderer);
 }
 
 /***************
@@ -1164,7 +1228,7 @@ void dm_shutdown(dm_context* context)
 {
     if(context->app_data) dm_free((void**)&context->app_data);
 
-    dm_free((void**)&context->renderer.command_manager.commands);
+    dm_free((void**)&context->renderer.render_command_manager.commands);
     
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
@@ -1306,7 +1370,8 @@ bool dm_renderer_end_frame(dm_context* context)
         return false; 
     }
     
-    context->renderer.command_manager.count = 0;
+    context->renderer.render_command_manager.count  = 0;
+    context->renderer.compute_command_manager.count = 0;
     
     if(!dm_renderer_backend_end_frame(context)) 
     {

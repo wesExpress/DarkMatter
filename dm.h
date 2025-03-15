@@ -300,21 +300,24 @@ typedef struct dm_threadpool_t
 /*********
 RENDERING
 ***********/
-typedef enum dm_render_resource_type_t
+#define DM_RENDERER_MAX_RESOURCE_COUNT 100
+typedef enum dm_resource_type_t
 {
     DM_RESOURCE_TYPE_UNKNOWN,
     DM_RESOURCE_TYPE_RASTER_PIPELINE,
+    DM_RESOURCE_TYPE_COMPUTE_PIPELINE,
+    DM_RESOURCE_TYPE_RAYTRACING_PIPELINE,
     DM_RESOURCE_TYPE_VERTEX_BUFFER,
     DM_RESOURCE_TYPE_INDEX_BUFFER,
     DM_RESOURCE_TYPE_CONSTANT_BUFFER,
     DM_RESOURCE_TYPE_STORAGE_BUFFER,
     DM_RESOURCE_TYPE_TEXTURE,
-} dm_render_resource_type;
+} dm_resource_type;
 
 typedef struct dm_resource_handle_t
 {
-    dm_render_resource_type type;
-    uint32_t                index;
+    dm_resource_type type;
+    uint32_t         index;
 } dm_resource_handle;
 
 typedef enum dm_input_element_format_t
@@ -523,6 +526,15 @@ typedef struct dm_texture_desc_t
     void*             data;
 } dm_texture_desc;
 
+// compute
+typedef struct dm_compute_pipeline_desc_t
+{
+    dm_descriptor_group descriptor_group[DM_MAX_DESCRIPTOR_GROUPS];
+    uint8_t             descriptor_group_count;
+
+    dm_shader_desc shader;
+} dm_compute_pipeline_desc;
+
 // commands
 typedef enum dm_render_command_type_t
 {
@@ -543,7 +555,17 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED
 } dm_render_command_type;
 
-typedef struct dm_render_command_param_t
+typedef enum dm_compute_command_type_t
+{
+    DM_COMPUTE_COMMAND_TYPE_BIND_COMPUTE_PIPELINE,
+    DM_COMPUTE_COMMAND_TYPE_BIND_STORAGE_BUFFER,
+    DM_COMPUTE_COMMAND_TYPE_BIND_CONSTANT_BUFFER,
+    DM_COMPUTE_COMMAND_TYPE_BIND_TEXTURE,
+    DM_COMPUTE_COMMAND_TYPE_DISPATCH,
+    DM_COMPUTE_COMMAND_TYPE_UNKNOWN
+} dm_compute_command_type;
+
+typedef struct dm_command_param_t
 {
     union
     {
@@ -558,25 +580,37 @@ typedef struct dm_render_command_param_t
         dm_resource_handle  handle_val;
         void*               void_val;
     };
-} dm_render_command_param;
+} dm_command_param;
 
-#define DM_RENDER_COMMAND_MAX_PARAMS 10
-typedef struct dm_render_command_t
+#define DM_COMMAND_MAX_PARAMS 10
+typedef struct dm_command_t
 {
-    dm_render_command_type  type;
-    dm_render_command_param params[DM_RENDER_COMMAND_MAX_PARAMS];
-} dm_render_command;
+    union
+    {
+        dm_render_command_type  r_type;
+        dm_compute_command_type c_type;
+    };
+    dm_command_param params[DM_COMMAND_MAX_PARAMS];
+} dm_command;
 
-typedef struct dm_render_command_manager_t
+typedef enum dm_command_manager_type_t
 {
-    dm_render_command* commands;
-    uint32_t           capacity, count;
-} dm_render_command_manager;
+    DM_COMMAND_MANAGER_TYPE_RENDER,
+    DM_COMMAND_MANAGER_TYPE_COMPUTE,
+    DM_COMMAND_MANAGER_TYPE_UNKNOWN
+} dm_command_manager_type;
 
-#define DM_RENDERER_MAX_RESOURCE_COUNT 100
+typedef struct dm_command_manager_t
+{
+    uint32_t                capacity, count;
+    dm_command_manager_type type;
+    dm_command*             commands;
+} dm_command_manager;
+
 typedef struct dm_renderer_t
 {
-    dm_render_command_manager command_manager;
+    dm_command_manager render_command_manager;
+    dm_command_manager compute_command_manager;
     
     uint32_t width, height;
     bool vsync;
@@ -762,6 +796,18 @@ void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t 
 // font loading
 bool dm_renderer_load_font(const char* path, int font_size, dm_font* font, dm_context* context);
 dm_font_aligned_quad dm_font_get_aligned_quad(dm_font font, const char text, float* xf, float* yf);
+
+// compute
+bool dm_compute_create_compute_pipeline(dm_compute_pipeline_desc desc, dm_resource_handle* handle, dm_context* context);
+
+bool dm_compute_command_begin_recording(dm_context* context);
+bool dm_compute_command_end_recording(dm_context* context);
+void dm_compute_command_bind_compute_pipeline(dm_resource_handle handle, dm_context* context);
+void dm_compute_command_bind_storage_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context);
+void dm_compute_command_bind_constant_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context);
+void dm_compute_command_bind_texture(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context);
+void dm_compute_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, uint32_t descriptor_buffer_index, dm_context* context);
+void dm_compute_command_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_context* context);
 
 // framework funcs
 bool        dm_context_is_running(dm_context* context);
