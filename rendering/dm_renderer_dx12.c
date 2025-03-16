@@ -2097,8 +2097,6 @@ bool dm_compute_command_backend_begin_recording(dm_renderer* renderer)
     }
 
     dm_dx12_descriptor_heap* binding_heap = &dx12_renderer->binding_heap[current_frame];
-    //binding_heap->cpu_handle.current = binding_heap->cpu_handle.begin;
-    //binding_heap->gpu_handle.current = binding_heap->gpu_handle.begin;
     
     ID3D12DescriptorHeap* heaps[] = { binding_heap->heap };
     ID3D12GraphicsCommandList7_SetDescriptorHeaps(command_list, _countof(heaps), heaps);
@@ -2162,7 +2160,11 @@ void dm_compute_command_backend_bind_compute_pipeline(dm_resource_handle handle,
 
     dm_dx12_compute_pipeline pipeline = dx12_renderer->compute_pipelines[handle.index];
     const uint8_t current_frame = dx12_renderer->current_frame;
+#if DM_DX12_COMPUTE_COMMAND_LIST 
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->compute_command_list[current_frame];
+#else
+    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
+#endif
 
     ID3D12GraphicsCommandList7_SetPipelineState(command_list, pipeline.state);
     ID3D12GraphicsCommandList7_SetComputeRootSignature(command_list, pipeline.root_signature);
@@ -2196,7 +2198,11 @@ void dm_compute_command_backend_bind_descriptor_group(uint8_t group_index, uint8
     HRESULT hr;
 
     const uint8_t current_frame = dx12_renderer->current_frame;
+#if DM_DX12_COMPUTE_COMMAND_LIST 
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->compute_command_list[current_frame];
+#else
+    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
+#endif
 
     D3D12_GPU_DESCRIPTOR_HANDLE handle = dx12_renderer->binding_heap[current_frame].gpu_handle.current;
     handle.ptr -= descriptor_count * dx12_renderer->binding_heap[current_frame].size;
@@ -2210,7 +2216,11 @@ void dm_compute_command_backend_dispatch(const uint16_t x, const uint16_t y, con
     HRESULT hr;
 
     const uint8_t current_frame = dx12_renderer->current_frame;
+#if DM_DX12_COMPUTE_COMMAND_LIST 
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->compute_command_list[current_frame];
+#else
+    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
+#endif
 
     ID3D12GraphicsCommandList7_Dispatch(command_list, x,y,z);
 }
