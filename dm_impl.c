@@ -627,6 +627,8 @@ extern bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, d
 extern bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 
 bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_resource_handle* handle, dm_context* context)
 {
@@ -685,6 +687,26 @@ bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_
     if(dm_renderer_backend_create_storage_buffer(desc, handle, &context->renderer)) return true;
 
     DM_LOG_FATAL("Creating storage buffer failed");
+    return false;
+}
+
+bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_context* context)
+{
+    handle->type = DM_RESOURCE_TYPE_RAYTRACING_PIPELINE;
+
+    if(dm_renderer_backend_create_raytracing_pipeline(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating raytracing pipeline failed");
+    return false;
+}
+
+bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_resource_handle* handle, dm_context* context)
+{
+    handle->type = DM_RESOURCE_TYPE_ACCELERATION_STRUCTURE;
+
+    if(dm_renderer_backend_create_acceleration_structure(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating acceleration structure failed");
     return false;
 }
 
