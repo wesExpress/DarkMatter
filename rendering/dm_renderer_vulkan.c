@@ -9,12 +9,10 @@
 #define VK_USE_PLATFORM_WIN32_KHR
 #endif
 
-#if 0 
-#include <vulkan/vulkan.h>
-#else
 #define VOLK_IMPLEMENTATION
 #include "volk/volk.h"
-#endif
+
+#include "VulkanMemoryAllocator/include/vk_mem_alloc.h"
 
 #define DM_VULKAN_MAX_FRAMES_IN_FLIGHT DM_MAX_FRAMES_IN_FLIGHT 
 
@@ -119,12 +117,15 @@ typedef struct dm_vulkan_device_t
     VkPhysicalDevice physical;
     VkDevice         logical;
 
-    VkPhysicalDeviceProperties                    properties;
-    VkPhysicalDeviceProperties2                   properties2;
-    VkPhysicalDeviceDescriptorBufferPropertiesEXT descriptor_buffer_props;
-    VkPhysicalDeviceDescriptorBufferFeaturesEXT   descriptor_buffer_feats;
-    VkPhysicalDeviceVulkan12Properties            vulkan_12_props;
-    VkPhysicalDeviceVulkan12Features              vulkan_12_feats;
+    VkPhysicalDeviceProperties                       properties;
+    VkPhysicalDeviceProperties2                      properties2;
+    VkPhysicalDeviceDescriptorBufferPropertiesEXT    descriptor_buffer_props;
+    VkPhysicalDeviceDescriptorBufferFeaturesEXT      descriptor_buffer_feats;
+    VkPhysicalDeviceVulkan12Properties               vulkan_12_props;
+    VkPhysicalDeviceVulkan12Features                 vulkan_12_feats;
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR acceleration_structure_feats;
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR    raytracing_pipeline_feats;
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR  raytracing_pipeline_props;
 
     VkPhysicalDeviceFeatures         features;
     VkPhysicalDeviceFeatures2        features2;
@@ -182,7 +183,7 @@ typedef struct dm_vulkan_descriptor_buffer_t
 typedef struct dm_vulkan_renderer_t
 {
     VkInstance             instance;
-    VkAllocationCallbacks* allocator;
+    VmaAllocator           allocator;
 
     dm_vulkan_device device;
 
@@ -324,15 +325,22 @@ bool dm_vulkan_is_device_suitable(VkPhysicalDevice physical_device, const char**
     vkGetPhysicalDeviceMemoryProperties(device.physical, &device.memory_properties);
 
     device.descriptor_buffer_feats.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_FEATURES_EXT;
-    device.vulkan_12_feats.sType         = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
     device.descriptor_buffer_feats.pNext = &device.vulkan_12_feats;
+    device.vulkan_12_feats.sType         = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+    device.vulkan_12_feats.pNext         = &device.acceleration_structure_feats;
+
+    device.acceleration_structure_feats.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+    device.acceleration_structure_feats.pNext = &device.raytracing_pipeline_feats;
+    device.raytracing_pipeline_feats.sType    = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
 
     device.features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
     device.features2.pNext = &device.descriptor_buffer_feats;
     vkGetPhysicalDeviceFeatures2(device.physical, &device.features2);
 
-    if(device.descriptor_buffer_feats.descriptorBuffer==0) return false;
-    if(device.vulkan_12_feats.bufferDeviceAddress==0)      return false;
+    if(device.descriptor_buffer_feats.descriptorBuffer==0)           return false;
+    if(device.vulkan_12_feats.bufferDeviceAddress==0)                return false;
+    if(device.acceleration_structure_feats.accelerationStructure==0) return false;
+    if(device.raytracing_pipeline_feats.rayTracingPipeline==0)       return false;
 
     if(device.properties.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU) return false;
 
@@ -519,7 +527,7 @@ bool dm_vulkan_create_swapchain(dm_renderer* renderer)
     create_info.clipped        = VK_TRUE;
     create_info.oldSwapchain   = VK_NULL_HANDLE;
 
-    vr = vkCreateSwapchainKHR(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->swapchain.swapchain);
+    vr = vkCreateSwapchainKHR(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->swapchain.swapchain);
     if(!dm_vulkan_decode_vr(vr))
     {
         DM_LOG_FATAL("vkCreateSwapchainKHR failed");
@@ -573,7 +581,7 @@ bool dm_vulkan_create_rendertargets(dm_vulkan_renderer* vulkan_renderer)
         create_info.subresourceRange.baseArrayLayer = 0;
         create_info.subresourceRange.layerCount     = 1;
 
-        vr = vkCreateImageView(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->swapchain.views[i]);
+        vr = vkCreateImageView(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->swapchain.views[i]);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateImageView failed");
@@ -604,7 +612,7 @@ bool dm_vulkan_create_framebuffers(dm_vulkan_renderer* vulkan_renderer)
         create_info.height          = vulkan_renderer->swapchain.extents.height;
         create_info.layers          = 1;
 
-        vr = vkCreateFramebuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->swapchain.frame_buffers[i]);
+        vr = vkCreateFramebuffer(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->swapchain.frame_buffers[i]);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateFrameBuffer failed");
@@ -625,7 +633,7 @@ bool dm_vulkan_create_command_pool(dm_vulkan_family* family, VkCommandPoolCreate
     create_info.flags = create_flags; 
     create_info.queueFamilyIndex = family->index;
 
-    if(dm_vulkan_decode_vr(vkCreateCommandPool(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &family->pool))) return true;
+    if(dm_vulkan_decode_vr(vkCreateCommandPool(vulkan_renderer->device.logical, &create_info, NULL, &family->pool))) return true;
 
     DM_LOG_FATAL("vkCreateCommandPool failed");
     return false;
@@ -784,7 +792,7 @@ bool dm_renderer_backend_init(dm_context* context)
         create_info.ppEnabledLayerNames     = required_layers;
 #endif
 
-        vr = vkCreateInstance(&create_info, vulkan_renderer->allocator, &vulkan_renderer->instance);
+        vr = vkCreateInstance(&create_info, NULL, &vulkan_renderer->instance);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateInstance failed");
@@ -815,7 +823,7 @@ bool dm_renderer_backend_init(dm_context* context)
             return false;
         }
 
-        vr = func(vulkan_renderer->instance, &debug_create_info, vulkan_renderer->allocator, &vulkan_renderer->debug_messenger);
+        vr = func(vulkan_renderer->instance, &debug_create_info, NULL, &vulkan_renderer->debug_messenger);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("Failed to create Vulkan debug messenger");
@@ -834,7 +842,7 @@ bool dm_renderer_backend_init(dm_context* context)
         create_info.hwnd      = w32_data->hwnd;
         create_info.hinstance = w32_data->h_instance;
 
-        vr = vkCreateWin32SurfaceKHR(vulkan_renderer->instance, &create_info, vulkan_renderer->allocator, &vulkan_renderer->surface);
+        vr = vkCreateWin32SurfaceKHR(vulkan_renderer->instance, &create_info, NULL, &vulkan_renderer->surface);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateWin32SurfaceKHR failed");
@@ -853,7 +861,9 @@ bool dm_renderer_backend_init(dm_context* context)
             VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
             VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME,
             VK_KHR_SYNCHRONIZATION_2_EXTENSION_NAME,
-            //VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+            VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+            VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+            VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
         };
 
         uint32_t device_count = 0;
@@ -905,7 +915,9 @@ bool dm_renderer_backend_init(dm_context* context)
             queue_create_infos[i].pQueuePriorities = &queue_priority;
         }
 
-        vulkan_renderer->device.descriptor_buffer_feats.pNext = &vulkan_renderer->device.vulkan_12_feats;
+        vulkan_renderer->device.descriptor_buffer_feats.pNext      = &vulkan_renderer->device.vulkan_12_feats;
+        vulkan_renderer->device.vulkan_12_feats.pNext              = &vulkan_renderer->device.acceleration_structure_feats;
+        vulkan_renderer->device.acceleration_structure_feats.pNext = &vulkan_renderer->device.raytracing_pipeline_feats;
 
         VkDeviceCreateInfo create_info = { 0 };
         create_info.sType                   = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -917,7 +929,7 @@ bool dm_renderer_backend_init(dm_context* context)
         create_info.enabledLayerCount       = 0;
         create_info.pNext                   = &vulkan_renderer->device.descriptor_buffer_feats;
 
-        vr = vkCreateDevice(vulkan_renderer->device.physical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->device.logical);
+        vr = vkCreateDevice(vulkan_renderer->device.physical, &create_info, NULL, &vulkan_renderer->device.logical);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateDevice failed");
@@ -928,15 +940,56 @@ bool dm_renderer_backend_init(dm_context* context)
         vkGetDeviceQueue(vulkan_renderer->device.logical, vulkan_renderer->device.transfer_family.index,  0, &vulkan_renderer->device.transfer_family.queue);
         vkGetDeviceQueue(vulkan_renderer->device.logical, vulkan_renderer->device.compute_family.index,   0, &vulkan_renderer->device.compute_family.queue);
         vkGetDeviceQueue(vulkan_renderer->device.logical, vulkan_renderer->device.transient_family.index, 0, &vulkan_renderer->device.transient_family.queue);
-    }
 
-    // descriptor buffer stuff
-    {
-        vulkan_renderer->device.descriptor_buffer_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT;
-        vulkan_renderer->device.properties2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-        vulkan_renderer->device.properties2.pNext = &vulkan_renderer->device.descriptor_buffer_props;
+        vulkan_renderer->device.properties2.sType               = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+        vulkan_renderer->device.properties2.pNext               = &vulkan_renderer->device.descriptor_buffer_props;
+        vulkan_renderer->device.descriptor_buffer_props.sType   = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_BUFFER_PROPERTIES_EXT;
+        vulkan_renderer->device.descriptor_buffer_props.pNext   = &vulkan_renderer->device.raytracing_pipeline_props;
+        vulkan_renderer->device.raytracing_pipeline_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_PROPERTIES_KHR;
 
         vkGetPhysicalDeviceProperties2(vulkan_renderer->device.physical, &vulkan_renderer->device.properties2);
+    }
+
+    // allocator
+    {
+        VmaVulkanFunctions functions = { 0 };
+        functions.vkAllocateMemory                    = vkAllocateMemory;
+        functions.vkBindBufferMemory                  = vkBindBufferMemory;
+        functions.vkFreeMemory                        = vkFreeMemory;
+        functions.vkGetDeviceProcAddr                 = vkGetDeviceProcAddr;
+        functions.vkGetInstanceProcAddr               = vkGetInstanceProcAddr;
+        functions.vkMapMemory                         = vkMapMemory;
+        functions.vkUnmapMemory                       = vkUnmapMemory;
+        functions.vkGetPhysicalDeviceMemoryProperties = vkGetPhysicalDeviceMemoryProperties;
+        functions.vkInvalidateMappedMemoryRanges      = vkInvalidateMappedMemoryRanges;
+        functions.vkGetMemoryWin32HandleKHR           = vkGetMemoryWin32HandleKHR;
+
+        functions.vkBindBufferMemory                  = vkBindBufferMemory;
+        functions.vkGetBufferMemoryRequirements       = vkGetBufferMemoryRequirements;
+        functions.vkGetDeviceBufferMemoryRequirements = vkGetDeviceBufferMemoryRequirements;
+        functions.vkCreateBuffer                      = vkCreateBuffer;
+        functions.vkDestroyBuffer                     = vkDestroyBuffer;
+        functions.vkCmdCopyBuffer                     = vkCmdCopyBuffer;
+
+        functions.vkBindImageMemory                   = vkBindImageMemory;
+        functions.vkGetImageMemoryRequirements        = vkGetImageMemoryRequirements;
+        functions.vkGetDeviceImageMemoryRequirements  = vkGetDeviceImageMemoryRequirements;
+        functions.vkCreateImage                       = vkCreateImage;
+        functions.vkDestroyImage                      = vkDestroyImage;
+
+        VmaAllocatorCreateInfo create_info = { 0 };
+        create_info.instance          = vulkan_renderer->instance;
+        create_info.physicalDevice    = vulkan_renderer->device.physical;
+        create_info.device            = vulkan_renderer->device.logical;
+        create_info.pVulkanFunctions  = &functions;
+        create_info.flags            |= VMA_ALLOCATOR_CREATE_BUFFER_DEVICE_ADDRESS_BIT;
+
+        vr = vmaCreateAllocator(&create_info, &vulkan_renderer->allocator);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("VMA failed to initialize");
+            return false;
+        }
     }
 
 
@@ -975,7 +1028,7 @@ bool dm_renderer_backend_init(dm_context* context)
         create_info.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
         create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-        vr = vkCreateImage(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->depth_stencil_target);
+        vr = vkCreateImage(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->depth_stencil_target);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateImage failed");
@@ -994,7 +1047,7 @@ bool dm_renderer_backend_init(dm_context* context)
         allocate_info.allocationSize  = mem_reqs.size;
         allocate_info.memoryTypeIndex = mem_index; 
 
-        vr = vkAllocateMemory(vulkan_renderer->device.logical, &allocate_info, vulkan_renderer->allocator, &vulkan_renderer->depth_stencil_memory);
+        vr = vkAllocateMemory(vulkan_renderer->device.logical, &allocate_info, NULL, &vulkan_renderer->depth_stencil_memory);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkAllocateMemory failed");
@@ -1013,7 +1066,7 @@ bool dm_renderer_backend_init(dm_context* context)
         view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
         view_create_info.image                       = vulkan_renderer->depth_stencil_target;
 
-        vr = vkCreateImageView(vulkan_renderer->device.logical, &view_create_info, vulkan_renderer->allocator, &vulkan_renderer->depth_stencil_view);
+        vr = vkCreateImageView(vulkan_renderer->device.logical, &view_create_info, NULL, &vulkan_renderer->depth_stencil_view);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateImageView failed");
@@ -1077,7 +1130,7 @@ bool dm_renderer_backend_init(dm_context* context)
         create_info.dependencyCount = 1;
         create_info.pDependencies   = &dependency;
 
-        vr = vkCreateRenderPass(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->renderpasses[DM_VULKAN_DEFAULT_RENDERPASS].renderpass);
+        vr = vkCreateRenderPass(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->renderpasses[DM_VULKAN_DEFAULT_RENDERPASS].renderpass);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateRenderPass failed");
@@ -1132,14 +1185,14 @@ bool dm_renderer_backend_init(dm_context* context)
 
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
-            vr = vkCreateSemaphore(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->image_available_semaphore[i]);
+            vr = vkCreateSemaphore(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->image_available_semaphore[i]);
             if(!dm_vulkan_decode_vr(vr))
             {
                 DM_LOG_FATAL("vkCreateSemaphore failed");
                 return false;
             }
 
-            vr = vkCreateSemaphore(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->render_finished_semaphore[i]);
+            vr = vkCreateSemaphore(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->render_finished_semaphore[i]);
             if(!dm_vulkan_decode_vr(vr))
             {
                 DM_LOG_FATAL("vkCreateSemaphore failed");
@@ -1156,7 +1209,7 @@ bool dm_renderer_backend_init(dm_context* context)
 
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
-            vr = vkCreateFence(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->fences[i].fence);
+            vr = vkCreateFence(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->fences[i].fence);
             if(vr != VK_SUCCESS)
             {
                 DM_LOG_FATAL("vkCreateFence failed");
@@ -1186,7 +1239,7 @@ bool dm_renderer_backend_finish_init(dm_context* context)
 
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
-            vr = vkCreateBuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->resource_buffer.buffer.buffer[i]);
+            vr = vkCreateBuffer(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->resource_buffer.buffer.buffer[i]);
             if(!dm_vulkan_decode_vr(vr))
             {
                 DM_LOG_FATAL("vkCreateBuffer failed");
@@ -1215,7 +1268,7 @@ bool dm_renderer_backend_finish_init(dm_context* context)
         
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
-            vr = vkCreateBuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &vulkan_renderer->sampler_buffer.buffer.buffer[i]);
+            vr = vkCreateBuffer(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->sampler_buffer.buffer.buffer[i]);
             if(!dm_vulkan_decode_vr(vr))
             {
                 DM_LOG_FATAL("vkCreateBuffer failed");
@@ -1267,7 +1320,6 @@ void dm_renderer_backend_shutdown(dm_context* context)
     VkResult vr;
 
     const VkDevice device                  = vulkan_renderer->device.logical;
-    const VkAllocationCallbacks* allocator = vulkan_renderer->allocator;
 
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -1281,11 +1333,11 @@ void dm_renderer_backend_shutdown(dm_context* context)
     {
         for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
         {
-            vkDestroyBuffer(device, vulkan_renderer->vertex_buffers[i].host_buffer.buffer[j], allocator);
-            vkFreeMemory(device, vulkan_renderer->vertex_buffers[i].host_buffer.memory[j], allocator);
+            vkDestroyBuffer(device, vulkan_renderer->vertex_buffers[i].host_buffer.buffer[j], NULL);
+            vkFreeMemory(device, vulkan_renderer->vertex_buffers[i].host_buffer.memory[j], NULL);
 
-            vkDestroyBuffer(device, vulkan_renderer->vertex_buffers[i].device_buffer.buffer[j], allocator);
-            vkFreeMemory(device, vulkan_renderer->vertex_buffers[i].device_buffer.memory[j], allocator);
+            vkDestroyBuffer(device, vulkan_renderer->vertex_buffers[i].device_buffer.buffer[j], NULL);
+            vkFreeMemory(device, vulkan_renderer->vertex_buffers[i].device_buffer.memory[j], NULL);
         }
     }
 
@@ -1293,11 +1345,11 @@ void dm_renderer_backend_shutdown(dm_context* context)
     {
         for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
         {
-            vkDestroyBuffer(device, vulkan_renderer->index_buffers[i].host_buffer.buffer[j], allocator);
-            vkFreeMemory(device, vulkan_renderer->index_buffers[i].host_buffer.memory[j], allocator);
+            vkDestroyBuffer(device, vulkan_renderer->index_buffers[i].host_buffer.buffer[j], NULL);
+            vkFreeMemory(device, vulkan_renderer->index_buffers[i].host_buffer.memory[j], NULL);
 
-            vkDestroyBuffer(device, vulkan_renderer->index_buffers[i].device_buffer.buffer[j], allocator);
-            vkFreeMemory(device, vulkan_renderer->index_buffers[i].device_buffer.memory[j], allocator);
+            vkDestroyBuffer(device, vulkan_renderer->index_buffers[i].device_buffer.buffer[j], NULL);
+            vkFreeMemory(device, vulkan_renderer->index_buffers[i].device_buffer.memory[j], NULL);
         }
     }
 
@@ -1307,8 +1359,8 @@ void dm_renderer_backend_shutdown(dm_context* context)
         {
             vkUnmapMemory(device, vulkan_renderer->constant_buffers[i].buffer.memory[j]);
             vulkan_renderer->constant_buffers[i].mapped_memory[j] = NULL;
-            vkDestroyBuffer(device, vulkan_renderer->constant_buffers[i].buffer.buffer[j], allocator);
-            vkFreeMemory(device, vulkan_renderer->constant_buffers[i].buffer.memory[j], allocator);
+            vkDestroyBuffer(device, vulkan_renderer->constant_buffers[i].buffer.buffer[j], NULL);
+            vkFreeMemory(device, vulkan_renderer->constant_buffers[i].buffer.memory[j], NULL);
         }
     }
 
@@ -1316,11 +1368,11 @@ void dm_renderer_backend_shutdown(dm_context* context)
     {
         for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
         {
-            vkDestroyBuffer(device, vulkan_renderer->storage_buffers[i].host_buffer.buffer[j], allocator);
-            vkFreeMemory(device, vulkan_renderer->storage_buffers[i].host_buffer.memory[j], allocator);
+            vkDestroyBuffer(device, vulkan_renderer->storage_buffers[i].host_buffer.buffer[j], NULL);
+            vkFreeMemory(device, vulkan_renderer->storage_buffers[i].host_buffer.memory[j], NULL);
 
-            vkDestroyBuffer(device, vulkan_renderer->storage_buffers[i].device_buffer.buffer[j], allocator);
-            vkFreeMemory(device, vulkan_renderer->storage_buffers[i].device_buffer.memory[j], allocator);
+            vkDestroyBuffer(device, vulkan_renderer->storage_buffers[i].device_buffer.buffer[j], NULL);
+            vkFreeMemory(device, vulkan_renderer->storage_buffers[i].device_buffer.memory[j], NULL);
         }
     }
 
@@ -1328,15 +1380,15 @@ void dm_renderer_backend_shutdown(dm_context* context)
     {
         for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
         {
-            vkDestroyBuffer(device, vulkan_renderer->textures[i].staging_buffer.buffer[j], allocator);
-            vkFreeMemory(device, vulkan_renderer->textures[i].staging_buffer.memory[j], allocator);
+            vkDestroyBuffer(device, vulkan_renderer->textures[i].staging_buffer.buffer[j], NULL);
+            vkFreeMemory(device, vulkan_renderer->textures[i].staging_buffer.memory[j], NULL);
 
-            vkDestroyImage(device, vulkan_renderer->textures[i].image[j], allocator);
-            vkFreeMemory(device, vulkan_renderer->textures[i].image_memory[j], allocator);
+            vkDestroyImage(device, vulkan_renderer->textures[i].image[j], NULL);
+            vkFreeMemory(device, vulkan_renderer->textures[i].image_memory[j], NULL);
 
-            vkDestroyImageView(device, vulkan_renderer->textures[i].view[j], allocator);
+            vkDestroyImageView(device, vulkan_renderer->textures[i].view[j], NULL);
         }
-        vkDestroySampler(device, vulkan_renderer->textures[i].sampler, allocator);
+        vkDestroySampler(device, vulkan_renderer->textures[i].sampler, NULL);
     }
 
     for(uint8_t i=0; i<vulkan_renderer->raster_pipe_count; i++)
@@ -1344,29 +1396,29 @@ void dm_renderer_backend_shutdown(dm_context* context)
 
         for(uint8_t j=0; j<vulkan_renderer->raster_pipes[i].descriptor_set_layout_count; j++)
         {
-            vkDestroyDescriptorSetLayout(device, vulkan_renderer->raster_pipes[i].descriptor_set_layout[j], allocator);
+            vkDestroyDescriptorSetLayout(device, vulkan_renderer->raster_pipes[i].descriptor_set_layout[j], NULL);
         }
-        vkDestroyPipelineLayout(device, vulkan_renderer->raster_pipes[i].layout, allocator);
-        vkDestroyPipeline(device, vulkan_renderer->raster_pipes[i].pipeline, allocator);
+        vkDestroyPipelineLayout(device, vulkan_renderer->raster_pipes[i].layout, NULL);
+        vkDestroyPipeline(device, vulkan_renderer->raster_pipes[i].pipeline, NULL);
     }
 
     for(uint32_t i=0; i<vulkan_renderer->compute_pipe_count; i++)
     {
         for(uint8_t j=0; j<vulkan_renderer->compute_pipes[i].descriptor_set_layout_count; j++)
         {
-            vkDestroyDescriptorSetLayout(device, vulkan_renderer->compute_pipes[i].descriptor_set_layout[j], allocator);
+            vkDestroyDescriptorSetLayout(device, vulkan_renderer->compute_pipes[i].descriptor_set_layout[j], NULL);
         }
-        vkDestroyPipelineLayout(device, vulkan_renderer->compute_pipes[i].layout, allocator);
-        vkDestroyPipeline(device, vulkan_renderer->compute_pipes[i].pipeline, allocator);
+        vkDestroyPipelineLayout(device, vulkan_renderer->compute_pipes[i].layout, NULL);
+        vkDestroyPipeline(device, vulkan_renderer->compute_pipes[i].pipeline, NULL);
     }
 
-    vkDestroyImage(device, vulkan_renderer->depth_stencil_target, allocator);
-    vkDestroyImageView(device, vulkan_renderer->depth_stencil_view, allocator);
-    vkFreeMemory(device, vulkan_renderer->depth_stencil_memory, allocator);
+    vkDestroyImage(device, vulkan_renderer->depth_stencil_target, NULL);
+    vkDestroyImageView(device, vulkan_renderer->depth_stencil_view, NULL);
+    vkFreeMemory(device, vulkan_renderer->depth_stencil_memory, NULL);
 
     for(uint8_t i=0; i<vulkan_renderer->rp_count; i++)
     {
-        vkDestroyRenderPass(device, vulkan_renderer->renderpasses[i].renderpass, allocator);
+        vkDestroyRenderPass(device, vulkan_renderer->renderpasses[i].renderpass, NULL);
     }
 
     for(uint32_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
@@ -1374,40 +1426,40 @@ void dm_renderer_backend_shutdown(dm_context* context)
         vkUnmapMemory(device, vulkan_renderer->resource_buffer.buffer.memory[i]);
         vulkan_renderer->resource_buffer.mapped_memory[i].begin   = NULL;
         vulkan_renderer->resource_buffer.mapped_memory[i].current = NULL;
-        vkDestroyBuffer(device, vulkan_renderer->resource_buffer.buffer.buffer[i], allocator);
-        vkFreeMemory(device, vulkan_renderer->resource_buffer.buffer.memory[i], allocator);
+        vkDestroyBuffer(device, vulkan_renderer->resource_buffer.buffer.buffer[i], NULL);
+        vkFreeMemory(device, vulkan_renderer->resource_buffer.buffer.memory[i], NULL);
 
         vkUnmapMemory(device, vulkan_renderer->sampler_buffer.buffer.memory[i]);
         vulkan_renderer->sampler_buffer.mapped_memory[i].begin   = NULL;
         vulkan_renderer->sampler_buffer.mapped_memory[i].current = NULL;
-        vkDestroyBuffer(device, vulkan_renderer->sampler_buffer.buffer.buffer[i], allocator);
-        vkFreeMemory(device, vulkan_renderer->sampler_buffer.buffer.memory[i], allocator);
+        vkDestroyBuffer(device, vulkan_renderer->sampler_buffer.buffer.buffer[i], NULL);
+        vkFreeMemory(device, vulkan_renderer->sampler_buffer.buffer.memory[i], NULL);
 
-        vkDestroyFence(device, vulkan_renderer->fences[i].fence, allocator);
-        vkDestroySemaphore(device, vulkan_renderer->image_available_semaphore[i], allocator);
-        vkDestroySemaphore(device, vulkan_renderer->render_finished_semaphore[i], allocator);
-        vkDestroyFramebuffer(device, vulkan_renderer->swapchain.frame_buffers[i], allocator);
-        vkDestroyImageView(device, vulkan_renderer->swapchain.views[i], allocator);
+        vkDestroyFence(device, vulkan_renderer->fences[i].fence, NULL);
+        vkDestroySemaphore(device, vulkan_renderer->image_available_semaphore[i], NULL);
+        vkDestroySemaphore(device, vulkan_renderer->render_finished_semaphore[i], NULL);
+        vkDestroyFramebuffer(device, vulkan_renderer->swapchain.frame_buffers[i], NULL);
+        vkDestroyImageView(device, vulkan_renderer->swapchain.views[i], NULL);
     }
 
-    vkDestroyCommandPool(device, vulkan_renderer->device.graphics_family.pool,  allocator);
-    vkDestroyCommandPool(device, vulkan_renderer->device.transfer_family.pool,  allocator);
-    vkDestroyCommandPool(device, vulkan_renderer->device.compute_family.pool,   allocator);
-    vkDestroyCommandPool(device, vulkan_renderer->device.transient_family.pool, allocator);
+    vkDestroyCommandPool(device, vulkan_renderer->device.graphics_family.pool,  NULL);
+    vkDestroyCommandPool(device, vulkan_renderer->device.transfer_family.pool,  NULL);
+    vkDestroyCommandPool(device, vulkan_renderer->device.compute_family.pool,   NULL);
+    vkDestroyCommandPool(device, vulkan_renderer->device.transient_family.pool, NULL);
 
-    vkDestroySwapchainKHR(device, vulkan_renderer->swapchain.swapchain, allocator);
-    vkDestroyDevice(vulkan_renderer->device.logical, allocator);
-    vkDestroySurfaceKHR(vulkan_renderer->instance, vulkan_renderer->surface, vulkan_renderer->allocator);
+    vkDestroySwapchainKHR(device, vulkan_renderer->swapchain.swapchain, NULL);
+    vkDestroyDevice(vulkan_renderer->device.logical, NULL);
+    vkDestroySurfaceKHR(vulkan_renderer->instance, vulkan_renderer->surface, NULL);
 
 #ifdef DM_DEBUG
     PFN_vkDestroyDebugUtilsMessengerEXT func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(vulkan_renderer->instance, "vkDestroyDebugUtilsMessengerEXT");
     if(func)
     {
-        func(vulkan_renderer->instance, vulkan_renderer->debug_messenger, vulkan_renderer->allocator);
+        func(vulkan_renderer->instance, vulkan_renderer->debug_messenger, NULL);
     }
 #endif
 
-    vkDestroyInstance(vulkan_renderer->instance, vulkan_renderer->allocator);
+    vkDestroyInstance(vulkan_renderer->instance, NULL);
 }
 
 bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
@@ -1421,11 +1473,11 @@ bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* re
 
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        vkDestroyFramebuffer(device, vulkan_renderer->swapchain.frame_buffers[i], vulkan_renderer->allocator);
-        vkDestroyImageView(device, vulkan_renderer->swapchain.views[i], vulkan_renderer->allocator);
+        vkDestroyFramebuffer(device, vulkan_renderer->swapchain.frame_buffers[i], NULL);
+        vkDestroyImageView(device, vulkan_renderer->swapchain.views[i], NULL);
     }
 
-    vkDestroySwapchainKHR(device, vulkan_renderer->swapchain.swapchain, vulkan_renderer->allocator);
+    vkDestroySwapchainKHR(device, vulkan_renderer->swapchain.swapchain, NULL);
 
     if(!dm_vulkan_create_swapchain(renderer))
     {
@@ -1736,7 +1788,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
             }
         }
 
-        vertex_input_create_info.vertexBindingDescriptionCount = 2;
+        vertex_input_create_info.vertexBindingDescriptionCount = 1;
         vertex_input_create_info.pVertexBindingDescriptions    = bind_descriptions;
 
         vertex_input_create_info.vertexAttributeDescriptionCount = element_count;
@@ -1814,7 +1866,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
         layout_create_info.pBindings    = bindings;
         layout_create_info.flags        = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 
-        vr = vkCreateDescriptorSetLayout(vulkan_renderer->device.logical, &layout_create_info, vulkan_renderer->allocator, &pipeline.descriptor_set_layout[i]);
+        vr = vkCreateDescriptorSetLayout(vulkan_renderer->device.logical, &layout_create_info, NULL, &pipeline.descriptor_set_layout[i]);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateDescriptorSetLayout failed");
@@ -1846,7 +1898,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
         create_info.pSetLayouts    = pipeline.descriptor_set_layout;
         create_info.setLayoutCount = pipeline.descriptor_set_layout_count;
 
-        vr = vkCreatePipelineLayout(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &pipeline.layout);
+        vr = vkCreatePipelineLayout(vulkan_renderer->device.logical, &create_info, NULL, &pipeline.layout);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreatePipelineLayout failed");
@@ -2014,7 +2066,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
         create_info.pDepthStencilState  = &depth_stencil_state_info;
         create_info.flags               = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 
-        vr = vkCreateGraphicsPipelines(vulkan_renderer->device.logical, VK_NULL_HANDLE, 1, &create_info, vulkan_renderer->allocator, &pipeline.pipeline);
+        vr = vkCreateGraphicsPipelines(vulkan_renderer->device.logical, VK_NULL_HANDLE, 1, &create_info, NULL, &pipeline.pipeline);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateGraphicsPipeline failed");
@@ -2023,8 +2075,8 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     }
 
     // === cleanup ===
-    vkDestroyShaderModule(vulkan_renderer->device.logical, vs, vulkan_renderer->allocator);
-    vkDestroyShaderModule(vulkan_renderer->device.logical, ps, vulkan_renderer->allocator);
+    vkDestroyShaderModule(vulkan_renderer->device.logical, vs, NULL);
+    vkDestroyShaderModule(vulkan_renderer->device.logical, ps, NULL);
 
     //
     {
@@ -2068,7 +2120,7 @@ bool dm_vulkan_allocate_memory(VkMemoryRequirements memory_reqs, VkMemoryPropert
         allocate_info.pNext       = &allocate_flags_info;
     }
 
-    if(!dm_vulkan_decode_vr(vkAllocateMemory(vulkan_renderer->device.logical, &allocate_info, vulkan_renderer->allocator, memory)))
+    if(!dm_vulkan_decode_vr(vkAllocateMemory(vulkan_renderer->device.logical, &allocate_info, NULL, memory)))
     {
         DM_LOG_FATAL("vkAllocateMemory failed");
         return false;
@@ -2118,7 +2170,7 @@ bool dm_vulkan_create_buffer(const size_t size, VkBufferUsageFlagBits buffer_typ
     create_info.pQueueFamilyIndices   = family_indices;
     create_info.queueFamilyIndexCount = sharing_mode==VK_SHARING_MODE_CONCURRENT ? _countof(family_indices) : 0;
 
-    if(!dm_vulkan_decode_vr(vkCreateBuffer(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, buffer)))
+    if(!dm_vulkan_decode_vr(vkCreateBuffer(vulkan_renderer->device.logical, &create_info, NULL, buffer)))
     {
         DM_LOG_FATAL("vkCreateBuffer failed");
         return false;
@@ -2348,7 +2400,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         mapped_memory = NULL;
 
         // actual image
-        vr = vkCreateImage(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &texture.image[i]);
+        vr = vkCreateImage(vulkan_renderer->device.logical, &create_info, NULL, &texture.image[i]);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateImage failed");
@@ -2365,7 +2417,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         alloc_info.allocationSize = mem_reqs.size;
         alloc_info.memoryTypeIndex = dm_vulkan_find_memory_type(mem_reqs.memoryTypeBits, vulkan_renderer->device.memory_properties, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &mem_index);
 
-        vr = vkAllocateMemory(vulkan_renderer->device.logical, &alloc_info, vulkan_renderer->allocator, &texture.image_memory[i]);
+        vr = vkAllocateMemory(vulkan_renderer->device.logical, &alloc_info, NULL, &texture.image_memory[i]);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkAllocateMemory failed");
@@ -2417,7 +2469,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         view_info.subresourceRange.levelCount = 1;
         view_info.subresourceRange.layerCount = 1;
 
-        vr = vkCreateImageView(vulkan_renderer->device.logical, &view_info, vulkan_renderer->allocator, &texture.view[i]);
+        vr = vkCreateImageView(vulkan_renderer->device.logical, &view_info, NULL, &texture.view[i]);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateImageView failed");
@@ -2440,7 +2492,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         create_info.borderColor      = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
         create_info.compareOp        = VK_COMPARE_OP_NEVER;
 
-        vr = vkCreateSampler(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &texture.sampler);
+        vr = vkCreateSampler(vulkan_renderer->device.logical, &create_info, NULL, &texture.sampler);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateSampler failed");
@@ -2491,6 +2543,33 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
     //
     dm_memcpy(vulkan_renderer->storage_buffers + vulkan_renderer->sb_count, &buffer, sizeof(buffer));
     handle->index = vulkan_renderer->sb_count++;
+
+    return true;
+}
+
+/*************
+ * RAYTRACING
+ **************/
+bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    return true;
+}
+
+bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    return true;
+}
+
+bool dm_renderer_backend_get_blas_gpu_address(dm_resource_handle acceleration_structure, uint8_t blas_index, size_t* address, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
 
     return true;
 }
@@ -2548,7 +2627,7 @@ bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, d
         layout_create_info.pBindings    = bindings;
         layout_create_info.flags        = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 
-        vr = vkCreateDescriptorSetLayout(vulkan_renderer->device.logical, &layout_create_info, vulkan_renderer->allocator, &pipeline.descriptor_set_layout[i]);
+        vr = vkCreateDescriptorSetLayout(vulkan_renderer->device.logical, &layout_create_info, NULL, &pipeline.descriptor_set_layout[i]);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateDescriptorSetLayout failed");
@@ -2580,7 +2659,7 @@ bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, d
         create_info.pSetLayouts    = pipeline.descriptor_set_layout;
         create_info.setLayoutCount = pipeline.descriptor_set_layout_count;
 
-        vr = vkCreatePipelineLayout(vulkan_renderer->device.logical, &create_info, vulkan_renderer->allocator, &pipeline.layout);
+        vr = vkCreatePipelineLayout(vulkan_renderer->device.logical, &create_info, NULL, &pipeline.layout);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreatePipelineLayout failed");
@@ -2612,14 +2691,14 @@ bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, d
     create_info.stage  = shader_create_info;
     create_info.flags  = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 
-    vr = vkCreateComputePipelines(vulkan_renderer->device.logical, VK_NULL_HANDLE, 1, &create_info, vulkan_renderer->allocator, &pipeline.pipeline);
+    vr = vkCreateComputePipelines(vulkan_renderer->device.logical, VK_NULL_HANDLE, 1, &create_info, NULL, &pipeline.pipeline);
     if(!dm_vulkan_decode_vr(vr))
     {
         DM_LOG_FATAL("vkCreateComputePipelines failed");
         return false;
     }
 
-    vkDestroyShaderModule(vulkan_renderer->device.logical, cs, vulkan_renderer->allocator);
+    vkDestroyShaderModule(vulkan_renderer->device.logical, cs, NULL);
 
     //
     dm_memcpy(vulkan_renderer->compute_pipes + vulkan_renderer->compute_pipe_count, &pipeline, sizeof(pipeline));
@@ -2916,6 +2995,22 @@ bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm
     copy_region.size = size;
 
     vkCmdCopyBuffer(vulkan_renderer->device.graphics_family.buffer[vulkan_renderer->current_frame], buffer.host_buffer.buffer[current_frame], buffer.device_buffer.buffer[current_frame], 1, &copy_region);
+
+    return true;
+}
+
+bool dm_render_command_backend_bind_acceleration_structure(dm_resource_handle acceleration_structure, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    return true;
+}
+
+bool dm_render_command_backend_update_acceleration_structure(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
 
     return true;
 }
