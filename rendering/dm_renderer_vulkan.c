@@ -60,20 +60,26 @@ typedef struct dm_vulkan_compute_pipeline_t
 
 typedef struct dm_vulkan_buffer_t
 {
-    VkBuffer       buffer[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
-    VkDeviceMemory memory[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    VkBuffer      buffers[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    VmaAllocation allocations[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
 } dm_vulkan_buffer;
+
+typedef struct dm_vulkan_image_t
+{
+    VkImage       images[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    VmaAllocation allocations[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+} dm_vulkan_image;
 
 typedef struct dm_vulkan_vertex_buffer_t
 {
-    dm_vulkan_buffer host_buffer;
-    dm_vulkan_buffer device_buffer;
+    dm_vulkan_buffer host;
+    dm_vulkan_buffer device;
 } dm_vulkan_vertex_buffer;
 
 typedef struct dm_vulkan_index_buffer_t
 {
-    dm_vulkan_buffer host_buffer;
-    dm_vulkan_buffer device_buffer;
+    dm_vulkan_buffer host;
+    dm_vulkan_buffer device;
 
     VkIndexType index_type;
 } dm_vulkan_index_buffer;
@@ -87,9 +93,8 @@ typedef struct dm_vulkan_constant_buffer_t
 
 typedef struct dm_vulkan_texture_t
 {
-    dm_vulkan_buffer staging_buffer;
-    VkImage          image[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
-    VkDeviceMemory   image_memory[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    dm_vulkan_buffer staging;
+    dm_vulkan_image  image;
     VkImageView      view[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     VkFormat         format;
     VkSampler        sampler;
@@ -98,8 +103,8 @@ typedef struct dm_vulkan_texture_t
 
 typedef struct dm_vulkan_storage_buffer_t
 {
-    dm_vulkan_buffer host_buffer;
-    dm_vulkan_buffer device_buffer;
+    dm_vulkan_buffer host;
+    dm_vulkan_buffer device;
     size_t           size;
 } dm_vulkan_storage_buffer;
 
@@ -191,8 +196,7 @@ typedef struct dm_vulkan_renderer_t
 
     dm_vulkan_swapchain swapchain;
 
-    VkImage        depth_stencil_target;
-    VkDeviceMemory depth_stencil_memory;
+    dm_vulkan_image depth_stencil;
     VkImageView    depth_stencil_view;
 
     dm_vulkan_fence fences[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
@@ -680,11 +684,6 @@ bool dm_renderer_backend_init(dm_context* context)
         }
     }
 
-    // allocator
-    {
-        vulkan_renderer->allocator = NULL;
-    }
-
     // Vulkan instance
     {
 #ifdef DM_DEBUG
@@ -1028,34 +1027,16 @@ bool dm_renderer_backend_init(dm_context* context)
         create_info.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
         create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-        vr = vkCreateImage(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->depth_stencil_target);
+        VmaAllocationCreateInfo allocate_create_info = { 0 };
+        allocate_create_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+        vr = vmaCreateImage(vulkan_renderer->allocator, &create_info, &allocate_create_info, &vulkan_renderer->depth_stencil.images[0], &vulkan_renderer->depth_stencil.allocations[0], NULL);
         if(!dm_vulkan_decode_vr(vr))
         {
             DM_LOG_FATAL("vkCreateImage failed");
             DM_LOG_ERROR("Could not create depth stencil target");
             return false;
         }
-
-        VkMemoryRequirements mem_reqs = { 0 };
-        vkGetImageMemoryRequirements(vulkan_renderer->device.logical, vulkan_renderer->depth_stencil_target, &mem_reqs);
-
-        uint32_t mem_index;
-        if(!dm_vulkan_find_memory_type(mem_reqs.memoryTypeBits, vulkan_renderer->device.memory_properties, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &mem_index)) return false;
-
-        VkMemoryAllocateInfo allocate_info = { 0 };
-        allocate_info.sType           = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        allocate_info.allocationSize  = mem_reqs.size;
-        allocate_info.memoryTypeIndex = mem_index; 
-
-        vr = vkAllocateMemory(vulkan_renderer->device.logical, &allocate_info, NULL, &vulkan_renderer->depth_stencil_memory);
-        if(!dm_vulkan_decode_vr(vr))
-        {
-            DM_LOG_FATAL("vkAllocateMemory failed");
-            DM_LOG_ERROR("Could not allocate depth stencil memory");
-            return false;
-        }
-
-        vkBindImageMemory(vulkan_renderer->device.logical, vulkan_renderer->depth_stencil_target, vulkan_renderer->depth_stencil_memory, 0);
 
         VkImageViewCreateInfo view_create_info = { 0 };
         view_create_info.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -1064,7 +1045,7 @@ bool dm_renderer_backend_init(dm_context* context)
         view_create_info.subresourceRange.levelCount = 1;
         view_create_info.subresourceRange.layerCount = 1;
         view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
-        view_create_info.image                       = vulkan_renderer->depth_stencil_target;
+        view_create_info.image                       = vulkan_renderer->depth_stencil.images[0];
 
         vr = vkCreateImageView(vulkan_renderer->device.logical, &view_create_info, NULL, &vulkan_renderer->depth_stencil_view);
         if(!dm_vulkan_decode_vr(vr))
@@ -1159,7 +1140,6 @@ bool dm_renderer_backend_init(dm_context* context)
         flags |= VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
 
         if(!dm_vulkan_create_command_pool(&vulkan_renderer->device.transient_family, flags, vulkan_renderer)) return false;
-
     }
 
     // command buffer(s)
@@ -1237,29 +1217,29 @@ bool dm_renderer_backend_finish_init(dm_context* context)
         create_info.usage = VK_BUFFER_USAGE_RESOURCE_DESCRIPTOR_BUFFER_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
         create_info.size  = vulkan_renderer->resource_buffer.size;
 
+        VmaAllocationCreateInfo allocate_create_info = { 0 };
+        allocate_create_info.usage = VMA_MEMORY_USAGE_AUTO;
+        allocate_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
+
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
-            vr = vkCreateBuffer(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->resource_buffer.buffer.buffer[i]);
-            if(!dm_vulkan_decode_vr(vr))
+            dm_vulkan_buffer* buffer = &vulkan_renderer->resource_buffer.buffer;
+
+            vr = vmaCreateBuffer(vulkan_renderer->allocator, &create_info, &allocate_create_info, &buffer->buffers[i], &buffer->allocations[i], NULL); 
+            if(!dm_vulkan_decode_vr(vr) || !buffer->buffers[i])
             {
                 DM_LOG_FATAL("vkCreateBuffer failed");
                 DM_LOG_ERROR("Could not create ubo descriptor buffer");
                 return false;
             }
 
-            VkMemoryRequirements mem_reqs = { 0 };
-            vkGetBufferMemoryRequirements(vulkan_renderer->device.logical, vulkan_renderer->resource_buffer.buffer.buffer[i], &mem_reqs);
-
-            if(!dm_vulkan_allocate_memory(mem_reqs, mem_flags, create_info.usage, &vulkan_renderer->resource_buffer.buffer.memory[i], vulkan_renderer)) return false;
-            vkBindBufferMemory(vulkan_renderer->device.logical, vulkan_renderer->resource_buffer.buffer.buffer[i], vulkan_renderer->resource_buffer.buffer.memory[i], 0);
-
-            vkMapMemory(vulkan_renderer->device.logical, vulkan_renderer->resource_buffer.buffer.memory[i], 0, create_info.size, 0, &vulkan_renderer->resource_buffer.mapped_memory[i].begin);
-            vulkan_renderer->resource_buffer.mapped_memory[i].current = vulkan_renderer->resource_buffer.mapped_memory[i].begin;
-
             VkBufferDeviceAddressInfoKHR address_info = { 0 };
             address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-            address_info.buffer = vulkan_renderer->resource_buffer.buffer.buffer[i];
+            address_info.buffer = vulkan_renderer->resource_buffer.buffer.buffers[i];
             vulkan_renderer->resource_buffer.buffer_address[i].deviceAddress = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &address_info);
+
+            vmaMapMemory(vulkan_renderer->allocator, buffer->allocations[i], &vulkan_renderer->resource_buffer.mapped_memory[i].begin);
+            vulkan_renderer->resource_buffer.mapped_memory[i].current = vulkan_renderer->resource_buffer.mapped_memory[i].begin;
         }
 
         // combined image sampler buffer
@@ -1268,27 +1248,23 @@ bool dm_renderer_backend_finish_init(dm_context* context)
         
         for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
         {
-            vr = vkCreateBuffer(vulkan_renderer->device.logical, &create_info, NULL, &vulkan_renderer->sampler_buffer.buffer.buffer[i]);
-            if(!dm_vulkan_decode_vr(vr))
+            dm_vulkan_buffer* buffer = &vulkan_renderer->sampler_buffer.buffer;
+
+            vr = vmaCreateBuffer(vulkan_renderer->allocator, &create_info, &allocate_create_info, &buffer->buffers[i], &buffer->allocations[i], NULL); 
+            if(!dm_vulkan_decode_vr(vr) || !buffer->buffers[i])
             {
                 DM_LOG_FATAL("vkCreateBuffer failed");
                 DM_LOG_ERROR("Could not create image descriptor buffer");
                 return false;
             }
 
-            VkMemoryRequirements mem_reqs = { 0 };
-            vkGetBufferMemoryRequirements(vulkan_renderer->device.logical, vulkan_renderer->sampler_buffer.buffer.buffer[i], &mem_reqs);
-
-            if(!dm_vulkan_allocate_memory(mem_reqs, mem_flags, create_info.usage, &vulkan_renderer->sampler_buffer.buffer.memory[i], vulkan_renderer)) return false;
-            vkBindBufferMemory(vulkan_renderer->device.logical, vulkan_renderer->sampler_buffer.buffer.buffer[i], vulkan_renderer->sampler_buffer.buffer.memory[i], 0);
-
-            vkMapMemory(vulkan_renderer->device.logical, vulkan_renderer->sampler_buffer.buffer.memory[i], 0, create_info.size, 0, &vulkan_renderer->sampler_buffer.mapped_memory[i].begin);
-            vulkan_renderer->sampler_buffer.mapped_memory[i].current = vulkan_renderer->sampler_buffer.mapped_memory[i].begin;
-
             VkBufferDeviceAddressInfoKHR address_info = { 0 };
             address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-            address_info.buffer = vulkan_renderer->sampler_buffer.buffer.buffer[i];
+            address_info.buffer = vulkan_renderer->sampler_buffer.buffer.buffers[i];
             vulkan_renderer->sampler_buffer.buffer_address[i].deviceAddress = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &address_info);
+
+            vmaMapMemory(vulkan_renderer->allocator, buffer->allocations[i], &vulkan_renderer->sampler_buffer.mapped_memory[i].begin);
+            vulkan_renderer->sampler_buffer.mapped_memory[i].current = vulkan_renderer->sampler_buffer.mapped_memory[i].begin;
         }
     }
 
@@ -1319,7 +1295,8 @@ void dm_renderer_backend_shutdown(dm_context* context)
     dm_vulkan_renderer* vulkan_renderer = context->renderer.internal_renderer;
     VkResult vr;
 
-    const VkDevice device                  = vulkan_renderer->device.logical;
+    const VkDevice device        = vulkan_renderer->device.logical;
+    const VmaAllocator allocator = vulkan_renderer->allocator;
 
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -1331,61 +1308,56 @@ void dm_renderer_backend_shutdown(dm_context* context)
 
     for(uint32_t i=0; i<vulkan_renderer->vb_count; i++)
     {
+        dm_vulkan_vertex_buffer* vb = &vulkan_renderer->vertex_buffers[i];
+
         for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
         {
-            vkDestroyBuffer(device, vulkan_renderer->vertex_buffers[i].host_buffer.buffer[j], NULL);
-            vkFreeMemory(device, vulkan_renderer->vertex_buffers[i].host_buffer.memory[j], NULL);
-
-            vkDestroyBuffer(device, vulkan_renderer->vertex_buffers[i].device_buffer.buffer[j], NULL);
-            vkFreeMemory(device, vulkan_renderer->vertex_buffers[i].device_buffer.memory[j], NULL);
+            vmaDestroyBuffer(allocator, vb->host.buffers[j], vb->host.allocations[j]); 
+            vmaDestroyBuffer(allocator, vb->device.buffers[j], vb->device.allocations[j]);
         }
     }
 
     for(uint32_t i=0; i<vulkan_renderer->ib_count; i++)
     {
+        dm_vulkan_index_buffer* ib = &vulkan_renderer->index_buffers[i];
+
         for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
         {
-            vkDestroyBuffer(device, vulkan_renderer->index_buffers[i].host_buffer.buffer[j], NULL);
-            vkFreeMemory(device, vulkan_renderer->index_buffers[i].host_buffer.memory[j], NULL);
-
-            vkDestroyBuffer(device, vulkan_renderer->index_buffers[i].device_buffer.buffer[j], NULL);
-            vkFreeMemory(device, vulkan_renderer->index_buffers[i].device_buffer.memory[j], NULL);
+            vmaDestroyBuffer(allocator, ib->host.buffers[j], ib->host.allocations[j]); 
+            vmaDestroyBuffer(allocator, ib->device.buffers[j], ib->device.allocations[j]);
         }
     }
 
     for(uint32_t i=0; i<vulkan_renderer->cb_count; i++)
     {
+        dm_vulkan_constant_buffer* cb = &vulkan_renderer->constant_buffers[i];
+
         for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
         {
-            vkUnmapMemory(device, vulkan_renderer->constant_buffers[i].buffer.memory[j]);
-            vulkan_renderer->constant_buffers[i].mapped_memory[j] = NULL;
-            vkDestroyBuffer(device, vulkan_renderer->constant_buffers[i].buffer.buffer[j], NULL);
-            vkFreeMemory(device, vulkan_renderer->constant_buffers[i].buffer.memory[j], NULL);
+            vmaUnmapMemory(allocator, cb->buffer.allocations[j]);
+            vmaDestroyBuffer(allocator, cb->buffer.buffers[j], cb->buffer.allocations[j]);
         }
     }
 
     for(uint32_t i=0; i<vulkan_renderer->sb_count; i++)
     {
+        dm_vulkan_storage_buffer* sb = &vulkan_renderer->storage_buffers[i];
+
         for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
         {
-            vkDestroyBuffer(device, vulkan_renderer->storage_buffers[i].host_buffer.buffer[j], NULL);
-            vkFreeMemory(device, vulkan_renderer->storage_buffers[i].host_buffer.memory[j], NULL);
-
-            vkDestroyBuffer(device, vulkan_renderer->storage_buffers[i].device_buffer.buffer[j], NULL);
-            vkFreeMemory(device, vulkan_renderer->storage_buffers[i].device_buffer.memory[j], NULL);
+            vmaDestroyBuffer(allocator, sb->host.buffers[j], sb->host.allocations[j]);
+            vmaDestroyBuffer(allocator, sb->device.buffers[j], sb->device.allocations[j]);
         }
     }
 
     for(uint32_t i=0; i<vulkan_renderer->texture_count; i++)
     {
+        dm_vulkan_texture* t = &vulkan_renderer->textures[i];
+
         for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
         {
-            vkDestroyBuffer(device, vulkan_renderer->textures[i].staging_buffer.buffer[j], NULL);
-            vkFreeMemory(device, vulkan_renderer->textures[i].staging_buffer.memory[j], NULL);
-
-            vkDestroyImage(device, vulkan_renderer->textures[i].image[j], NULL);
-            vkFreeMemory(device, vulkan_renderer->textures[i].image_memory[j], NULL);
-
+            vmaDestroyBuffer(allocator, t->staging.buffers[j], t->staging.allocations[j]);
+            vmaDestroyImage(allocator, t->image.images[j], t->image.allocations[j]);
             vkDestroyImageView(device, vulkan_renderer->textures[i].view[j], NULL);
         }
         vkDestroySampler(device, vulkan_renderer->textures[i].sampler, NULL);
@@ -1393,7 +1365,6 @@ void dm_renderer_backend_shutdown(dm_context* context)
 
     for(uint8_t i=0; i<vulkan_renderer->raster_pipe_count; i++)
     {
-
         for(uint8_t j=0; j<vulkan_renderer->raster_pipes[i].descriptor_set_layout_count; j++)
         {
             vkDestroyDescriptorSetLayout(device, vulkan_renderer->raster_pipes[i].descriptor_set_layout[j], NULL);
@@ -1412,9 +1383,8 @@ void dm_renderer_backend_shutdown(dm_context* context)
         vkDestroyPipeline(device, vulkan_renderer->compute_pipes[i].pipeline, NULL);
     }
 
-    vkDestroyImage(device, vulkan_renderer->depth_stencil_target, NULL);
+    vmaDestroyImage(vulkan_renderer->allocator, vulkan_renderer->depth_stencil.images[0], vulkan_renderer->depth_stencil.allocations[0]);
     vkDestroyImageView(device, vulkan_renderer->depth_stencil_view, NULL);
-    vkFreeMemory(device, vulkan_renderer->depth_stencil_memory, NULL);
 
     for(uint8_t i=0; i<vulkan_renderer->rp_count; i++)
     {
@@ -1423,17 +1393,15 @@ void dm_renderer_backend_shutdown(dm_context* context)
 
     for(uint32_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        vkUnmapMemory(device, vulkan_renderer->resource_buffer.buffer.memory[i]);
+        vmaUnmapMemory(allocator, vulkan_renderer->resource_buffer.buffer.allocations[i]);
+        vmaDestroyBuffer(allocator, vulkan_renderer->resource_buffer.buffer.buffers[i], vulkan_renderer->resource_buffer.buffer.allocations[i]);
         vulkan_renderer->resource_buffer.mapped_memory[i].begin   = NULL;
         vulkan_renderer->resource_buffer.mapped_memory[i].current = NULL;
-        vkDestroyBuffer(device, vulkan_renderer->resource_buffer.buffer.buffer[i], NULL);
-        vkFreeMemory(device, vulkan_renderer->resource_buffer.buffer.memory[i], NULL);
 
-        vkUnmapMemory(device, vulkan_renderer->sampler_buffer.buffer.memory[i]);
+        vmaUnmapMemory(allocator, vulkan_renderer->sampler_buffer.buffer.allocations[i]);
+        vmaDestroyBuffer(allocator, vulkan_renderer->sampler_buffer.buffer.buffers[i], vulkan_renderer->sampler_buffer.buffer.allocations[i]);
         vulkan_renderer->sampler_buffer.mapped_memory[i].begin   = NULL;
         vulkan_renderer->sampler_buffer.mapped_memory[i].current = NULL;
-        vkDestroyBuffer(device, vulkan_renderer->sampler_buffer.buffer.buffer[i], NULL);
-        vkFreeMemory(device, vulkan_renderer->sampler_buffer.buffer.memory[i], NULL);
 
         vkDestroyFence(device, vulkan_renderer->fences[i].fence, NULL);
         vkDestroySemaphore(device, vulkan_renderer->image_available_semaphore[i], NULL);
@@ -2132,18 +2100,18 @@ bool dm_vulkan_allocate_memory(VkMemoryRequirements memory_reqs, VkMemoryPropert
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_vulkan_copy_memory(VkDeviceMemory* memory, void* data, const size_t size, dm_vulkan_renderer* vulkan_renderer)
+bool dm_vulkan_copy_memory(VmaAllocation allocation, void* data, const size_t size, dm_vulkan_renderer* vulkan_renderer)
 {
     void* temp = NULL;
 
-    vkMapMemory(vulkan_renderer->device.logical, *memory, 0, size, 0, &temp);
+    vmaMapMemory(vulkan_renderer->allocator, allocation, &temp); 
     if(!temp)
     {
         DM_LOG_FATAL("vkMapMemory failed");
         return false;
     }
     dm_memcpy(temp, data, size);
-    vkUnmapMemory(vulkan_renderer->device.logical, *memory);
+    vmaUnmapMemory(vulkan_renderer->allocator, allocation);
 
     return true;
 }
@@ -2151,7 +2119,7 @@ bool dm_vulkan_copy_memory(VkDeviceMemory* memory, void* data, const size_t size
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_vulkan_create_buffer(const size_t size, VkBufferUsageFlagBits buffer_type, VkMemoryPropertyFlagBits memory_flags, VkSharingMode sharing_mode, VkBuffer* buffer, VkDeviceMemory* memory, dm_vulkan_renderer* vulkan_renderer)
+bool dm_vulkan_create_buffer(const size_t size, VkBufferUsageFlagBits buffer_type, VkSharingMode sharing_mode, VkBuffer* buffer, VmaAllocation* allocation, dm_vulkan_renderer* vulkan_renderer)
 {
     uint32_t family_indices[3] = { 0 };
 
@@ -2170,19 +2138,20 @@ bool dm_vulkan_create_buffer(const size_t size, VkBufferUsageFlagBits buffer_typ
     create_info.pQueueFamilyIndices   = family_indices;
     create_info.queueFamilyIndexCount = sharing_mode==VK_SHARING_MODE_CONCURRENT ? _countof(family_indices) : 0;
 
-    if(!dm_vulkan_decode_vr(vkCreateBuffer(vulkan_renderer->device.logical, &create_info, NULL, buffer)))
+    VmaAllocationCreateInfo allocation_create_info = { 0 };
+    allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO;
+    if(buffer_type && VK_BUFFER_USAGE_TRANSFER_SRC_BIT)
     {
-        DM_LOG_FATAL("vkCreateBuffer failed");
-        return false;
+        allocation_create_info.flags = VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
     }
 
-    // device memory
-    VkMemoryRequirements memory_reqs ={ 0 };
-    vkGetBufferMemoryRequirements(vulkan_renderer->device.logical, *buffer, &memory_reqs);
+    VkResult vr = vmaCreateBuffer(vulkan_renderer->allocator, &create_info, &allocation_create_info, buffer, allocation, NULL); 
 
-    if(!dm_vulkan_allocate_memory(memory_reqs, memory_flags, create_info.usage, memory, vulkan_renderer)) return false;
-
-    vkBindBufferMemory(vulkan_renderer->device.logical, *buffer, *memory, 0);
+    if(!dm_vulkan_decode_vr(vr) || !buffer)
+    {
+        DM_LOG_FATAL("vmaCreateBuffer failed");
+        return false;
+    }
 
     return true;
 }
@@ -2197,28 +2166,26 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_res
     VkBufferUsageFlagBits host_buffer_usage   = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     VkBufferUsageFlagBits device_buffer_usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
 
-    VkMemoryPropertyFlagBits host_memory_flags   = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    VkMemoryPropertyFlagBits device_memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    
     VkSharingMode sharing_mode = VK_SHARING_MODE_CONCURRENT;
     
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
         // host buffer
-        if(!dm_vulkan_create_buffer(desc.size, host_buffer_usage, host_memory_flags, sharing_mode, &buffer.host_buffer.buffer[i], &buffer.host_buffer.memory[i], vulkan_renderer)) return false;
+        VmaAllocationCreateInfo allocation_create_info = { 0 };
+        if(!dm_vulkan_create_buffer(desc.size, host_buffer_usage, sharing_mode, &buffer.host.buffers[i], &buffer.host.allocations[i], vulkan_renderer)) return false;
 
         // device buffer
-        if(!dm_vulkan_create_buffer(desc.size, device_buffer_usage, device_memory_flags, sharing_mode, &buffer.device_buffer.buffer[i], &buffer.device_buffer.memory[i], vulkan_renderer)) return false;
+        if(!dm_vulkan_create_buffer(desc.size, device_buffer_usage, sharing_mode, &buffer.device.buffers[i], &buffer.device.allocations[i], vulkan_renderer)) return false;
 
         // buffer data
         if(!desc.data) continue;
 
-        if(!dm_vulkan_copy_memory(&buffer.host_buffer.memory[i], desc.data, desc.size, vulkan_renderer)) return false;
+        if(!dm_vulkan_copy_memory(buffer.host.allocations[i], desc.data, desc.size, vulkan_renderer)) return false;
 
         VkBufferCopy copy_region = { 0 };
         copy_region.size = desc.size;
 
-        vkCmdCopyBuffer(vulkan_renderer->device.transient_family.buffer[vulkan_renderer->current_frame], buffer.host_buffer.buffer[i], buffer.device_buffer.buffer[i], 1, &copy_region);
+        vkCmdCopyBuffer(vulkan_renderer->device.transient_family.buffer[vulkan_renderer->current_frame], buffer.host.buffers[i], buffer.device.buffers[i], 1, &copy_region);
     }
 
     //
@@ -2253,28 +2220,25 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resou
     VkBufferUsageFlagBits host_buffer_usage   = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     VkBufferUsageFlagBits device_buffer_usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
 
-    VkMemoryPropertyFlagBits host_memory_flags   = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    VkMemoryPropertyFlagBits device_memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-    
     VkSharingMode sharing_mode = VK_SHARING_MODE_CONCURRENT;
     
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
         // host buffer
-        if(!dm_vulkan_create_buffer(desc.size, host_buffer_usage, host_memory_flags, sharing_mode, &buffer.host_buffer.buffer[i], &buffer.host_buffer.memory[i], vulkan_renderer)) return false;
+        if(!dm_vulkan_create_buffer(desc.size, host_buffer_usage, sharing_mode, &buffer.host.buffers[i], &buffer.host.allocations[i], vulkan_renderer)) return false;
 
         // device buffer
-        if(!dm_vulkan_create_buffer(desc.size, device_buffer_usage, device_memory_flags, sharing_mode, &buffer.device_buffer.buffer[i], &buffer.device_buffer.memory[i], vulkan_renderer)) return false;
+        if(!dm_vulkan_create_buffer(desc.size, device_buffer_usage, sharing_mode, &buffer.device.buffers[i], &buffer.device.allocations[i], vulkan_renderer)) return false;
 
         // buffer data
         if(!desc.data) continue;
 
-        if(!dm_vulkan_copy_memory(&buffer.host_buffer.memory[i], desc.data, desc.size, vulkan_renderer)) return false;
+        if(!dm_vulkan_copy_memory(buffer.host.allocations[i], desc.data, desc.size, vulkan_renderer)) return false;
 
         VkBufferCopy copy_region = { 0 };
         copy_region.size = desc.size;
 
-        vkCmdCopyBuffer(vulkan_renderer->device.transient_family.buffer[vulkan_renderer->current_frame], buffer.host_buffer.buffer[i], buffer.device_buffer.buffer[i], 1, &copy_region);
+        vkCmdCopyBuffer(vulkan_renderer->device.transient_family.buffer[vulkan_renderer->current_frame], buffer.host.buffers[i], buffer.device.buffers[i], 1, &copy_region);
     }
 
     //
@@ -2293,20 +2257,19 @@ bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm
 
     dm_vulkan_constant_buffer buffer = { 0 };
     
-    VkBufferUsageFlagBits    buffer_usage   = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    VkMemoryPropertyFlagBits memory_flags   = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    VkSharingMode sharing_mode              = VK_SHARING_MODE_CONCURRENT;
+    VkBufferUsageFlagBits buffer_usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    VkSharingMode         sharing_mode = VK_SHARING_MODE_CONCURRENT;
     
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        if(!dm_vulkan_create_buffer(desc.size, buffer_usage, memory_flags, sharing_mode, &buffer.buffer.buffer[i], &buffer.buffer.memory[i], vulkan_renderer)) return false;
+        if(!dm_vulkan_create_buffer(desc.size, buffer_usage, sharing_mode, &buffer.buffer.buffers[i], &buffer.buffer.allocations[i], vulkan_renderer)) return false;
 
         // buffer data
         if(!desc.data) continue;
 
-        if(!dm_vulkan_copy_memory(&buffer.buffer.memory[i], desc.data, desc.size, vulkan_renderer)) return false;
+        if(!dm_vulkan_copy_memory(buffer.buffer.allocations[i], desc.data, desc.size, vulkan_renderer)) return false;
 
-        vkMapMemory(vulkan_renderer->device.logical, buffer.buffer.memory[i], 0, desc.size, 0, &buffer.mapped_memory[i]);
+        vmaMapMemory(vulkan_renderer->allocator, buffer.buffer.allocations[i], &buffer.mapped_memory[i]);
         if(!buffer.mapped_memory[i])
         {
             DM_LOG_FATAL("vkMapMemory failed");
@@ -2330,9 +2293,8 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
 
     dm_vulkan_texture texture = { 0 };
 
-    VkBufferUsageFlagBits    buffer_usage   = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    VkMemoryPropertyFlagBits memory_flags   = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    VkSharingMode sharing_mode              = VK_SHARING_MODE_CONCURRENT;
+    VkBufferUsageFlagBits buffer_usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    VkSharingMode         sharing_mode = VK_SHARING_MODE_CONCURRENT;
 
     const size_t size = desc.height * desc.width * desc.n_channels;
 
@@ -2374,19 +2336,22 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
     create_info.samples       = VK_SAMPLE_COUNT_1_BIT;
     create_info.format        = texture.format;
 
-    dm_vulkan_buffer* staging_buffer = &texture.staging_buffer;
+    dm_vulkan_buffer* staging_buffer = &texture.staging;
+
+    VmaAllocationCreateInfo allocation_create_info = { 0 };
+    allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO;
 
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        if(!dm_vulkan_create_buffer(size, buffer_usage, memory_flags, sharing_mode, &staging_buffer->buffer[i], &staging_buffer->memory[i], vulkan_renderer)) return false;
+        if(!dm_vulkan_create_buffer(size, buffer_usage, sharing_mode, &staging_buffer->buffers[i], &staging_buffer->allocations[i], vulkan_renderer)) return false;
 
         // buffer data
         if(!desc.data) continue;
 
-        if(!dm_vulkan_copy_memory(&staging_buffer->memory[i], desc.data, size, vulkan_renderer)) return false;
+        if(!dm_vulkan_copy_memory(staging_buffer->allocations[i], desc.data, size, vulkan_renderer)) return false;
 
         void* mapped_memory = NULL;
-        vkMapMemory(vulkan_renderer->device.logical, staging_buffer->memory[i], 0, size, 0, &mapped_memory);
+        vmaMapMemory(vulkan_renderer->allocator, staging_buffer->allocations[i], &mapped_memory);
         if(!mapped_memory)
         {
             DM_LOG_FATAL("vkMapMemory failed");
@@ -2395,46 +2360,27 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         
         dm_memcpy(mapped_memory, desc.data, size);
 
-        vkUnmapMemory(vulkan_renderer->device.logical, staging_buffer->memory[i]);
+        vmaUnmapMemory(vulkan_renderer->allocator, staging_buffer->allocations[i]);
 
         mapped_memory = NULL;
 
         // actual image
-        vr = vkCreateImage(vulkan_renderer->device.logical, &create_info, NULL, &texture.image[i]);
+        vr = vmaCreateImage(vulkan_renderer->allocator, &create_info, &allocation_create_info, &texture.image.images[i], &texture.image.allocations[i], NULL);
         if(!dm_vulkan_decode_vr(vr))
         {
-            DM_LOG_FATAL("vkCreateImage failed");
+            DM_LOG_FATAL("vmaCreateImage failed");
             return false;
         }
-
-        uint32_t mem_index;
-
-        VkMemoryRequirements mem_reqs = { 0 };
-        vkGetImageMemoryRequirements(vulkan_renderer->device.logical, texture.image[i], &mem_reqs);
-
-        VkMemoryAllocateInfo alloc_info = { 0 };
-        alloc_info.sType          = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        alloc_info.allocationSize = mem_reqs.size;
-        alloc_info.memoryTypeIndex = dm_vulkan_find_memory_type(mem_reqs.memoryTypeBits, vulkan_renderer->device.memory_properties, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, &mem_index);
-
-        vr = vkAllocateMemory(vulkan_renderer->device.logical, &alloc_info, NULL, &texture.image_memory[i]);
-        if(!dm_vulkan_decode_vr(vr))
-        {
-            DM_LOG_FATAL("vkAllocateMemory failed");
-            return false;
-        }
-
-        vkBindImageMemory(vulkan_renderer->device.logical, texture.image[i], texture.image_memory[i], 0);
 
         // transition image layout
         VkImageMemoryBarrier barrier = { 0 };
-        barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.image = texture.image[i];
+        barrier.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier.oldLayout                   = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier.newLayout                   = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+        barrier.dstAccessMask               = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier.image                       = texture.image.images[i];
         barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         barrier.subresourceRange.layerCount = 1;
         barrier.subresourceRange.levelCount = 1;
@@ -2449,7 +2395,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         copy.imageExtent.height          = desc.height;
         copy.imageExtent.depth           = 1;
 
-        vkCmdCopyBufferToImage(vulkan_renderer->device.graphics_family.buffer[vulkan_renderer->current_frame], staging_buffer->buffer[i], texture.image[i], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+        vkCmdCopyBufferToImage(vulkan_renderer->device.graphics_family.buffer[vulkan_renderer->current_frame], staging_buffer->buffers[i], texture.image.images[i], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
 
         // transition again
         barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
@@ -2462,7 +2408,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         // view
         VkImageViewCreateInfo view_info = { 0 };
         view_info.sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        view_info.image    = texture.image[i];
+        view_info.image    = texture.image.images[i];
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
         view_info.format   = texture.format;
         view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -2515,9 +2461,6 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
     VkBufferUsageFlagBits host_buffer_usage   = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     VkBufferUsageFlagBits device_buffer_usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
-    VkMemoryPropertyFlagBits host_memory_flags   = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT | VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
-    VkMemoryPropertyFlagBits device_memory_flags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
-
     VkSharingMode sharing_mode = VK_SHARING_MODE_CONCURRENT;
 
     dm_vulkan_storage_buffer buffer = { 0 };
@@ -2525,19 +2468,18 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
 
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        if(!dm_vulkan_create_buffer(desc.size, host_buffer_usage, host_memory_flags, sharing_mode, &buffer.host_buffer.buffer[i], &buffer.host_buffer.memory[i], vulkan_renderer)) return false;
-
-        if(!dm_vulkan_create_buffer(desc.size, device_buffer_usage, device_memory_flags, sharing_mode, &buffer.device_buffer.buffer[i], &buffer.device_buffer.memory[i], vulkan_renderer)) return false; 
+        if(!dm_vulkan_create_buffer(desc.size, host_buffer_usage, sharing_mode, &buffer.host.buffers[i], &buffer.host.allocations[i], vulkan_renderer)) return false;
+        if(!dm_vulkan_create_buffer(desc.size, device_buffer_usage, sharing_mode, &buffer.device.buffers[i], &buffer.device.allocations[i], vulkan_renderer)) return false; 
 
         // buffer data
         if(!desc.data) continue;
 
-        if(!dm_vulkan_copy_memory(&buffer.host_buffer.memory[i], desc.data, desc.size, vulkan_renderer)) return false;
+        if(!dm_vulkan_copy_memory(buffer.host.allocations[i], desc.data, desc.size, vulkan_renderer)) return false;
 
         VkBufferCopy copy_region = { 0 };
         copy_region.size = desc.size;
 
-        vkCmdCopyBuffer(vulkan_renderer->device.transient_family.buffer[vulkan_renderer->current_frame], buffer.host_buffer.buffer[i], buffer.device_buffer.buffer[i], 1, &copy_region);
+        vkCmdCopyBuffer(vulkan_renderer->device.transient_family.buffer[vulkan_renderer->current_frame], buffer.host.buffers[i], buffer.device.buffers[i], 1, &copy_region);
     }
 
     //
@@ -2562,6 +2504,82 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
 {
     DM_VULKAN_GET_RENDERER;
     VkResult vr;
+
+    //dm_vulkan_acceleration_structure as = { 0 };
+
+    for(uint8_t i=0; i<desc.tlas.blas_count; i++)
+    {
+        for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
+        {
+            VkAccelerationStructureGeometryDataKHR geometry_desc = { 0 };
+            VkAccelerationStructureBuildRangeInfoKHR build_range = { 0 };
+
+            switch(desc.tlas.blas[i].geometry_type)
+            {
+                case DM_BLAS_GEOMETRY_TYPE_TRIANGLES:
+                {
+                    geometry_desc.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+
+                    VkBufferDeviceAddressInfo vb_address_info = { 0 };
+                    vb_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                    vb_address_info.buffer = vulkan_renderer->vertex_buffers[desc.tlas.blas[i].vertex_buffer.index].device.buffers[j];
+
+                    VkBufferDeviceAddressInfo ib_address_info = { 0 };
+                    ib_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                    ib_address_info.buffer = vulkan_renderer->index_buffers[desc.tlas.blas[i].index_buffer.index].device.buffers[j];
+
+                    switch(desc.tlas.blas[i].vertex_type)
+                    {
+                        case DM_BLAS_VERTEX_TYPE_FLOAT_3:
+                        geometry_desc.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+                        break;
+
+                        default:
+                        DM_LOG_FATAL("Unsupported vertex format");
+                        return false;
+                    }
+                    geometry_desc.triangles.maxVertex                = desc.tlas.blas[i].vertex_count;
+                    geometry_desc.triangles.vertexStride             = desc.tlas.blas[i].vertex_stride;
+                    geometry_desc.triangles.vertexData.deviceAddress = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &vb_address_info);
+
+                    build_range.primitiveCount = desc.tlas.blas[i].vertex_count;
+
+                    switch(desc.tlas.blas[i].index_type)
+                    {
+                        case DM_INDEX_BUFFER_INDEX_TYPE_UINT32:
+                        geometry_desc.triangles.indexType = VK_INDEX_TYPE_UINT32;
+                        break;
+
+                        default:
+                        DM_LOG_FATAL("Unsupported index type");
+                        return false;
+                    }
+                    geometry_desc.triangles.indexData.deviceAddress = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &ib_address_info);
+                } break;
+
+                default:
+                DM_LOG_FATAL("Unsupported geometry type");
+                return false;
+            }
+
+            VkAccelerationStructureGeometryKHR geometry = { 0 };
+            geometry.sType    = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+            geometry.geometry = geometry_desc;
+
+            switch(desc.tlas.blas[i].flags)
+            {
+                case DM_BLAS_GEOMETRY_FLAG_OPAQUE:
+                geometry.flags |= VK_GEOMETRY_OPAQUE_BIT_KHR;
+                break;
+
+                default:
+                DM_LOG_FATAL("Unsupported geometry flag");
+                return false;
+            }
+
+            
+        }
+    }
 
     return true;
 }
@@ -2813,7 +2831,7 @@ bool dm_render_command_backend_bind_vertex_buffer(dm_resource_handle handle, uin
     const uint8_t current_frame = vulkan_renderer->current_frame;
     dm_vulkan_vertex_buffer buffer = vulkan_renderer->vertex_buffers[handle.index];
     
-    VkBuffer buffers[]     = { buffer.device_buffer.buffer[current_frame] };
+    VkBuffer buffers[]     = { buffer.device.buffers[current_frame] };
     VkDeviceSize offsets[] = { 0 };
 
     vkCmdBindVertexBuffers(vulkan_renderer->device.graphics_family.buffer[current_frame], slot,_countof(buffers),buffers, offsets);
@@ -2828,7 +2846,7 @@ bool dm_render_command_backend_bind_index_buffer(dm_resource_handle handle, dm_r
     const uint8_t current_frame = vulkan_renderer->current_frame;
     dm_vulkan_index_buffer buffer = vulkan_renderer->index_buffers[handle.index];
 
-    vkCmdBindIndexBuffer(vulkan_renderer->device.graphics_family.buffer[current_frame], buffer.device_buffer.buffer[current_frame], 0, buffer.index_type);
+    vkCmdBindIndexBuffer(vulkan_renderer->device.graphics_family.buffer[current_frame], buffer.device.buffers[current_frame], 0, buffer.index_type);
 
     return true;
 }
@@ -2840,12 +2858,12 @@ bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_
     const uint8_t current_frame = vulkan_renderer->current_frame;
     dm_vulkan_vertex_buffer buffer = vulkan_renderer->vertex_buffers[handle.index];
         
-    if(!dm_vulkan_copy_memory(&buffer.host_buffer.memory[current_frame], data, size, vulkan_renderer)) return false;
+    if(!dm_vulkan_copy_memory(buffer.host.allocations[current_frame], data, size, vulkan_renderer)) return false;
 
     VkBufferCopy copy_region = { 0 };
     copy_region.size = size;
 
-    vkCmdCopyBuffer(vulkan_renderer->device.graphics_family.buffer[vulkan_renderer->current_frame], buffer.host_buffer.buffer[current_frame], buffer.device_buffer.buffer[current_frame], 1, &copy_region);
+    vkCmdCopyBuffer(vulkan_renderer->device.graphics_family.buffer[vulkan_renderer->current_frame], buffer.host.buffers[current_frame], buffer.device.buffers[current_frame], 1, &copy_region);
 
     return true;
 }
@@ -2880,7 +2898,7 @@ bool dm_render_command_backend_bind_constant_buffer(dm_resource_handle buffer, u
 
     VkBufferDeviceAddressInfo buffer_address_info = { 0 };
     buffer_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    buffer_address_info.buffer = internal_buffer.buffer.buffer[current_frame]; 
+    buffer_address_info.buffer = internal_buffer.buffer.buffers[current_frame]; 
 
     VkDescriptorAddressInfoEXT address_info = { 0 };
     address_info.sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
@@ -2954,7 +2972,7 @@ bool dm_render_command_backend_bind_storage_buffer(dm_resource_handle buffer, ui
 
     VkBufferDeviceAddressInfo buffer_address_info = { 0 };
     buffer_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    buffer_address_info.buffer = internal_buffer.device_buffer.buffer[current_frame]; 
+    buffer_address_info.buffer = internal_buffer.device.buffers[current_frame]; 
 
     VkDescriptorAddressInfoEXT address_info = { 0 };
     address_info.sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
@@ -2989,12 +3007,12 @@ bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm
     const uint8_t current_frame = vulkan_renderer->current_frame;
     dm_vulkan_storage_buffer buffer = vulkan_renderer->storage_buffers[handle.index];
         
-    if(!dm_vulkan_copy_memory(&buffer.host_buffer.memory[current_frame], data, size, vulkan_renderer)) return false;
+    if(!dm_vulkan_copy_memory(buffer.host.allocations[current_frame], data, size, vulkan_renderer)) return false;
 
     VkBufferCopy copy_region = { 0 };
     copy_region.size = size;
 
-    vkCmdCopyBuffer(vulkan_renderer->device.graphics_family.buffer[vulkan_renderer->current_frame], buffer.host_buffer.buffer[current_frame], buffer.device_buffer.buffer[current_frame], 1, &copy_region);
+    vkCmdCopyBuffer(vulkan_renderer->device.graphics_family.buffer[vulkan_renderer->current_frame], buffer.host.buffers[current_frame], buffer.device.buffers[current_frame], 1, &copy_region);
 
     return true;
 }
@@ -3080,7 +3098,7 @@ void dm_compute_command_backend_bind_storage_buffer(dm_resource_handle handle, u
 
     VkBufferDeviceAddressInfo buffer_address_info = { 0 };
     buffer_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    buffer_address_info.buffer = internal_buffer.device_buffer.buffer[current_frame]; 
+    buffer_address_info.buffer = internal_buffer.device.buffers[current_frame]; 
 
     VkDescriptorAddressInfoEXT address_info = { 0 };
     address_info.sType   = VK_STRUCTURE_TYPE_DESCRIPTOR_ADDRESS_INFO_EXT;
