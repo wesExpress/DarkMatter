@@ -566,15 +566,26 @@ typedef struct dm_blas_desc_t
     dm_blas_geometry_flag flags;
 } dm_blas_desc;
 
+// this is the struct that both dx12 and vulkan use
+// should enable optimized instancing for rt
+typedef struct dm_raytracing_instance_t
+{
+    float    transform[3][4];
+    uint32_t id : 24;
+    uint32_t mask : 8;
+    uint32_t sbt_offset : 24;
+    uint32_t flags : 8;
+    size_t   blas_address;
+} dm_raytracing_instance;
+
 #define DM_TLAS_MAX_BLAS 10
 typedef struct dm_tlas_desc_t
 {
     dm_blas_desc blas[DM_TLAS_MAX_BLAS];
     uint8_t      blas_count;
 
-    dm_mat4* instance_transform;
-    uint8_t* instance_blas;
-    uint32_t instance_count;
+    dm_raytracing_instance* instances;
+    uint32_t                instance_count;
 } dm_tlas_desc;
 
 typedef struct dm_acceleration_structure_desc_t
@@ -584,8 +595,8 @@ typedef struct dm_acceleration_structure_desc_t
 
 typedef struct dm_raytracing_pipeline_desc_t
 {
-    dm_resource_handle acceleration_structure;
-    size_t             payload_size;
+    uint8_t max_depth;
+    size_t  payload_size;
 } dm_raytracing_pipeline_desc;
 
 // compute
@@ -604,27 +615,29 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS,
     DM_RENDER_COMMAND_TYPE_END_RENDER_PASS,
     DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE,
+    DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP,
     DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_TYPE_BIND_TEXTURE,
+    DM_RENDER_COMMAND_TYPE_BIND_STORAGE_BUFFER,
+    DM_RENDER_COMMAND_TYPE_BIND_ACCELERATION_STRUCTURE,
     DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER,
-    DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP,
     DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER,
-    DM_RENDER_COMMAND_TYPE_BIND_STORAGE_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_ACCLERATION_STRUCTURE,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED
 } dm_render_command_type;
 
 typedef enum dm_compute_command_type_t
 {
+    DM_COMPUTE_COMMAND_TYPE_UNKNOWN,
     DM_COMPUTE_COMMAND_TYPE_BIND_COMPUTE_PIPELINE,
     DM_COMPUTE_COMMAND_TYPE_BIND_STORAGE_BUFFER,
     DM_COMPUTE_COMMAND_TYPE_BIND_CONSTANT_BUFFER,
     DM_COMPUTE_COMMAND_TYPE_BIND_TEXTURE,
     DM_COMPUTE_COMMAND_TYPE_DISPATCH,
-    DM_COMPUTE_COMMAND_TYPE_UNKNOWN
 } dm_compute_command_type;
 
 typedef struct dm_command_param_t
@@ -838,22 +851,27 @@ bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle
 bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_resource_handle* handle, dm_context* context);
 
+// don't really like this, but not really sure how to fix
+bool dm_renderer_get_blas_gpu_address(dm_resource_handle acceleration_structure, uint8_t blas_index, size_t* address, dm_context* context);
+
 void dm_render_command_begin_render_pass(float r, float g, float b, float a, dm_context* context);
 void dm_render_command_end_render_pass(dm_context* context);
 
 void dm_render_command_bind_raster_pipeline(dm_resource_handle handle, dm_context* context);
 void dm_render_command_bind_raytracing_pipeline(dm_resource_handle handle, dm_context* context);
 void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, uint32_t descriptor_buffer_index, dm_context* context);
+
 void dm_render_command_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, dm_context* context);
 void dm_render_command_bind_index_buffer(dm_resource_handle handle, dm_context* context);
-
 void dm_render_command_bind_constant_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context);
 void dm_render_command_bind_texture(dm_resource_handle texture, uint8_t binding, uint8_t descriptor_group, dm_context* context);
 void dm_render_command_bind_storage_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context);
+void dm_render_command_bind_acceleration_structure(dm_resource_handle acceleration_structure, uint8_t binding, uint8_t descriptor_group, dm_context* context);
 
 void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
+void dm_render_command_update_acceleration_structure(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_context* context);
 
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
 void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);
@@ -910,6 +928,5 @@ dm_hash64 dm_hash_64bit(uint64_t key);
 dm_hash   dm_hash_int_pair(int x, int y);
 dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y);
 uint32_t  dm_hash_reduce(uint32_t x, uint32_t n);
-
 
 #endif //DM_H

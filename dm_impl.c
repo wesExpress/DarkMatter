@@ -630,6 +630,8 @@ extern bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc des
 extern bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 
+extern bool dm_renderer_backend_get_blas_gpu_address(dm_resource_handle acceleration_structure, uint8_t blas_index, size_t* address, dm_renderer* renderer);
+
 bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_resource_handle* handle, dm_context* context)
 {
     handle->type = DM_RESOURCE_TYPE_RASTER_PIPELINE;
@@ -710,6 +712,17 @@ bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc de
     return false;
 }
 
+bool dm_renderer_get_blas_gpu_address(dm_resource_handle acceleration_structure, uint8_t blas_index, size_t* address, dm_context* context)
+{
+    if(acceleration_structure.type != DM_RESOURCE_TYPE_ACCELERATION_STRUCTURE)
+    {
+        DM_LOG_FATAL("Resource is not an acceleration structure");
+        return false;
+    }
+
+    return dm_renderer_backend_get_blas_gpu_address(acceleration_structure, blas_index, address, &context->renderer);
+}
+
 /***************
 RENDER COMMANDS
 *****************/
@@ -727,6 +740,8 @@ extern bool dm_render_command_backend_bind_texture(dm_resource_handle texture, u
 extern bool dm_render_command_backend_bind_storage_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_acceleration_structure(dm_resource_handle acceleration_structure, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_acceleration_structure(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer);
 
 void _dm_render_command_submit(dm_command command, dm_command_manager* manager)
 {
@@ -895,6 +910,33 @@ void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resourc
     DM_RENDER_COMMAND_SUBMIT;
 }
 
+void dm_render_command_bind_acceleration_structure(dm_resource_handle acceleration_structure, uint8_t binding, uint8_t descriptor_group, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_ACCELERATION_STRUCTURE;
+
+    command.params[0].handle_val = acceleration_structure;
+    command.params[1].u8_val     = binding;
+    command.params[2].u8_val     = descriptor_group;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_update_acceleration_structure(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_ACCLERATION_STRUCTURE;
+
+    command.params[0].void_val   = instance_data;
+    command.params[1].size_t_val = size;
+    command.params[2].u32_val    = instance_count;
+    command.params[3].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context)
 {
     dm_command command = { 0 };
@@ -1002,6 +1044,17 @@ bool dm_renderer_submit_commands(dm_context* context)
             if(params[0].handle_val.type != DM_RESOURCE_TYPE_INDEX_BUFFER) { DM_LOG_FATAL("Resource is not an index buffer."); return false; }
             if(dm_render_command_backend_bind_index_buffer(params[0].handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind index buffer failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_BIND_ACCELERATION_STRUCTURE:
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_ACCELERATION_STRUCTURE) { DM_LOG_FATAL("Resource is not an acceleration structure"); return false; }
+            if(dm_render_command_backend_bind_acceleration_structure(params[0].handle_val, params[1].u8_val, params[2].u8_val, renderer)) continue;
+            DM_LOG_FATAL("Bind acceleration structure failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_UPDATE_ACCLERATION_STRUCTURE:
+            if(params[3].handle_val.type != DM_RESOURCE_TYPE_ACCELERATION_STRUCTURE) { DM_LOG_FATAL("Resource is not an acceleration structure"); return false; }
+            if(dm_render_command_backend_update_acceleration_structure(params[0].void_val, params[1].size_t_val, params[2].u32_val, params[3].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Update acceleration structure failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED:
