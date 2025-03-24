@@ -1735,8 +1735,22 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
                         return false;
                     }
 
-                    geometry_desc.Triangles.IndexCount                 = desc.tlas.blas[j].index_count;
-                    geometry_desc.Triangles.IndexBuffer                = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[ib.device_buffers[i]]);
+                    geometry_desc.Triangles.IndexCount  = desc.tlas.blas[j].index_count;
+                    geometry_desc.Triangles.IndexBuffer = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[ib.device_buffers[i]]);
+                    switch(desc.tlas.blas[j].index_type)
+                    {
+                        case DM_INDEX_BUFFER_INDEX_TYPE_UINT16:
+                        geometry_desc.Triangles.IndexFormat = DXGI_FORMAT_R16_UINT;
+                        break;
+
+                        case DM_INDEX_BUFFER_INDEX_TYPE_UINT32:
+                        geometry_desc.Triangles.IndexFormat = DXGI_FORMAT_R32_UINT;
+                        break;
+
+                        default:
+                        DM_LOG_FATAL("Unsupported index type");
+                        return false;
+                    }
                 } break;
 
                 default:
