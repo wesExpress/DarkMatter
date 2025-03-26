@@ -1382,7 +1382,7 @@ void dm_renderer_backend_shutdown(dm_context* context)
         {
             for(uint8_t k=0; k<as->blas_count; k++)
             {
-                vmaDestroyBuffer(allocator, as->blas[k][j].result.buffer, as->blas[k][j].scratch.allocation);
+                vmaDestroyBuffer(allocator, as->blas[k][j].result.buffer, as->blas[k][j].result.allocation);
                 vmaDestroyBuffer(allocator, as->blas[k][j].scratch.buffer, as->blas[k][j].scratch.allocation);
                 vkDestroyAccelerationStructureKHR(device, as->blas[k][j].as, NULL);
             }
@@ -2602,9 +2602,9 @@ bool dm_vulkan_create_blas(dm_blas_desc blas_desc, dm_vulkan_acceleration_struct
                     return false;
                 }
 
-                primitive_count = blas_desc.vertex_count - 1;
+                primitive_count = blas_desc.index_count / 3;
 
-                geometry_data.triangles.maxVertex                = primitive_count; 
+                geometry_data.triangles.maxVertex                = blas_desc.vertex_count - 1; 
                 geometry_data.triangles.vertexStride             = blas_desc.vertex_stride;
                 geometry_data.triangles.vertexData.deviceAddress = vb_address;
 
@@ -2631,7 +2631,7 @@ bool dm_vulkan_create_blas(dm_blas_desc blas_desc, dm_vulkan_acceleration_struct
         geometry.geometry = geometry_data;
 
         VkBufferUsageFlagBits usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-        if(!dm_vulkan_create_acceleration_structure(build_info, usage_flags, build_range.primitiveCount, &as->blas[blas_index][i], vulkan_renderer)) 
+        if(!dm_vulkan_create_acceleration_structure(build_info, usage_flags, primitive_count, &as->blas[blas_index][i], vulkan_renderer)) 
         {
             DM_LOG_FATAL("Could not create bottom-level acceleration structure");
             return false;
@@ -2646,9 +2646,63 @@ bool dm_vulkan_create_blas(dm_blas_desc blas_desc, dm_vulkan_acceleration_struct
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_vulkan_create_tlas()
+bool dm_vulkan_create_tlas(dm_tlas_desc tlas_desc, dm_vulkan_acceleration_structure* as, dm_vulkan_renderer* vulkan_renderer)
 {
     VkResult vr;
+    
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        // instance buffer
+        VkBufferUsageFlags buffer_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+        size_t buffer_size = sizeof(VkAccelerationStructureMotionInstanceDataNV) * tlas_desc.instance_count;
+        if(!dm_vulkan_create_buffer(buffer_size, buffer_flags, VK_SHARING_MODE_CONCURRENT, &as->instance_buffer[i].buffer, &as->instance_buffer[i].allocation, vulkan_renderer)) return false;
+        
+        void* temp = NULL;
+
+        vr = vmaMapMemory(vulkan_renderer->allocator, as->instance_buffer[i].allocation, &temp);
+        if(!dm_vulkan_decode_vr(vr) || !temp)
+        {
+            DM_LOG_FATAL("vmaMapMemory failed");
+            return false;
+        }
+        as->instance_data[i] = temp;
+        temp = NULL;
+
+        dm_memcpy(as->instance_data[i], tlas_desc.instances, buffer_size);
+
+        VkBufferDeviceAddressInfo instance_address_info = { 0 };
+        instance_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        instance_address_info.buffer = as->instance_buffer[i].buffer;
+
+        VkDeviceAddress instance_address = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &instance_address_info);
+        
+        // top level
+        VkAccelerationStructureGeometryDataKHR geometry_data = { 0 };
+        geometry_data.instances.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+        geometry_data.instances.data.deviceAddress = instance_address;
+
+        VkAccelerationStructureGeometryKHR geometry = { 0 };
+        geometry.sType        = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+        geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+        geometry.geometry     = geometry_data;
+        // TODO: needs to be configurable, hardcoded here
+        geometry.flags        = VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+        VkAccelerationStructureBuildGeometryInfoKHR build_info = { 0 };
+        build_info.sType         = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+        build_info.type          = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+        build_info.mode          = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        build_info.flags         = VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+        build_info.pGeometries   = &geometry;
+        build_info.geometryCount = 1;
+
+        VkAccelerationStructureBuildSizesInfoKHR build_sizes_info = { 0 };
+        build_sizes_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+        
+        VkBufferUsageFlagBits usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+        if(!dm_vulkan_create_acceleration_structure(build_info, usage_flags, tlas_desc.instance_count, &as->tlas[i], vulkan_renderer)) return false;
+    }
+
     return true;
 }
 
@@ -2665,95 +2719,7 @@ bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure
         if(!dm_vulkan_create_blas(desc.tlas.blas[i], &as, vulkan_renderer)) return false;
     }
 
-#if 0
-    // top level
-    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        // instance data
-        VkBufferUsageFlagBits instance_buffer_usage = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
-        size_t instance_buffer_size = sizeof(VkAccelerationStructureInstanceKHR) * desc.tlas.instance_count;
-        if(!dm_vulkan_create_buffer(instance_buffer_size, instance_buffer_usage, VK_SHARING_MODE_CONCURRENT, &as.instance_buffer[i].buffer, &as.instance_buffer[i].allocation, vulkan_renderer)) return false;
-
-        void* temp = NULL;
-        vmaMapMemory(vulkan_renderer->allocator, as.instance_buffer[i].allocation, &temp);
-        if(!temp)
-        {
-            DM_LOG_FATAL("vmaMapMemory failed");
-            return false;
-        }
-        as.instance_data[i] = temp;
-
-        dm_memcpy(as.instance_data[i], desc.tlas.instances, sizeof(VkAccelerationStructureInstanceKHR) * desc.tlas.instance_count);
-
-        VkBufferDeviceAddressInfo instance_address_info = { 0 };
-        instance_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        instance_address_info.buffer = as.instance_buffer[i].buffer;
-
-        VkDeviceAddress instance_address = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &instance_address_info);
-
-        // top level continued
-        VkAccelerationStructureGeometryDataKHR top_level_geometry_data = { 0 };
-        top_level_geometry_data.instances.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
-        top_level_geometry_data.instances.data.deviceAddress = instance_address;
-
-        VkAccelerationStructureGeometryKHR top_level_geometry = { 0 };
-        top_level_geometry.sType        = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-        top_level_geometry.geometry     = top_level_geometry_data;
-        top_level_geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
-        // TODO: needs to be configurable, hardcoded here
-        top_level_geometry.flags        = VK_GEOMETRY_OPAQUE_BIT_KHR;
-
-        VkAccelerationStructureBuildGeometryInfoKHR top_level_build_info = { 0 };
-        top_level_build_info.sType         = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-        top_level_build_info.type          = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-        top_level_build_info.mode          = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-        top_level_build_info.pGeometries   = &top_level_geometry;
-        top_level_build_info.geometryCount = 1;
-
-        VkAccelerationStructureBuildSizesInfoKHR top_level_build_sizes_info = { 0 };
-        top_level_build_sizes_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
-        
-        uint32_t top_level_primitive_count[] = { 1 };
-
-        vkGetAccelerationStructureBuildSizesKHR(vulkan_renderer->device.logical, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &top_level_build_info, top_level_primitive_count, &top_level_build_sizes_info);
-
-        size_t tlas_size = top_level_build_sizes_info.accelerationStructureSize;
-        VkBufferUsageFlagBits tlas_usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-        if(!dm_vulkan_create_buffer(tlas_size, tlas_usage_flags, VK_SHARING_MODE_CONCURRENT, &as.tlas[i].result.buffer, &as.tlas[i].result.allocation, vulkan_renderer)) return false;
-
-        VkAccelerationStructureCreateInfoKHR top_level_create_info = { 0 };
-        top_level_create_info.sType  = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
-        top_level_create_info.type   = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-        top_level_create_info.buffer = as.tlas[i].result.buffer;
-        top_level_create_info.size   = tlas_size;
-
-        vr = vkCreateAccelerationStructureKHR(vulkan_renderer->device.logical, &top_level_create_info, NULL, &as.tlas[i].as);
-        if(!dm_vulkan_decode_vr(vr) || !as.tlas[i].as)
-        {
-            DM_LOG_FATAL("vkCreateAccelerationStructureKHR failed");
-            return false;
-        }
-
-        size_t tlas_scratch_size = top_level_build_sizes_info.buildScratchSize;
-        VkBufferUsageFlagBits tlas_scratch_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-        if(!dm_vulkan_create_buffer(tlas_scratch_size, tlas_scratch_flags, VK_SHARING_MODE_CONCURRENT, &as.tlas[i].scratch.buffer, &as.tlas[i].scratch.allocation, vulkan_renderer)) return false;
-
-        VkBufferDeviceAddressInfo top_level_scratch_address_info = { 0 };
-        top_level_scratch_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-        top_level_scratch_address_info.buffer = as.tlas[i].scratch.buffer;
-
-        VkDeviceAddress top_level_scratch_address = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &top_level_scratch_address_info);
-
-        top_level_build_info.scratchData.deviceAddress = top_level_scratch_address;
-        top_level_build_info.dstAccelerationStructure  = as.tlas[i].as;
-
-        VkAccelerationStructureBuildRangeInfoKHR top_level_ranges = { 0 };
-        top_level_ranges.primitiveCount = 1;
-
-        const VkAccelerationStructureBuildRangeInfoKHR* tl_ranges2 = { &top_level_ranges };
-
-        vkCmdBuildAccelerationStructuresKHR(vulkan_renderer->device.graphics_family.buffer[0], 1, &top_level_build_info, &tl_ranges2);
-#endif
+    if(!dm_vulkan_create_tlas(desc.tlas, &as, vulkan_renderer)) return false;
 
     //
     dm_memcpy(vulkan_renderer->acceleration_structures + vulkan_renderer->as_count, &as, sizeof(as));
@@ -3218,17 +3184,43 @@ bool dm_render_command_backend_update_acceleration_structure(void* instance_data
     dm_vulkan_acceleration_structure as = vulkan_renderer->acceleration_structures[handle.index];
     const uint8_t current_frame = vulkan_renderer->current_frame;
 
-    VkBufferDeviceAddressInfo address_info = { 0 };
-    address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-    address_info.buffer = as.tlas[current_frame].scratch.buffer;
+    dm_memcpy(as.instance_data[current_frame], instance_data, size);
+
+    VkBufferDeviceAddressInfo instance_buffer_address_info = { 0 };
+    instance_buffer_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    instance_buffer_address_info.buffer = as.instance_buffer[current_frame].buffer;
+
+    VkAccelerationStructureGeometryDataKHR geometry_data = { 0 };
+    geometry_data.instances.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+    geometry_data.instances.data.deviceAddress = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &instance_buffer_address_info); 
+
+    VkAccelerationStructureGeometryKHR geometry = { 0 };
+    geometry.sType        = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+    geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    geometry.geometry     = geometry_data;
+    geometry.flags        = VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+    VkBufferDeviceAddressInfo scratch_buffer_address_info = { 0 };
+    scratch_buffer_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    scratch_buffer_address_info.buffer = as.tlas[current_frame].scratch.buffer;
 
     VkAccelerationStructureBuildGeometryInfoKHR build_info = { 0 };
     build_info.sType                     = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
     build_info.type                      = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-    build_info.mode                      = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    build_info.mode                      = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+    build_info.flags                     = VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
     build_info.dstAccelerationStructure  = as.tlas[current_frame].as;
     build_info.srcAccelerationStructure  = as.tlas[current_frame].as;    
-    build_info.scratchData.deviceAddress = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &address_info);
+    build_info.scratchData.deviceAddress = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &scratch_buffer_address_info);
+    build_info.pGeometries               = &geometry; 
+    build_info.geometryCount             = 1;
+
+    VkAccelerationStructureBuildRangeInfoKHR build_range = { 0 };
+    build_range.primitiveCount = instance_count;
+
+    const VkAccelerationStructureBuildRangeInfoKHR* build_range2 = { &build_range };
+
+    vkCmdBuildAccelerationStructuresKHR(vulkan_renderer->device.graphics_family.buffer[current_frame], 1, &build_info, &build_range2);
 
     return true;
 }
