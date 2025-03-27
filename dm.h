@@ -417,23 +417,30 @@ typedef enum dm_descriptor_range_type_t
     DM_DESCRIPTOR_RANGE_TYPE_CONSTANT_BUFFER,
     DM_DESCRIPTOR_RANGE_TYPE_TEXTURE,
     DM_DESCRIPTOR_RANGE_TYPE_READ_STORAGE_BUFFER,
-    DM_DESCRIPTOR_RANGE_TYPE_WRITE_STORAGE_BUFFER
+    DM_DESCRIPTOR_RANGE_TYPE_WRITE_STORAGE_BUFFER,
+    DM_DESCRIPTOR_RANGE_TYPE_ACCELERATION_STRUCTURE,
+    DM_DESCRIPTOR_RANGE_TYPE_READ_TEXTURE,
+    DM_DESCRIPTOR_RANGE_TYPE_WRITE_TEXTURE,
 } dm_descriptor_range_type;
 
-#define DM_DESCRIPTOR_RANGE_MAX_RESOURCES 5
-typedef struct dm_descriptor_range_t
+typedef enum dm_descriptor_type_t
 {
-    dm_descriptor_range_type type;
-    //dm_render_handle         handles[DM_DESCRIPTOR_RANGE_MAX_RESOURCES];
-    uint8_t                  count;
-} dm_descriptor_range;
+    DM_DESCRIPTOR_TYPE_UNKNOWN,
+    DM_DESCRIPTOR_TYPE_CONSTANT_BUFFER,
+    DM_DESCRIPTOR_TYPE_TEXTURE,
+    DM_DESCRIPTOR_TYPE_READ_STORAGE_BUFFER,
+    DM_DESCRIPTOR_TYPE_WRITE_STORAGE_BUFFER,
+    DM_DESCRIPTOR_TYPE_READ_TEXTURE,
+    DM_DESCRIPTOR_TYPE_WRITE_TEXTURE,
+    DM_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE
+} dm_descriptor_type;
 
-#define DM_DESCRIPTOR_GROUP_MAX_RANGES 5
+#define DM_DESCRIPTOR_GROUP_MAX_DESCRIPTORS 10
 typedef struct dm_descriptor_group_t
 {
-    dm_descriptor_range       ranges[DM_DESCRIPTOR_GROUP_MAX_RANGES];
     dm_descriptor_group_flags flags;
-    uint8_t                   range_count;
+    dm_descriptor_type        descriptors[DM_DESCRIPTOR_GROUP_MAX_DESCRIPTORS];
+    uint8_t                   count;
 } dm_descriptor_group;
 
 typedef enum dm_viewport_type_t
@@ -593,8 +600,47 @@ typedef struct dm_acceleration_structure_desc_t
     dm_tlas_desc tlas;
 } dm_acceleration_structure_desc;
 
+typedef enum dm_rt_pipe_hit_group_stage_t
+{
+    DM_RT_PIPE_HIT_GROUP_STAGE_CLOSEST,
+    DM_RT_PIPE_HIT_GROUP_STAGE_ANY,
+    DM_RT_PIPE_HIT_GROUP_STAGE_INTERSECTION,
+    DM_RT_PIPE_HIT_GROUP_STAGE_UNKNOWN
+} dm_rt_pipe_hit_group_stage;
+
+typedef enum dm_rt_pipe_hit_group_flag_t
+{
+    DM_RT_PIPE_HIT_GROUP_FLAG_CLOSEST       = 1,
+    DM_RT_PIPE_HIT_GROUP_FLAG_ANY           = 2,
+    DM_RT_PIPE_HIT_GROUP_FLAG_INTERSECTION  = 4
+} dm_rt_pipe_hit_group_flag;
+
+typedef enum dm_rt_pipe_hit_group_type_t
+{
+    DM_RT_PIPE_HIT_GROUP_TYPE_TRIANGLES,
+    DM_RT_PIPE_HIT_GROUP_TYPE_UNKONWN
+} dm_rt_pipe_hit_group_type;
+
+typedef struct dm_raytracing_pipeline_hit_group_t
+{
+    char name[512];
+    char path[512];
+
+    char shaders[DM_RT_PIPE_HIT_GROUP_STAGE_UNKNOWN][512];
+    dm_rt_pipe_hit_group_flag flags;
+
+    dm_rt_pipe_hit_group_type type;
+} dm_raytracing_pipeline_hit_group;
+
+#define DM_RT_PIPE_MAX_HIT_GROUPS 5
 typedef struct dm_raytracing_pipeline_desc_t
 {
+    dm_raytracing_pipeline_hit_group hit_groups[DM_RT_PIPE_MAX_HIT_GROUPS];
+    uint8_t                          hit_group_count;
+
+    dm_descriptor_group descriptor_group[DM_MAX_DESCRIPTOR_GROUPS];
+    uint8_t             descriptor_group_count;
+
     uint8_t max_depth;
     size_t  payload_size;
 } dm_raytracing_pipeline_desc;
