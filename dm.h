@@ -406,9 +406,10 @@ typedef struct dm_rasterizer_desc_t
 
 typedef enum dm_descriptor_group_flags_t
 {
-    DM_DESCRIPTOR_GROUP_FLAG_UNKNOWN       = 0x00,
-    DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER = 0x01,
-    DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER  = 0x02,
+    DM_DESCRIPTOR_GROUP_FLAG_UNKNOWN        = 0x00,
+    DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER  = 0x01,
+    DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER   = 0x02,
+    DM_DESCRIPTOR_GROUP_FLAG_COMPUTE_SHADER = 0x04
 } dm_descriptor_group_flags;
 
 typedef enum dm_descriptor_range_type_t
@@ -481,11 +482,13 @@ typedef struct dm_raster_pipeline_desc_t
     dm_rasterizer_desc             rasterizer;
     dm_depth_stencil_desc          depth_stencil;
 
-    dm_descriptor_group            descriptor_group[DM_MAX_DESCRIPTOR_GROUPS];
+    dm_descriptor_group            descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
     uint8_t                        descriptor_group_count;
 
     dm_viewport viewport;
     dm_scissor  scissor;
+
+    bool sampler;
 } dm_raster_pipeline_desc;
 
 
@@ -638,7 +641,7 @@ typedef struct dm_raytracing_pipeline_desc_t
     dm_raytracing_pipeline_hit_group hit_groups[DM_RT_PIPE_MAX_HIT_GROUPS];
     uint8_t                          hit_group_count;
 
-    dm_descriptor_group descriptor_group[DM_MAX_DESCRIPTOR_GROUPS];
+    dm_descriptor_group descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
     uint8_t             descriptor_group_count;
 
     uint8_t max_depth;
@@ -648,7 +651,7 @@ typedef struct dm_raytracing_pipeline_desc_t
 // compute
 typedef struct dm_compute_pipeline_desc_t
 {
-    dm_descriptor_group descriptor_group[DM_MAX_DESCRIPTOR_GROUPS];
+    dm_descriptor_group descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
     uint8_t             descriptor_group_count;
 
     dm_shader_desc shader;

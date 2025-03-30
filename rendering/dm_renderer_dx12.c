@@ -909,97 +909,93 @@ bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* re
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_dx12_create_root_signature(dm_descriptor_group group, D3D12_ROOT_SIGNATURE_FLAGS flags, D3D12_STATIC_SAMPLER_DESC* sampler_desc, ID3D12RootSignature** signature, dm_dx12_renderer* dx12_renderer)
+bool dm_dx12_create_root_signature(dm_descriptor_group* groups, uint8_t group_count, D3D12_ROOT_SIGNATURE_FLAGS flags, D3D12_STATIC_SAMPLER_DESC* sampler_desc, ID3D12RootSignature** signature, dm_dx12_renderer* dx12_renderer)
 {
     HRESULT hr;
 
-    D3D12_ROOT_DESCRIPTOR_TABLE table    = { 0 };
-    D3D12_DESCRIPTOR_RANGE      ranges[3] = { 0 };
-    D3D12_ROOT_PARAMETER        param    = { 0 };
+    dm_assert(group_count <= 2);
 
-    param.ParameterType    = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-    // TODO: just blasting this in here
-    switch(group.flags)
+    D3D12_ROOT_PARAMETER   params[2]    = { 0 };
+    D3D12_DESCRIPTOR_RANGE ranges[2][3] = { 0 };
+
+    for(uint8_t i=0; i<group_count; i++)
     {
-        case DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER:
-        param.ShaderVisibility |= D3D12_SHADER_VISIBILITY_VERTEX;
-        break;
+        D3D12_ROOT_DESCRIPTOR_TABLE table    = { 0 };
 
-        case DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER:
-        param.ShaderVisibility |= D3D12_SHADER_VISIBILITY_PIXEL;
-        break;
+        dm_descriptor_group group = groups[i];
 
-        default:
-        DM_LOG_FATAL("Unsupported descriptor shader visibility");
-        return false;
-    }
-    param.ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX; 
+        params[i].ParameterType    = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
 
-    int cbv_index = -1;
-    int srv_index = -1;
-    int uav_index = -1;
+        if(group.flags & DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER && group.flags & DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER) params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_ALL;
+        else if(group.flags & DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER) params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
+        else if(group.flags & DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER)  params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    uint8_t range_count = 0;
-    uint8_t cbv_count   = 0;
-    uint8_t srv_count   = 0;
-    uint8_t uav_count   = 0;
+        int cbv_index = -1;
+        int srv_index = -1;
+        int uav_index = -1;
 
-    for(uint8_t i=0; i<group.count; i++)
-    {
-        switch(group.descriptors[i])
+        uint8_t range_count = 0;
+        uint8_t cbv_count   = 0;
+        uint8_t srv_count   = 0;
+        uint8_t uav_count   = 0;
+
+        for(uint8_t i=0; i<group.count; i++)
         {
-            case DM_DESCRIPTOR_TYPE_CONSTANT_BUFFER:
-            cbv_index = cbv_index < 0 ? range_count++ : cbv_index;
-            cbv_count++;
-            break;
+            switch(group.descriptors[i])
+            {
+                case DM_DESCRIPTOR_TYPE_CONSTANT_BUFFER:
+                    cbv_index = cbv_index < 0 ? range_count++ : cbv_index;
+                    cbv_count++;
+                    break;
 
-            case DM_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE:
-            case DM_DESCRIPTOR_TYPE_TEXTURE:
-            case DM_DESCRIPTOR_TYPE_READ_TEXTURE:
-            case DM_DESCRIPTOR_TYPE_READ_STORAGE_BUFFER:
-            srv_index = srv_index < 0 ? range_count++ : srv_index;
-            srv_count++;
-            break;
+                case DM_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE:
+                case DM_DESCRIPTOR_TYPE_TEXTURE:
+                case DM_DESCRIPTOR_TYPE_READ_TEXTURE:
+                case DM_DESCRIPTOR_TYPE_READ_STORAGE_BUFFER:
+                    srv_index = srv_index < 0 ? range_count++ : srv_index;
+                    srv_count++;
+                    break;
 
-            case DM_DESCRIPTOR_TYPE_WRITE_STORAGE_BUFFER:
-            case DM_DESCRIPTOR_TYPE_WRITE_TEXTURE:
-            uav_index = uav_index < 0 ? range_count++ : uav_index;
-            uav_count++;
-            break;
+                case DM_DESCRIPTOR_TYPE_WRITE_STORAGE_BUFFER:
+                case DM_DESCRIPTOR_TYPE_WRITE_TEXTURE:
+                    uav_index = uav_index < 0 ? range_count++ : uav_index;
+                    uav_count++;
+                    break;
 
-            default:
-            DM_LOG_FATAL("Unsupported descriptor type");
-            return false;
+                default:
+                    DM_LOG_FATAL("Unsupported descriptor type");
+                    return false;
+            }
         }
-    }
 
-    if(cbv_count) 
-    {
-        ranges[cbv_index].NumDescriptors                    = cbv_count;
-        ranges[cbv_index].RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-        ranges[cbv_index].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-    }
-    if(srv_count) 
-    {
-        ranges[srv_index].NumDescriptors                    = srv_count;
-        ranges[srv_index].RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-        ranges[srv_index].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-    }
-    if(uav_count) 
-    {
-        ranges[uav_index].NumDescriptors                    = uav_count;
-        ranges[uav_index].RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-        ranges[uav_index].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-    }
+        if(cbv_count) 
+        {
+            ranges[i][cbv_index].NumDescriptors                    = cbv_count;
+            ranges[i][cbv_index].RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
+            ranges[i][cbv_index].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+        }
+        if(srv_count) 
+        {
+            ranges[i][srv_index].NumDescriptors                    = srv_count;
+            ranges[i][srv_index].RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
+            ranges[i][srv_index].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+        }
+        if(uav_count) 
+        {
+            ranges[i][uav_index].NumDescriptors                    = uav_count;
+            ranges[i][uav_index].RangeType                         = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
+            ranges[i][uav_index].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
+        }
 
-    table.NumDescriptorRanges = range_count;
-    table.pDescriptorRanges   = ranges;
+        table.NumDescriptorRanges = range_count;
+        table.pDescriptorRanges   = ranges[i];
 
-    param.DescriptorTable = table;
+        params[i].DescriptorTable = table;
+    }
 
     D3D12_ROOT_SIGNATURE_DESC root_desc = { 0 };
-    root_desc.NumParameters = 1;
-    root_desc.pParameters   = &param;
+    root_desc.NumParameters = group_count;
+    root_desc.pParameters   = params;
     root_desc.Flags         = flags;
     if(sampler_desc)
     {
@@ -1064,108 +1060,12 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     D3D12_GRAPHICS_PIPELINE_STATE_DESC pso_desc = { 0 };
     pso_desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;
 
-    // === descriptors ===
-    // TODO: this is probably terrible
-#if 0
-    D3D12_ROOT_DESCRIPTOR_TABLE tables[DM_MAX_DESCRIPTOR_GROUPS] = { 0 };
-    D3D12_DESCRIPTOR_RANGE ranges[DM_MAX_DESCRIPTOR_GROUPS][DM_DESCRIPTOR_GROUP_MAX_RANGES] = { 0 };
-    D3D12_ROOT_PARAMETER params[DM_MAX_DESCRIPTOR_GROUPS] = { 0 };
-
-    uint32_t descriptor_count = 0;
-
-    // for each descriptor group
-    for(uint8_t i=0; i<desc.descriptor_group_count; i++)
-    {
-        dm_descriptor_group group = desc.descriptor_group[i];
-
-        // for each range
-        for(uint8_t j=0; j<group.range_count; j++)
-        {
-            dm_descriptor_range range = group.ranges[j];
-
-            switch(range.type)
-            {
-                case DM_DESCRIPTOR_RANGE_TYPE_CONSTANT_BUFFER:
-                ranges[i][j].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_CBV;
-                break;
-
-                case DM_DESCRIPTOR_RANGE_TYPE_READ_STORAGE_BUFFER:
-                case DM_DESCRIPTOR_RANGE_TYPE_TEXTURE:
-                ranges[i][j].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-                break;
-
-                case DM_DESCRIPTOR_RANGE_TYPE_WRITE_STORAGE_BUFFER:
-                ranges[i][j].RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_UAV;
-                break;
-
-                default:
-                DM_LOG_FATAL("Unknown or unsupported descriptor range type");
-                return false;
-            }
-
-            ranges[i][j].NumDescriptors                    = range.count;
-            ranges[i][j].OffsetInDescriptorsFromTableStart = D3D12_DESCRIPTOR_RANGE_OFFSET_APPEND;
-
-            descriptor_count += range.count;
-        }
-
-        tables[i].NumDescriptorRanges = group.range_count;
-        tables[i].pDescriptorRanges   = ranges[i];
-
-        params[i].ParameterType    = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-        params[i].DescriptorTable  = tables[i];
-        if(group.flags == DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER) params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-        else if(group.flags == DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER) params[i].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-    }
-
-    // === sampler ===
-    D3D12_STATIC_SAMPLER_DESC sampler = { 0 };
-    sampler.Filter           = D3D12_FILTER_MIN_MAG_MIP_POINT;
-    sampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-    sampler.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-    sampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-    sampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER;
-    sampler.BorderColor      = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-    sampler.MaxLOD           = D3D12_FLOAT32_MAX;
-    sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
     // === root signature ===
-    D3D12_ROOT_SIGNATURE_DESC root_desc = { 0 };
-    
-    root_desc.NumParameters     = desc.descriptor_group_count;
-    root_desc.pParameters       = params;
-    root_desc.NumStaticSamplers = 1;
-    root_desc.pStaticSamplers   = &sampler;
-
-    root_desc.Flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-    ID3D10Blob* root_blob = NULL;
-
-    hr = D3D12SerializeRootSignature(&root_desc, D3D_ROOT_SIGNATURE_VERSION_1, &root_blob, NULL);
-    if(!dm_platform_win32_decode_hresult(hr))
-    {
-        DM_LOG_FATAL("D3D12SerializeRootSignature failed");
-        dm_dx12_get_debug_message(dx12_renderer);
-        return false;
-    }
-
-    hr = ID3D12Device5_CreateRootSignature(dx12_renderer->device, 0, ID3D10Blob_GetBufferPointer(root_blob), ID3D10Blob_GetBufferSize(root_blob), &IID_ID3D12RootSignature, &temp);
-    if(!dm_platform_win32_decode_hresult(hr) || !temp)
-    {
-        DM_LOG_FATAL("ID3D12Device5_CreateRootSignature failed");
-        dm_dx12_get_debug_message(dx12_renderer);
-        return false;
-    }
-#endif
     D3D12_ROOT_SIGNATURE_FLAGS flags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-    // === sampler ===
     D3D12_STATIC_SAMPLER_DESC sampler = { 0 };
     sampler.Filter           = D3D12_FILTER_MIN_MAG_MIP_POINT;
     sampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
@@ -1176,7 +1076,9 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     sampler.MaxLOD           = D3D12_FLOAT32_MAX;
     sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
 
-    if(!dm_dx12_create_root_signature(desc.descriptor_group[0], flags, &sampler, &pipeline.root_signature, dx12_renderer)) return false;
+    void* s = desc.sampler ? &sampler : NULL;
+
+    if(!dm_dx12_create_root_signature(desc.descriptor_groups, desc.descriptor_group_count, flags, s, &pipeline.root_signature, dx12_renderer)) return false;
 
     // === rasterizer ===
     switch(desc.rasterizer.cull_mode)
@@ -2246,7 +2148,7 @@ bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, d
     }
 
     // descriptors
-    if(!dm_dx12_create_root_signature(desc.descriptor_group[0], 0, NULL, &pipeline.root_signature, dx12_renderer)) return false;
+    if(!dm_dx12_create_root_signature(desc.descriptor_group, desc.descriptor_group_count, 0, NULL, &pipeline.root_signature, dx12_renderer)) return false;
 
     // pipeline state
     {

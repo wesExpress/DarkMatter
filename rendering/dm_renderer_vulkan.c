@@ -31,6 +31,13 @@ typedef struct dm_vulkan_renderpass_t
     VkRenderPass renderpass;
 } dm_vulkan_renderpass;
 
+typedef struct dm_vulkan_descriptor_layout_t
+{
+    VkDescriptorSetLayout layout;
+    size_t                size;
+    size_t                offsets[DM_DESCRIPTOR_GROUP_MAX_DESCRIPTORS];
+} dm_vulkan_descriptor_layout;
+
 #define DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_SETS     4
 #define DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_BINDINGS 10
 typedef struct dm_vulkan_raster_pipeline_t
@@ -38,10 +45,8 @@ typedef struct dm_vulkan_raster_pipeline_t
     VkPipeline       pipeline;
     VkPipelineLayout layout;
 
-    VkDescriptorSetLayout descriptor_set_layout[DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_SETS];
-    size_t                descriptor_set_layout_sizes[DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_SETS];
-    size_t                descriptor_set_layout_offsets[DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_SETS][DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_BINDINGS];
-    uint8_t               descriptor_set_layout_count;
+    dm_vulkan_descriptor_layout layouts[DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_SETS];
+    uint8_t                     descriptor_set_layout_count;
 
     VkViewport viewport;
     VkRect2D   scissor;
@@ -52,10 +57,8 @@ typedef struct dm_vulkan_compute_pipeline_t
     VkPipeline       pipeline;
     VkPipelineLayout layout;
 
-    VkDescriptorSetLayout descriptor_set_layout[DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_SETS];
-    size_t                descriptor_set_layout_sizes[DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_SETS];
-    size_t                descriptor_set_layout_offsets[DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_SETS][DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_BINDINGS];
-    uint8_t               descriptor_set_layout_count;
+    dm_vulkan_descriptor_layout layouts[DM_VULKAN_PIPELINE_MAX_DESCRIPTOR_SETS];
+    uint8_t                     descriptor_set_layout_count;
 } dm_vulkan_compute_pipeline;
 
 typedef struct dm_vulkan_buffer_t
@@ -1412,7 +1415,7 @@ void dm_renderer_backend_shutdown(dm_context* context)
     {
         for(uint8_t j=0; j<vulkan_renderer->raster_pipes[i].descriptor_set_layout_count; j++)
         {
-            vkDestroyDescriptorSetLayout(device, vulkan_renderer->raster_pipes[i].descriptor_set_layout[j], NULL);
+            vkDestroyDescriptorSetLayout(device, vulkan_renderer->raster_pipes[i].layouts[j].layout, NULL);
         }
         vkDestroyPipelineLayout(device, vulkan_renderer->raster_pipes[i].layout, NULL);
         vkDestroyPipeline(device, vulkan_renderer->raster_pipes[i].pipeline, NULL);
@@ -1422,7 +1425,7 @@ void dm_renderer_backend_shutdown(dm_context* context)
     {
         for(uint8_t j=0; j<vulkan_renderer->compute_pipes[i].descriptor_set_layout_count; j++)
         {
-            vkDestroyDescriptorSetLayout(device, vulkan_renderer->compute_pipes[i].descriptor_set_layout[j], NULL);
+            vkDestroyDescriptorSetLayout(device, vulkan_renderer->compute_pipes[i].layouts[j].layout, NULL);
         }
         vkDestroyPipelineLayout(device, vulkan_renderer->compute_pipes[i].layout, NULL);
         vkDestroyPipeline(device, vulkan_renderer->compute_pipes[i].pipeline, NULL);
@@ -1651,6 +1654,80 @@ bool dm_renderer_backend_end_frame(dm_context* context)
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
+bool dm_vulkan_create_descriptor_layout(dm_descriptor_group* groups, uint8_t group_count, dm_vulkan_descriptor_layout* layouts, dm_vulkan_renderer* vulkan_renderer)
+{
+    VkResult vr;
+
+    for(uint8_t i=0; i<group_count; i++)
+    {
+        dm_descriptor_group group = groups[i];
+
+        VkDescriptorSetLayoutBinding bindings[DM_DESCRIPTOR_GROUP_MAX_DESCRIPTORS] = { 0 };
+        VkDescriptorSetLayoutCreateInfo layout_create_info = { 0 };
+
+        for(uint8_t j=0; j<group.count; j++)
+        {
+            bindings[j].descriptorCount = 1;
+            bindings[j].binding = j;
+
+            if(group.flags & DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER)  bindings[j].stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
+            if(group.flags & DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER)   bindings[j].stageFlags |= VK_SHADER_STAGE_FRAGMENT_BIT;
+            if(group.flags & DM_DESCRIPTOR_GROUP_FLAG_COMPUTE_SHADER) bindings[j].stageFlags |= VK_SHADER_STAGE_COMPUTE_BIT;
+
+            switch(group.descriptors[j])
+            {
+                case DM_DESCRIPTOR_TYPE_CONSTANT_BUFFER:
+                bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+                break;
+
+                case DM_DESCRIPTOR_RANGE_TYPE_TEXTURE:
+                bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+                break;
+
+                case DM_DESCRIPTOR_RANGE_TYPE_READ_STORAGE_BUFFER:
+                case DM_DESCRIPTOR_RANGE_TYPE_WRITE_STORAGE_BUFFER:
+                bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                break;
+
+                default:
+                DM_LOG_FATAL("Unsupported descriptor type");
+                return false;
+            }
+        }
+
+        layout_create_info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        layout_create_info.bindingCount = group.count;
+        layout_create_info.pBindings    = bindings;
+        layout_create_info.flags        = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
+
+        vr = vkCreateDescriptorSetLayout(vulkan_renderer->device.logical, &layout_create_info, NULL, &layouts[i].layout);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkCreateDescriptorSetLayout failed");
+            return false;
+        }
+
+        // descriptor layout sizes and alignment
+        vkGetDescriptorSetLayoutSizeEXT(vulkan_renderer->device.logical, layouts[i].layout, &layouts[i].size);
+        layouts[i].size = (layouts[i].size + vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
+        layouts[i].size &= ~(vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
+
+        // TODO: this is bad! just a quick solution to fix incorrect buffer sizes
+        vulkan_renderer->resource_buffer.size += layouts[i].size;
+        vulkan_renderer->sampler_buffer.size  += layouts[i].size;
+
+        for(uint8_t j=0; j<group.count; j++)
+        {
+            vkGetDescriptorSetLayoutBindingOffsetEXT(vulkan_renderer->device.logical, layouts[i].layout, j, &layouts[i].offsets[j]);
+        }
+    }
+
+    return true;
+}
+
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
 bool dm_vulkan_create_shader_module(const char* path, VkShaderModule* module, VkDevice device)
 {
     VkResult vr;
@@ -1821,83 +1898,23 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     }
     VkPipelineShaderStageCreateInfo shader_stages[] = { vs_create_info, ps_create_info };
 
-    // === descriptor set ===
-    // this is probably really terrible
-    for(uint8_t i=0; i<desc.descriptor_group_count; i++)
-    {
-        dm_descriptor_group group = desc.descriptor_group[i];
-
-        VkDescriptorSetLayoutBinding bindings[DM_DESCRIPTOR_GROUP_MAX_RANGES] = { 0 };
-        VkDescriptorSetLayoutCreateInfo layout_create_info = { 0 };
-
-        uint16_t descriptor_count = 0;
-
-       for(uint8_t j=0; j<group.range_count; j++)
-        {
-            bindings[j].binding         = j; 
-            bindings[j].descriptorCount = group.ranges[j].count;
-            descriptor_count += group.ranges[j].count;
-
-            switch(group.ranges[j].type)
-            {
-                case DM_DESCRIPTOR_RANGE_TYPE_CONSTANT_BUFFER:
-                bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                break;
-
-                case DM_DESCRIPTOR_RANGE_TYPE_TEXTURE:
-                bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                break;
-
-                case DM_DESCRIPTOR_RANGE_TYPE_READ_STORAGE_BUFFER:
-                case DM_DESCRIPTOR_RANGE_TYPE_WRITE_STORAGE_BUFFER:
-                bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-                break;
-
-                default:
-                DM_LOG_FATAL("Unsupported or uncreated resource for descriptor set");
-                return false;
-            }
-
-            if(group.flags & DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER) bindings[j].stageFlags |= VK_SHADER_STAGE_VERTEX_BIT;
-            if(group.flags & DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER)  bindings[j].stageFlags  |= VK_SHADER_STAGE_FRAGMENT_BIT;
-        }
-
-        layout_create_info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layout_create_info.bindingCount = group.range_count;
-        layout_create_info.pBindings    = bindings;
-        layout_create_info.flags        = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-
-        vr = vkCreateDescriptorSetLayout(vulkan_renderer->device.logical, &layout_create_info, NULL, &pipeline.descriptor_set_layout[i]);
-        if(!dm_vulkan_decode_vr(vr))
-        {
-            DM_LOG_FATAL("vkCreateDescriptorSetLayout failed");
-            return false;
-        }
-
-        // descriptor layout sizes and alignment
-        vkGetDescriptorSetLayoutSizeEXT(vulkan_renderer->device.logical, pipeline.descriptor_set_layout[i], &pipeline.descriptor_set_layout_sizes[i]);
-        pipeline.descriptor_set_layout_sizes[i] = (pipeline.descriptor_set_layout_sizes[i] + vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
-        pipeline.descriptor_set_layout_sizes[i] &= ~(vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
-
-        // TODO: this is bad! just a quick solution to fix incorrect buffer sizes
-        vulkan_renderer->resource_buffer.size += pipeline.descriptor_set_layout_sizes[i];
-        vulkan_renderer->sampler_buffer.size  += pipeline.descriptor_set_layout_sizes[i];
-
-        for(uint8_t j=0; j<group.range_count; j++)
-        {
-            vkGetDescriptorSetLayoutBindingOffsetEXT(vulkan_renderer->device.logical, pipeline.descriptor_set_layout[i], j, &pipeline.descriptor_set_layout_offsets[i][j]);
-        }
-
-        pipeline.descriptor_set_layout_count++;
-    }
-
+    // === descriptor set layouts ===
+    if(!dm_vulkan_create_descriptor_layout(desc.descriptor_groups, desc.descriptor_group_count, pipeline.layouts, vulkan_renderer)) return false;
+    pipeline.descriptor_set_layout_count = desc.descriptor_group_count;
+    
     // === layout ===
     {
-        // TODO: needs to be configurable
+        VkDescriptorSetLayout layouts[DM_MAX_DESCRIPTOR_GROUPS];
+
+        for(uint8_t i=0; i<desc.descriptor_group_count; i++)
+        {
+            layouts[i] = pipeline.layouts[i].layout;
+        }
+
         VkPipelineLayoutCreateInfo create_info = { 0 };
         create_info.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        create_info.pSetLayouts    = pipeline.descriptor_set_layout;
-        create_info.setLayoutCount = pipeline.descriptor_set_layout_count;
+        create_info.pSetLayouts    = layouts;
+        create_info.setLayoutCount = desc.descriptor_group_count;
 
         vr = vkCreatePipelineLayout(vulkan_renderer->device.logical, &create_info, NULL, &pipeline.layout);
         if(!dm_vulkan_decode_vr(vr))
@@ -2293,24 +2310,24 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
     switch(desc.format)
     {
         case DM_TEXTURE_FORMAT_BYTE_4_UINT:
-            texture.format = VK_FORMAT_R8G8B8A8_UINT;
-            break;
+        texture.format = VK_FORMAT_R8G8B8A8_UINT;
+        break;
 
         case DM_TEXTURE_FORMAT_BYTE_4_UNORM:
-            texture.format = VK_FORMAT_R8G8B8A8_UNORM;
-            break;
+        texture.format = VK_FORMAT_R8G8B8A8_UNORM;
+        break;
 
         case DM_TEXTURE_FORMAT_FLOAT_3:
-            texture.format = VK_FORMAT_R32G32B32_SFLOAT;
-            break;
+        texture.format = VK_FORMAT_R32G32B32_SFLOAT;
+        break;
 
         case DM_TEXTURE_FORMAT_FLOAT_4:
-            texture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-            break;
+        texture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        break;
 
         default:
-            DM_LOG_FATAL("Unknown or unsupported texture format");
-            return false;
+        DM_LOG_FATAL("Unknown or unsupported texture format");
+        return false;
     }
 
     VkImageCreateInfo create_info = { 0 };
@@ -2754,80 +2771,22 @@ bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, d
 
     dm_vulkan_compute_pipeline pipeline = { 0 };
 
-    for(uint8_t i=0; i<desc.descriptor_group_count; i++)
-    {
-        dm_descriptor_group group = desc.descriptor_group[i];
-
-        VkDescriptorSetLayoutBinding bindings[DM_DESCRIPTOR_GROUP_MAX_RANGES] = { 0 };
-        VkDescriptorSetLayoutCreateInfo layout_create_info = { 0 };
-
-        uint16_t descriptor_count = 0;
-
-       for(uint8_t j=0; j<group.range_count; j++)
-        {
-            bindings[j].binding         = j; 
-            bindings[j].descriptorCount = group.ranges[j].count;
-            descriptor_count += group.ranges[j].count;
-
-            switch(group.ranges[j].type)
-            {
-                case DM_DESCRIPTOR_RANGE_TYPE_CONSTANT_BUFFER:
-                bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-                break;
-
-                case DM_DESCRIPTOR_RANGE_TYPE_TEXTURE:
-                bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-                break;
-
-                case DM_DESCRIPTOR_RANGE_TYPE_READ_STORAGE_BUFFER:
-                case DM_DESCRIPTOR_RANGE_TYPE_WRITE_STORAGE_BUFFER:
-                bindings[j].descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-                break;
-
-                default:
-                DM_LOG_FATAL("Unsupported or uncreated resource for descriptor set");
-                return false;
-            }
-
-            bindings[j].stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
-        }
-
-        layout_create_info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-        layout_create_info.bindingCount = group.range_count;
-        layout_create_info.pBindings    = bindings;
-        layout_create_info.flags        = VK_DESCRIPTOR_SET_LAYOUT_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
-
-        vr = vkCreateDescriptorSetLayout(vulkan_renderer->device.logical, &layout_create_info, NULL, &pipeline.descriptor_set_layout[i]);
-        if(!dm_vulkan_decode_vr(vr))
-        {
-            DM_LOG_FATAL("vkCreateDescriptorSetLayout failed");
-            return false;
-        }
-
-        // descriptor layout sizes and alignment
-        vkGetDescriptorSetLayoutSizeEXT(vulkan_renderer->device.logical, pipeline.descriptor_set_layout[i], &pipeline.descriptor_set_layout_sizes[i]);
-        pipeline.descriptor_set_layout_sizes[i] = (pipeline.descriptor_set_layout_sizes[i] + vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
-        pipeline.descriptor_set_layout_sizes[i] &= ~(vulkan_renderer->device.descriptor_buffer_props.descriptorBufferOffsetAlignment - 1);
-
-        // TODO: this is bad! just a quick solution to fix incorrect buffer sizes
-        vulkan_renderer->resource_buffer.size += pipeline.descriptor_set_layout_sizes[i];
-        vulkan_renderer->sampler_buffer.size  += pipeline.descriptor_set_layout_sizes[i];
-
-        for(uint8_t j=0; j<group.range_count; j++)
-        {
-            vkGetDescriptorSetLayoutBindingOffsetEXT(vulkan_renderer->device.logical, pipeline.descriptor_set_layout[i], j, &pipeline.descriptor_set_layout_offsets[i][j]);
-        }
-
-        pipeline.descriptor_set_layout_count++;
-    }
+    // === layout ===
+    if(!dm_vulkan_create_descriptor_layout(desc.descriptor_groups, desc.descriptor_group_count, pipeline.layouts, vulkan_renderer)) return false;
+    pipeline.descriptor_set_layout_count = desc.descriptor_group_count;
 
     // === layout ===
     {
-        // TODO: needs to be configurable
+        VkDescriptorSetLayout layouts[DM_MAX_DESCRIPTOR_GROUPS];
+        for(uint8_t i=0; i<desc.descriptor_group_count; i++)
+        {
+            layouts[i] = pipeline.layouts[i].layout;
+        }
+
         VkPipelineLayoutCreateInfo create_info = { 0 };
         create_info.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        create_info.pSetLayouts    = pipeline.descriptor_set_layout;
-        create_info.setLayoutCount = pipeline.descriptor_set_layout_count;
+        create_info.pSetLayouts    = layouts;
+        create_info.setLayoutCount = desc.descriptor_group_count;
 
         vr = vkCreatePipelineLayout(vulkan_renderer->device.logical, &create_info, NULL, &pipeline.layout);
         if(!dm_vulkan_decode_vr(vr))
@@ -2970,7 +2929,7 @@ bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_
     vkCmdSetDescriptorBufferOffsetsEXT(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bound_pipeline.layout, group_index, 1, &descriptor_buffer_index, &offset);
 
     // move the offset forward by this layouts size
-    descriptor_buffer->offset[current_frame] += bound_pipeline.descriptor_set_layout_sizes[group_index];
+    descriptor_buffer->offset[current_frame] += bound_pipeline.layouts[group_index].size;
 
     return true;
 }
@@ -3065,7 +3024,7 @@ bool dm_render_command_backend_bind_constant_buffer(dm_resource_handle buffer, u
     // our descriptor buffer has some offset already
     size_t offset  = vulkan_renderer->resource_buffer.offset[current_frame];
     // each descriptor layout has an offset for each of its bindings
-    offset        += bound_pipeline.descriptor_set_layout_offsets[descriptor_group][binding];
+    offset        += bound_pipeline.layouts[descriptor_group].offsets[binding];
     // move buffer pointer to the current offset plus binding offset
     char* buffer_ptr = vulkan_renderer->resource_buffer.mapped_memory[current_frame].begin + offset;
 
@@ -3099,7 +3058,7 @@ bool dm_render_command_backend_bind_texture(dm_resource_handle texture, uint8_t 
     // our descriptor buffer has some offset already
     size_t offset  = vulkan_renderer->sampler_buffer.offset[current_frame];
     // each descriptor layout has an offset for each of its bindings
-    offset        += bound_pipeline.descriptor_set_layout_offsets[descriptor_group][binding];
+    offset        += bound_pipeline.layouts[descriptor_group].offsets[binding];
     // move buffer pointer to the current offset plus descriptor offset
     char* buffer_ptr = vulkan_renderer->sampler_buffer.mapped_memory[current_frame].begin + offset;
 
@@ -3139,7 +3098,7 @@ bool dm_render_command_backend_bind_storage_buffer(dm_resource_handle buffer, ui
     // our descriptor buffer has some offset already
     size_t offset  = vulkan_renderer->resource_buffer.offset[current_frame];
     // each descriptor layout has an offset for each of its bindings
-    offset        += bound_pipeline.descriptor_set_layout_offsets[descriptor_group][binding];
+    offset        += bound_pipeline.layouts[descriptor_group].offsets[binding];
     // move buffer pointer to the current offset plus binding offset
     char* buffer_ptr = vulkan_renderer->resource_buffer.mapped_memory[current_frame].begin + offset;
 
@@ -3306,7 +3265,7 @@ void dm_compute_command_backend_bind_storage_buffer(dm_resource_handle handle, u
     // our descriptor buffer has some offset already
     size_t offset  = vulkan_renderer->resource_buffer.offset[current_frame];
     // each descriptor layout has an offset for each of its bindings
-    offset        += bound_pipeline.descriptor_set_layout_offsets[descriptor_group][binding];
+    offset        += bound_pipeline.layouts[descriptor_group].offsets[binding];
     // move buffer pointer to the current offset plus binding offset
     char* buffer_ptr = vulkan_renderer->resource_buffer.mapped_memory[current_frame].begin + offset;
 
@@ -3357,7 +3316,7 @@ void dm_compute_command_backend_bind_descriptor_group(uint8_t group_index, uint8
     vkCmdSetDescriptorBufferOffsetsEXT(cmd_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, bound_pipeline.layout, group_index, 1, &descriptor_buffer_index, &offset);
 
     // move the offset forward by this layouts size
-    descriptor_buffer->offset[current_frame] += bound_pipeline.descriptor_set_layout_sizes[group_index];
+    descriptor_buffer->offset[current_frame] += bound_pipeline.layouts[group_index].size;
 }
 
 void dm_compute_command_backend_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_renderer* renderer)
