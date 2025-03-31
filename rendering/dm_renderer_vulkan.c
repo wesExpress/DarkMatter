@@ -2776,43 +2776,37 @@ bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, d
     pipeline.descriptor_set_layout_count = desc.descriptor_group_count;
 
     // === layout ===
+    VkDescriptorSetLayout layouts[DM_MAX_DESCRIPTOR_GROUPS];
+    for(uint8_t i=0; i<desc.descriptor_group_count; i++)
     {
-        VkDescriptorSetLayout layouts[DM_MAX_DESCRIPTOR_GROUPS];
-        for(uint8_t i=0; i<desc.descriptor_group_count; i++)
-        {
-            layouts[i] = pipeline.layouts[i].layout;
-        }
+        layouts[i] = pipeline.layouts[i].layout;
+    }
 
-        VkPipelineLayoutCreateInfo create_info = { 0 };
-        create_info.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-        create_info.pSetLayouts    = layouts;
-        create_info.setLayoutCount = desc.descriptor_group_count;
+    VkPipelineLayoutCreateInfo layout_create_info = { 0 };
+    layout_create_info.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+    layout_create_info.pSetLayouts    = layouts;
+    layout_create_info.setLayoutCount = desc.descriptor_group_count;
 
-        vr = vkCreatePipelineLayout(vulkan_renderer->device.logical, &create_info, NULL, &pipeline.layout);
-        if(!dm_vulkan_decode_vr(vr))
-        {
-            DM_LOG_FATAL("vkCreatePipelineLayout failed");
-            return false;
-        }
+    vr = vkCreatePipelineLayout(vulkan_renderer->device.logical, &layout_create_info, NULL, &pipeline.layout);
+    if(!dm_vulkan_decode_vr(vr))
+    {
+        DM_LOG_FATAL("vkCreatePipelineLayout failed");
+        return false;
     }
 
     VkShaderModule cs;
     VkPipelineShaderStageCreateInfo shader_create_info = { 0 };
     // === shader ===
+    if(!dm_vulkan_create_shader_module(desc.shader.path, &cs, vulkan_renderer->device.logical)) 
     {
-
-        if(!dm_vulkan_create_shader_module(desc.shader.path, &cs, vulkan_renderer->device.logical)) 
-        {
-            DM_LOG_ERROR("Could not load vertex shader");
-            return false;
-        }
-
-        shader_create_info.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shader_create_info.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
-        shader_create_info.module = cs;
-        shader_create_info.pName  = "main";
-
+        DM_LOG_ERROR("Could not load vertex shader");
+        return false;
     }
+
+    shader_create_info.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_create_info.stage  = VK_SHADER_STAGE_COMPUTE_BIT;
+    shader_create_info.module = cs;
+    shader_create_info.pName  = "main";
 
     VkComputePipelineCreateInfo create_info = { 0 };
     create_info.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
@@ -3286,7 +3280,7 @@ void dm_compute_command_backend_bind_texture(dm_resource_handle handle, uint8_t 
     VkResult vr;
 }
 
-void dm_compute_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, uint32_t descriptor_buffer_index, dm_renderer* renderer)
+void dm_compute_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_renderer* renderer)
 {
     DM_VULKAN_GET_RENDERER;
     VkResult vr;

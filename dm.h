@@ -520,7 +520,7 @@ typedef struct dm_constant_buffer_desc_t
 
 typedef struct dm_storage_buffer_desc_t
 {
-    size_t size, element_size, stride;
+    size_t size, stride;
     void*  data;
     bool   write;
 } dm_storage_buffer_desc;
@@ -633,6 +633,9 @@ typedef struct dm_raytracing_pipeline_hit_group_t
     dm_rt_pipe_hit_group_flag flags;
 
     dm_rt_pipe_hit_group_type type;
+
+    dm_descriptor_group descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
+    uint8_t             descriptor_group_count;
 } dm_raytracing_pipeline_hit_group;
 
 #define DM_RT_PIPE_MAX_HIT_GROUPS 5
@@ -641,8 +644,11 @@ typedef struct dm_raytracing_pipeline_desc_t
     dm_raytracing_pipeline_hit_group hit_groups[DM_RT_PIPE_MAX_HIT_GROUPS];
     uint8_t                          hit_group_count;
 
-    dm_descriptor_group descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
-    uint8_t             descriptor_group_count;
+    dm_descriptor_group global_descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
+    uint8_t             global_descriptor_group_count;
+
+    dm_descriptor_group raygen_descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
+    uint8_t             raygen_descriptor_group_count;
 
     uint8_t max_depth;
     size_t  payload_size;

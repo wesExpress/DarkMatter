@@ -645,15 +645,15 @@ bool dm_renderer_backend_finish_init(dm_context* context)
     HRESULT hr;
 
     ID3D12CommandQueue* command_queue = dx12_renderer->command_queue;
-    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[dx12_renderer->current_frame];
-    ID3D12CommandList* command_lists[] = { (ID3D12CommandList*)command_list };
+    ID3D12CommandList*  command_lists[DM_DX12_MAX_FRAMES_IN_FLIGHT] = { 0 };
 
     for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
     {
+        command_lists[i] = (ID3D12CommandList*)dx12_renderer->command_list[i];
         ID3D12GraphicsCommandList7_Close(dx12_renderer->command_list[i]);
     }
 
-    ID3D12CommandQueue_ExecuteCommandLists(command_queue, _countof(command_lists), command_lists);
+    ID3D12CommandQueue_ExecuteCommandLists(command_queue, DM_DX12_MAX_FRAMES_IN_FLIGHT, command_lists);
 
     ID3D12CommandQueue_Signal(dx12_renderer->command_queue, dx12_renderer->fences[dx12_renderer->current_frame].fence, dx12_renderer->fences[dx12_renderer->current_frame].value);
     if(!dm_dx12_wait_for_previous_frame(dx12_renderer)) 
@@ -1684,12 +1684,6 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
     DM_DX12_GET_RENDERER;
     HRESULT hr;
 
-    if(!desc.data)
-    {
-        DM_LOG_FATAL("Storage buffers need data");
-        return false;
-    }
-
     dm_dx12_storage_buffer buffer = { 0 };
 
     D3D12_RESOURCE_FLAGS device_flags = D3D12_RESOURCE_FLAG_NONE;
@@ -1710,9 +1704,14 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
         if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, device_flags, device_buffer, dx12_renderer)) return false;
         buffer.device_buffers[i] = dx12_renderer->resource_count++;
 
-        if(!dm_dx12_copy_memory(*host_buffer, desc.data, desc.size)) return false;
+        if(desc.data)
+        {
+            if(!dm_dx12_copy_memory(*host_buffer, desc.data, desc.size)) return false;
+        }
 
         ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[i];
+
+        ID3D12GraphicsCommandList7_CopyBufferRegion(command_list, *device_buffer, 0, *host_buffer, 0, desc.size);
 
         D3D12_RESOURCE_BARRIER barrier = { 0 };
 
@@ -2131,40 +2130,36 @@ bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, d
 
     D3D12_COMPUTE_PIPELINE_STATE_DESC cso_desc = { 0 };
 
-    // shader
+    // === shader ===
+    ID3DBlob* shader = NULL;
+    
+    const char* shader_path = desc.shader.path;
+
+    if(!dm_dx12_load_shader_data(shader_path, &shader)) 
     {
-        ID3DBlob* shader = NULL;
-        
-        const char* shader_path = desc.shader.path;
-
-        if(!dm_dx12_load_shader_data(shader_path, &shader)) 
-        {
-            DM_LOG_ERROR("Could not load shader: %s", desc.shader.path);
-            return false;
-        }
-
-        cso_desc.CS.pShaderBytecode = ID3D10Blob_GetBufferPointer(shader);
-        cso_desc.CS.BytecodeLength  = ID3D10Blob_GetBufferSize(shader);
+        DM_LOG_ERROR("Could not load shader: %s", desc.shader.path);
+        return false;
     }
+
+    cso_desc.CS.pShaderBytecode = ID3D10Blob_GetBufferPointer(shader);
+    cso_desc.CS.BytecodeLength  = ID3D10Blob_GetBufferSize(shader);
 
     // descriptors
-    if(!dm_dx12_create_root_signature(desc.descriptor_group, desc.descriptor_group_count, 0, NULL, &pipeline.root_signature, dx12_renderer)) return false;
+    if(!dm_dx12_create_root_signature(desc.descriptor_groups, desc.descriptor_group_count, 0, NULL, &pipeline.root_signature, dx12_renderer)) return false;
 
     // pipeline state
+    cso_desc.pRootSignature = pipeline.root_signature;
+
+    hr = ID3D12Device5_CreateComputePipelineState(dx12_renderer->device, &cso_desc, &IID_ID3D12PipelineState, &temp);
+    if(!dm_platform_win32_decode_hresult(hr) || !temp)
     {
-        cso_desc.pRootSignature = pipeline.root_signature;
-
-        hr = ID3D12Device5_CreateComputePipelineState(dx12_renderer->device, &cso_desc, &IID_ID3D12PipelineState, &temp);
-        if(!dm_platform_win32_decode_hresult(hr) || !temp)
-        {
-            DM_LOG_FATAL("ID3D12Device5_CreatePipelineState failed");
-            dm_dx12_get_debug_message(dx12_renderer);
-            return false;
-        }
-        pipeline.state = temp;
-
-        temp = NULL;
+        DM_LOG_FATAL("ID3D12Device5_CreatePipelineState failed");
+        dm_dx12_get_debug_message(dx12_renderer);
+        return false;
     }
+    pipeline.state = temp;
+
+    temp = NULL;
 
     //
     dm_memcpy(dx12_renderer->compute_pipelines + dx12_renderer->comp_pipe_count, &pipeline, sizeof(pipeline));
