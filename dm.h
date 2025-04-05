@@ -406,10 +406,11 @@ typedef struct dm_rasterizer_desc_t
 
 typedef enum dm_descriptor_group_flags_t
 {
-    DM_DESCRIPTOR_GROUP_FLAG_UNKNOWN        = 0x00,
-    DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER  = 0x01,
-    DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER   = 0x02,
-    DM_DESCRIPTOR_GROUP_FLAG_COMPUTE_SHADER = 0x04
+    DM_DESCRIPTOR_GROUP_FLAG_UNKNOWN            = 0,
+    DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER      = 1,
+    DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER       = 2,
+    DM_DESCRIPTOR_GROUP_FLAG_COMPUTE_SHADER     = 4,
+    DM_DESCRIPTOR_GROUP_FLAG_RAY_TRACING_SHADER = 8
 } dm_descriptor_group_flags;
 
 typedef enum dm_descriptor_range_type_t
@@ -539,6 +540,7 @@ typedef struct dm_texture_desc_t
     uint32_t          width, height, n_channels;
     dm_texture_format format;
     void*             data;
+    bool              write;
 } dm_texture_desc;
 
 // raytracing
@@ -627,7 +629,6 @@ typedef enum dm_rt_pipe_hit_group_type_t
 typedef struct dm_raytracing_pipeline_hit_group_t
 {
     char name[512];
-    char path[512];
 
     char shaders[DM_RT_PIPE_HIT_GROUP_STAGE_UNKNOWN][512];
     dm_rt_pipe_hit_group_flag flags;
@@ -650,6 +651,8 @@ typedef struct dm_raytracing_pipeline_desc_t
     dm_descriptor_group raygen_descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
     uint8_t             raygen_descriptor_group_count;
 
+    char shader_path[512];
+
     uint8_t max_depth;
     size_t  payload_size;
 } dm_raytracing_pipeline_desc;
@@ -670,6 +673,7 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS,
     DM_RENDER_COMMAND_TYPE_END_RENDER_PASS,
     DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE,
+    DM_RENDER_COMMAND_TYPE_BIND_RAYTRACING_PIPELINE,
     DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP,
     DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER,
@@ -681,8 +685,10 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_ACCLERATION_STRUCTURE,
+    DM_RENDER_COMMAND_TYPE_COPY_IMAGE_TO_SCREEN,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
-    DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED
+    DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED,
+    DM_RENDER_COMMAND_TYPE_DISPATCH_RAYS
 } dm_render_command_type;
 
 typedef enum dm_compute_command_type_t
@@ -930,6 +936,9 @@ void dm_render_command_update_acceleration_structure(void* instance_data, size_t
 
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
 void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);
+
+void dm_render_command_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_context* context);
+void dm_render_command_copy_image_to_screen(dm_resource_handle image, dm_context* context);
 
 // font loading
 bool dm_renderer_load_font(const char* path, int font_size, dm_font* font, dm_context* context);

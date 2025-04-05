@@ -18,6 +18,14 @@
 
 #define DM_DX12_MAX_FRAMES_IN_FLIGHT DM_MAX_FRAMES_IN_FLIGHT 
 
+typedef enum dm_dx12_pipeline_type_t
+{
+    DM_DX12_PIPELINE_TYPE_UNKNOWN,
+    DM_DX12_PIPELINE_TYPE_RASTER,
+    DM_DX12_PIPELINE_TYPE_RAYTRACING,
+    DM_DX12_PIPELINE_TYPE_COMPUTE
+} dm_dx12_pipeline_type;
+
 typedef struct dm_dx12_cpu_heap_handle_t
 {
     D3D12_CPU_DESCRIPTOR_HANDLE begin;
@@ -107,8 +115,8 @@ typedef struct dm_dx12_storage_buffer_t
 
 typedef struct dm_dx12_raytracing_pipeline_t
 {
-    ID3D12RootSignature* root_signature;
-    ID3D12PipelineState* pso;
+    ID3D12RootSignature* global_root_signature;
+    ID3D12StateObject*   pso;
     uint8_t              shader_binding_table[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 } dm_dx12_raytracing_pipeline;
 
@@ -203,6 +211,8 @@ typedef struct dm_dx12_renderer_t
 
     ID3D12Resource* resources[DM_DX12_MAX_RESOURCES];
     uint32_t        resource_count;
+
+    dm_dx12_pipeline_type active_pipeline_type;
 
 #ifdef DM_DEBUG
     ID3D12Debug* debug;
@@ -346,11 +356,7 @@ bool dm_renderer_backend_init(dm_context* context)
         bool found = false;
 
         DXGI_ADAPTER_DESC1 adapter_desc = { 0 };
-#if 0
-        D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_11_0;
-#else
         D3D_FEATURE_LEVEL feature_level = D3D_FEATURE_LEVEL_12_1;
-#endif
 
         while(IDXGIFactory4_EnumAdapters1(dx12_renderer->factory, adapter_index, &dx12_renderer->adapter) != DXGI_ERROR_NOT_FOUND)
         {
@@ -711,7 +717,7 @@ void dm_renderer_backend_shutdown(dm_context* context)
 
     for(uint32_t i=0; i<dx12_renderer->rt_pipe_count; i++)
     {
-        ID3D12RootSignature_Release(dx12_renderer->rt_pipelines[i].root_signature);
+        ID3D12RootSignature_Release(dx12_renderer->rt_pipelines[i].global_root_signature);
         ID3D12PipelineState_Release(dx12_renderer->rt_pipelines[i].pso);
     }
 
@@ -797,6 +803,8 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     
     ID3D12DescriptorHeap* heaps[] = { binding_heap->heap };
     ID3D12GraphicsCommandList7_SetDescriptorHeaps(command_list, _countof(heaps), heaps);
+
+    dx12_renderer->active_pipeline_type = DM_DX12_PIPELINE_TYPE_UNKNOWN;
 
     return true;
 }
@@ -1533,7 +1541,7 @@ bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_dx12_create_texture(const size_t width, const size_t height, const dm_texture_format format, D3D12_HEAP_TYPE heap_type, D3D12_RESOURCE_STATES state, ID3D12Resource** resource, ID3D12Device5* device)
+bool dm_dx12_create_texture(const size_t width, const size_t height, const dm_texture_format format, D3D12_HEAP_TYPE heap_type, D3D12_RESOURCE_STATES state, D3D12_RESOURCE_FLAGS flags, ID3D12Resource** resource, ID3D12Device5* device)
 {
     D3D12_RESOURCE_DESC desc = { 0 };
     desc.Dimension        = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
@@ -1544,7 +1552,7 @@ bool dm_dx12_create_texture(const size_t width, const size_t height, const dm_te
     desc.MipLevels        = 1;
     desc.SampleDesc.Count = 1;
     desc.Layout           = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-    desc.Flags            = D3D12_RESOURCE_FLAG_NONE;
+    desc.Flags            = flags;
     switch(format)
     {
         case DM_TEXTURE_FORMAT_FLOAT_3:
@@ -1611,6 +1619,9 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         return false;
     }
 
+    D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
+    if(desc.write) flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
     for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
     {
         // host texture is actually a buffer
@@ -1618,17 +1629,14 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         if(!dm_dx12_create_buffer(size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, host_resource, dx12_renderer)) return false;
         texture.host_textures[i] = dx12_renderer->resource_count++;
 
-        if(!desc.data)
+        if(desc.data)
         {
-            DM_LOG_FATAL("Need data to create a texture");
-            return false;
+            if(!dm_dx12_copy_memory(*host_resource, desc.data, size)) return false;
         }
-
-        if(!dm_dx12_copy_memory(*host_resource, desc.data, size)) return false;
 
         // device texture
         ID3D12Resource** device_resource = &dx12_renderer->resources[dx12_renderer->resource_count];
-        if(!dm_dx12_create_texture(desc.width, desc.height, desc.format, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST, device_resource, dx12_renderer->device)) return false;
+        if(!dm_dx12_create_texture(desc.width, desc.height, desc.format, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST, flags, device_resource, dx12_renderer->device)) return false;
         texture.device_textures[i] = dx12_renderer->resource_count++;
 
         D3D12_BOX texture_as_box = { 0 };
@@ -1651,24 +1659,41 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
 
         ID3D12GraphicsCommandList7_CopyTextureRegion(command_list, &dest, 0,0,0, &src, &texture_as_box);
 
-        D3D12_RESOURCE_BARRIER barrier = { 0 };
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource   = *device_resource;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-
-        ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
-
         // view
-        D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
-        view_desc.Format                  = format;
-        view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        view_desc.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D;
-        view_desc.Texture2D.MipLevels     = 1;
+        if(desc.write)
+        {
+            D3D12_RESOURCE_BARRIER barrier = { 0 };
+            barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barrier.Transition.pResource   = *device_resource;
+            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+            barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
-        ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, *device_resource, &view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
+            D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
+            view_desc.Format        = format;
+            view_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+            
+            ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, *device_resource, NULL, &view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
+        }
+        else
+        {
+            D3D12_RESOURCE_BARRIER barrier = { 0 };
+            barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+            barrier.Transition.pResource   = *device_resource;
+            barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+            barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+            ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
+
+            D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
+            view_desc.Format                  = format;
+            view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            view_desc.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D;
+            view_desc.Texture2D.MipLevels     = 1;
+
+            ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, *device_resource, &view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
+        }
+
         texture.handle[i] = dx12_renderer->resource_heap[i].cpu_handle.current;
-
         dx12_renderer->resource_heap[i].cpu_handle.current.ptr += dx12_renderer->resource_heap[i].size;
     }
 
@@ -1769,27 +1794,26 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     dm_dx12_raytracing_pipeline pipeline = { 0 };
 
     // === shaders ===
-    ID3DBlob* vs = NULL;
-    ID3DBlob* ps = NULL;
-    
-    D3D12_DXIL_LIBRARY_DESC library_desc[DM_RT_PIPE_MAX_HIT_GROUPS] = { 0 };
+    D3D12_DXIL_LIBRARY_DESC library_desc = { 0 };
     D3D12_HIT_GROUP_DESC    hit_group_desc[DM_RT_PIPE_MAX_HIT_GROUPS] = { 0 };
+
+    if(!dm_dx12_create_root_signature(desc.global_descriptor_groups, desc.global_descriptor_group_count, 0, NULL, &pipeline.global_root_signature, dx12_renderer)) return false;
+
+    ID3DBlob* shader = NULL;
+
+    const char* path = desc.shader_path;
+
+    if(!dm_dx12_load_shader_data(path, &shader))
+    {
+        DM_LOG_ERROR("Could not load hit group shader: %s", shader);
+        return false;
+    }
+
+    library_desc.DXILLibrary.pShaderBytecode = ID3D10Blob_GetBufferPointer(shader);
+    library_desc.DXILLibrary.BytecodeLength  = ID3D10Blob_GetBufferSize(shader);
 
     for(uint8_t i=0; i<desc.hit_group_count; i++)
     {
-        ID3DBlob* shader = NULL;
-
-        const char* path = desc.hit_groups[i].path;
-        
-        if(!dm_dx12_load_shader_data(path, &shader))
-        {
-            DM_LOG_ERROR("Could not load hit group shader: %s", shader);
-            return false;
-        }
-
-        library_desc[i].DXILLibrary.pShaderBytecode = ID3D10Blob_GetBufferPointer(shader);
-        library_desc[i].DXILLibrary.BytecodeLength  = ID3D10Blob_GetBufferSize(shader);
-
         switch(desc.hit_groups[i].type)
         {
             case DM_RT_PIPE_HIT_GROUP_TYPE_TRIANGLES:
@@ -1831,7 +1855,7 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     shader_config.MaxPayloadSizeInBytes   = desc.payload_size;
 
     D3D12_GLOBAL_ROOT_SIGNATURE global_sig = { 0 };
-    global_sig.pGlobalRootSignature = pipeline.root_signature;
+    global_sig.pGlobalRootSignature = pipeline.global_root_signature;
 
     D3D12_RAYTRACING_PIPELINE_CONFIG pipeline_config = { 0 };
     if(desc.max_depth > 31)
@@ -1844,11 +1868,11 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     
     D3D12_STATE_SUBOBJECT dxil_subobject = { 0 };
     dxil_subobject.Type  = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
-    dxil_subobject.pDesc = &library_desc[0];
+    dxil_subobject.pDesc = &library_desc;
 
     D3D12_STATE_SUBOBJECT hit_group_subobject = { 0 };
     hit_group_subobject.Type  = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
-    hit_group_subobject.pDesc = &hit_group_desc[0];
+    hit_group_subobject.pDesc = hit_group_desc;
 
     D3D12_STATE_SUBOBJECT shader_config_subobject = { 0 };
     shader_config_subobject.Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
@@ -1869,7 +1893,7 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     object_desc.NumSubobjects = _countof(subobjects);
     object_desc.pSubobjects   = subobjects;
 
-    hr = ID3D12Device5_CreateStateObject(dx12_renderer->device, &object_desc, &IID_ID3D12PipelineState, &temp);
+    hr = ID3D12Device5_CreateStateObject(dx12_renderer->device, &object_desc, &IID_ID3D12StateObject, &temp);
     if(!dm_platform_win32_decode_hresult(hr) || !temp)
     {
         DM_LOG_FATAL("ID3D12Device5_CreateStateObject failed");
@@ -2245,6 +2269,25 @@ bool dm_render_command_backend_bind_raster_pipeline(dm_resource_handle handle, d
     ID3D12GraphicsCommandList7_RSSetScissorRects(command_list, 1, &pipeline.scissor);
     ID3D12GraphicsCommandList7_IASetPrimitiveTopology(command_list, pipeline.topology);
 
+    dx12_renderer->active_pipeline_type = DM_DX12_PIPELINE_TYPE_RASTER;
+
+    return true;
+}
+
+bool dm_render_command_backend_bind_raytracing_pipeline(dm_resource_handle handle, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+
+    const uint8_t current_frame = dx12_renderer->current_frame;
+    
+    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
+    dm_dx12_raytracing_pipeline pipeline = dx12_renderer->rt_pipelines[handle.index];
+
+    ID3D12GraphicsCommandList7_SetPipelineState1(command_list, pipeline.pso);
+    ID3D12GraphicsCommandList7_SetComputeRootSignature(command_list, pipeline.global_root_signature);
+
+    dx12_renderer->active_pipeline_type = DM_DX12_PIPELINE_TYPE_RAYTRACING;
+
     return true;
 }
 
@@ -2458,7 +2501,96 @@ bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_
     D3D12_GPU_DESCRIPTOR_HANDLE handle = dx12_renderer->binding_heap[current_frame].gpu_handle.current;
     handle.ptr -= descriptor_count * dx12_renderer->binding_heap[current_frame].size;
 
-    ID3D12GraphicsCommandList7_SetGraphicsRootDescriptorTable(command_list, group_index, handle);
+    switch(dx12_renderer->active_pipeline_type)
+    {
+        case DM_DX12_PIPELINE_TYPE_RASTER:
+        ID3D12GraphicsCommandList7_SetGraphicsRootDescriptorTable(command_list, group_index, handle);
+        break;
+
+        case DM_DX12_PIPELINE_TYPE_RAYTRACING:
+        case DM_DX12_PIPELINE_TYPE_COMPUTE:
+        ID3D12GraphicsCommandList7_SetComputeRootDescriptorTable(command_list, group_index, handle);
+        break;
+
+        default:
+        DM_LOG_FATAL("No pipeline or unknown pipeline type bound.");
+        return false;
+    }
+
+    return true;
+}
+
+bool dm_render_command_backend_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+
+    dm_dx12_raytracing_pipeline rt_pipeline = dx12_renderer->rt_pipelines[pipeline.index];
+
+    ID3D12Resource* sbt = dx12_renderer->resources[rt_pipeline.shader_binding_table[dx12_renderer->current_frame]];
+
+    D3D12_DISPATCH_RAYS_DESC dispatch_desc = { 0 };
+    dispatch_desc.Width  = x;
+    dispatch_desc.Height = y;
+    dispatch_desc.Depth  = 1;
+
+    size_t start_address = ID3D12Resource_GetGPUVirtualAddress(sbt);
+
+    dispatch_desc.RayGenerationShaderRecord.StartAddress = start_address; 
+    dispatch_desc.RayGenerationShaderRecord.SizeInBytes  = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+
+    dispatch_desc.MissShaderTable.StartAddress = start_address + D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+    dispatch_desc.MissShaderTable.SizeInBytes  = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+
+    dispatch_desc.HitGroupTable.StartAddress = start_address + 2 * D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+    dispatch_desc.HitGroupTable.SizeInBytes  = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+
+    const uint8_t current_frame = dx12_renderer->current_frame;
+    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
+
+    ID3D12GraphicsCommandList7_DispatchRays(command_list, &dispatch_desc);
+    
+    return true;
+}
+
+bool dm_render_command_backend_copy_image_to_screen(dm_resource_handle image, dm_renderer* renderer)
+{
+    DM_DX12_GET_RENDERER;
+
+    dm_dx12_texture texture = dx12_renderer->textures[image.index];
+
+    const uint8_t current_frame = dx12_renderer->current_frame;
+    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
+
+    ID3D12Resource* image_resource = dx12_renderer->resources[texture.device_textures[current_frame]];
+    ID3D12Resource* render_target  = dx12_renderer->resources[dx12_renderer->render_targets[current_frame]];
+
+    D3D12_RESOURCE_BARRIER before_barriers[2] = { 0 };
+
+    before_barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    before_barriers[0].Transition.pResource   = image_resource;
+    before_barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+    before_barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
+
+    before_barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    before_barriers[1].Transition.pResource   = render_target;
+    before_barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+    before_barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
+
+    D3D12_RESOURCE_BARRIER after_barriers[2] = { 0 };
+
+    after_barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    after_barriers[0].Transition.pResource   = render_target;
+    after_barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+    after_barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
+
+    after_barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    after_barriers[1].Transition.pResource   = image_resource;
+    after_barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
+    after_barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+
+    ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 2, before_barriers);
+    ID3D12GraphicsCommandList7_CopyResource(command_list, render_target, image_resource); 
+    ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 2, after_barriers);
 
     return true;
 }
@@ -2586,6 +2718,8 @@ void dm_compute_command_backend_bind_compute_pipeline(dm_resource_handle handle,
 
     ID3D12GraphicsCommandList7_SetPipelineState(command_list, pipeline.state);
     ID3D12GraphicsCommandList7_SetComputeRootSignature(command_list, pipeline.root_signature);
+
+    dx12_renderer->active_pipeline_type = DM_DX12_PIPELINE_TYPE_COMPUTE;
 }
 
 void dm_compute_command_backend_bind_storage_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer)

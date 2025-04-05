@@ -729,6 +729,7 @@ RENDER COMMANDS
 extern bool dm_render_command_backend_begin_render_pass(float r, float g, float b, float a, dm_renderer* renderer);
 extern bool dm_render_command_backend_end_render_pass(dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_raster_pipeline(dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_raytracing_pipeline(dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_index_buffer(dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
@@ -742,6 +743,8 @@ extern bool dm_render_command_backend_update_storage_buffer(void* data, size_t s
 extern bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_acceleration_structure(dm_resource_handle acceleration_structure, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_acceleration_structure(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_renderer* renderer);
+extern bool dm_render_command_backend_copy_image_to_screen(dm_resource_handle image, dm_renderer* renderer);
 
 void _dm_render_command_submit(dm_command command, dm_command_manager* manager)
 {
@@ -796,6 +799,17 @@ void dm_render_command_bind_raster_pipeline(dm_resource_handle handle, dm_contex
     DM_RENDER_COMMAND_SUBMIT;
 }
 
+void dm_render_command_bind_raytracing_pipeline(dm_resource_handle handle, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_RAYTRACING_PIPELINE;
+
+    command.params[0].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
 void dm_render_command_bind_constant_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context)
 {
     dm_command command = { 0 };
@@ -816,6 +830,19 @@ void dm_render_command_bind_texture(dm_resource_handle texture, uint8_t binding,
     command.r_type = DM_RENDER_COMMAND_TYPE_BIND_TEXTURE;
 
     command.params[0].handle_val = texture;
+    command.params[1].u8_val     = binding;
+    command.params[2].u8_val     = descriptor_group;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_bind_acceleration_structure(dm_resource_handle acceleration_structure, uint8_t binding, uint8_t descriptor_group, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_ACCELERATION_STRUCTURE;
+
+    command.params[0].handle_val = acceleration_structure;
     command.params[1].u8_val     = binding;
     command.params[2].u8_val     = descriptor_group;
 
@@ -910,19 +937,6 @@ void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resourc
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_acceleration_structure(dm_resource_handle acceleration_structure, uint8_t binding, uint8_t descriptor_group, dm_context* context)
-{
-    dm_command command = { 0 };
-
-    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_ACCELERATION_STRUCTURE;
-
-    command.params[0].handle_val = acceleration_structure;
-    command.params[1].u8_val     = binding;
-    command.params[2].u8_val     = descriptor_group;
-
-    DM_RENDER_COMMAND_SUBMIT;
-}
-
 void dm_render_command_update_acceleration_structure(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_context* context)
 {
     dm_command command = { 0 };
@@ -933,6 +947,30 @@ void dm_render_command_update_acceleration_structure(void* instance_data, size_t
     command.params[1].size_t_val = size;
     command.params[2].u32_val    = instance_count;
     command.params[3].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_DISPATCH_RAYS;
+
+    command.params[0].u16_val    = x;
+    command.params[1].u16_val    = y;
+    command.params[2].handle_val = pipeline;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_copy_image_to_screen(dm_resource_handle image, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_COPY_IMAGE_TO_SCREEN;
+
+    command.params[0].handle_val = image;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -995,6 +1033,11 @@ bool dm_renderer_submit_commands(dm_context* context)
             if(dm_render_command_backend_bind_raster_pipeline(params[0].handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind raster pipeline failed");
             return false;
+            case DM_RENDER_COMMAND_TYPE_BIND_RAYTRACING_PIPELINE:
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_RAYTRACING_PIPELINE) { DM_LOG_FATAL("Resource is not a raytracing pipeline"); return false; }
+            if(dm_render_command_backend_bind_raytracing_pipeline(params[0].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Bind raytracig pipeline failed");
+            return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER:
             if(params[0].handle_val.type != DM_RESOURCE_TYPE_CONSTANT_BUFFER) { DM_LOG_FATAL("Resource is not a constant buffer."); return false; }
@@ -1055,6 +1098,18 @@ bool dm_renderer_submit_commands(dm_context* context)
             if(params[3].handle_val.type != DM_RESOURCE_TYPE_ACCELERATION_STRUCTURE) { DM_LOG_FATAL("Resource is not an acceleration structure"); return false; }
             if(dm_render_command_backend_update_acceleration_structure(params[0].void_val, params[1].size_t_val, params[2].u32_val, params[3].handle_val, renderer)) continue;
             DM_LOG_FATAL("Update acceleration structure failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_DISPATCH_RAYS:
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_RAYTRACING_PIPELINE) { DM_LOG_FATAL("Resource is not a raytracing pipeline"); return false; }
+            if(dm_render_command_backend_dispatch_rays(params[0].u16_val, params[1].u16_val, params[2].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Dispatch rays failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_COPY_IMAGE_TO_SCREEN:
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_TEXTURE) { DM_LOG_FATAL("Resource is not a texture"); return false; }
+            if(dm_render_command_backend_copy_image_to_screen(params[0].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Copy image to screen failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED:
