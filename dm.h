@@ -355,6 +355,7 @@ typedef struct dm_input_element_desc_t
 typedef enum dm_input_topology_t
 {
     DM_INPUT_TOPOLOGY_UNKNOWN,
+    DM_INPUT_TOPOLOGY_LINE_LIST,
     DM_INPUT_TOPOLOGY_TRIANGLE_LIST,
 } dm_input_topology;
 
@@ -559,6 +560,7 @@ typedef enum dm_blas_geometry_flag_t
 typedef enum dm_blas_vertex_type_t
 {
     DM_BLAS_VERTEX_TYPE_FLOAT_3,
+    DM_BLAS_VERTEX_TYPE_FLOAT_4,
     DM_BLAS_VERTEX_TYPE_UNKNOWN
 } dm_blas_vertex_type;
 
@@ -652,9 +654,12 @@ typedef struct dm_raytracing_pipeline_desc_t
     uint8_t             raygen_descriptor_group_count;
 
     char shader_path[512];
+    char raygen[512];
+    char miss[512];
 
-    uint8_t max_depth;
-    size_t  payload_size;
+    uint8_t  max_depth;
+    uint32_t max_instance_count;
+    size_t   payload_size;
 } dm_raytracing_pipeline_desc;
 
 // compute
@@ -682,6 +687,7 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_BIND_STORAGE_BUFFER,
     DM_RENDER_COMMAND_TYPE_BIND_ACCELERATION_STRUCTURE,
     DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_INDEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_ACCLERATION_STRUCTURE,
@@ -930,6 +936,7 @@ void dm_render_command_bind_storage_buffer(dm_resource_handle buffer, uint8_t bi
 void dm_render_command_bind_acceleration_structure(dm_resource_handle acceleration_structure, uint8_t binding, uint8_t descriptor_group, dm_context* context);
 
 void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
+void dm_render_command_update_index_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_acceleration_structure(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_context* context);

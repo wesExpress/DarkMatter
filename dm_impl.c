@@ -733,6 +733,7 @@ extern bool dm_render_command_backend_bind_raytracing_pipeline(dm_resource_handl
 extern bool dm_render_command_backend_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_index_buffer(dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_index_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
@@ -890,6 +891,19 @@ void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource
     dm_command command = { 0 };
 
     command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER;
+
+    command.params[0].void_val   = data;
+    command.params[1].size_t_val = size;
+    command.params[2].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_update_index_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_INDEX_BUFFER;
 
     command.params[0].void_val   = data;
     command.params[1].size_t_val = size;
@@ -1087,6 +1101,11 @@ bool dm_renderer_submit_commands(dm_context* context)
             if(params[0].handle_val.type != DM_RESOURCE_TYPE_INDEX_BUFFER) { DM_LOG_FATAL("Resource is not an index buffer."); return false; }
             if(dm_render_command_backend_bind_index_buffer(params[0].handle_val, renderer)) continue;
             DM_LOG_FATAL("Bind index buffer failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_UPDATE_INDEX_BUFFER:
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_INDEX_BUFFER) { DM_LOG_FATAL("Resource is not an index buffer."); return false; }
+            if(dm_render_command_backend_update_index_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Update vertex buffer failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_ACCELERATION_STRUCTURE:
