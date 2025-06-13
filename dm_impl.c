@@ -628,9 +628,10 @@ extern bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc d
 extern bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_tlas(dm_tlas_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 
-extern bool dm_renderer_backend_get_blas_gpu_address(dm_resource_handle acceleration_structure, uint8_t blas_index, size_t* address, dm_renderer* renderer);
+extern bool dm_renderer_backend_get_blas_gpu_address(dm_resource_handle blas, size_t* address, dm_renderer* renderer);
 
 bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_resource_handle* handle, dm_context* context)
 {
@@ -702,25 +703,35 @@ bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm
     return false;
 }
 
-bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_resource_handle* handle, dm_context* context)
+bool dm_renderer_create_blas(dm_blas_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    handle->type = DM_RESOURCE_TYPE_ACCELERATION_STRUCTURE;
+    handle->type = DM_RESOURCE_TYPE_BLAS;
 
-    if(dm_renderer_backend_create_acceleration_structure(desc, handle, &context->renderer)) return true;
+    if(dm_renderer_backend_create_blas(desc, handle, &context->renderer)) return true;
 
-    DM_LOG_FATAL("Creating acceleration structure failed");
+    DM_LOG_FATAL("Creating blas failed");
     return false;
 }
 
-bool dm_renderer_get_blas_gpu_address(dm_resource_handle acceleration_structure, uint8_t blas_index, size_t* address, dm_context* context)
+bool dm_renderer_create_tlas(dm_tlas_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    if(acceleration_structure.type != DM_RESOURCE_TYPE_ACCELERATION_STRUCTURE)
+    handle->type = DM_RESOURCE_TYPE_TLAS;
+
+    if(dm_renderer_backend_create_tlas(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating tlas failed");
+    return false;
+}
+
+bool dm_renderer_get_blas_gpu_address(dm_resource_handle handle, size_t* address, dm_context* context)
+{
+    if(handle.type != DM_RESOURCE_TYPE_BLAS)
     {
-        DM_LOG_FATAL("Resource is not an acceleration structure");
+        DM_LOG_FATAL("Resource is not a bottom-level acceleration structure");
         return false;
     }
 
-    return dm_renderer_backend_get_blas_gpu_address(acceleration_structure, blas_index, address, &context->renderer);
+    return dm_renderer_backend_get_blas_gpu_address(handle, address, &context->renderer);
 }
 
 /***************
@@ -730,6 +741,7 @@ extern bool dm_render_command_backend_begin_render_pass(float r, float g, float 
 extern bool dm_render_command_backend_end_render_pass(dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_raster_pipeline(dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_raytracing_pipeline(dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_index_buffer(dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
@@ -742,8 +754,8 @@ extern bool dm_render_command_backend_bind_texture(dm_resource_handle texture, u
 extern bool dm_render_command_backend_bind_storage_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_acceleration_structure(dm_resource_handle acceleration_structure, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
-extern bool dm_render_command_backend_update_acceleration_structure(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_tlas(dm_resource_handle tlas, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_tlas(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_renderer* renderer);
 extern bool dm_render_command_backend_copy_image_to_screen(dm_resource_handle image, dm_renderer* renderer);
 
@@ -811,54 +823,16 @@ void dm_render_command_bind_raytracing_pipeline(dm_resource_handle handle, dm_co
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_constant_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context)
+void dm_render_command_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_context* context)
 {
     dm_command command = { 0 };
 
-    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER;
+    command.r_type = DM_RENDER_COMMAND_TYPE_SET_ROOT_CONSTANTS;
 
-    command.params[0].handle_val = buffer;
-    command.params[1].u8_val     = binding;
-    command.params[2].u8_val     = descriptor_group;
-
-    DM_RENDER_COMMAND_SUBMIT;
-}
-
-void dm_render_command_bind_texture(dm_resource_handle texture, uint8_t binding, uint8_t descriptor_group, dm_context* context)
-{
-    dm_command command = { 0 };
-
-    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_TEXTURE;
-
-    command.params[0].handle_val = texture;
-    command.params[1].u8_val     = binding;
-    command.params[2].u8_val     = descriptor_group;
-
-    DM_RENDER_COMMAND_SUBMIT;
-}
-
-void dm_render_command_bind_acceleration_structure(dm_resource_handle acceleration_structure, uint8_t binding, uint8_t descriptor_group, dm_context* context)
-{
-    dm_command command = { 0 };
-
-    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_ACCELERATION_STRUCTURE;
-
-    command.params[0].handle_val = acceleration_structure;
-    command.params[1].u8_val     = binding;
-    command.params[2].u8_val     = descriptor_group;
-
-    DM_RENDER_COMMAND_SUBMIT;
-}
-
-void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_context* context)
-{
-    dm_command command = { 0 };
-
-    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP;
-
-    command.params[0].u8_val  = group_index;
-    command.params[1].u8_val  = descriptor_count;
-    command.params[2].u32_val = descriptor_buffer_index;
+    command.params[0].u8_val     = slot;
+    command.params[1].u32_val    = count;
+    command.params[2].size_t_val = offset;
+    command.params[3].void_val   = data;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -925,19 +899,6 @@ void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resour
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_bind_storage_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context)
-{
-    dm_command command = { 0 };
-
-    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_STORAGE_BUFFER;
-
-    command.params[0].handle_val = buffer;
-    command.params[1].u8_val     = binding;
-    command.params[2].u8_val     = descriptor_group;
-
-    DM_RENDER_COMMAND_SUBMIT;
-}
-
 void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
 {
     dm_command command = { 0 };
@@ -951,11 +912,11 @@ void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resourc
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_update_acceleration_structure(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_context* context)
+void dm_render_command_update_tlas(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_context* context)
 {
     dm_command command = { 0 };
 
-    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_ACCLERATION_STRUCTURE;
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_TLAS;
 
     command.params[0].void_val   = instance_data;
     command.params[1].size_t_val = size;
@@ -1053,37 +1014,21 @@ bool dm_renderer_submit_commands(dm_context* context)
             DM_LOG_FATAL("Bind raytracig pipeline failed");
             return false;
 
-            case DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER:
-            if(params[0].handle_val.type != DM_RESOURCE_TYPE_CONSTANT_BUFFER) { DM_LOG_FATAL("Resource is not a constant buffer."); return false; }
-            if(dm_render_command_backend_bind_constant_buffer(params[0].handle_val, params[1].u8_val, params[2].u8_val, renderer)) continue;
-            DM_LOG_FATAL("Bind constant buffer failed");
+            case DM_RENDER_COMMAND_TYPE_SET_ROOT_CONSTANTS:
+            if(dm_render_command_backend_set_root_constants(params[0].u8_val, params[1].u32_val, params[2].size_t_val, params[3].void_val, renderer)) continue;
+            DM_LOG_FATAL("Set root constants failed");
             return false;
+
             case DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER:
             if(params[2].handle_val.type != DM_RESOURCE_TYPE_CONSTANT_BUFFER) { DM_LOG_FATAL("Resource is not a constant buffer."); return false; }
             if(dm_render_command_backend_update_constant_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
             DM_LOG_FATAL("Update constant buffer failed");
             return false;
 
-            case DM_RENDER_COMMAND_TYPE_BIND_TEXTURE:
-            if(params[0].handle_val.type != DM_RESOURCE_TYPE_TEXTURE) { DM_LOG_FATAL("Resource is not a texture."); return false; }
-            if(dm_render_command_backend_bind_texture(params[0].handle_val, params[1].u8_val, params[2].u8_val, renderer)) continue;
-            DM_LOG_FATAL("Bind texture failed");
-            return false;
-
-            case DM_RENDER_COMMAND_TYPE_BIND_STORAGE_BUFFER:
-            if(params[0].handle_val.type != DM_RESOURCE_TYPE_STORAGE_BUFFER) { DM_LOG_FATAL("Resource is not a storage buffer"); return false; }
-            if(dm_render_command_backend_bind_storage_buffer(params[0].handle_val, params[1].u8_val, params[2].u8_val, renderer)) continue;
-            DM_LOG_FATAL("Bind storage buffer failed");
-            return false;
             case DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER:
             if(params[2].handle_val.type != DM_RESOURCE_TYPE_STORAGE_BUFFER) { DM_LOG_FATAL("Resource is not a storage buffer"); return false; }
             if(dm_render_command_backend_update_storage_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
             DM_LOG_FATAL("Update storage buffer failed");
-            return false;
-
-            case DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP:
-            if(dm_render_command_backend_bind_descriptor_group(params[0].u8_val, params[1].u8_val, params[2].u32_val, renderer)) continue;
-            DM_LOG_FATAL("Bind descriptor group failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER:
@@ -1108,14 +1053,9 @@ bool dm_renderer_submit_commands(dm_context* context)
             DM_LOG_FATAL("Update vertex buffer failed");
             return false;
 
-            case DM_RENDER_COMMAND_TYPE_BIND_ACCELERATION_STRUCTURE:
-            if(params[0].handle_val.type != DM_RESOURCE_TYPE_ACCELERATION_STRUCTURE) { DM_LOG_FATAL("Resource is not an acceleration structure"); return false; }
-            if(dm_render_command_backend_bind_acceleration_structure(params[0].handle_val, params[1].u8_val, params[2].u8_val, renderer)) continue;
-            DM_LOG_FATAL("Bind acceleration structure failed");
-            return false;
-            case DM_RENDER_COMMAND_TYPE_UPDATE_ACCLERATION_STRUCTURE:
-            if(params[3].handle_val.type != DM_RESOURCE_TYPE_ACCELERATION_STRUCTURE) { DM_LOG_FATAL("Resource is not an acceleration structure"); return false; }
-            if(dm_render_command_backend_update_acceleration_structure(params[0].void_val, params[1].size_t_val, params[2].u32_val, params[3].handle_val, renderer)) continue;
+            case DM_RENDER_COMMAND_TYPE_UPDATE_TLAS:
+            if(params[3].handle_val.type != DM_RESOURCE_TYPE_TLAS) { DM_LOG_FATAL("Resource is not a top level acceleration structure"); return false; }
+            if(dm_render_command_backend_update_tlas(params[0].void_val, params[1].size_t_val, params[2].u32_val, params[3].handle_val, renderer)) continue;
             DM_LOG_FATAL("Update acceleration structure failed");
             return false;
 
@@ -1170,10 +1110,7 @@ bool dm_compute_create_compute_pipeline(dm_compute_pipeline_desc desc, dm_resour
 extern bool dm_compute_command_backend_begin_recording(dm_renderer* renderer);
 extern bool dm_compute_command_backend_end_recording(dm_renderer* renderer);
 extern void dm_compute_command_backend_bind_compute_pipeline(dm_resource_handle handle, dm_renderer* renderer);
-extern void dm_compute_command_backend_bind_storage_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
-extern void dm_compute_command_backend_bind_constant_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
-extern void dm_compute_command_backend_bind_texture(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
-extern void dm_compute_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, uint32_t descriptor_buffer_index, dm_renderer* renderer);
+extern void dm_compute_command_backend_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_renderer* renderer);
 extern void dm_compute_command_backend_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_renderer* renderer);
  
 bool dm_compute_command_begin_recording(dm_context* context)
@@ -1191,24 +1128,9 @@ void dm_compute_command_bind_compute_pipeline(dm_resource_handle handle, dm_cont
     dm_compute_command_backend_bind_compute_pipeline(handle, &context->renderer);
 }
 
-void dm_compute_command_bind_storage_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context)
-{
-    dm_compute_command_backend_bind_storage_buffer(handle, binding, descriptor_group, &context->renderer);
-}
-
-void dm_compute_command_bind_constant_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context)
-{
-    dm_compute_command_backend_bind_constant_buffer(handle, binding, descriptor_group, &context->renderer);
-}
-
-void dm_compute_command_bind_texture(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context)
-{
-    dm_compute_command_backend_bind_texture(handle, binding, descriptor_group, &context->renderer);
-}
-
-void dm_compute_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, uint32_t descriptor_buffer_index, dm_context* context)
-{
-    dm_compute_command_backend_bind_descriptor_group(group_index, num_descriptors, descriptor_buffer_index, &context->renderer);
+void dm_compute_command_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_context* context)
+{   
+    dm_compute_command_backend_set_root_constants(slot, count, offset, data, &context->renderer);
 }
 
 void dm_compute_command_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_context* context)

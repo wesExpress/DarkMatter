@@ -303,10 +303,12 @@ typedef struct dm_threadpool_t
 /*********
 RENDERING
 ***********/
+#define DM_MAX_ROOT_CONSTANTS 10
 #define DM_RENDERER_MAX_RESOURCE_COUNT 100
 typedef enum dm_resource_type_t
 {
     DM_RESOURCE_TYPE_UNKNOWN,
+    DM_RESOURCE_TYPE_DESCRIPTOR_HEAP,
     DM_RESOURCE_TYPE_RASTER_PIPELINE,
     DM_RESOURCE_TYPE_COMPUTE_PIPELINE,
     DM_RESOURCE_TYPE_RAYTRACING_PIPELINE,
@@ -315,13 +317,14 @@ typedef enum dm_resource_type_t
     DM_RESOURCE_TYPE_CONSTANT_BUFFER,
     DM_RESOURCE_TYPE_STORAGE_BUFFER,
     DM_RESOURCE_TYPE_TEXTURE,
-    DM_RESOURCE_TYPE_ACCELERATION_STRUCTURE
+    DM_RESOURCE_TYPE_BLAS,
+    DM_RESOURCE_TYPE_TLAS
 } dm_resource_type;
 
 typedef struct dm_resource_handle_t
 {
     dm_resource_type type;
-    uint32_t         index;
+    uint32_t         index, descriptor_index;
 } dm_resource_handle;
 
 typedef enum dm_input_element_format_t
@@ -405,47 +408,6 @@ typedef struct dm_rasterizer_desc_t
     dm_rasterizer_front_face   front_face;
 } dm_rasterizer_desc;
 
-typedef enum dm_descriptor_group_flags_t
-{
-    DM_DESCRIPTOR_GROUP_FLAG_UNKNOWN            = 0,
-    DM_DESCRIPTOR_GROUP_FLAG_VERTEX_SHADER      = 1,
-    DM_DESCRIPTOR_GROUP_FLAG_PIXEL_SHADER       = 2,
-    DM_DESCRIPTOR_GROUP_FLAG_COMPUTE_SHADER     = 4,
-    DM_DESCRIPTOR_GROUP_FLAG_RAY_TRACING_SHADER = 8
-} dm_descriptor_group_flags;
-
-typedef enum dm_descriptor_range_type_t
-{
-    DM_DESCRIPTOR_RANGE_TYPE_UNKNOWN,
-    DM_DESCRIPTOR_RANGE_TYPE_CONSTANT_BUFFER,
-    DM_DESCRIPTOR_RANGE_TYPE_TEXTURE,
-    DM_DESCRIPTOR_RANGE_TYPE_READ_STORAGE_BUFFER,
-    DM_DESCRIPTOR_RANGE_TYPE_WRITE_STORAGE_BUFFER,
-    DM_DESCRIPTOR_RANGE_TYPE_ACCELERATION_STRUCTURE,
-    DM_DESCRIPTOR_RANGE_TYPE_READ_TEXTURE,
-    DM_DESCRIPTOR_RANGE_TYPE_WRITE_TEXTURE,
-} dm_descriptor_range_type;
-
-typedef enum dm_descriptor_type_t
-{
-    DM_DESCRIPTOR_TYPE_UNKNOWN,
-    DM_DESCRIPTOR_TYPE_CONSTANT_BUFFER,
-    DM_DESCRIPTOR_TYPE_TEXTURE,
-    DM_DESCRIPTOR_TYPE_READ_STORAGE_BUFFER,
-    DM_DESCRIPTOR_TYPE_WRITE_STORAGE_BUFFER,
-    DM_DESCRIPTOR_TYPE_READ_TEXTURE,
-    DM_DESCRIPTOR_TYPE_WRITE_TEXTURE,
-    DM_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE
-} dm_descriptor_type;
-
-#define DM_DESCRIPTOR_GROUP_MAX_DESCRIPTORS 10
-typedef struct dm_descriptor_group_t
-{
-    dm_descriptor_group_flags flags;
-    dm_descriptor_type        descriptors[DM_DESCRIPTOR_GROUP_MAX_DESCRIPTORS];
-    uint8_t                   count;
-} dm_descriptor_group;
-
 typedef enum dm_viewport_type_t
 {
     DM_VIEWPORT_TYPE_UNKNOWN,
@@ -477,15 +439,11 @@ typedef struct dm_depth_stencil_desc_t
     bool depth, stencil;
 } dm_depth_stencil_desc;
 
-#define DM_MAX_DESCRIPTOR_GROUPS 2
 typedef struct dm_raster_pipeline_desc_t
 {
     dm_raster_input_assembler_desc input_assembler;
     dm_rasterizer_desc             rasterizer;
     dm_depth_stencil_desc          depth_stencil;
-
-    dm_descriptor_group            descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
-    uint8_t                        descriptor_group_count;
 
     dm_viewport viewport;
     dm_scissor  scissor;
@@ -602,11 +560,6 @@ typedef struct dm_tlas_desc_t
     uint32_t                instance_count;
 } dm_tlas_desc;
 
-typedef struct dm_acceleration_structure_desc_t
-{
-    dm_tlas_desc tlas;
-} dm_acceleration_structure_desc;
-
 typedef enum dm_rt_pipe_hit_group_stage_t
 {
     DM_RT_PIPE_HIT_GROUP_STAGE_CLOSEST,
@@ -637,8 +590,7 @@ typedef struct dm_raytracing_pipeline_hit_group_t
 
     dm_rt_pipe_hit_group_type type;
 
-    dm_descriptor_group descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
-    uint8_t             descriptor_group_count;
+    uint8_t geometry_count;
 } dm_raytracing_pipeline_hit_group;
 
 #define DM_RT_PIPE_MAX_HIT_GROUPS 5
@@ -646,12 +598,6 @@ typedef struct dm_raytracing_pipeline_desc_t
 {
     dm_raytracing_pipeline_hit_group hit_groups[DM_RT_PIPE_MAX_HIT_GROUPS];
     uint8_t                          hit_group_count;
-
-    dm_descriptor_group global_descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
-    uint8_t             global_descriptor_group_count;
-
-    dm_descriptor_group raygen_descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
-    uint8_t             raygen_descriptor_group_count;
 
     char shader_path[512];
     char raygen[512];
@@ -665,9 +611,6 @@ typedef struct dm_raytracing_pipeline_desc_t
 // compute
 typedef struct dm_compute_pipeline_desc_t
 {
-    dm_descriptor_group descriptor_groups[DM_MAX_DESCRIPTOR_GROUPS];
-    uint8_t             descriptor_group_count;
-
     dm_shader_desc shader;
 } dm_compute_pipeline_desc;
 
@@ -679,18 +622,14 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_END_RENDER_PASS,
     DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE,
     DM_RENDER_COMMAND_TYPE_BIND_RAYTRACING_PIPELINE,
-    DM_RENDER_COMMAND_TYPE_BIND_DESCRIPTOR_GROUP,
+    DM_RENDER_COMMAND_TYPE_SET_ROOT_CONSTANTS,
     DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER,
-    DM_RENDER_COMMAND_TYPE_BIND_CONSTANT_BUFFER,
-    DM_RENDER_COMMAND_TYPE_BIND_TEXTURE,
-    DM_RENDER_COMMAND_TYPE_BIND_STORAGE_BUFFER,
-    DM_RENDER_COMMAND_TYPE_BIND_ACCELERATION_STRUCTURE,
     DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_INDEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER,
-    DM_RENDER_COMMAND_TYPE_UPDATE_ACCLERATION_STRUCTURE,
+    DM_RENDER_COMMAND_TYPE_UPDATE_TLAS,
     DM_RENDER_COMMAND_TYPE_COPY_IMAGE_TO_SCREEN,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED,
@@ -701,9 +640,7 @@ typedef enum dm_compute_command_type_t
 {
     DM_COMPUTE_COMMAND_TYPE_UNKNOWN,
     DM_COMPUTE_COMMAND_TYPE_BIND_COMPUTE_PIPELINE,
-    DM_COMPUTE_COMMAND_TYPE_BIND_STORAGE_BUFFER,
-    DM_COMPUTE_COMMAND_TYPE_BIND_CONSTANT_BUFFER,
-    DM_COMPUTE_COMMAND_TYPE_BIND_TEXTURE,
+    DM_COMPUTE_COMMAND_TYPE_SET_ROOT_CONSTANTS,
     DM_COMPUTE_COMMAND_TYPE_DISPATCH,
 } dm_compute_command_type;
 
@@ -916,30 +853,27 @@ bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resourc
 bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_context* context);
-bool dm_renderer_create_acceleration_structure(dm_acceleration_structure_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_blas(dm_blas_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_tlas(dm_tlas_desc desc, dm_resource_handle* handle, dm_context* context);
 
 // don't really like this, but not really sure how to fix
-bool dm_renderer_get_blas_gpu_address(dm_resource_handle acceleration_structure, uint8_t blas_index, size_t* address, dm_context* context);
+bool dm_renderer_get_blas_gpu_address(dm_resource_handle blas, size_t* address, dm_context* context);
 
 void dm_render_command_begin_render_pass(float r, float g, float b, float a, dm_context* context);
 void dm_render_command_end_render_pass(dm_context* context);
 
 void dm_render_command_bind_raster_pipeline(dm_resource_handle handle, dm_context* context);
 void dm_render_command_bind_raytracing_pipeline(dm_resource_handle handle, dm_context* context);
-void dm_render_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, uint32_t descriptor_buffer_index, dm_context* context);
 
+void dm_render_command_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_context* context);
 void dm_render_command_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, dm_context* context);
 void dm_render_command_bind_index_buffer(dm_resource_handle handle, dm_context* context);
-void dm_render_command_bind_constant_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context);
-void dm_render_command_bind_texture(dm_resource_handle texture, uint8_t binding, uint8_t descriptor_group, dm_context* context);
-void dm_render_command_bind_storage_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_context* context);
-void dm_render_command_bind_acceleration_structure(dm_resource_handle acceleration_structure, uint8_t binding, uint8_t descriptor_group, dm_context* context);
 
 void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_index_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
-void dm_render_command_update_acceleration_structure(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_context* context);
+void dm_render_command_update_tlas(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_context* context);
 
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
 void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);
@@ -957,10 +891,7 @@ bool dm_compute_create_compute_pipeline(dm_compute_pipeline_desc desc, dm_resour
 bool dm_compute_command_begin_recording(dm_context* context);
 bool dm_compute_command_end_recording(dm_context* context);
 void dm_compute_command_bind_compute_pipeline(dm_resource_handle handle, dm_context* context);
-void dm_compute_command_bind_storage_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context);
-void dm_compute_command_bind_constant_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context);
-void dm_compute_command_bind_texture(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_context* context);
-void dm_compute_command_bind_descriptor_group(uint8_t group_index, uint8_t num_descriptors, uint32_t descriptor_buffer_index, dm_context* context);
+void dm_compute_command_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_context* context);
 void dm_compute_command_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_context* context);
 
 // framework funcs
