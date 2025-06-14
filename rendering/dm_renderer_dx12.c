@@ -865,7 +865,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
         return false;
     }
 
-    ID3D12DescriptorHeap* heaps[] = { dx12_renderer->resource_heap->heap };
+    ID3D12DescriptorHeap* heaps[] = { dx12_renderer->resource_heap[current_frame].heap };
     ID3D12GraphicsCommandList7_SetDescriptorHeaps(command_list, _countof(heaps), heaps);
 
     dx12_renderer->active_pipeline_type = DM_DX12_PIPELINE_TYPE_UNKNOWN;
@@ -2344,7 +2344,21 @@ bool dm_render_command_backend_set_root_constants(uint8_t slot, uint32_t count, 
 
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
 
-    ID3D12GraphicsCommandList7_SetGraphicsRoot32BitConstants(command_list, slot, count, data, offset);
+    switch(dx12_renderer->active_pipeline_type)
+    {
+        case DM_DX12_PIPELINE_TYPE_RASTER:
+        ID3D12GraphicsCommandList7_SetGraphicsRoot32BitConstants(command_list, slot, count, data, offset);
+        break;
+
+        //case DM_DX12_PIPELINE_TYPE_COMPUTE:
+        case DM_DX12_PIPELINE_TYPE_RAYTRACING:
+        ID3D12GraphicsCommandList7_SetComputeRoot32BitConstants(command_list, slot, count, data, offset);
+        break;
+            
+        default:
+        DM_LOG_FATAL("Unknown/unsupported pipeline type bound. Should NOT be here.");
+        return false;
+    }
 
     return true;
 }
