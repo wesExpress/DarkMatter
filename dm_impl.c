@@ -1110,6 +1110,7 @@ bool dm_compute_create_compute_pipeline(dm_compute_pipeline_desc desc, dm_resour
 extern bool dm_compute_command_backend_begin_recording(dm_renderer* renderer);
 extern bool dm_compute_command_backend_end_recording(dm_renderer* renderer);
 extern void dm_compute_command_backend_bind_compute_pipeline(dm_resource_handle handle, dm_renderer* renderer);
+extern void dm_compute_command_backend_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
 extern void dm_compute_command_backend_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_renderer* renderer);
 extern void dm_compute_command_backend_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_renderer* renderer);
  
@@ -1126,6 +1127,11 @@ bool dm_compute_command_end_recording(dm_context* context)
 void dm_compute_command_bind_compute_pipeline(dm_resource_handle handle, dm_context* context)
 {
     dm_compute_command_backend_bind_compute_pipeline(handle, &context->renderer);
+}
+
+void dm_compute_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
+{
+    dm_compute_command_backend_update_constant_buffer(data, size, handle, &context->renderer);
 }
 
 void dm_compute_command_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_context* context)

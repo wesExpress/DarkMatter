@@ -639,6 +639,7 @@ typedef enum dm_render_command_type_t
 typedef enum dm_compute_command_type_t
 {
     DM_COMPUTE_COMMAND_TYPE_UNKNOWN,
+    DM_COMPUTE_COMMAND_UPDATE_CONSTANT_BUFFER, 
     DM_COMPUTE_COMMAND_TYPE_BIND_COMPUTE_PIPELINE,
     DM_COMPUTE_COMMAND_TYPE_SET_ROOT_CONSTANTS,
     DM_COMPUTE_COMMAND_TYPE_DISPATCH,
@@ -890,6 +891,7 @@ bool dm_compute_create_compute_pipeline(dm_compute_pipeline_desc desc, dm_resour
 
 bool dm_compute_command_begin_recording(dm_context* context);
 bool dm_compute_command_end_recording(dm_context* context);
+void dm_compute_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_compute_command_bind_compute_pipeline(dm_resource_handle handle, dm_context* context);
 void dm_compute_command_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_context* context);
 void dm_compute_command_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_context* context);

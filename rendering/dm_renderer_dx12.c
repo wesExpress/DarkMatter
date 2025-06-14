@@ -2755,16 +2755,19 @@ void dm_compute_command_backend_set_root_constants(uint8_t slot, uint32_t count,
     ID3D12GraphicsCommandList7_SetComputeRoot32BitConstants(command_list, slot,count,data,offset);
 }
 
-void dm_compute_command_backend_bind_constant_buffer(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer)
+void dm_compute_command_backend_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
-    HRESULT hr;
-}
 
-void dm_compute_command_backend_bind_texture(dm_resource_handle handle, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer)
-{
-    DM_DX12_GET_RENDERER;
-    HRESULT hr;
+    const uint8_t current_frame = dx12_renderer->current_frame;
+
+    if(!dx12_renderer->constant_buffers[handle.index].mapped_addresses[current_frame])
+    {
+        DM_LOG_FATAL("Constant buffer has an invalid address");
+        return;
+    }
+
+    dm_memcpy(dx12_renderer->constant_buffers[handle.index].mapped_addresses[current_frame], data, size);
 }
 
 void dm_compute_command_backend_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_renderer* renderer)
