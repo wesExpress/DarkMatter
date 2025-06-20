@@ -1271,6 +1271,15 @@ void dm_mat_rotate(const dm_mat4 mat, float radians, const dm_vec3 axis, dm_mat4
 }
 
 DM_INLINE
+void dm_mat_rotate_quat(const dm_mat4 mat, const dm_vec4 quat, dm_mat4 out)
+{
+    dm_mat4 rotation;
+    dm_mat4_rotate_from_quat(quat, rotation);
+
+    dm_mat4_mul_mat4(mat, rotation, out);
+}
+
+DM_INLINE
 void dm_mat_rotate_degrees(const dm_mat4 mat, float degrees, const dm_vec3 axis, dm_mat4 out)
 {
 	dm_mat_rotate(mat, DM_MATH_DEG_TO_RAD * degrees, axis, out);
