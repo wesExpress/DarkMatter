@@ -550,13 +550,13 @@ typedef struct dm_raytracing_instance_t
     size_t   blas_address;
 } dm_raytracing_instance;
 
-#define DM_TLAS_MAX_BLAS 10
 typedef struct dm_tlas_desc_t
 {
-    dm_blas_desc blas[DM_TLAS_MAX_BLAS];
-    uint8_t      blas_count;
-
+#if 0
     dm_raytracing_instance* instances;
+#else
+    dm_resource_handle instance_buffer;
+#endif
     uint32_t                instance_count;
 } dm_tlas_desc;
 
@@ -874,7 +874,7 @@ void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource
 void dm_render_command_update_index_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
-void dm_render_command_update_tlas(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_context* context);
+void dm_render_command_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_context* context);
 
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
 void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);

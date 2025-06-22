@@ -755,7 +755,7 @@ extern bool dm_render_command_backend_bind_storage_buffer(dm_resource_handle buf
 extern bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_renderer* renderer);
 extern bool dm_render_command_backend_bind_tlas(dm_resource_handle tlas, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
-extern bool dm_render_command_backend_update_tlas(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_renderer* renderer);
 extern bool dm_render_command_backend_copy_image_to_screen(dm_resource_handle image, dm_renderer* renderer);
 
@@ -912,16 +912,14 @@ void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resourc
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_update_tlas(void* instance_data, size_t size, uint32_t instance_count, dm_resource_handle handle, dm_context* context)
+void dm_render_command_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_context* context)
 {
     dm_command command = { 0 };
 
     command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_TLAS;
 
-    command.params[0].void_val   = instance_data;
-    command.params[1].size_t_val = size;
-    command.params[2].u32_val    = instance_count;
-    command.params[3].handle_val = handle;
+    command.params[0].u32_val    = instance_count;
+    command.params[1].handle_val = handle;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -1054,8 +1052,8 @@ bool dm_renderer_submit_commands(dm_context* context)
             return false;
 
             case DM_RENDER_COMMAND_TYPE_UPDATE_TLAS:
-            if(params[3].handle_val.type != DM_RESOURCE_TYPE_TLAS) { DM_LOG_FATAL("Resource is not a top level acceleration structure"); return false; }
-            if(dm_render_command_backend_update_tlas(params[0].void_val, params[1].size_t_val, params[2].u32_val, params[3].handle_val, renderer)) continue;
+            if(params[1].handle_val.type != DM_RESOURCE_TYPE_TLAS) { DM_LOG_FATAL("Resource is not a top level acceleration structure"); return false; }
+            if(dm_render_command_backend_update_tlas(params[0].u32_val, params[1].handle_val, renderer)) continue;
             DM_LOG_FATAL("Update acceleration structure failed");
             return false;
 
