@@ -1567,31 +1567,36 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
 
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[0];
 
-    const size_t size = desc.width * desc.height * desc.n_channels;
-
     DXGI_FORMAT format;
+    size_t      pixel_stride;
     switch(desc.format)
     {
         case DM_TEXTURE_FORMAT_BYTE_4_UINT:
         format = DXGI_FORMAT_R8G8B8A8_UINT;
+        pixel_stride = 1;
         break;
 
         case DM_TEXTURE_FORMAT_BYTE_4_UNORM:
         format = DXGI_FORMAT_R8G8B8A8_UNORM;
+        pixel_stride = 1;
         break;
 
         case DM_TEXTURE_FORMAT_FLOAT_3:
         format = DXGI_FORMAT_R32G32B32_FLOAT;
+        pixel_stride = 3;
         break;
 
         case DM_TEXTURE_FORMAT_FLOAT_4:
         format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+        pixel_stride = 4;
         break;
 
         default:
         DM_LOG_FATAL("Unknown or unsupported texture format");
         return false;
     }
+
+    const size_t size = desc.width * desc.height * desc.n_channels * pixel_stride;
 
     D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE;
     if(desc.write) flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
@@ -1633,7 +1638,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         src.PlacedFootprint.Footprint.Width    = desc.width;
         src.PlacedFootprint.Footprint.Height   = desc.height;
         src.PlacedFootprint.Footprint.Depth    = 1;
-        src.PlacedFootprint.Footprint.RowPitch = desc.width * desc.n_channels;
+        src.PlacedFootprint.Footprint.RowPitch = desc.width * desc.n_channels * pixel_stride;
         src.PlacedFootprint.Footprint.Format   = format;
 
         D3D12_TEXTURE_COPY_LOCATION dest = { 0 };
@@ -1999,11 +2004,13 @@ bool dm_dx12_create_acceleration_structure(D3D12_BUILD_RAYTRACING_ACCELERATION_S
     D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild_info = { 0 };
     ID3D12Device5_GetRaytracingAccelerationStructurePrebuildInfo(dx12_renderer->device, inputs, &prebuild_info);
 
+    as->scratch_size = prebuild_info.ScratchDataSizeInBytes;
+
     const D3D12_RESOURCE_FLAGS resource_flag   = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     const D3D12_RESOURCE_STATES resource_state = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
 
     ID3D12Resource** scratch_buffer = &dx12_renderer->resources[dx12_renderer->resource_count];
-    if(!dm_dx12_create_buffer(prebuild_info.ScratchDataSizeInBytes, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_flag, scratch_buffer, dx12_renderer)) return false;
+    if(!dm_dx12_create_buffer(as->scratch_size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, resource_flag, scratch_buffer, dx12_renderer)) return false;
     as->scratch = dx12_renderer->resource_count++;
 
     ID3D12Resource** buffer = &dx12_renderer->resources[dx12_renderer->resource_count];
@@ -2135,12 +2142,12 @@ bool dm_renderer_backend_create_tlas(dm_tlas_desc desc, dm_resource_handle* hand
         D3D12_RESOURCE_BARRIER pre_barrier = { 0 };
         pre_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         pre_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        pre_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COMMON;
+        pre_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         pre_barrier.Transition.pResource   = internal_buffer;
 
         D3D12_RESOURCE_BARRIER post_barrier = { 0 };
         post_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        post_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+        post_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         post_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         post_barrier.Transition.pResource   = internal_buffer;
 
@@ -2236,6 +2243,8 @@ bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, d
     dm_memcpy(dx12_renderer->compute_pipelines + dx12_renderer->comp_pipe_count, &pipeline, sizeof(pipeline));
     handle->index = dx12_renderer->comp_pipe_count++;
 
+    ID3D10Blob_Release(shader);
+
     return true;
 }
 
@@ -2328,6 +2337,10 @@ bool dm_render_command_backend_bind_raytracing_pipeline(dm_resource_handle handl
     
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
     dm_dx12_raytracing_pipeline pipeline = dx12_renderer->rt_pipelines[handle.index];
+
+    dm_dx12_tlas as = dx12_renderer->tlas[0];
+
+    D3D12_GPU_VIRTUAL_ADDRESS address = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[as.as[current_frame].result]);
 
     ID3D12GraphicsCommandList7_SetPipelineState1(command_list, pipeline.pso);
 
@@ -2522,7 +2535,7 @@ bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_
 
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build_desc = { 0 };
     build_desc.Inputs.Type                      = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
-    build_desc.Inputs.Flags                     = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+    build_desc.Inputs.Flags                     = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE | D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
     build_desc.DestAccelerationStructureData    = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[tlas.as[current_frame].result]);
     build_desc.SourceAccelerationStructureData  = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[tlas.as[current_frame].result]);
     build_desc.ScratchAccelerationStructureData = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[tlas.as[current_frame].scratch]);
