@@ -2,6 +2,7 @@
 
 #ifdef DM_VULKAN
 
+#define DM_VULKAN_DESCRIPTOR_BUFFERS
 #include <string.h>
 
 #ifdef DM_PLATFORM_WIN32
@@ -399,13 +400,16 @@ void dm_renderer_backend_shutdown(dm_context* context)
         vkDestroySampler(device, vulkan_renderer->textures[i].sampler, NULL);
     }
 
-#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
         vmaUnmapMemory(allocator, vulkan_renderer->buffers[vulkan_renderer->resource_descriptor_buffer.indices[i]].memory);
         vmaUnmapMemory(allocator, vulkan_renderer->buffers[vulkan_renderer->sampler_descriptor_buffer.indices[i]].memory);
-    }
+#else
+        vkDestroyDescriptorPool(device, vulkan_renderer->resource_bindless_pool[i], NULL);
+        vkDestroyDescriptorPool(device, vulkan_renderer->sampler_bindless_pool[i], NULL);
 #endif
+    }
 
     // throws a validation error for not deleting device memory?
     // not sure how
@@ -421,12 +425,6 @@ void dm_renderer_backend_shutdown(dm_context* context)
     }
 
     // === backend stuff ===
-    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        vkDestroyDescriptorPool(device, vulkan_renderer->resource_bindless_pool[i], NULL);
-        vkDestroyDescriptorPool(device, vulkan_renderer->sampler_bindless_pool[i], NULL);
-    }
-    
     vkDestroyPipelineLayout(device, vulkan_renderer->bindless_pipeline_layout, NULL);
     vkDestroyDescriptorSetLayout(device, vulkan_renderer->sampler_bindless_layout, NULL);
     vkDestroyDescriptorSetLayout(device, vulkan_renderer->resource_bindless_layout, NULL);
@@ -553,7 +551,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     depth_barrier.srcAccessMask       = 0;
     depth_barrier.dstAccessMask       = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
     depth_barrier.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
-    depth_barrier.newLayout           = VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL;
+    depth_barrier.newLayout           = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     depth_barrier.subresourceRange    = range;
 
     VkPipelineStageFlags depth_stage_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT; 
@@ -973,7 +971,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     render_create_info.sType = VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO;
     render_create_info.colorAttachmentCount    = 1;
     render_create_info.pColorAttachmentFormats = &vulkan_renderer->swapchain.format;
-    render_create_info.depthAttachmentFormat   = VK_FORMAT_D32_SFLOAT;
+    render_create_info.depthAttachmentFormat   = VK_FORMAT_D32_SFLOAT_S8_UINT;
 
     VkGraphicsPipelineCreateInfo create_info = { 0 };
     create_info.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -1812,7 +1810,7 @@ bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, d
     create_info.sType  = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
     create_info.layout = vulkan_renderer->bindless_pipeline_layout;
     create_info.stage  = shader_create_info;
-#ifdef DM_VULKAN_CREATE_DESCRIPTOR_BUFFERS
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
     create_info.flags  = VK_PIPELINE_CREATE_DESCRIPTOR_BUFFER_BIT_EXT;
 #endif
 
@@ -2654,7 +2652,7 @@ bool dm_vulkan_create_depth_stencil_target(const uint32_t width, const uint32_t 
 
     VkImageCreateInfo create_info = { 0 };
     create_info.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    create_info.format        = VK_FORMAT_D32_SFLOAT;
+    create_info.format        = VK_FORMAT_D32_SFLOAT_S8_UINT;
     create_info.imageType     = VK_IMAGE_TYPE_2D;
     create_info.extent.width  = width;
     create_info.extent.height = height;
@@ -2681,7 +2679,7 @@ bool dm_vulkan_create_depth_stencil_target(const uint32_t width, const uint32_t 
     VkImageViewCreateInfo view_create_info = { 0 };
     view_create_info.sType                       = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     view_create_info.viewType                    = VK_IMAGE_VIEW_TYPE_2D;
-    view_create_info.format                      = VK_FORMAT_D32_SFLOAT;
+    view_create_info.format                      = VK_FORMAT_D32_SFLOAT_S8_UINT;
     view_create_info.subresourceRange.levelCount = 1;
     view_create_info.subresourceRange.layerCount = 1;
     view_create_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
