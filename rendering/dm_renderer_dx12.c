@@ -18,14 +18,6 @@
 
 #define DM_DX12_MAX_FRAMES_IN_FLIGHT DM_MAX_FRAMES_IN_FLIGHT 
 
-typedef enum dm_dx12_pipeline_type_t
-{
-    DM_DX12_PIPELINE_TYPE_UNKNOWN,
-    DM_DX12_PIPELINE_TYPE_RASTER,
-    DM_DX12_PIPELINE_TYPE_RAYTRACING,
-    DM_DX12_PIPELINE_TYPE_COMPUTE
-} dm_dx12_pipeline_type;
-
 typedef struct dm_dx12_cpu_heap_handle_t
 {
     D3D12_CPU_DESCRIPTOR_HANDLE begin;
@@ -217,7 +209,7 @@ typedef struct dm_dx12_renderer_t
     ID3D12Resource* resources[DM_DX12_MAX_RESOURCES];
     uint32_t        resource_count;
 
-    dm_dx12_pipeline_type active_pipeline_type;
+    dm_pipeline_type active_pipeline_type;
 
 #ifdef DM_DEBUG
     ID3D12Debug* debug;
@@ -860,7 +852,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     ID3D12DescriptorHeap* heaps[] = { dx12_renderer->resource_heap[current_frame].heap };
     ID3D12GraphicsCommandList7_SetDescriptorHeaps(command_list, _countof(heaps), heaps);
 
-    dx12_renderer->active_pipeline_type = DM_DX12_PIPELINE_TYPE_UNKNOWN;
+    dx12_renderer->active_pipeline_type = DM_PIPELINE_TYPE_UNKNOWN;
 
     ID3D12GraphicsCommandList7_SetGraphicsRootSignature(command_list, dx12_renderer->bindless_root_signature);
     ID3D12GraphicsCommandList7_SetComputeRootSignature(command_list, dx12_renderer->bindless_root_signature);
@@ -2145,12 +2137,6 @@ bool dm_renderer_backend_create_tlas(dm_tlas_desc desc, dm_resource_handle* hand
         pre_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         pre_barrier.Transition.pResource   = internal_buffer;
 
-        D3D12_RESOURCE_BARRIER post_barrier = { 0 };
-        post_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        post_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-        post_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        post_barrier.Transition.pResource   = internal_buffer;
-
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = { 0 };
         inputs.NumDescs      = desc.instance_count;
         inputs.InstanceDescs = ID3D12Resource_GetGPUVirtualAddress(internal_buffer);
@@ -2160,7 +2146,6 @@ bool dm_renderer_backend_create_tlas(dm_tlas_desc desc, dm_resource_handle* hand
 
         ID3D12GraphicsCommandList7_ResourceBarrier(dx12_renderer->command_list[0], 1, &pre_barrier);
         if(!dm_dx12_create_acceleration_structure(&inputs, i, &tlas.as[i], dx12_renderer)) return false;
-        ID3D12GraphicsCommandList7_ResourceBarrier(dx12_renderer->command_list[0], 1, &post_barrier);
 
         // srv
         D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
@@ -2324,7 +2309,7 @@ bool dm_render_command_backend_bind_raster_pipeline(dm_resource_handle handle, d
     ID3D12GraphicsCommandList7_RSSetScissorRects(command_list, 1, &pipeline.scissor);
     ID3D12GraphicsCommandList7_IASetPrimitiveTopology(command_list, pipeline.topology);
 
-    dx12_renderer->active_pipeline_type = DM_DX12_PIPELINE_TYPE_RASTER;
+    dx12_renderer->active_pipeline_type = DM_PIPELINE_TYPE_RASTER;
 
     return true;
 }
@@ -2344,7 +2329,7 @@ bool dm_render_command_backend_bind_raytracing_pipeline(dm_resource_handle handl
 
     ID3D12GraphicsCommandList7_SetPipelineState1(command_list, pipeline.pso);
 
-    dx12_renderer->active_pipeline_type = DM_DX12_PIPELINE_TYPE_RAYTRACING;
+    dx12_renderer->active_pipeline_type = DM_PIPELINE_TYPE_RAYTRACING;
 
     return true;
 }
@@ -2359,12 +2344,12 @@ bool dm_render_command_backend_set_root_constants(uint8_t slot, uint32_t count, 
 
     switch(dx12_renderer->active_pipeline_type)
     {
-        case DM_DX12_PIPELINE_TYPE_RASTER:
+        case DM_PIPELINE_TYPE_RASTER:
         ID3D12GraphicsCommandList7_SetGraphicsRoot32BitConstants(command_list, slot, count, data, offset);
         break;
 
         //case DM_DX12_PIPELINE_TYPE_COMPUTE:
-        case DM_DX12_PIPELINE_TYPE_RAYTRACING:
+        case DM_PIPELINE_TYPE_RAYTRACING:
         ID3D12GraphicsCommandList7_SetComputeRoot32BitConstants(command_list, slot, count, data, offset);
         break;
             
@@ -2751,7 +2736,7 @@ void dm_compute_command_backend_bind_compute_pipeline(dm_resource_handle handle,
 
     ID3D12GraphicsCommandList7_SetPipelineState(command_list, pipeline.state);
 
-    dx12_renderer->active_pipeline_type = DM_DX12_PIPELINE_TYPE_COMPUTE;
+    dx12_renderer->active_pipeline_type = DM_PIPELINE_TYPE_COMPUTE;
 }
 
 void dm_compute_command_backend_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_renderer* renderer)

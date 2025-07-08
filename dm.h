@@ -303,6 +303,14 @@ typedef struct dm_threadpool_t
 /*********
 RENDERING
 ***********/
+typedef enum dm_pipeline_type_t
+{
+    DM_PIPELINE_TYPE_UNKNOWN,
+    DM_PIPELINE_TYPE_RASTER,
+    DM_PIPELINE_TYPE_RAYTRACING,
+    DM_PIPELINE_TYPE_COMPUTE
+} dm_pipeline_type;
+
 #define DM_MAX_ROOT_CONSTANTS 10
 #define DM_RENDERER_MAX_RESOURCE_COUNT 100
 typedef enum dm_resource_type_t
@@ -552,12 +560,8 @@ typedef struct dm_raytracing_instance_t
 
 typedef struct dm_tlas_desc_t
 {
-#if 0
-    dm_raytracing_instance* instances;
-#else
     dm_resource_handle instance_buffer;
-#endif
-    uint32_t                instance_count;
+    uint32_t           instance_count;
 } dm_tlas_desc;
 
 typedef enum dm_rt_pipe_hit_group_stage_t

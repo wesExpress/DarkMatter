@@ -749,12 +749,7 @@ extern bool dm_render_command_backend_update_index_buffer(void* data, size_t siz
 extern bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_constant_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_texture(dm_resource_handle texture, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_storage_buffer(dm_resource_handle buffer, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_descriptor_group(uint8_t group_index, uint8_t descriptor_count, uint32_t descriptor_buffer_index, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_tlas(dm_resource_handle tlas, uint8_t binding, uint8_t descriptor_group, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_renderer* renderer);
 extern bool dm_render_command_backend_copy_image_to_screen(dm_resource_handle image, dm_renderer* renderer);
@@ -1263,8 +1258,7 @@ FRAMEWORK
 ***********/
 typedef enum dm_context_flags_t
 {
-    DM_CONTEXT_FLAG_IS_RUNNING,
-    DM_CONTEXT_FLAG_UNKNOWN
+    DM_CONTEXT_FLAG_IS_RUNNING = 1,
 } dm_context_flags;
 
 bool dm_init(dm_context_init_packet init_packet, dm_context** context)
@@ -1276,6 +1270,10 @@ bool dm_init(dm_context_init_packet init_packet, dm_context** context)
     dm_strcpy((*context)->platform_data.window_data.title, init_packet.window_title);
     dm_strcpy((*context)->platform_data.asset_path, init_packet.asset_folder);
     
+    // misc
+    (*context)->delta = 1.0f / 60.f;
+    (*context)->flags |= DM_CONTEXT_FLAG_IS_RUNNING;
+
     if(!dm_platform_init(init_packet.window_x, init_packet.window_y, *context)) return false;
     
     (*context)->renderer.width  = (*context)->platform_data.window_data.width;
@@ -1290,10 +1288,6 @@ bool dm_init(dm_context_init_packet init_packet, dm_context** context)
     init_genrand(&(*context)->random, (uint32_t)dm_platform_get_time(&(*context)->platform_data));
     init_genrand64(&(*context)->random_64, (uint64_t)dm_platform_get_time(&(*context)->platform_data));
     
-    // misc
-    (*context)->delta = 1.0f / 60.f;
-    (*context)->flags |= DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
-
     if(init_packet.app_data_size) (*context)->app_data = dm_alloc(init_packet.app_data_size);
     
     return true;
@@ -1322,7 +1316,7 @@ bool dm_poll_events(dm_context* context)
         {
             case DM_EVENT_WINDOW_CLOSE:
             {
-                context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+                context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
                 DM_LOG_WARN("Window close event received");
                 return true;
             } break;
@@ -1402,13 +1396,13 @@ bool dm_update_begin(dm_context* context)
     
     if(!dm_platform_pump_events(&context->platform_data)) 
     {
-        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+        context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
         return false;
     }
     
     if(!dm_poll_events(context))
     {
-        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+        context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
         return false;
     }
     context->platform_data.event_list.num = 0;
@@ -1440,7 +1434,7 @@ bool dm_renderer_end_frame(dm_context* context)
     // command submission
     if(!dm_renderer_submit_commands(context)) 
     { 
-        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+        context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
         DM_LOG_FATAL("Submiting render commands failed"); 
         return false; 
     }
@@ -1450,7 +1444,7 @@ bool dm_renderer_end_frame(dm_context* context)
     
     if(!dm_renderer_backend_end_frame(context)) 
     {
-        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+        context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
         DM_LOG_FATAL("End frame failed"); 
         return false; 
     }
@@ -1486,7 +1480,7 @@ void* dm_read_bytes(const char* path, const char* mode, size_t* size)
 
 bool dm_context_is_running(dm_context* context)
 {
-    return context->flags & DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+    return context->flags & DM_CONTEXT_FLAG_IS_RUNNING;
 }
 
 uint32_t __dm_get_screen_width(dm_context* context)
@@ -1626,7 +1620,7 @@ extern void dm_application_shutdown(dm_context* context);
 void dm_kill(dm_context* context)
 {
     DM_LOG_FATAL("DarkMatter kill received");
-    context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+    context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
 }
 
 #ifdef DM_MATH_TESTS
@@ -1750,9 +1744,7 @@ DM_EXIT:
     dm_application_shutdown(context);
     dm_shutdown(context);
     
-#ifdef DM_DEBUG
-    DM_LOG_WARN("Press any key to exit...");
-#endif
+    DM_LOG_WARN("Press enter to exit...");
     int r = getchar();
     
     return exit_code;
