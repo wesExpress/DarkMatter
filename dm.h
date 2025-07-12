@@ -324,7 +324,9 @@ typedef enum dm_resource_type_t
     DM_RESOURCE_TYPE_INDEX_BUFFER,
     DM_RESOURCE_TYPE_CONSTANT_BUFFER,
     DM_RESOURCE_TYPE_STORAGE_BUFFER,
-    DM_RESOURCE_TYPE_TEXTURE,
+    DM_RESOURCE_TYPE_STORAGE_TEXTURE,
+    DM_RESOURCE_TYPE_SAMPLED_TEXTURE,
+    DM_RESOURCE_TYPE_SAMPLER,
     DM_RESOURCE_TYPE_BLAS,
     DM_RESOURCE_TYPE_TLAS
 } dm_resource_type;
@@ -459,7 +461,6 @@ typedef struct dm_raster_pipeline_desc_t
     bool sampler;
 } dm_raster_pipeline_desc;
 
-
 typedef struct dm_vertex_buffer_desc_t
 {
     size_t size, stride, element_size;
@@ -507,7 +508,7 @@ typedef struct dm_texture_desc_t
     uint32_t          width, height, n_channels;
     dm_texture_format format;
     void*             data;
-    bool              write;
+    dm_resource_handle sampler;
 } dm_texture_desc;
 
 // raytracing
@@ -633,6 +634,7 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_UPDATE_INDEX_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER,
     DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER,
+    DM_RENDER_COMMAND_TYPE_RESIZE_TEXTURE,
     DM_RENDER_COMMAND_TYPE_UPDATE_TLAS,
     DM_RENDER_COMMAND_TYPE_COPY_IMAGE_TO_SCREEN,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
@@ -856,12 +858,13 @@ bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_ha
 bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
-bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_storage_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_sampled_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_sampler(dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_blas(dm_blas_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_tlas(dm_tlas_desc desc, dm_resource_handle* handle, dm_context* context);
 
-// don't really like this, but not really sure how to fix
 bool dm_renderer_get_blas_gpu_address(dm_resource_handle blas, size_t* address, dm_context* context);
 
 void dm_render_command_begin_render_pass(float r, float g, float b, float a, dm_context* context);
@@ -878,6 +881,7 @@ void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource
 void dm_render_command_update_index_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
+void dm_render_command_resize_texture(uint32_t width, uint32_t height, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_context* context);
 
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);
@@ -887,7 +891,7 @@ void dm_render_command_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle 
 void dm_render_command_copy_image_to_screen(dm_resource_handle image, dm_context* context);
 
 // font loading
-bool dm_renderer_load_font(const char* path, int font_size, dm_font* font, dm_context* context);
+bool dm_renderer_load_font(const char* path, int font_size, dm_resource_handle sampler, dm_font* font, dm_context* context);
 dm_font_aligned_quad dm_font_get_aligned_quad(dm_font font, const char text, float* xf, float* yf);
 
 // compute

@@ -2,7 +2,10 @@
 
 #ifdef DM_VULKAN
 
+#if 1
 #define DM_VULKAN_DESCRIPTOR_BUFFERS
+#endif
+
 #include <string.h>
 
 #ifdef DM_PLATFORM_WIN32
@@ -63,14 +66,14 @@ typedef struct dm_vulkan_queue_family_t
 
 typedef struct dm_vulkan_device_properties_t
 {
-    VkPhysicalDeviceProperties                         properties;
-    VkPhysicalDeviceProperties2                        properties2;
-    VkPhysicalDeviceVulkan13Properties                 vulkan_1_3;
+    VkPhysicalDeviceProperties                           properties;
+    VkPhysicalDeviceProperties2                          properties2;
+    VkPhysicalDeviceVulkan13Properties                   vulkan_1_3;
 #ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
-    VkPhysicalDeviceDescriptorBufferPropertiesEXT      descriptor_buffer;
+    VkPhysicalDeviceDescriptorBufferPropertiesEXT        descriptor_buffer;
 #endif
-    VkPhysicalDeviceAccelerationStructurePropertiesKHR acceleration_structure;
-    VkPhysicalDeviceRayTracingPipelinePropertiesKHR    raytracing_pipeline;
+    VkPhysicalDeviceAccelerationStructurePropertiesKHR   acceleration_structure;
+    VkPhysicalDeviceRayTracingPipelinePropertiesKHR      raytracing_pipeline;
 } dm_vulkan_device_properties;
 
 typedef struct dm_vulkan_device_features_t
@@ -146,8 +149,31 @@ typedef struct dm_vulkan_texture_t
     uint32_t staging_buffer[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     uint32_t image[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     VkFormat format;
-    VkSampler sampler;
 } dm_vulkan_texture;
+
+typedef struct dm_vulkan_sampler_t
+{
+    VkSampler sampler;
+} dm_vulkan_sampler;
+
+typedef struct dm_vulkan_as_t
+{
+    uint32_t                   result;
+    uint32_t                   scratch;
+    VkAccelerationStructureKHR as;
+    size_t                     result_size, scratch_size;
+} dm_vulkan_as;
+
+typedef struct dm_vulkan_blas_t
+{
+    dm_vulkan_as as[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+} dm_vulkan_blas;
+
+typedef struct dm_vulkan_tlas_t
+{
+    dm_vulkan_as as[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
+    dm_resource_handle instance_buffer;
+} dm_vulkan_tlas;
 
 #define DM_VULKAN_MAX_DESCRIPTORS               100
 #define DM_VULKAN_MAX_DESCRIPTOR_TYPES          10
@@ -157,13 +183,14 @@ typedef enum dm_vulkan_resource_descriptor_type_t
     DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
     DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_BUFFER,
     DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+    DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
     DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE,
     DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_UNKNOWN
 } dm_vulkan_resource_descriptor_type;
 
 typedef enum dm_vulkan_sampler_descriptor_type_t
 {
-    DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+    DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_SAMPLER,
     DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_UNKNOWN
 } dm_vulkan_sampler_descriptor_type;
 
@@ -197,6 +224,9 @@ typedef struct dm_vulkan_descriptor_buffer_t
 #define DM_VULKAN_MAX_CBS           10
 #define DM_VULKAN_MAX_SBS           10
 #define DM_VULKAN_MAX_TEXTURES      10
+#define DM_VULKAN_MAX_SAMPLERS      10
+#define DM_VULKAN_MAX_BLAS          10
+#define DM_VULKAN_MAX_TLAS          10
 
 #define DM_VULKAN_MAX_BUFFERS DM_VULKAN_MAX_DESCRIPTORS * DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_UNKNOWN * DM_VULKAN_MAX_FRAMES_IN_FLIGHT
 #define DM_VULKAN_MAX_IMAGES  DM_VULKAN_MAX_DESCRIPTORS * DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_UNKNOWN * DM_VULKAN_MAX_FRAMES_IN_FLIGHT
@@ -258,6 +288,15 @@ typedef struct dm_vulkan_renderer_t
 
     dm_vulkan_texture textures[DM_VULKAN_MAX_TEXTURES];
     uint32_t          texture_count;
+
+    dm_vulkan_sampler samplers[DM_VULKAN_MAX_SAMPLERS];
+    uint32_t          sampler_count;
+
+    dm_vulkan_blas blas[DM_VULKAN_MAX_BLAS];
+    uint32_t       blas_count;
+
+    dm_vulkan_tlas tlas[DM_VULKAN_MAX_TLAS];
+    uint32_t       tlas_count;
 
     dm_resource_handle bound_pipeline;
     dm_pipeline_type   bound_pipeline_type;
@@ -395,9 +434,21 @@ void dm_renderer_backend_shutdown(dm_context* context)
         }
     }
 
-    for(uint32_t i=0; i<vulkan_renderer->texture_count; i++)
+    for(uint32_t i=0; i<vulkan_renderer->sampler_count; i++)
     {
-        vkDestroySampler(device, vulkan_renderer->textures[i].sampler, NULL);
+        vkDestroySampler(device, vulkan_renderer->samplers[i].sampler, NULL);
+    }
+
+    for(uint8_t j=0; j<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; j++)
+    {
+        for(uint32_t i=0; i<vulkan_renderer->tlas_count; i++)
+        {
+            vkDestroyAccelerationStructureKHR(device, vulkan_renderer->tlas[i].as[j].as, NULL);
+        }
+        for(uint32_t i=0; i<vulkan_renderer->blas_count; i++)
+        {
+            vkDestroyAccelerationStructureKHR(device, vulkan_renderer->blas[i].as[j].as, NULL);
+        }
     }
 
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
@@ -475,6 +526,7 @@ bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* re
     if(!dm_vulkan_create_swapchain(vulkan_renderer)) { DM_LOG_FATAL("Recreating swapchain failed"); return false; }
     if(!dm_vulkan_create_render_targets(vulkan_renderer)) { DM_LOG_FATAL("Recreating rendertargets failed"); return false;}
 
+    // depth stencil target
     vmaDestroyImage(vulkan_renderer->allocator, vulkan_renderer->depth_stencil.image, vulkan_renderer->depth_stencil.memory);
     vkDestroyImageView(vulkan_renderer->device.logical, vulkan_renderer->depth_stencil.view, NULL);
 
@@ -1225,7 +1277,7 @@ bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm
 
         // descriptors
 #ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
-        dm_vulkan_copy_buffer_descriptor(host_buffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 0, desc.size, i, vulkan_renderer);
+        dm_vulkan_copy_buffer_descriptor(host_buffer, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_UNIFORM_BUFFER, desc.size, i, vulkan_renderer);
 #else
         VkDescriptorBufferInfo buffer_info = { 0 };
         buffer_info.buffer = host_buffer->buffer;
@@ -1295,7 +1347,7 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
 
         // descriptors
 #ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
-        dm_vulkan_copy_buffer_descriptor(device_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1, desc.size, i, vulkan_renderer);
+        dm_vulkan_copy_buffer_descriptor(device_buffer, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_BUFFER, desc.size, i, vulkan_renderer);
 #else
         VkDescriptorBufferInfo buffer_info = { 0 };
         buffer_info.buffer = device_buffer->buffer;
@@ -1326,12 +1378,50 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
     return true;
 }
 
-bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_vulkan_copy_buffer_to_image(dm_vulkan_buffer* buffer, dm_vulkan_image* image, VkBufferImageCopy copy, bool sampled, dm_vulkan_renderer* vulkan_renderer)
 {
-    DM_VULKAN_GET_RENDERER;
-    VkResult vr;
+    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[0];
 
-    dm_vulkan_texture texture = { 0 };
+    // transition image layout
+    VkImageMemoryBarrier barrier = { 0 };
+    barrier.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout                   = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout                   = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstAccessMask               = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.image                       = image->image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.subresourceRange.levelCount = 1;
+
+    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,NULL,0,NULL, 1, &barrier);
+
+    // copy over data
+    vkCmdCopyBufferToImage(cmd_buffer, buffer->buffer, image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
+
+    // transition again
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = sampled ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
+
+    VkPipelineStageFlagBits flags = sampled ? VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT : VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT;
+
+    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,flags,0,0,NULL,0,NULL, 1, &barrier);
+
+    return true;
+}
+
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_vulkan_create_texture(dm_texture_desc desc, VkImageUsageFlagBits usage_flags, dm_vulkan_texture* texture, dm_vulkan_renderer* vulkan_renderer)
+{
+    VkResult vr;
 
     VkBufferUsageFlagBits buffer_usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     VkSharingMode         sharing_mode = VK_SHARING_MODE_CONCURRENT;
@@ -1341,19 +1431,19 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
     switch(desc.format)
     {
         case DM_TEXTURE_FORMAT_BYTE_4_UINT:
-        texture.format = VK_FORMAT_R8G8B8A8_UINT;
+        texture->format = VK_FORMAT_R8G8B8A8_UINT;
         break;
 
         case DM_TEXTURE_FORMAT_BYTE_4_UNORM:
-        texture.format = VK_FORMAT_R8G8B8A8_UNORM;
+        texture->format = VK_FORMAT_R8G8B8A8_UNORM;
         break;
 
         case DM_TEXTURE_FORMAT_FLOAT_3:
-        texture.format = VK_FORMAT_R32G32B32_SFLOAT;
+        texture->format = VK_FORMAT_R32G32B32_SFLOAT;
         break;
 
         case DM_TEXTURE_FORMAT_FLOAT_4:
-        texture.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+        texture->format = VK_FORMAT_R32G32B32A32_SFLOAT;
         break;
 
         default:
@@ -1371,29 +1461,28 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
     image_create_info.arrayLayers   = 1;
     image_create_info.tiling        = VK_IMAGE_TILING_OPTIMAL;
     image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    image_create_info.usage         = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     image_create_info.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
     image_create_info.samples       = VK_SAMPLE_COUNT_1_BIT;
-    image_create_info.format        = texture.format;
+    image_create_info.usage         = usage_flags;
+    image_create_info.format        = texture->format;
 
     VmaAllocationCreateInfo allocation_create_info = { 0 };
     allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[0];
 
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
         dm_vulkan_buffer* staging_buffer = &vulkan_renderer->buffers[vulkan_renderer->buffer_count];
 
         if(!dm_vulkan_create_buffer(size, buffer_usage, sharing_mode, staging_buffer, vulkan_renderer)) return false;
-        texture.staging_buffer[i] = vulkan_renderer->buffer_count++;
+        texture->staging_buffer[i] = vulkan_renderer->buffer_count++;
 
         // buffer data
-        if(!desc.data) continue;
+        if(desc.data) 
+        {
+            if(!dm_vulkan_copy_memory(staging_buffer->memory, desc.data, size, vulkan_renderer)) return false;
+        }
 
-        if(!dm_vulkan_copy_memory(staging_buffer->memory, desc.data, size, vulkan_renderer)) return false;
-
-        // actual image
+        // sampled image
         dm_vulkan_image* image = &vulkan_renderer->images[vulkan_renderer->image_count];
 
         vr = vmaCreateImage(vulkan_renderer->allocator, &image_create_info, &allocation_create_info, &image->image, &image->memory, NULL);
@@ -1402,47 +1491,26 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
             DM_LOG_FATAL("vmaCreateImage failed");
             return false;
         }
-        texture.image[i] = vulkan_renderer->image_count++;
+        texture->image[i] = vulkan_renderer->image_count++;
 
-        // transition image layout
-        VkImageMemoryBarrier barrier = { 0 };
-        barrier.sType                       = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-        barrier.oldLayout                   = VK_IMAGE_LAYOUT_UNDEFINED;
-        barrier.newLayout                   = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.srcQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstQueueFamilyIndex         = VK_QUEUE_FAMILY_IGNORED;
-        barrier.dstAccessMask               = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.image                       = image->image;
-        barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        barrier.subresourceRange.layerCount = 1;
-        barrier.subresourceRange.levelCount = 1;
+        if(desc.data)
+        {
+            VkBufferImageCopy copy = { 0 };
+            copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            copy.imageSubresource.layerCount = 1;
+            copy.imageExtent.width           = desc.width;
+            copy.imageExtent.height          = desc.height;
+            copy.imageExtent.depth           = 1;
 
-        vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,VK_PIPELINE_STAGE_TRANSFER_BIT,0,0,NULL,0,NULL, 1, &barrier);
+            if(!dm_vulkan_copy_buffer_to_image(staging_buffer, image, copy, true, vulkan_renderer)) return false;
+        }
 
-        // copy over data
-        VkBufferImageCopy copy = { 0 };
-        copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        copy.imageSubresource.layerCount = 1;
-        copy.imageExtent.width           = desc.width;
-        copy.imageExtent.height          = desc.height;
-        copy.imageExtent.depth           = 1;
-
-        vkCmdCopyBufferToImage(cmd_buffer, staging_buffer->buffer, image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);
-
-        // transition again
-        barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-        barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_2_SHADER_READ_BIT;
-
-        vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,0,0,NULL,0,NULL, 1, &barrier);
-
-        // view
+        // view(s)
         VkImageViewCreateInfo view_info = { 0 };
         view_info.sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
         view_info.image    = image->image;
         view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        view_info.format   = texture.format;
+        view_info.format   = texture->format;
         view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
         view_info.subresourceRange.levelCount = 1;
         view_info.subresourceRange.layerCount = 1;
@@ -1455,8 +1523,138 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         }
     }
 
-    // === sampler ===
-    // TODO: needs to be configurable
+    dm_memcpy(vulkan_renderer->textures + vulkan_renderer->texture_count, &texture, sizeof(dm_vulkan_texture));
+
+    return true;
+}
+
+bool dm_renderer_backend_create_storage_texture(dm_texture_desc desc, dm_resource_handle *handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
+    dm_vulkan_descriptor_buffer* descriptor_buffer = &vulkan_renderer->resource_descriptor_buffer;
+    dm_vulkan_descriptor_data    descriptor_data   = descriptor_buffer->descriptor_data[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_IMAGE];
+#endif
+
+    dm_vulkan_texture texture = { 0 };
+
+    if(!dm_vulkan_create_texture(desc, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_STORAGE_BIT, &texture, vulkan_renderer)) return false; 
+
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VkDescriptorImageInfo image_info = { 0 };
+        image_info.imageView   = vulkan_renderer->images[texture.image[i]].view;
+        image_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
+        VkDescriptorGetInfoEXT info = { 0 };
+        info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT;
+        info.data.pStorageImage = &image_info;
+        info.type               = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+
+        char* descriptor_buffer_ptr = (char*)descriptor_buffer->memory_handle[i].begin;
+        descriptor_buffer_ptr += descriptor_data.offset;
+        descriptor_buffer_ptr += descriptor_data.count * descriptor_data.size;
+
+        vkGetDescriptorEXT(vulkan_renderer->device.logical, &info, descriptor_data.size, descriptor_buffer_ptr);
+#else
+        VkWriteDescriptorSet write_set = { 0 };
+        write_set.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_set.descriptorCount = 1;
+        write_set.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        write_set.dstSet          = vulkan_renderer->resource_bindless_set[i];
+        write_set.dstArrayElement = vulkan_renderer->texture_count;
+        write_set.dstBinding      = DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        write_set.pImageInfo      = &image_info;
+
+        vkUpdateDescriptorSets(vulkan_renderer->device.logical, 1, &write_set, 0, NULL);
+#endif
+    }
+
+    //
+    handle->index = vulkan_renderer->texture_count++;
+
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
+    handle->descriptor_index = descriptor_buffer->descriptor_data[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_IMAGE].count++;
+#else
+    handle->descriptor_index = handle->index;
+#endif  
+
+    return true;
+}
+
+bool dm_renderer_backend_create_sampled_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    dm_vulkan_texture texture = { 0 };
+
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
+    dm_vulkan_descriptor_buffer* descriptor_buffer = &vulkan_renderer->resource_descriptor_buffer;
+    dm_vulkan_descriptor_data    descriptor_data   = descriptor_buffer->descriptor_data[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_SAMPLED_IMAGE];
+#endif
+
+    if(!dm_vulkan_create_texture(desc, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, &texture, vulkan_renderer)) return false; 
+
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VkDescriptorImageInfo image_info = { 0 };
+        image_info.imageView   = vulkan_renderer->images[texture.image[i]].view;
+        image_info.sampler     = vulkan_renderer->samplers[desc.sampler.index].sampler;
+        image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
+        VkDescriptorGetInfoEXT info = { 0 };
+        info.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT;
+        info.data.pSampledImage = &image_info;
+        info.type               = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+
+        char* descriptor_buffer_ptr = (char*)descriptor_buffer->memory_handle[i].begin;
+        descriptor_buffer_ptr += descriptor_data.offset;
+        descriptor_buffer_ptr += descriptor_data.count * descriptor_data.size;
+
+        vkGetDescriptorEXT(vulkan_renderer->device.logical, &info, descriptor_data.size, descriptor_buffer_ptr);
+#else
+        VkWriteDescriptorSet write_set = { 0 };
+        write_set.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_set.descriptorCount = 1;
+        write_set.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        write_set.dstSet          = vulkan_renderer->resource_bindless_set[i];
+        write_set.dstArrayElement = vulkan_renderer->texture_count;
+        write_set.dstBinding      = DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        write_set.pImageInfo      = &image_info;
+
+        vkUpdateDescriptorSets(vulkan_renderer->device.logical, 1, &write_set, 0, NULL);
+#endif
+    }
+
+    //
+    handle->index = vulkan_renderer->texture_count++;
+
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
+    handle->descriptor_index = descriptor_buffer->descriptor_data[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_SAMPLED_IMAGE].count++;
+#else
+    handle->descriptor_index = handle->index;
+#endif
+
+    return true;
+}
+
+bool dm_renderer_backend_create_sampler(dm_resource_handle* handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
+    dm_vulkan_descriptor_buffer* descriptor_buffer = &vulkan_renderer->sampler_descriptor_buffer;
+    dm_vulkan_descriptor_data    descriptor_data   = descriptor_buffer->descriptor_data[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_SAMPLER];
+#endif
+
+    dm_vulkan_sampler sampler = { 0 };
+
     VkSamplerCreateInfo sampler_create_info = { 0 };
     sampler_create_info.sType            = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     sampler_create_info.magFilter        = VK_FILTER_LINEAR;
@@ -1469,7 +1667,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
     sampler_create_info.borderColor      = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
     sampler_create_info.compareOp        = VK_COMPARE_OP_NEVER;
 
-    vr = vkCreateSampler(vulkan_renderer->device.logical, &sampler_create_info, NULL, &texture.sampler);
+    vr = vkCreateSampler(vulkan_renderer->device.logical, &sampler_create_info, NULL, &sampler.sampler);
     if(!dm_vulkan_decode_vr(vr))
     {
         DM_LOG_FATAL("vkCreateSampler failed");
@@ -1477,54 +1675,42 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
     }
 
     // descriptor
-#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
-    dm_vulkan_descriptor_buffer* descriptor_buffer = &vulkan_renderer->sampler_descriptor_buffer;
-    dm_vulkan_descriptor_data descriptor_data = descriptor_buffer->descriptor_data[0];
-
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        VkDescriptorImageInfo image_info = { 0 };
-        image_info.sampler     = texture.sampler;
-        image_info.imageView   = vulkan_renderer->images[texture.image[i]].view;
-        image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
         VkDescriptorGetInfoEXT info = { 0 };
-        info.sType                      = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT;
-        info.type                       = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        info.data.pCombinedImageSampler = &image_info;
+        info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_GET_INFO_EXT;
+        info.data.pSampler = &sampler.sampler;
+        info.type          = VK_DESCRIPTOR_TYPE_SAMPLER;
 
         char* descriptor_buffer_ptr = (char*)descriptor_buffer->memory_handle[i].begin;
         descriptor_buffer_ptr += descriptor_data.offset;
         descriptor_buffer_ptr += descriptor_data.count * descriptor_data.size;
 
         vkGetDescriptorEXT(vulkan_renderer->device.logical, &info, descriptor_data.size, descriptor_buffer_ptr);
-    }
 #else
-    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
-    {
         VkDescriptorImageInfo image_info = { 0 };
-        image_info.sampler     = texture.sampler;
-        image_info.imageView   = vulkan_renderer->images[texture.image[i]].view;
-        image_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        image_info.sampler = sampler.sampler;
 
         VkWriteDescriptorSet write_set = { 0 };
         write_set.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
         write_set.descriptorCount = 1;
-        write_set.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write_set.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
         write_set.dstSet          = vulkan_renderer->sampler_bindless_set[i];
-        write_set.dstArrayElement = vulkan_renderer->texture_count;
-        write_set.dstBinding      = DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        write_set.dstArrayElement = vulkan_renderer->sampler_count;
+        write_set.dstBinding      = DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_SAMPLER;
         write_set.pImageInfo      = &image_info;
 
         vkUpdateDescriptorSets(vulkan_renderer->device.logical, 1, &write_set, 0, NULL);
-    }
 #endif
+    }
 
     //
-    dm_memcpy(vulkan_renderer->textures + vulkan_renderer->texture_count, &texture, sizeof(texture));
-    handle->index = vulkan_renderer->texture_count++;
+    dm_memcpy(vulkan_renderer->samplers + vulkan_renderer->sampler_count, &sampler, sizeof(sampler));
+    handle->index = vulkan_renderer->sampler_count++;
+
 #ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
-    handle->descriptor_index = descriptor_buffer->descriptor_data[0].count++;
+    handle->descriptor_index = descriptor_buffer->descriptor_data[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_SAMPLER].count++;
 #else
     handle->descriptor_index = handle->index;
 #endif
@@ -1537,18 +1723,272 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     return true;
 }
 
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_vulkan_create_acceleration_structure(VkAccelerationStructureBuildGeometryInfoKHR build_info, VkBufferUsageFlags usage_flags, uint32_t primitive_count, dm_vulkan_as* as, dm_vulkan_renderer* vulkan_renderer)
+{
+    VkResult vr;
+
+    VkAccelerationStructureBuildSizesInfoKHR build_sizes_info = { 0 };
+    build_sizes_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+
+    const uint32_t primitive_counts[] = { primitive_count };
+
+    vkGetAccelerationStructureBuildSizesKHR(vulkan_renderer->device.logical, VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &build_info, primitive_counts, &build_sizes_info);
+
+    const size_t as_size      = build_sizes_info.accelerationStructureSize;
+    const size_t scratch_size = build_sizes_info.buildScratchSize;
+
+    // result buffer
+    dm_vulkan_buffer* result_buffer = &vulkan_renderer->buffers[vulkan_renderer->buffer_count];
+    dm_vulkan_buffer* scratch_buffer = &vulkan_renderer->buffers[vulkan_renderer->buffer_count+1];
+
+    if(!dm_vulkan_create_buffer(as_size, usage_flags, VK_SHARING_MODE_CONCURRENT, result_buffer, vulkan_renderer)) return false;
+    as->result = vulkan_renderer->buffer_count++;
+
+    // acceleration structure
+    VkAccelerationStructureCreateInfoKHR as_create_info = { 0 };
+    as_create_info.sType  = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+    as_create_info.buffer = result_buffer->buffer;
+    as_create_info.size   = as_size; 
+    as_create_info.type   = build_info.type;
+
+    vr = vkCreateAccelerationStructureKHR(vulkan_renderer->device.logical, &as_create_info, NULL, &as->as);
+    if(!dm_vulkan_decode_vr(vr) || !as->as)
+    {
+        DM_LOG_FATAL("vkCreateAccelerationStructureKHR failed");
+        return false;
+    }
+
+    // scratch buffer
+    usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
+
+    if(!dm_vulkan_create_buffer(scratch_size, usage_flags, VK_SHARING_MODE_CONCURRENT, scratch_buffer, vulkan_renderer)) return false;
+    as->scratch = vulkan_renderer->buffer_count++;
+
+    VkBufferDeviceAddressInfo scratch_device_info = { 0 };
+    scratch_device_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    scratch_device_info.buffer = scratch_buffer->buffer;
+    
+    VkDeviceAddress scratch_device_address = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &scratch_device_info);
+
+    // continue building
+    build_info.scratchData.deviceAddress = scratch_device_address;
+    build_info.dstAccelerationStructure  = as->as;
+
+    VkAccelerationStructureBuildRangeInfoKHR build_range = { 0 };
+    build_range.primitiveCount = primitive_count;
+
+    const VkAccelerationStructureBuildRangeInfoKHR* build_range2 = { &build_range };
+    vkCmdBuildAccelerationStructuresKHR(vulkan_renderer->device.graphics_queue.buffer[vulkan_renderer->current_frame], 1, &build_info, &build_range2);
+
+    as->result_size  = as_size;
+    as->scratch_size = scratch_size;
+
+    return true;
+}
+
 bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
 {
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    dm_vulkan_blas blas = { 0 };
+
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VkAccelerationStructureBuildRangeInfoKHR    build_range   = { 0 };
+        VkAccelerationStructureGeometryDataKHR      geometry_data = { 0 };
+
+        VkAccelerationStructureGeometryKHR          geometry      = { 0 };
+        geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+
+        VkAccelerationStructureBuildGeometryInfoKHR build_info    = { 0 };
+        build_info.sType         = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+        build_info.type          = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+        build_info.mode          = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        build_info.flags         = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
+        build_info.geometryCount = 1;
+        build_info.pGeometries   = &geometry; 
+
+        size_t primitive_count = 0;
+
+        switch(desc.flags)
+        {
+            case DM_BLAS_GEOMETRY_FLAG_OPAQUE:
+            geometry.flags = VK_GEOMETRY_OPAQUE_BIT_KHR;
+            break;
+
+            default:
+            DM_LOG_FATAL("Unknown geometry flag");
+            return false;
+        }
+
+        switch(desc.geometry_type)
+        {
+            case DM_BLAS_GEOMETRY_TYPE_TRIANGLES:
+            {
+                dm_vulkan_buffer vb = vulkan_renderer->buffers[vulkan_renderer->vertex_buffers[desc.vertex_buffer.index].device[i]];
+                dm_vulkan_buffer ib = vulkan_renderer->buffers[vulkan_renderer->index_buffers[desc.index_buffer.index].device[i]];
+                geometry_data.triangles.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+                geometry.geometryType         = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+
+                VkBufferDeviceAddressInfo vb_address_info = { 0 };
+                vb_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                vb_address_info.buffer = vb.buffer;
+                VkDeviceAddress vb_address = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &vb_address_info);
+
+                VkBufferDeviceAddressInfo ib_address_info = { 0 };
+                ib_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                ib_address_info.buffer = ib.buffer; 
+                VkDeviceAddress ib_address = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &ib_address_info);
+                    
+                switch(desc.vertex_type)
+                {
+                    case DM_BLAS_VERTEX_TYPE_FLOAT_3:
+                    geometry_data.triangles.vertexFormat = VK_FORMAT_R32G32B32_SFLOAT;
+                    break;
+
+                    default:
+                    DM_LOG_FATAL("Unsupported vertex format");
+                    return false;
+                }
+
+                primitive_count = desc.index_count / 3;
+
+                geometry_data.triangles.maxVertex                = desc.vertex_count - 1; 
+                geometry_data.triangles.vertexStride             = desc.vertex_stride;
+                geometry_data.triangles.vertexData.deviceAddress = vb_address;
+
+                build_range.primitiveCount = primitive_count; 
+
+                switch(desc.index_type)
+                {
+                    case DM_INDEX_BUFFER_INDEX_TYPE_UINT32:
+                    geometry_data.triangles.indexType = VK_INDEX_TYPE_UINT32;
+                    break;
+
+                    default:
+                    DM_LOG_FATAL("Unsupported index type");
+                    return false;
+                }
+                geometry_data.triangles.indexData.deviceAddress = ib_address;
+            } break;
+
+            default:
+            DM_LOG_FATAL("Unsupported geometry type");
+            return false;
+        }
+
+        geometry.geometry = geometry_data;
+
+        VkBufferUsageFlagBits usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+        if(!dm_vulkan_create_acceleration_structure(build_info, usage_flags, primitive_count, &blas.as[i], vulkan_renderer)) 
+        {
+            DM_LOG_FATAL("Could not create bottom-level acceleration structure");
+            return false;
+        }
+    }
+
+    //
+    dm_memcpy(vulkan_renderer->blas + vulkan_renderer->blas_count, &blas, sizeof(blas));
+    handle->index = vulkan_renderer->blas_count++;
+
     return true;
 }
 
 bool dm_renderer_backend_create_tlas(dm_tlas_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
 {
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+    
+    dm_vulkan_tlas tlas = { 0 };
+    tlas.instance_buffer = desc.instance_buffer;
+
+    dm_vulkan_storage_buffer instance_buffer = vulkan_renderer->storage_buffers[desc.instance_buffer.index];
+
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        VkBufferDeviceAddressInfo instance_address_info = { 0 };
+        instance_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+        instance_address_info.buffer = vulkan_renderer->buffers[instance_buffer.device[i]].buffer;
+
+        VkDeviceAddress instance_address = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &instance_address_info);
+        
+        // top level
+        VkAccelerationStructureGeometryDataKHR geometry_data = { 0 };
+        geometry_data.instances.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+        geometry_data.instances.data.deviceAddress = instance_address;
+
+        VkAccelerationStructureGeometryKHR geometry = { 0 };
+        geometry.sType        = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+        geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+        geometry.geometry     = geometry_data;
+        // TODO: needs to be configurable, hardcoded here
+        geometry.flags        = VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+        VkAccelerationStructureBuildGeometryInfoKHR build_info = { 0 };
+        build_info.sType         = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+        build_info.type          = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+        build_info.mode          = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        build_info.flags         = VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+        build_info.pGeometries   = &geometry;
+        build_info.geometryCount = 1;
+
+        VkAccelerationStructureBuildSizesInfoKHR build_sizes_info = { 0 };
+        build_sizes_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+        
+        VkBufferUsageFlagBits usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+        if(!dm_vulkan_create_acceleration_structure(build_info, usage_flags, desc.instance_count, &tlas.as[i], vulkan_renderer)) return false;
+
+        // descriptors
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
+        dm_vulkan_copy_buffer_descriptor(&vulkan_renderer->buffers[tlas.as[i].result], VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE, tlas.as[i].result_size, i, vulkan_renderer);
+#else
+        VkWriteDescriptorSetAccelerationStructureKHR write_info = { 0 };
+        write_info.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR;
+        write_info.accelerationStructureCount = 1;
+        write_info.pAccelerationStructures    = &tlas.as[i].as;
+
+        VkWriteDescriptorSet write_set = { 0 };
+        write_set.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_set.descriptorCount = 1;
+        write_set.descriptorType  = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
+        write_set.dstSet          = vulkan_renderer->resource_bindless_set[i];
+        write_set.dstArrayElement = vulkan_renderer->tlas_count;
+        write_set.dstBinding      = DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE;
+        write_set.pNext           = &write_info;
+
+        vkUpdateDescriptorSets(vulkan_renderer->device.logical, 1, &write_set, 0, NULL);
+#endif
+    }
+
+    //
+    dm_memcpy(vulkan_renderer->tlas + vulkan_renderer->tlas_count, &tlas, sizeof(tlas));
+    handle->index = vulkan_renderer->tlas_count++;
+#ifdef DM_VULKAN_DESCRIPTOR_BUFFERS
+    handle->descriptor_index = vulkan_renderer->resource_descriptor_buffer.descriptor_data[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE].count++;
+#else
+    handle->descriptor_index = handle->index;
+#endif
+
     return true;
 }
 
 bool dm_renderer_backend_get_blas_gpu_address(dm_resource_handle blas, size_t* address, dm_renderer* renderer)
 {
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    dm_vulkan_blas as = vulkan_renderer->blas[blas.index];
+
+    VkBufferDeviceAddressInfo address_info = { 0 };
+    address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    address_info.buffer = vulkan_renderer->buffers[as.as[vulkan_renderer->current_frame].result].buffer;
+
+    *address = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &address_info);
+
     return true;
 }
 
@@ -1617,6 +2057,13 @@ bool dm_render_command_backend_bind_raster_pipeline(dm_resource_handle handle, d
     const VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[current_frame];
 
     dm_vulkan_raster_pipeline pipeline = vulkan_renderer->raster_pipes[handle.index];
+
+    pipeline.viewport.y      = (float)renderer->height;
+    pipeline.viewport.width  = (float)renderer->width;
+    pipeline.viewport.height = -(float)renderer->height;
+
+    pipeline.scissor.extent.width  = renderer->width;
+    pipeline.scissor.extent.height = renderer->height;
 
     vkCmdBindPipeline(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline.pipeline);
     vkCmdSetViewport(cmd_buffer, 0,1, &pipeline.viewport);
@@ -1749,13 +2196,105 @@ bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm
     return true;
 }
 
+bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, dm_resource_handle handle, dm_renderer* renderer)
+{
+    return true;
+}
+
 bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer)
 {
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    dm_vulkan_tlas tlas = vulkan_renderer->tlas[handle.index];
+    dm_vulkan_storage_buffer instance_buffer = vulkan_renderer->storage_buffers[tlas.instance_buffer.index];
+    const uint8_t current_frame = vulkan_renderer->current_frame;
+
+    dm_vulkan_buffer* instance_b = &vulkan_renderer->buffers[instance_buffer.device[current_frame]];
+    dm_vulkan_buffer* scratch_buffer = &vulkan_renderer->buffers[tlas.as[current_frame].scratch];
+
+    VkBufferDeviceAddressInfo instance_buffer_address_info = { 0 };
+    instance_buffer_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    instance_buffer_address_info.buffer = instance_b->buffer;
+
+    VkAccelerationStructureGeometryDataKHR geometry_data = { 0 };
+    geometry_data.instances.sType              = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+    geometry_data.instances.data.deviceAddress = vkGetBufferDeviceAddressKHR(vulkan_renderer->device.logical, &instance_buffer_address_info); 
+
+    VkAccelerationStructureGeometryKHR geometry = { 0 };
+    geometry.sType        = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+    geometry.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    geometry.geometry     = geometry_data;
+    geometry.flags        = VK_GEOMETRY_OPAQUE_BIT_KHR;
+
+    VkBufferDeviceAddressInfo scratch_buffer_address_info = { 0 };
+    scratch_buffer_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+    scratch_buffer_address_info.buffer = scratch_buffer->buffer;
+
+    VkAccelerationStructureBuildGeometryInfoKHR build_info = { 0 };
+    build_info.sType                     = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+    build_info.type                      = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+    build_info.mode                      = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
+    build_info.flags                     = VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+    build_info.dstAccelerationStructure  = tlas.as[current_frame].as;
+    build_info.srcAccelerationStructure  = tlas.as[current_frame].as;    
+    build_info.scratchData.deviceAddress = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &scratch_buffer_address_info);
+    build_info.pGeometries               = &geometry; 
+    build_info.geometryCount             = 1;
+
+    VkAccelerationStructureBuildRangeInfoKHR build_range = { 0 };
+    build_range.primitiveCount = instance_count;
+
+    const VkAccelerationStructureBuildRangeInfoKHR* build_range2 = { &build_range };
+
+    vkCmdBuildAccelerationStructuresKHR(vulkan_renderer->device.graphics_queue.buffer[current_frame], 1, &build_info, &build_range2);
+
     return true;
 }
 
 bool dm_render_command_backend_copy_image_to_screen(dm_resource_handle image, dm_renderer* renderer)
 {
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    dm_vulkan_texture* texture = &vulkan_renderer->textures[image.index];
+
+    const uint8_t current_frame = vulkan_renderer->current_frame;
+    VkCommandBuffer cmd_buffer  = vulkan_renderer->device.graphics_queue.buffer[current_frame];
+
+    //VkImage source_image  = vulkan_renderer->images[texture->image[current_frame]].image;
+    VkImage render_target = vulkan_renderer->swapchain.render_targets[current_frame];
+
+    // transition source image before copy
+    VkImageSubresourceRange range = { 0 };
+    range.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
+    range.baseMipLevel   = 0;
+    range.levelCount     = 1;
+    range.baseArrayLayer = 0;
+    range.layerCount     = 1;
+
+    // must transition swapchain images and depth image
+    VkImageMemoryBarrier source_barrier = { 0 };
+    source_barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    //source_barrier.image               = source_image;
+    source_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    source_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    source_barrier.srcAccessMask       = 0;
+    source_barrier.dstAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    source_barrier.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
+    source_barrier.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    source_barrier.subresourceRange    = range;
+
+    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_NONE, VK_PIPELINE_STAGE_TRANSFER_BIT,  0,0,NULL,0,NULL, 1, &source_barrier);
+
+    // transition source image back
+    source_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    source_barrier.dstAccessMask = 0;
+    source_barrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    source_barrier.newLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_NONE, 0,0,NULL,0,NULL, 1, &source_barrier);
+
     return true;
 }
 
@@ -2410,6 +2949,7 @@ bool dm_vulkan_create_device(dm_vulkan_renderer* vulkan_renderer)
         VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME,
         VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
+        VK_KHR_DYNAMIC_RENDERING_LOCAL_READ_EXTENSION_NAME
     };
 
     uint32_t physical_device_count;
@@ -2827,6 +3367,7 @@ bool dm_vulkan_create_bindless_layout(dm_vulkan_renderer* vulkan_renderer)
     resource_descriptor_types[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_UNIFORM_BUFFER]         = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     resource_descriptor_types[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_BUFFER]         = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     resource_descriptor_types[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_IMAGE]          = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    resource_descriptor_types[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_SAMPLED_IMAGE]          = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
     resource_descriptor_types[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE] = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
 
     if(!dm_vulkan_create_layout(resource_descriptor_types, _countof(resource_descriptor_types), &vulkan_renderer->resource_bindless_layout, vulkan_renderer)) return false;
@@ -2834,7 +3375,7 @@ bool dm_vulkan_create_bindless_layout(dm_vulkan_renderer* vulkan_renderer)
     // sampler bindless layout
     VkDescriptorType sampler_descriptor_types[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_UNKNOWN];
 
-    sampler_descriptor_types[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER] = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    sampler_descriptor_types[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_SAMPLER] = VK_DESCRIPTOR_TYPE_SAMPLER;
 
     if(!dm_vulkan_create_layout(sampler_descriptor_types, _countof(sampler_descriptor_types), &vulkan_renderer->sampler_bindless_layout, vulkan_renderer)) return false;
 
@@ -2920,9 +3461,10 @@ bool dm_vulkan_create_descriptor_buffers(dm_vulkan_renderer* vulkan_renderer)
     resource_data[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_UNIFORM_BUFFER].size         = vulkan_renderer->device.properties.descriptor_buffer.uniformBufferDescriptorSize;
     resource_data[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_BUFFER].size         = vulkan_renderer->device.properties.descriptor_buffer.storageBufferDescriptorSize;
     resource_data[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_IMAGE].size          = vulkan_renderer->device.properties.descriptor_buffer.storageImageDescriptorSize;
+    resource_data[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_SAMPLED_IMAGE].size          = vulkan_renderer->device.properties.descriptor_buffer.sampledImageDescriptorSize;
     resource_data[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE].size = vulkan_renderer->device.properties.descriptor_buffer.accelerationStructureDescriptorSize;
 
-    sampler_data[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER].size = vulkan_renderer->device.properties.descriptor_buffer.combinedImageSamplerDescriptorSize;
+    sampler_data[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_SAMPLER].size = vulkan_renderer->device.properties.descriptor_buffer.samplerDescriptorSize;
 
     return true;
 }
@@ -2934,10 +3476,16 @@ bool dm_vulkan_create_bindless_descriptor_pool(dm_vulkan_renderer* vulkan_render
     VkDescriptorPoolSize resource_pool_size[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_UNKNOWN] = { 0 };
     resource_pool_size[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_UNIFORM_BUFFER].type                    = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     resource_pool_size[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_UNIFORM_BUFFER].descriptorCount         = DM_VULKAN_MAX_DESCRIPTORS;
+
     resource_pool_size[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_BUFFER].type                    = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     resource_pool_size[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_BUFFER].descriptorCount         = DM_VULKAN_MAX_DESCRIPTORS;
+
     resource_pool_size[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_IMAGE].type                     = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     resource_pool_size[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_STORAGE_IMAGE].descriptorCount          = DM_VULKAN_MAX_DESCRIPTORS;
+
+    resource_pool_size[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_SAMPLED_IMAGE].type                     = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+    resource_pool_size[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_SAMPLED_IMAGE].descriptorCount          = DM_VULKAN_MAX_DESCRIPTORS;
+
     resource_pool_size[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE].type            = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
     resource_pool_size[DM_VULKAN_RESOURCE_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE].descriptorCount = DM_VULKAN_MAX_DESCRIPTORS;
 
@@ -2949,8 +3497,8 @@ bool dm_vulkan_create_bindless_descriptor_pool(dm_vulkan_renderer* vulkan_render
     resource_create_info.flags         = VK_DESCRIPTOR_POOL_CREATE_UPDATE_AFTER_BIND_BIT;
 
     VkDescriptorPoolSize sampler_pool_size[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_UNKNOWN] = { 0 };
-    sampler_pool_size[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER].type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    sampler_pool_size[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER].descriptorCount = DM_VULKAN_MAX_DESCRIPTORS;
+    sampler_pool_size[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_SAMPLER].type            = VK_DESCRIPTOR_TYPE_SAMPLER;
+    sampler_pool_size[DM_VULKAN_SAMPLER_DESCRIPTOR_TYPE_SAMPLER].descriptorCount = DM_VULKAN_MAX_DESCRIPTORS;
 
     VkDescriptorPoolCreateInfo sampler_create_info = { 0 };
     sampler_create_info.sType         = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
