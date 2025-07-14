@@ -2,7 +2,7 @@
 
 #ifdef DM_VULKAN
 
-#if 1
+#if 0
 #define DM_VULKAN_DESCRIPTOR_BUFFERS
 #endif
 
