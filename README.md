@@ -18,9 +18,13 @@ This is a cross-platform rendering framework for the purpose of learning. It is 
   - TBD: Linux
 
 ## Current Progress
-DarkMatter is only DX12 currently; this will change once ResourceDescriptorHeap is supported with Vulkan, or I find the time to square the circle of supporting the two vastly different approaches.
+DarkMatter uses a bindless rendering approach for both Vulkan and DX12.
 
-With DX12:
-- raster pipelines
-- raytracing pipelines
-- bindless rendering
+- DX12
+  - Resource descriptor heap
+  - Sampler descriptor heap
+
+- Vulkan
+  - Descriptor Sets/Pools
+  OR
+  - Descriptor Buffers
