@@ -544,11 +544,23 @@ bool dm_renderer_backend_init(dm_context* context)
         root_params[0].Constants.Num32BitValues = DM_MAX_ROOT_CONSTANTS;
         root_params[0].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
 
+        D3D12_STATIC_SAMPLER_DESC sampler = { 0 };
+        sampler.Filter           = D3D12_FILTER_MIN_MAG_MIP_POINT;
+        sampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+        sampler.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+        sampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+        sampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER;
+        sampler.BorderColor      = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
+        sampler.MaxLOD           = D3D12_FLOAT32_MAX;
+        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
+
         D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_sig_desc = { 0 };
         root_sig_desc.Version                = D3D_ROOT_SIGNATURE_VERSION_1_1;
         root_sig_desc.Desc_1_1.Flags         = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
         root_sig_desc.Desc_1_1.NumParameters = 1;
         root_sig_desc.Desc_1_1.pParameters   = root_params;
+        root_sig_desc.Desc_1_1.NumStaticSamplers = 1;
+        root_sig_desc.Desc_1_1.pStaticSamplers = &sampler;
 
         ID3DBlob* blob = NULL;
         void* temp = NULL;
@@ -842,7 +854,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
         return false;
     }
 
-    ID3D12DescriptorHeap* heaps[] = { dx12_renderer->resource_heap[current_frame].heap };
+    ID3D12DescriptorHeap* heaps[] = { dx12_renderer->resource_heap[current_frame].heap, dx12_renderer->sampler_heap[current_frame].heap };
     ID3D12GraphicsCommandList7_SetDescriptorHeaps(command_list, _countof(heaps), heaps);
 
     dx12_renderer->active_pipeline_type = DM_PIPELINE_TYPE_UNKNOWN;
@@ -1748,14 +1760,13 @@ bool dm_renderer_backend_create_sampler(dm_resource_handle* handle, dm_renderer*
     DM_DX12_GET_RENDERER;
     HRESULT hr;
 
-    // TODO: this sucks
     D3D12_SAMPLER_DESC sampler = { 0 };
     sampler.Filter         = D3D12_FILTER_MIN_MAG_MIP_POINT;
     sampler.AddressU       = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
     sampler.AddressV       = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
     sampler.AddressW       = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-    sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
     sampler.MaxLOD         = D3D12_FLOAT32_MAX;
+    sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 
     for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
     {
