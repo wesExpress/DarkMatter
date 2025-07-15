@@ -1051,7 +1051,7 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_res
         VkBufferCopy copy_region = { 0 };
         copy_region.size = desc.size;
 
-        vkCmdCopyBuffer(vulkan_renderer->device.transfer_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
+        vkCmdCopyBuffer(vulkan_renderer->device.graphics_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
     }
 
     //
@@ -1108,7 +1108,7 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resou
         VkBufferCopy copy_region = { 0 };
         copy_region.size = desc.size;
 
-        vkCmdCopyBuffer(vulkan_renderer->device.transfer_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
+        vkCmdCopyBuffer(vulkan_renderer->device.graphics_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
     }
 
     //
@@ -1206,7 +1206,7 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
             VkBufferCopy copy_region = { 0 };
             copy_region.size = desc.size;
 
-            vkCmdCopyBuffer(vulkan_renderer->device.transfer_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
+            vkCmdCopyBuffer(vulkan_renderer->device.graphics_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
         }
 
         // descriptors
@@ -1585,19 +1585,11 @@ bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* hand
 
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        VkAccelerationStructureBuildRangeInfoKHR    build_range   = { 0 };
+        //VkAccelerationStructureBuildRangeInfoKHR    build_range   = { 0 };
         VkAccelerationStructureGeometryDataKHR      geometry_data = { 0 };
 
         VkAccelerationStructureGeometryKHR          geometry      = { 0 };
         geometry.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
-
-        VkAccelerationStructureBuildGeometryInfoKHR build_info    = { 0 };
-        build_info.sType         = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
-        build_info.type          = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
-        build_info.mode          = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-        build_info.flags         = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_BUILD_BIT_KHR;
-        build_info.geometryCount = 1;
-        build_info.pGeometries   = &geometry; 
 
         size_t primitive_count = 0;
 
@@ -1631,6 +1623,7 @@ bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* hand
                 ib_address_info.buffer = ib.buffer; 
                 VkDeviceAddress ib_address = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &ib_address_info);
                     
+                // vertex data
                 switch(desc.vertex_type)
                 {
                     case DM_BLAS_VERTEX_TYPE_FLOAT_3:
@@ -1642,13 +1635,12 @@ bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* hand
                     return false;
                 }
 
-                primitive_count = desc.index_count / 3;
-
                 geometry_data.triangles.maxVertex                = desc.vertex_count - 1; 
                 geometry_data.triangles.vertexStride             = desc.vertex_stride;
                 geometry_data.triangles.vertexData.deviceAddress = vb_address;
 
-                build_range.primitiveCount = primitive_count; 
+                // index data
+                primitive_count = desc.index_count / 3; 
 
                 switch(desc.index_type)
                 {
@@ -1670,7 +1662,15 @@ bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* hand
 
         geometry.geometry = geometry_data;
 
+        VkAccelerationStructureBuildGeometryInfoKHR build_info    = { 0 };
+        build_info.sType         = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+        build_info.type          = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+        build_info.mode          = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+        build_info.geometryCount = 1;
+        build_info.pGeometries   = &geometry; 
+
         VkBufferUsageFlagBits usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+
         if(!dm_vulkan_create_acceleration_structure(build_info, usage_flags, primitive_count, &blas.as[i], vulkan_renderer)) 
         {
             DM_LOG_FATAL("Could not create bottom-level acceleration structure");
