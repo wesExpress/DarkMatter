@@ -1,5 +1,7 @@
 #include "dm.h"
 
+#include <stdlib.h>
+#include <stdio.h>
 #include <string.h>
 #include <math.h>
 #include <time.h>
@@ -12,43 +14,8 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image/stb_image.h"
 
+#define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype/stb_truetype.h"
-
-#define FAST_OBJ_IMPLEMENTATION
-#include "fast_obj/fast_obj.h"
-
-#define CGLTF_IMPLEMENTATION
-#include "cgltf/cgltf.h"
-
-//#define DM_MATH_TESTS
-
-/*********
-BYTE POOL
-***********/
-void __dm_byte_pool_insert(dm_byte_pool* byte_pool, void* data, size_t data_size)
-{
-    if(!byte_pool->data) byte_pool->data = dm_alloc(data_size);
-    else                 byte_pool->data = dm_realloc(byte_pool->data, byte_pool->size + data_size);
-    
-    void* dest = (char*)byte_pool->data + byte_pool->size;
-    dm_memcpy(dest, data, data_size);
-    byte_pool->size += data_size;
-}
-#define DM_BYTE_POOL_INSERT(BYTE_POOL, DATA) __dm_byte_pool_insert(&BYTE_POOL, &DATA, sizeof(DATA))
-
-void* __dm_byte_pool_pop(dm_byte_pool* byte_pool, size_t data_size)
-{
-    if(!byte_pool->size)
-    {
-        DM_LOG_ERROR("Trying to pop from an empty byte pool");
-        return NULL;
-    }
-    
-    void* result = (char*)byte_pool->data + byte_pool->size - data_size;
-    byte_pool->size -= data_size;
-    return result;
-}
-#define DM_BYTE_POOL_POP(BYTE_POOL, T, NAME) T NAME = *(T*)__dm_byte_pool_pop(&BYTE_POOL, sizeof(T))
 
 /****
 MATH
@@ -222,10 +189,10 @@ void* dm_realloc(void* block, size_t size)
     return block;
 }
 
-void dm_free(void* block)
+void dm_free(void** block)
 {
-    free(block);
-    block = NULL;
+    free(*block);
+    *block = NULL;
 }
 
 void* dm_memset(void* dest, int value, size_t size)
@@ -300,7 +267,7 @@ float dm_random_float_normal(float mu, float sigma, dm_context* context)
 {
     const float u1 = dm_random_float(context);
     const float u2 = dm_random_float(context);
-     
+    
     const float mag = sigma * dm_sqrtf(-2.0 * dm_logf(u1));
     const float z0  = mag * dm_cos(DM_MATH_2PI * u2) + mu;
     const float z1  = mag * dm_sin(DM_MATH_2PI * u2) + mu;
@@ -505,12 +472,16 @@ EVENT
 *******/
 void dm_add_window_close_event(dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_WINDOW_CLOSE;
 }
 
 void dm_add_window_resize_event(uint32_t new_width, uint32_t new_height, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_WINDOW_RESIZE;
     e->new_rect[0] = new_width;
@@ -519,6 +490,8 @@ void dm_add_window_resize_event(uint32_t new_width, uint32_t new_height, dm_even
 
 void dm_add_mousebutton_down_event(dm_mousebutton_code button, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSEBUTTON_DOWN;
     e->button = button;
@@ -526,6 +499,8 @@ void dm_add_mousebutton_down_event(dm_mousebutton_code button, dm_event_list* ev
 
 void dm_add_mousebutton_up_event(dm_mousebutton_code button, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSEBUTTON_UP;
     e->button = button;
@@ -533,6 +508,8 @@ void dm_add_mousebutton_up_event(dm_mousebutton_code button, dm_event_list* even
 
 void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSE_MOVE;
     
@@ -542,6 +519,8 @@ void dm_add_mouse_move_event(uint32_t mouse_x, uint32_t mouse_y, dm_event_list* 
 
 void dm_add_mouse_scroll_event(float delta, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_MOUSE_SCROLL;
     e->delta = delta;
@@ -549,6 +528,8 @@ void dm_add_mouse_scroll_event(float delta, dm_event_list* event_list)
 
 void dm_add_key_down_event(dm_key_code key, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_KEY_DOWN;
     e->key = key;
@@ -556,6 +537,8 @@ void dm_add_key_down_event(dm_key_code key, dm_event_list* event_list)
 
 void dm_add_key_up_event(dm_key_code key, dm_event_list* event_list)
 {
+    if(event_list->num>=DM_MAX_EVENTS_PER_FRAME) return;
+
     dm_event* e = &event_list->events[event_list->num++];
     e->type = DM_EVENT_KEY_UP;
     e->key = key;
@@ -607,56 +590,24 @@ void __dm_log_output(log_level level, const char* message, ...)
 	dm_platform_write(out, level);
 }
 
+/**********
+ * LOGGING
+************/
+void dm_strcpy(char* dest, const char* src)
+{
+    strcpy(dest, src);
+}
+
 /*********
 RENDERING
 ***********/
 extern bool dm_renderer_backend_init(dm_context* context);
+extern bool dm_renderer_backend_finish_init(dm_context* context);
 extern void dm_renderer_backend_shutdown(dm_context* context);
 extern bool dm_renderer_backend_begin_frame(dm_renderer* renderer);
 extern bool dm_renderer_backend_end_frame(dm_context* context);
-extern void dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer);
+extern bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer);
 
-extern void* dm_renderer_backend_get_internal_texture_ptr(dm_render_handle handle, dm_renderer* renderer);
-
-extern bool dm_renderer_backend_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_renderer* renderer);
-
-extern bool dm_renderer_backend_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t num_channels, const void* data, const char* name, dm_render_handle* handle, dm_renderer* renderer);
-
-extern void dm_render_command_backend_clear(float r, float g, float b, float a, dm_renderer* renderer);
-extern void dm_render_command_backend_set_viewport(uint32_t width, uint32_t height, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_pipeline(dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_set_primitive_topology(dm_primitive_topology topology, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_shader(dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_buffer(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
-extern bool dm_render_command_backend_update_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_uniform(dm_render_handle handle, dm_uniform_stage stage, uint32_t slot, uint32_t offset, dm_renderer* renderer);
-extern bool dm_render_command_backend_update_uniform(dm_render_handle handle, void* data, size_t data_size, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
-extern bool dm_render_command_backend_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_default_framebuffer(dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_framebuffer(dm_render_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_bind_framebuffer_texture(dm_render_handle handle, uint32_t slot, dm_renderer* renderer);
-extern void dm_render_command_backend_draw_arrays(uint32_t start, uint32_t count, dm_renderer* renderer);
-extern void dm_render_command_backend_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
-extern void dm_render_command_backend_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_renderer* renderer);
-extern void dm_render_command_backend_toggle_wireframe(bool wireframe, dm_renderer* renderer);
-extern void dm_render_command_backend_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_renderer* renderer);
-
-// compute
-extern bool  dm_compute_backend_create_shader(dm_compute_shader_desc desc, dm_compute_handle* handle, dm_renderer* renderer);
-extern bool  dm_compute_backend_create_buffer(size_t data_size, size_t elem_size, dm_compute_buffer_type type, dm_compute_handle* handle, dm_renderer* renderer);
-extern bool  dm_compute_backend_create_uniform(size_t data_size, dm_compute_handle* handle, dm_renderer* renderer);
-
-extern bool  dm_compute_backend_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_renderer* renderer);
-extern bool  dm_compute_backend_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_renderer* renderer);
-extern void* dm_compute_backend_command_get_buffer_data(dm_compute_handle handle, dm_renderer* renderer);
-extern bool  dm_compute_backend_command_bind_shader(dm_compute_handle handle, dm_renderer* renderer);
-extern bool  dm_compute_backend_command_dispatch(uint32_t threads_per_group_x, uint32_t threads_per_group_y, uint32_t threads_per_group_z, uint32_t thread_group_count_x, uint32_t thread_group_count_y, uint32_t thread_group_count_z, dm_renderer* renderer);
-
-// renderer
 bool dm_renderer_init(dm_context* context)
 {
     if(!dm_renderer_backend_init(context)) { DM_LOG_FATAL("Could not initialize renderer backend"); return false; }
@@ -669,148 +620,560 @@ void dm_renderer_shutdown(dm_context* context)
     dm_renderer_backend_shutdown(context);
 }
 
-// buffer
-bool dm_renderer_create_buffer(dm_buffer_desc desc, void* data, dm_render_handle* handle, dm_context* context)
+// render resources
+extern bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_sampler(dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_tlas(dm_tlas_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+
+extern bool dm_renderer_backend_get_blas_gpu_address(dm_resource_handle blas, size_t* address, dm_renderer* renderer);
+
+bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    if(dm_renderer_backend_create_buffer(desc, data, handle, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Could not create buffer");
+    handle->type = DM_RESOURCE_TYPE_RASTER_PIPELINE;
+
+    if(dm_renderer_backend_create_raster_pipeline(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Could not create raster pipeline");
     return false;
 }
 
-bool dm_renderer_create_static_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_buffer_desc desc = {
-        .type=DM_BUFFER_TYPE_VERTEX,
-        .usage=DM_BUFFER_USAGE_STATIC,
-        .cpu_access=DM_BUFFER_CPU_WRITE,
-        .buffer_size=data_size,
-        .elem_size=vertex_size
-    };
-    
-    return dm_renderer_create_buffer(desc, data, handle, context);
-}
+    handle->type = DM_RESOURCE_TYPE_VERTEX_BUFFER;
 
-bool dm_renderer_create_dynamic_vertex_buffer(void* data, size_t data_size, size_t vertex_size, dm_render_handle* handle, dm_context* context)
-{
-    dm_buffer_desc desc = {
-        .type=DM_BUFFER_TYPE_VERTEX,
-        .usage=DM_BUFFER_USAGE_DYNAMIC,
-        .cpu_access=DM_BUFFER_CPU_READ,
-        .buffer_size=data_size,
-        .elem_size=vertex_size
-    };
-    
-    return dm_renderer_create_buffer(desc, data, handle, context);
-}
+    if(dm_renderer_backend_create_vertex_buffer(desc, handle, &context->renderer)) return true;
 
-bool dm_renderer_create_static_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context)
-{
-    dm_buffer_desc desc = {
-        .type=DM_BUFFER_TYPE_INDEX,
-        .usage=DM_BUFFER_USAGE_STATIC,
-        .cpu_access=DM_BUFFER_CPU_WRITE,
-        .buffer_size=data_size,
-        .elem_size=index_size
-    };
-    
-    return dm_renderer_create_buffer(desc, data, handle, context);
-}
-
-bool dm_renderer_create_dynamic_index_buffer(void* data, size_t data_size, size_t index_size, dm_render_handle* handle, dm_context* context)
-{
-    dm_buffer_desc desc = {
-        .type=DM_BUFFER_TYPE_INDEX,
-        .usage=DM_BUFFER_USAGE_DYNAMIC,
-        .cpu_access=DM_BUFFER_CPU_READ,
-        .buffer_size=data_size,
-        .elem_size=index_size
-    };
-    
-    return dm_renderer_create_buffer(desc, data, handle, context);
-}
-
-bool dm_compute_create_buffer(size_t data_size, size_t elem_size, dm_compute_buffer_type type, dm_compute_handle* handle, dm_context* context)
-{
-    if(dm_compute_backend_create_buffer(data_size, elem_size, type, handle, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Could not create compute buffer");
+    DM_LOG_FATAL("Creating vertex buffer failed");
     return false;
 }
 
-bool dm_renderer_create_shader_and_pipeline(dm_shader_desc shader_desc, dm_pipeline_desc pipe_desc, dm_vertex_attrib_desc* attrib_descs, uint32_t attrib_count, dm_render_handle* shader_handle, dm_render_handle* pipe_handle, dm_context* context)
+bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    if(dm_renderer_backend_create_shader_and_pipeline(shader_desc, pipe_desc, attrib_descs, attrib_count, shader_handle, pipe_handle, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Creating shader and pipeline failed");
+    handle->type = DM_RESOURCE_TYPE_INDEX_BUFFER;
+
+    if(dm_renderer_backend_create_index_buffer(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating index buffer failed");
     return false;
 }
 
-bool dm_renderer_create_uniform(size_t size, dm_uniform_stage stage, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    if(dm_renderer_backend_create_uniform(size, stage, handle, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Creating uniform failed");
+    handle->type = DM_RESOURCE_TYPE_CONSTANT_BUFFER;
+
+    if(dm_renderer_backend_create_constant_buffer(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating constant buffer failed");
     return false;
 }
 
-bool dm_renderer_create_texture_from_file(const char* path, uint32_t n_channels, bool flipped, const char* name, dm_render_handle* handle, dm_context* context)
+bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    DM_LOG_DEBUG("Loading image: %s", path);
-    
-    int width, height;
-    int num_channels = n_channels;
-#if defined(DM_DIRECTX) || defined(DM_METAL)
-    num_channels = 4;
-#endif
-    
-    stbi_set_flip_vertically_on_load(flipped);
-    unsigned char* data = stbi_load(path, &width, &height, &num_channels, num_channels);
-    
-    if(!data)
+    handle->type = DM_RESOURCE_TYPE_TEXTURE;
+
+    if(dm_renderer_backend_create_texture(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating texture failed");
+    return false;
+}
+
+bool dm_renderer_create_sampler(dm_resource_handle* handle, dm_context* context)
+{
+    handle->type = DM_RESOURCE_TYPE_SAMPLER;
+
+    if(dm_renderer_backend_create_sampler(handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating sampler failed");
+    return false;
+}
+
+bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
+{
+    handle->type = DM_RESOURCE_TYPE_STORAGE_BUFFER;
+
+    if(dm_renderer_backend_create_storage_buffer(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating storage buffer failed");
+    return false;
+}
+
+bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_context* context)
+{
+    handle->type = DM_RESOURCE_TYPE_RAYTRACING_PIPELINE;
+
+    if(dm_renderer_backend_create_raytracing_pipeline(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating raytracing pipeline failed");
+    return false;
+}
+
+bool dm_renderer_create_blas(dm_blas_desc desc, dm_resource_handle* handle, dm_context* context)
+{
+    handle->type = DM_RESOURCE_TYPE_BLAS;
+
+    if(dm_renderer_backend_create_blas(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating blas failed");
+    return false;
+}
+
+bool dm_renderer_create_tlas(dm_tlas_desc desc, dm_resource_handle* handle, dm_context* context)
+{
+    handle->type = DM_RESOURCE_TYPE_TLAS;
+
+    if(dm_renderer_backend_create_tlas(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating tlas failed");
+    return false;
+}
+
+bool dm_renderer_get_blas_gpu_address(dm_resource_handle handle, size_t* address, dm_context* context)
+{
+    if(handle.type != DM_RESOURCE_TYPE_BLAS)
     {
-        // TODO: Need to not crash, but have a default texture
-        DM_LOG_FATAL("Failed to load image: %s", path);
+        DM_LOG_FATAL("Resource is not a bottom-level acceleration structure");
         return false;
     }
-    
-    n_channels = num_channels;
-    if(!dm_renderer_backend_create_texture(width, height, n_channels, data, name, handle, &context->renderer))
+
+    return dm_renderer_backend_get_blas_gpu_address(handle, address, &context->renderer);
+}
+
+/***************
+RENDER COMMANDS
+*****************/
+extern bool dm_render_command_backend_begin_render_pass(float r, float g, float b, float a, dm_renderer* renderer);
+extern bool dm_render_command_backend_end_render_pass(dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_raster_pipeline(dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_raytracing_pipeline(dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, dm_renderer* renderer);
+extern bool dm_render_command_backend_bind_index_buffer(dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_index_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer);
+extern bool dm_render_command_backend_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_renderer* renderer);
+extern bool dm_render_command_backend_copy_image_to_screen(dm_resource_handle image, dm_renderer* renderer);
+
+void _dm_render_command_submit(dm_command command, dm_command_manager* manager)
+{
+    if(!manager->commands)
     {
-        DM_LOG_FATAL("Failed to create texture from file: %s", path);
-        stbi_image_free(data);
-        return false;
+        manager->capacity = 16;
+        manager->commands = dm_alloc(sizeof(dm_command) * manager->capacity);
     }
+
+    manager->commands[manager->count++] = command;
+
+    if((float)manager->count / (float)manager->capacity > 0.75f)
+    {
+        manager->capacity *= 2;
+        manager->commands = dm_realloc(manager->commands, sizeof(dm_command) * manager->capacity);
+    }
+}
+
+#define DM_RENDER_COMMAND_SUBMIT _dm_render_command_submit(command, &context->renderer.render_command_manager)
+
+void dm_render_command_begin_render_pass(float r, float g, float b, float a, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS;
+
+    command.params[0].float_val = r;
+    command.params[1].float_val = g;
+    command.params[2].float_val = b;
+    command.params[3].float_val = a;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_end_render_pass(dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_END_RENDER_PASS;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_bind_raster_pipeline(dm_resource_handle handle, dm_context* context)
+{
+    dm_command command = { 0 };
     
-    stbi_image_free(data);
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE;
+
+    command.params[0].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_bind_raytracing_pipeline(dm_resource_handle handle, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_RAYTRACING_PIPELINE;
+
+    command.params[0].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_SET_ROOT_CONSTANTS;
+
+    command.params[0].u8_val     = slot;
+    command.params[1].u32_val    = count;
+    command.params[2].size_t_val = offset;
+    command.params[3].void_val   = data;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER;
+
+    command.params[0].handle_val = handle;
+    command.params[1].u8_val     = slot;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_bind_index_buffer(dm_resource_handle handle, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER;
+
+    command.params[0].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER;
+
+    command.params[0].void_val   = data;
+    command.params[1].size_t_val = size;
+    command.params[2].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_update_index_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_INDEX_BUFFER;
+
+    command.params[0].void_val   = data;
+    command.params[1].size_t_val = size;
+    command.params[2].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER;
+
+    command.params[0].void_val   = data;
+    command.params[1].size_t_val = size;
+    command.params[2].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER;
+
+    command.params[0].void_val   = data;
+    command.params[1].size_t_val = size;
+    command.params[2].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_resize_texture(uint32_t width, uint32_t height, dm_resource_handle handle, dm_context *context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_RESIZE_TEXTURE;
+
+    command.params[0].u32_val    = width;
+    command.params[1].u32_val    = height;
+    command.params[2].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_TLAS;
+
+    command.params[0].u32_val    = instance_count;
+    command.params[1].handle_val = handle;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_DISPATCH_RAYS;
+
+    command.params[0].u16_val    = x;
+    command.params[1].u16_val    = y;
+    command.params[2].handle_val = pipeline;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_copy_image_to_screen(dm_resource_handle image, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_COPY_IMAGE_TO_SCREEN;
+
+    command.params[0].handle_val = image;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED;
+
+    command.params[0].u32_val = instance_count;
+    command.params[1].u32_val = instance_offset;
+    command.params[2].u32_val = vertex_count;
+    command.params[3].u32_val = vertex_offset;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED;
+
+    command.params[0].u32_val = instance_count;
+    command.params[1].u32_val = instance_offset;
+    command.params[2].u32_val = index_count;
+    command.params[3].u32_val = index_offset;
+    command.params[4].u32_val = vertex_offset;
+
+    DM_RENDER_COMMAND_SUBMIT;
+}
+
+bool dm_renderer_submit_commands(dm_context* context)
+{
+    dm_timer t = { 0 };
+    dm_timer_start(&t, context);
+    
+    dm_renderer* renderer = &context->renderer;
+    
+    for(uint32_t i=0; i<context->renderer.render_command_manager.count && dm_context_is_running(context); i++)
+    {
+        dm_command command = context->renderer.render_command_manager.commands[i];
+        dm_command_param* params = command.params;
+        
+        switch(command.r_type)
+        {
+            case DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS:
+            if(dm_render_command_backend_begin_render_pass(params[0].float_val, params[1].float_val, params[2].float_val, params[3].float_val, renderer)) continue;
+            DM_LOG_FATAL("Begin renderpass failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_END_RENDER_PASS:
+            if(dm_render_command_backend_end_render_pass(renderer)) continue;
+            DM_LOG_FATAL("End renderpass failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE:
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_RASTER_PIPELINE) { DM_LOG_FATAL("Resource is not a raster pipeline."); return false; }
+            if(dm_render_command_backend_bind_raster_pipeline(params[0].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Bind raster pipeline failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_BIND_RAYTRACING_PIPELINE:
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_RAYTRACING_PIPELINE) { DM_LOG_FATAL("Resource is not a raytracing pipeline"); return false; }
+            if(dm_render_command_backend_bind_raytracing_pipeline(params[0].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Bind raytracig pipeline failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_SET_ROOT_CONSTANTS:
+            if(dm_render_command_backend_set_root_constants(params[0].u8_val, params[1].u32_val, params[2].size_t_val, params[3].void_val, renderer)) continue;
+            DM_LOG_FATAL("Set root constants failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER:
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_CONSTANT_BUFFER) { DM_LOG_FATAL("Resource is not a constant buffer."); return false; }
+            if(dm_render_command_backend_update_constant_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Update constant buffer failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER:
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_STORAGE_BUFFER) { DM_LOG_FATAL("Resource is not a storage buffer"); return false; }
+            if(dm_render_command_backend_update_storage_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Update storage buffer failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER:
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_VERTEX_BUFFER) { DM_LOG_FATAL("Resource is not a vertex buffer"); return false; }
+            if(dm_render_command_backend_bind_vertex_buffer(params[0].handle_val, params[1].u8_val, renderer)) continue;
+            DM_LOG_FATAL("Bind vertex buffer failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER:
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_VERTEX_BUFFER) { DM_LOG_FATAL("Resource is not a vertex buffer."); return false; }
+            if(dm_render_command_backend_update_vertex_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Update vertex buffer failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER:
+            if(params[0].handle_val.type != DM_RESOURCE_TYPE_INDEX_BUFFER) { DM_LOG_FATAL("Resource is not an index buffer."); return false; }
+            if(dm_render_command_backend_bind_index_buffer(params[0].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Bind index buffer failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_UPDATE_INDEX_BUFFER:
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_INDEX_BUFFER) { DM_LOG_FATAL("Resource is not an index buffer."); return false; }
+            if(dm_render_command_backend_update_index_buffer(params[0].void_val, params[1].size_t_val, params[2].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Update vertex buffer failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_RESIZE_TEXTURE:
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_TEXTURE) { DM_LOG_FATAL("Resource is not a texture"); return false; }
+            if(dm_render_command_backend_resize_texture(params[0].u32_val, params[1].u32_val, params[2].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Resize texture failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_UPDATE_TLAS:
+            if(params[1].handle_val.type != DM_RESOURCE_TYPE_TLAS) { DM_LOG_FATAL("Resource is not a top level acceleration structure"); return false; }
+            if(dm_render_command_backend_update_tlas(params[0].u32_val, params[1].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Update acceleration structure failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_DISPATCH_RAYS:
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_RAYTRACING_PIPELINE) { DM_LOG_FATAL("Resource is not a raytracing pipeline"); return false; }
+            if(dm_render_command_backend_dispatch_rays(params[0].u16_val, params[1].u16_val, params[2].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Dispatch rays failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_COPY_IMAGE_TO_SCREEN:
+            //if(params[0].handle_val.type != DM_RESOURCE_TYPE_TEXTURE) { DM_LOG_FATAL("Resource is not a texture"); return false; }
+            if(dm_render_command_backend_copy_image_to_screen(params[0].handle_val, renderer)) continue;
+            DM_LOG_FATAL("Copy image to screen failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED:
+            if(dm_render_command_backend_draw_instanced(params[0].u32_val, params[1].u32_val, params[2].u32_val, params[3].u32_val, renderer)) continue;
+            DM_LOG_FATAL("Draw instanced failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED:
+            if(dm_render_command_backend_draw_instanced_indexed(params[0].u32_val, params[1].u32_val, params[2].u32_val, params[3].u32_val, params[5].u32_val, renderer)) continue;
+            DM_LOG_FATAL("Draw instanced indexed failed");
+            return false;
+
+            default:
+            DM_LOG_ERROR("Unknown render command! Shouldn't be here...");
+            // TODO: do we kill here? Probably not, just ignore...
+            //return false;
+            break;
+        }
+    }
     
     return true;
+    dm_font font = { 0 };
 }
 
-bool dm_renderer_create_texture_from_data(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context)
+/**********
+ * COMPUTE
+ ***********/
+extern bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+
+bool dm_compute_create_compute_pipeline(dm_compute_pipeline_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    if(dm_renderer_backend_create_texture(width, height, n_channels, data, name, handle, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Failed to create texture from data");
+    handle->type = DM_RESOURCE_TYPE_COMPUTE_PIPELINE;
+
+    if(dm_compute_backend_create_compute_pipeline(desc, handle, &context->renderer)) return true;
+
+    DM_LOG_FATAL("Creating compute pipeline failed");
     return false;
 }
 
-bool dm_renderer_create_dynamic_texture(uint32_t width, uint32_t height, uint32_t n_channels, const void* data, const char* name, dm_render_handle* handle, dm_context* context)
+extern bool dm_compute_command_backend_begin_recording(dm_renderer* renderer);
+extern bool dm_compute_command_backend_end_recording(dm_renderer* renderer);
+extern void dm_compute_command_backend_bind_compute_pipeline(dm_resource_handle handle, dm_renderer* renderer);
+extern void dm_compute_command_backend_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
+extern void dm_compute_command_backend_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_renderer* renderer);
+extern void dm_compute_command_backend_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_renderer* renderer);
+ 
+bool dm_compute_command_begin_recording(dm_context* context)
 {
-    if(dm_renderer_backend_create_dynamic_texture(width, height, n_channels, data, name, handle, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Could not create dynamic texture");
-    return false;
+    return dm_compute_command_backend_begin_recording(&context->renderer);
 }
 
-void* dm_renderer_get_internal_texture_ptr(dm_render_handle handle, dm_context* context)
+bool dm_compute_command_end_recording(dm_context* context)
 {
-    return dm_renderer_backend_get_internal_texture_ptr(handle, &context->renderer);
+    return dm_compute_command_backend_end_recording(&context->renderer);
 }
 
-bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_context* context)
+void dm_compute_command_bind_compute_pipeline(dm_resource_handle handle, dm_context* context)
 {
-    DM_LOG_DEBUG("Loading font: %s", path);
+    dm_compute_command_backend_bind_compute_pipeline(handle, &context->renderer);
+}
+
+void dm_compute_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context)
+{
+    dm_compute_command_backend_update_constant_buffer(data, size, handle, &context->renderer);
+}
+
+void dm_compute_command_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_context* context)
+{   
+    dm_compute_command_backend_set_root_constants(slot, count, offset, data, &context->renderer);
+}
+
+void dm_compute_command_dispatch(const uint16_t x, const uint16_t y, const uint16_t z, dm_context* context)
+{
+    dm_compute_command_backend_dispatch(x,y,z, &context->renderer);
+}
+
+/***************
+ * FONT 
+ ****************/
+bool dm_renderer_load_font(const char* path, int font_size, dm_resource_handle sampler, dm_font* font, dm_context* context)
+{
+    DM_LOG_INFO("Loading font: %s", path);
     
     size_t size = 0;
     void* buffer = dm_read_bytes(path, "rb", &size);
@@ -828,22 +1191,21 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
         return false;
     }
     
-    uint32_t w = 512;
-    uint32_t h = 512;
-    uint32_t n_channels = 4;
+    uint16_t w = 512;
+    uint16_t h = 512;
+    uint8_t n_channels = 4;
     
     unsigned char* alpha_bitmap = dm_alloc(w * h);
     unsigned char* bitmap = dm_alloc(w * h * n_channels);
     dm_memzero(alpha_bitmap, w * h);
     dm_memzero(bitmap, w * h * n_channels);
     
-    dm_font font = { 0 };
-    stbtt_BakeFontBitmap(buffer, 0, 16, alpha_bitmap, 512, 512, 32, 96, (stbtt_bakedchar*)font.glyphs);
+    stbtt_BakeFontBitmap(buffer, 0, font_size, alpha_bitmap, w,h, 32, 96, (stbtt_bakedchar*)font->glyphs);
     
     // bitmaps are single alpha values, so make 4 channel texture
-    for(uint32_t y=0; y<h; y++)
+    for(uint16_t y=0; y<h; y++)
     {
-        for(uint32_t x=0; x<w; x++)
+        for(uint16_t x=0; x<w; x++)
         {
             uint32_t index = y * w + x;
             uint32_t bitmap_index = index * n_channels;
@@ -855,1133 +1217,36 @@ bool dm_renderer_load_font(const char* path, dm_render_handle* handle, dm_contex
             bitmap[bitmap_index + 3] = a;
         }
     }
+
+    bitmap[0] = 1.f;
     
-    font.texture_index = -1;
-    if(!dm_renderer_create_texture_from_data(w, h, n_channels, bitmap, "font_texture", &font.texture_index, context)) 
+    dm_texture_desc desc = { 0 };
+    desc.width      = w;
+    desc.height     = h;
+    desc.n_channels = n_channels;
+    desc.data       = bitmap;
+    desc.format     = DM_TEXTURE_FORMAT_BYTE_4_UNORM;
+    desc.sampler    = sampler;
+
+    if(!dm_renderer_create_texture(desc, &font->texture_handle, context))
     { 
         DM_LOG_FATAL("Could not create texture for font: %s"); 
         return false; 
     }
-    
-    dm_free(alpha_bitmap);
-    dm_free(bitmap);
-    dm_free(buffer);
-    
-    dm_memcpy(context->renderer.fonts + context->renderer.font_count, &font, sizeof(dm_font));
-    *handle = context->renderer.font_count++;
-    
+
+    dm_free((void**)&alpha_bitmap);
+    dm_free((void**)&bitmap);
+    dm_free(&buffer);
+
     return true;
 }
 
-bool dm_compute_create_uniform(size_t data_size, dm_compute_handle* handle, dm_context* context)
+dm_font_aligned_quad dm_font_get_aligned_quad(dm_font font, const char text, float* xf, float* yf)
 {
-    if(dm_compute_backend_create_uniform(data_size, handle, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Could not create compute uniform");
-    return false;
-}
+    stbtt_aligned_quad q;
+    stbtt_GetBakedQuad((stbtt_bakedchar*)font.glyphs, 512,512, text-32, xf,yf, &q, 1);
 
-bool dm_compute_create_shader(dm_compute_shader_desc desc, dm_render_handle* handle, dm_context* context)
-{
-    if(dm_compute_backend_create_shader(desc, handle, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Could not create compute shader from: %s", desc.path);
-    return false;
-}
-
-bool dm_compute_command_bind_buffer(dm_compute_handle handle, uint32_t offset, uint32_t slot, dm_context* context)
-{
-    if(dm_compute_backend_command_bind_buffer(handle, offset, slot, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Could not bind compute buffer");
-    return false;
-}
-
-bool dm_compute_command_update_buffer(dm_compute_handle handle, void* data, size_t data_size, size_t offset, dm_context* context)
-{
-    if(dm_compute_backend_command_update_buffer(handle, data, data_size, offset, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Could not update compute buffer");
-    return false;
-}
-
-void* dm_compute_command_get_buffer_data(dm_compute_handle handle, dm_context* context)
-{
-    return dm_compute_backend_command_get_buffer_data(handle, &context->renderer);
-}
-
-bool dm_compute_command_bind_shader(dm_compute_handle handle, dm_context* context)
-{
-    if(dm_compute_backend_command_bind_shader(handle, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Could not bind compute shader");
-    return false;
-}
-
-bool dm_compute_command_dispatch(uint32_t threads_per_group_x, uint32_t threads_per_group_y, uint32_t threads_per_group_z, uint32_t thread_group_count_x, uint32_t thread_group_count_y, uint32_t thread_group_count_z, dm_context* context)
-{
-    if(dm_compute_backend_command_dispatch(threads_per_group_x, threads_per_group_y, threads_per_group_z, thread_group_count_x, thread_group_count_y, thread_group_count_z, &context->renderer)) return true;
-    
-    DM_LOG_FATAL("Compute dispatch failed");
-    return false;
-}
-
-/*************
-MODEL LOADING
-***************/
-bool dm_renderer_load_obj_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, dm_mesh_index_type index_type, float** vertices, void** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset)
-{
-    fastObjMesh* m = fast_obj_read(path);
-    if(!m) { DM_LOG_ERROR("Could not create mesh from file \'%s\'", path); return false; }
-    
-    assert(m->group_count==1);
-    
-    int indx = 0;
-    
-    int pos_offset, norm_offset, tex_offset; 
-    pos_offset = norm_offset = tex_offset = -1;
-    size_t vertex_size = 0;
-    
-    for(uint32_t i=0; i<attrib_count; i++)
-    {
-        switch(attribs[i])
-        {
-            case DM_MESH_VERTEX_ATTRIB_POSITION:
-            pos_offset = vertex_size;
-            vertex_size += 3;
-            break;
-            
-            case DM_MESH_VERTEX_ATTRIB_NORMAL:
-            norm_offset = vertex_size;
-            vertex_size += 3;
-            break;
-            
-            case DM_MESH_VERTEX_ATTRIB_TEXCOORD:
-            tex_offset = vertex_size;
-            vertex_size += 2;
-            break;
-            
-            default:
-            DM_LOG_ERROR("Invalid vertex attribute for obj format");
-            return false;
-        }
-    }
-    
-    *vertices = dm_alloc(sizeof(float) * vertex_size * 3 * m->groups[0].face_count);
-    switch(index_type)
-    {
-        case DM_MESH_INDEX_TYPE_UINT16:
-        *indices  = dm_alloc(sizeof(uint16_t) * m->index_count);
-        break;
-        
-        case DM_MESH_INDEX_TYPE_UINT32:
-        *indices  = dm_alloc(sizeof(uint32_t) * m->index_count);
-        break;
-        
-        default:
-        dm_free(*vertices);
-        fast_obj_destroy(m);
-        return false;
-    }
-    
-    fastObjIndex mi;
-    
-    *vertex_count = 0;
-    // over each face
-    for(uint32_t j=0; j<m->groups[0].face_count; j++)
-    {
-        const uint32_t fv = m->face_vertices[m->groups[0].face_offset + j];
-        
-        // over each vertex
-        for(uint32_t k=0; k < fv; k++)
-        {
-            mi = m->indices[m->groups[0].index_offset + indx];
-            
-            if(pos_offset >= 0)
-            {
-                (*vertices)[indx * vertex_size + pos_offset + 0] = m->positions[3 * mi.p + 0];
-                (*vertices)[indx * vertex_size + pos_offset + 1] = m->positions[3 * mi.p + 1];
-                (*vertices)[indx * vertex_size + pos_offset + 2] = m->positions[3 * mi.p + 2];
-            }
-            
-            if(norm_offset >= 0)
-            {
-                (*vertices)[indx * vertex_size + norm_offset + 0] = m->normals[3 * mi.n + 0];
-                (*vertices)[indx * vertex_size + norm_offset + 1] = m->normals[3 * mi.n + 1];
-                (*vertices)[indx * vertex_size + norm_offset + 2] = m->normals[3 * mi.n + 2];
-            }
-            
-            if(tex_offset >= 0)
-            {
-                (*vertices)[indx * vertex_size + tex_offset + 0] = m->texcoords[2 * mi.t + 0];
-                (*vertices)[indx * vertex_size + tex_offset + 1] = m->texcoords[2 * mi.t + 1];
-            }
-            
-            switch(index_type)
-            {
-                case DM_MESH_INDEX_TYPE_UINT16:
-                {
-                    uint16_t* inds = *indices;
-                    inds[indx] = index_offset + indx;
-                } break;
-                
-                case DM_MESH_INDEX_TYPE_UINT32:
-                {
-                    uint32_t* inds = *indices;
-                    inds[indx] = index_offset + indx;
-                } break;
-                
-                default:
-                return false;
-            }
-            indx++;
-            (*vertex_count)++;
-        }
-    }
-    
-    assert(indx == m->index_count);
-    assert(*vertex_count == m->groups[0].face_count * 3);
-    
-    *index_count = m->index_count;
-    
-    fast_obj_destroy(m);
-    
-    return true;
-}
-
-bool dm_renderer_load_gltf_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, dm_mesh_index_type index_type, float** vertices, void** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset)
-{
-    cgltf_options options = { 0 };
-    cgltf_data* data = NULL;
-    cgltf_result result = cgltf_parse_file(&options, path, &data);
-    if(result != cgltf_result_success)
-    {
-        DM_LOG_FATAL("Could not load file: %s", path);
-        cgltf_free(data);
-        return false;
-    }
-    
-    result = cgltf_validate(data);
-    if(result!=cgltf_result_success) 
-    {
-        DM_LOG_FATAL("Validating gltf data failed: %s", path);
-        cgltf_free(data);
-        return false;
-    }
-    
-    result = cgltf_load_buffers(&options, data, path);
-    if(result!=cgltf_result_success)
-    {
-        DM_LOG_FATAL("Could not load gltf buffers: %s", path);
-        cgltf_free(data);
-        return false;
-    }
-    
-    // only supporting single meshes at this point
-    uint32_t mesh_count = data->meshes_count;
-    assert(mesh_count==1);
-    
-    cgltf_mesh mesh = data->meshes[0];
-    
-    // only supporting triangles (faces) for now
-    uint32_t primitive_count = mesh.primitives_count;
-    assert(primitive_count==1);
-    assert(mesh.primitives[0].type==cgltf_primitive_type_triangles);
-    
-    cgltf_primitive primitive = mesh.primitives[0];
-    
-    // only supporting up to 3 attribute types for now
-    //assert(primitive.attributes_count<=3);
-    
-    // make sure that attributes all have the same number of counts
-    for(uint32_t i=0; i<primitive.attributes_count; i++)
-    {
-        for(uint32_t j=i+1; j<primitive.attributes_count; j++)
-        {
-            assert(primitive.attributes[i].data->count==primitive.attributes[j].data->count);
-        }
-    }
-    
-    // we now know how many vertices we have
-    const uint32_t count = primitive.attributes[0].data->count;
-    
-    // get attribute offsets into our vertices buffer
-    int pos_offset, norm_offset, tex_offset;
-    pos_offset = norm_offset = tex_offset = -1;
-    
-    size_t vertex_stride = 0;
-    
-    for(uint32_t i=0; i<attrib_count; i++)
-    {
-        switch(attribs[i])
-        {
-            case DM_MESH_VERTEX_ATTRIB_POSITION:
-            pos_offset = vertex_stride;
-            vertex_stride += 3;
-            break;
-            
-            case DM_MESH_VERTEX_ATTRIB_NORMAL:
-            norm_offset = vertex_stride;
-            vertex_stride += 3;
-            break;
-            
-            case DM_MESH_VERTEX_ATTRIB_TEXCOORD:
-            tex_offset = vertex_stride;
-            vertex_stride += 2;
-            break;
-            
-            default:
-            DM_LOG_ERROR("Invalid vertex attribute for obj format");
-            return false;
-        }
-    }
-    
-    *vertices = dm_alloc(sizeof(float) * vertex_stride * count);
-    
-    // put data into our vertices buffer    
-    cgltf_accessor*    accessor = NULL;
-    cgltf_attribute    attribute;
-    cgltf_buffer_view* buffer_view = NULL;
-    float* buffer = NULL;
-    
-    size_t stride = 0;
-    size_t size = 0;
-    size_t offset = 0;
-    
-    for(uint32_t v=0; v<count; v++)
-    {
-        for(uint32_t i=0; i<primitive.attributes_count; i++)
-        {
-            attribute   = primitive.attributes[i];
-            accessor    = attribute.data;
-            buffer_view = accessor->buffer_view;
-            buffer      = (float*)((char*)buffer_view->buffer->data + buffer_view->offset);
-            stride      = accessor->stride / sizeof(float);
-            
-            switch(primitive.attributes[i].type)
-            {
-                case cgltf_attribute_type_position:
-                if(pos_offset>=0) 
-                {
-                    size   = sizeof(float) * 3;
-                    offset = pos_offset;
-                } break;
-                
-                case cgltf_attribute_type_normal:
-                if(norm_offset>=0) 
-                {
-                    size   = sizeof(float) * 3;
-                    offset = norm_offset;
-                } break;
-                
-                case cgltf_attribute_type_texcoord:
-                if(tex_offset>=0)
-                {
-                    size   = sizeof(float) * 2;
-                    offset = tex_offset;
-                } break;
-                
-                default:
-                continue;
-            }
-            
-            dm_memcpy(*vertices + v * vertex_stride + offset, buffer + v * stride, size);
-        }
-    }
-    
-    // get indices
-    size_t indices_size = primitive.indices->buffer_view->size;
-    *indices = dm_alloc(indices_size);
-    dm_memcpy(*indices, (char*)primitive.indices->buffer_view->buffer->data + primitive.indices->buffer_view->offset, indices_size);
-    
-    *vertex_count = count;
-    *index_count = primitive.indices->buffer_view->size / sizeof(uint16_t);
-    
-    // cleanup
-    cgltf_free(data);
-    
-    return true;
-}
-
-bool dm_renderer_load_model(const char* path, const dm_mesh_vertex_attrib* attribs, uint32_t attrib_count, dm_mesh_index_type index_type, float** vertices, void** indices, uint32_t* vertex_count, uint32_t* index_count, uint32_t index_offset, dm_context* context)
-{
-    const char* ext = strrchr(path, '.');
-    ext++;
-    
-    if(strcmp(ext, "obj")==0) 
-        return dm_renderer_load_obj_model(path, attribs, attrib_count, index_type, vertices, indices, vertex_count, index_count, index_offset);
-    else if(strcmp(ext, "gltf")==0 || strcmp(ext, "glb")==0) 
-        return dm_renderer_load_gltf_model(path, attribs, attrib_count, index_type, vertices, indices, vertex_count, index_count, index_offset);
-    
-    DM_LOG_FATAL("Unknown model extension");
-    return false;
-}
-
-/***************
-RENDER COMMANDS
-*****************/
-void __dm_renderer_submit_render_command(dm_render_command* command, dm_render_command_manager* manager)
-{
-    dm_render_command* c = &manager->commands[manager->command_count++];
-    
-    if(!c->params.data) c->params.data = dm_alloc(command->params.size);
-    else if(c->params.size != command->params.size) c->params.data = dm_realloc(c->params.data, command->params.size);
-    dm_memcpy(c->params.data, command->params.data, command->params.size);
-    
-    c->type = command->type;
-    c->params.size = command->params.size;
-    
-    dm_free(command->params.data);
-}
-#define DM_SUBMIT_RENDER_COMMAND(COMMAND) __dm_renderer_submit_render_command(&COMMAND, &context->renderer.command_manager)
-#define DM_SUBMIT_RENDER_COMMAND_MANAGER(COMMAND, MANAGER) __dm_renderer_submit_render_command(&COMMAND, &MANAGER)
-#define DM_TOO_MANY_COMMANDS context->renderer.command_manager.command_count > DM_MAX_RENDER_COMMANDS
-
-void dm_render_command_clear(float r, float g, float b, float a, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_CLEAR;
-    
-    DM_BYTE_POOL_INSERT(command.params, r);
-    DM_BYTE_POOL_INSERT(command.params, g);
-    DM_BYTE_POOL_INSERT(command.params, b);
-    DM_BYTE_POOL_INSERT(command.params, a);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_set_viewport(uint32_t width, uint32_t height, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_SET_VIEWPORT;
-    
-    DM_BYTE_POOL_INSERT(command.params, width);
-    DM_BYTE_POOL_INSERT(command.params, height);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_set_default_viewport(dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_SET_VIEWPORT;
-    
-    DM_BYTE_POOL_INSERT(command.params, context->platform_data.window_data.width);
-    DM_BYTE_POOL_INSERT(command.params, context->platform_data.window_data.height);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_set_primitive_topology(dm_primitive_topology topology, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_SET_TOPOLOGY;
-    
-    DM_BYTE_POOL_INSERT(command.params, topology);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-#if 0
-void dm_render_command_begin_renderpass(dm_render_handle pass_index, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_BEGIN_RENDER_PASS;
-    
-    DM_BYTE_POOL_INSERT(command.params, pass_index);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_end_renderpass(dm_render_handle pass_index, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_END_RENDER_PASS;
-    
-    DM_BYTE_POOL_INSERT(command.params, pass_index);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-#endif
-
-void dm_render_command_bind_shader(dm_render_handle handle, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_BIND_SHADER;
-    
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_bind_pipeline(dm_render_handle handle, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_BIND_PIPELINE;
-    
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_bind_buffer(dm_render_handle handle, uint32_t slot, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_BIND_BUFFER;
-    
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    DM_BYTE_POOL_INSERT(command.params, slot);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_bind_uniform(dm_render_handle uniform_handle, uint32_t slot, dm_uniform_stage stage, uint32_t offset, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_BIND_UNIFORM;
-    
-    DM_BYTE_POOL_INSERT(command.params, uniform_handle);
-    DM_BYTE_POOL_INSERT(command.params, slot);
-    DM_BYTE_POOL_INSERT(command.params, stage);
-    DM_BYTE_POOL_INSERT(command.params, offset);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_update_buffer(dm_render_handle handle, void* data, size_t data_size, size_t offset, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_UPDATE_BUFFER;
-    
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    __dm_byte_pool_insert(&command.params, data, data_size);
-    DM_BYTE_POOL_INSERT(command.params, data_size);
-    DM_BYTE_POOL_INSERT(command.params, offset);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_update_uniform(dm_render_handle uniform_handle, void* data, size_t data_size, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_UPDATE_UNIFORM;
-    
-    DM_BYTE_POOL_INSERT(command.params, uniform_handle);
-    __dm_byte_pool_insert(&command.params, data, data_size);
-    DM_BYTE_POOL_INSERT(command.params, data_size);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_bind_texture(dm_render_handle handle, uint32_t slot, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_BIND_TEXTURE;
-    
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    DM_BYTE_POOL_INSERT(command.params, slot);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_update_texture(dm_render_handle handle, uint32_t width, uint32_t height, void* data, size_t data_size, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_UPDATE_TEXTURE;
-    
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    DM_BYTE_POOL_INSERT(command.params, width);
-    DM_BYTE_POOL_INSERT(command.params, height);
-    __dm_byte_pool_insert(&command.params, data, data_size);
-    DM_BYTE_POOL_INSERT(command.params, data_size);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_bind_default_framebuffer(dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_BIND_DEFAULT_FRAMEBUFFER;
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_bind_framebuffer(dm_render_handle handle, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_BIND_FRAMEBUFFER;
-    
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_bind_framebuffer_texture(dm_render_handle handle, uint32_t slot, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_BIND_FRAMEBUFFER_TEXTURE;
-    
-    DM_BYTE_POOL_INSERT(command.params, handle);
-    DM_BYTE_POOL_INSERT(command.params, slot);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_draw_arrays(uint32_t start, uint32_t count, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_DRAW_ARRAYS;
-    
-    DM_BYTE_POOL_INSERT(command.params, start);
-    DM_BYTE_POOL_INSERT(command.params, count);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_draw_indexed(uint32_t num_indices, uint32_t index_offset, uint32_t vertex_offset, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_DRAW_INDEXED;
-    
-    DM_BYTE_POOL_INSERT(command.params, num_indices);
-    DM_BYTE_POOL_INSERT(command.params, index_offset);
-    DM_BYTE_POOL_INSERT(command.params, vertex_offset);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_draw_instanced(uint32_t num_indices, uint32_t num_insts, uint32_t index_offset, uint32_t vertex_offset, uint32_t inst_offset, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_DRAW_INSTANCED;
-    
-    DM_BYTE_POOL_INSERT(command.params, num_indices);
-    DM_BYTE_POOL_INSERT(command.params, num_insts);
-    DM_BYTE_POOL_INSERT(command.params, index_offset);
-    DM_BYTE_POOL_INSERT(command.params, vertex_offset);
-    DM_BYTE_POOL_INSERT(command.params, inst_offset);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_toggle_wireframe(bool wireframe, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_TOGGLE_WIREFRAME;
-    
-    DM_BYTE_POOL_INSERT(command.params, wireframe);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-void dm_render_command_set_scissor_rects(uint32_t left, uint32_t right, uint32_t top, uint32_t bottom, dm_context* context)
-{
-    if(DM_TOO_MANY_COMMANDS) return;
-    
-    dm_render_command command = { 0 };
-    command.type = DM_RENDER_COMMAND_SET_SCISSOR_RECTS;
-    
-    DM_BYTE_POOL_INSERT(command.params, left);
-    DM_BYTE_POOL_INSERT(command.params, right);
-    DM_BYTE_POOL_INSERT(command.params, top);
-    DM_BYTE_POOL_INSERT(command.params, bottom);
-    
-    DM_SUBMIT_RENDER_COMMAND(command);
-}
-
-bool dm_renderer_submit_commands(dm_context* context)
-{
-    dm_timer t = { 0 };
-    dm_timer_start(&t, context);
-    
-    for(uint32_t i=0; i<context->renderer.command_manager.command_count; i++)
-    {
-        dm_render_command command = context->renderer.command_manager.commands[i];
-        
-        switch(command.type)
-        {
-            case DM_RENDER_COMMAND_CLEAR:
-            {
-                DM_BYTE_POOL_POP(command.params, float, a);
-                DM_BYTE_POOL_POP(command.params, float, b);
-                DM_BYTE_POOL_POP(command.params, float, g);
-                DM_BYTE_POOL_POP(command.params, float, r);
-                
-                dm_render_command_backend_clear(r, g, b, a, &context->renderer);
-            } break;
-            
-            case DM_RENDER_COMMAND_SET_VIEWPORT:
-            {
-                DM_BYTE_POOL_POP(command.params, uint32_t, height);
-                DM_BYTE_POOL_POP(command.params, uint32_t, width);
-                
-                dm_render_command_backend_set_viewport(width, height, &context->renderer);
-            } break;
-            
-            case DM_RENDER_COMMAND_SET_TOPOLOGY:
-            {
-                DM_BYTE_POOL_POP(command.params, dm_primitive_topology, topology);
-                
-                if(!dm_render_command_backend_set_primitive_topology(topology, &context->renderer)) { DM_LOG_FATAL("Set topology failed"); return false; }
-            } break;
-            
-            case DM_RENDER_COMMAND_BIND_SHADER:
-            {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
-                
-                if(!dm_render_command_backend_bind_shader(handle, &context->renderer)) { DM_LOG_FATAL("Bind shader failed"); return false; }
-            } break;
-            
-            case DM_RENDER_COMMAND_BIND_PIPELINE:
-            {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
-                
-                if(!dm_render_command_backend_bind_pipeline(handle, &context->renderer)) { DM_LOG_FATAL("Bind pipeline failed"); return false; }
-            } break;
-            
-            case DM_RENDER_COMMAND_BIND_BUFFER:
-            {
-                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
-                
-                if(!dm_render_command_backend_bind_buffer(handle, slot, &context->renderer)) { DM_LOG_FATAL("Bind buffer failed"); return false; }
-            } break;
-            case DM_RENDER_COMMAND_UPDATE_BUFFER:
-            {
-                DM_BYTE_POOL_POP(command.params, size_t, offset);
-                DM_BYTE_POOL_POP(command.params, size_t, data_size);
-                void* data = __dm_byte_pool_pop(&command.params, data_size);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
-                
-                if(!dm_render_command_backend_update_buffer(handle, data, data_size, offset, &context->renderer)) { DM_LOG_FATAL("Update buffer failed"); return false; }
-            } break;
-            
-            case DM_RENDER_COMMAND_BIND_UNIFORM:
-            {
-                DM_BYTE_POOL_POP(command.params, uint32_t, offset);
-                DM_BYTE_POOL_POP(command.params, dm_uniform_stage, stage);
-                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, uniform_handle);
-                
-                if(!dm_render_command_backend_bind_uniform(uniform_handle, stage, slot, offset, &context->renderer)) { DM_LOG_FATAL("Bind uniform failed"); return false; }
-            } break;
-            case DM_RENDER_COMMAND_UPDATE_UNIFORM:
-            {
-                DM_BYTE_POOL_POP(command.params, size_t, data_size);
-                void* data = __dm_byte_pool_pop(&command.params, data_size);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, uniform_handle);
-                
-                if(!dm_render_command_backend_update_uniform(uniform_handle, data, data_size, &context->renderer)) { DM_LOG_FATAL("Update uniform failed"); return false; }
-            } break;
-            
-            case DM_RENDER_COMMAND_BIND_TEXTURE:
-            {
-                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
-                
-                if(!dm_render_command_backend_bind_texture(handle, slot, &context->renderer)) { DM_LOG_FATAL("Bind texture failed"); return false; }
-            } break;
-            case DM_RENDER_COMMAND_UPDATE_TEXTURE:
-            {
-                DM_BYTE_POOL_POP(command.params, size_t, data_size);
-                void* data = __dm_byte_pool_pop(&command.params, data_size);
-                DM_BYTE_POOL_POP(command.params, uint32_t, height);
-                DM_BYTE_POOL_POP(command.params, uint32_t, width);
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
-                
-                if(!dm_render_command_backend_update_texture(handle, width, height, data, data_size, &context->renderer)) { DM_LOG_FATAL("Update texture failed"); return false; }
-            } break;
-            
-            case DM_RENDER_COMMAND_BIND_DEFAULT_FRAMEBUFFER:
-            {
-                if(!dm_render_command_backend_bind_default_framebuffer(&context->renderer)) { DM_LOG_FATAL("Bind default framebuffer failed"); return false; } 
-            } break;
-            case DM_RENDER_COMMAND_BIND_FRAMEBUFFER:
-            {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
-                
-                if(!dm_render_command_backend_bind_framebuffer(handle, &context->renderer)) { DM_LOG_FATAL("Bind framebuffer failed"); return false; }
-            } break;
-            case DM_RENDER_COMMAND_BIND_FRAMEBUFFER_TEXTURE:
-            {
-                DM_BYTE_POOL_POP(command.params, dm_render_handle, handle);
-                DM_BYTE_POOL_POP(command.params, uint32_t, slot);
-                
-                if(!dm_render_command_backend_bind_framebuffer_texture(handle, slot, &context->renderer)) { DM_LOG_FATAL("Bind framebuffer texture failed"); return false; }
-            } break;
-            
-            case DM_RENDER_COMMAND_DRAW_ARRAYS:
-            {
-                DM_BYTE_POOL_POP(command.params, uint32_t, count);
-                DM_BYTE_POOL_POP(command.params, uint32_t, start);
-                
-                dm_render_command_backend_draw_arrays(start, count, &context->renderer);
-            } break;
-            case DM_RENDER_COMMAND_DRAW_INDEXED:
-            {
-                DM_BYTE_POOL_POP(command.params, uint32_t, vertex_offset);
-                DM_BYTE_POOL_POP(command.params, uint32_t, index_offset);
-                DM_BYTE_POOL_POP(command.params, uint32_t, num_indices);
-                
-                dm_render_command_backend_draw_indexed(num_indices, index_offset, vertex_offset, &context->renderer);
-            } break;
-            case DM_RENDER_COMMAND_DRAW_INSTANCED:
-            {
-                DM_BYTE_POOL_POP(command.params, uint32_t, inst_offset);
-                DM_BYTE_POOL_POP(command.params, uint32_t, vertex_offset);
-                DM_BYTE_POOL_POP(command.params, uint32_t, index_offset);
-                DM_BYTE_POOL_POP(command.params, uint32_t, num_insts);
-                DM_BYTE_POOL_POP(command.params, uint32_t, num_indices);
-                
-                dm_render_command_backend_draw_instanced(num_indices, num_insts, index_offset, vertex_offset, inst_offset, &context->renderer);
-            } break;
-            
-            case DM_RENDER_COMMAND_TOGGLE_WIREFRAME:
-            {
-                DM_BYTE_POOL_POP(command.params, bool, wireframe);
-                
-                dm_render_command_backend_toggle_wireframe(wireframe, &context->renderer);
-            } break;
-            
-            case DM_RENDER_COMMAND_SET_SCISSOR_RECTS:
-            {
-                DM_BYTE_POOL_POP(command.params, uint32_t, bottom);
-                DM_BYTE_POOL_POP(command.params, uint32_t, top);
-                DM_BYTE_POOL_POP(command.params, uint32_t, right);
-                DM_BYTE_POOL_POP(command.params, uint32_t, left);
-                
-                dm_render_command_backend_set_scissor_rects(left, right, top, bottom, &context->renderer);
-            } break;
-            
-            default:
-            DM_LOG_ERROR("Unknown render command! Shouldn't be here...");
-            // TODO: do we kill here? Probably not, just ignore...
-            //return false;
-            break;
-        }
-    }
-    
-    return true;
-}
-
-dm_pipeline_desc dm_renderer_default_pipeline()
-{
-    dm_pipeline_desc pipeline_desc = { 0 };
-    pipeline_desc.cull_mode = DM_CULL_BACK;
-    pipeline_desc.winding_order = DM_WINDING_COUNTER_CLOCK;
-    pipeline_desc.primitive_topology = DM_TOPOLOGY_TRIANGLE_LIST;
-    
-    pipeline_desc.depth = true;
-    pipeline_desc.depth_comp = DM_COMPARISON_LESS;
-    
-    pipeline_desc.blend = true;
-    pipeline_desc.blend_eq = DM_BLEND_EQUATION_ADD;
-    pipeline_desc.blend_src_f = DM_BLEND_FUNC_SRC_ALPHA;
-    pipeline_desc.blend_dest_f = DM_BLEND_FUNC_ONE_MINUS_SRC_ALPHA;
-    
-    return pipeline_desc;
-}
-
-/***
-ECS
-*****/
-bool dm_ecs_init(dm_context* context)
-{
-    dm_ecs_manager* ecs_manager = &context->ecs_manager;
-    
-    dm_memset(ecs_manager->entities, DM_ECS_INVALID_ENTITY, sizeof(dm_entity) * DM_ECS_MAX_ENTITIES);
-    
-    size_t size = sizeof(uint32_t) * DM_ECS_MAX_ENTITIES * DM_ECS_MAX;
-    dm_memset(ecs_manager->entity_component_indices, DM_ECS_INVALID_ID, size);
-    dm_memzero(ecs_manager->entity_component_masks, sizeof(dm_ecs_id) * DM_ECS_MAX_ENTITIES);
-    
-    return true;
-}
-
-void dm_ecs_shutdown(dm_context* context)
-{
-    uint32_t i;
-    
-    dm_ecs_manager* ecs_manager = &context->ecs_manager;
-    
-    for(i=0; i<ecs_manager->num_registered_components; i++)
-    {
-        dm_free(ecs_manager->components[i].data);
-    }
-    
-    dm_ecs_system* system = NULL;
-    for(i=0; i<DM_ECS_SYSTEM_TIMING_UNKNOWN; i++)
-    {
-        for(uint32_t j=0; j<ecs_manager->num_registered_systems[i]; j++)
-        {
-            system = &ecs_manager->systems[i][j];
-            
-            system->shutdown_func((void*)system,(void*)context);
-            
-            if(system->system_data) dm_free(system->system_data);
-        }
-    }
-}
-
-dm_ecs_id dm_ecs_register_component(size_t size, dm_context* context)
-{
-    if(context->ecs_manager.num_registered_components >= DM_ECS_MAX) return DM_ECS_INVALID_ID;
-    
-    dm_ecs_id id = context->ecs_manager.num_registered_components++;
-    
-    context->ecs_manager.components[id].size = size;
-    context->ecs_manager.components[id].data = dm_alloc(size);
-    
-    return id;
-}
-
-dm_ecs_id dm_ecs_register_system(dm_ecs_id* component_ids, uint32_t component_count, dm_ecs_system_timing timing,  bool (*run_func)(void*,void*), void (*shutdown_func)(void*,void*), void (*insert_func)(uint32_t,void*,void*), dm_context* context)
-{
-    if(context->ecs_manager.num_registered_systems[timing] >= DM_ECS_MAX) return DM_ECS_INVALID_ID;
-    
-    dm_ecs_id id = context->ecs_manager.num_registered_systems[timing]++;
-    dm_ecs_system* system = &context->ecs_manager.systems[timing][id];
-    
-    for(uint32_t i=0; i<component_count; i++)
-    {
-        system->component_mask   |= DM_BIT_SHIFT(component_ids[i]);
-        system->component_ids[i]  = component_ids[i];
-    }
-    
-    system->component_count = component_count;
-    
-    system->run_func      = run_func;
-    system->shutdown_func = shutdown_func;
-    system->insert_func   = insert_func;
-    
-    system->entity_count = 0;
-    
-    dm_memset(system->entity_indices, DM_ECS_INVALID_ID, sizeof(uint32_t) * DM_ECS_MAX_ENTITIES * DM_ECS_MAX);
-    
-    return id;
-}
-
-void dm_ecs_entity_insert(dm_entity entity, dm_context* context)
-{
-    //const uint32_t index = dm_hash_32bit(entity) % context->ecs_manager.entity_capacity;
-    const uint32_t index = entity % DM_ECS_MAX_ENTITIES;
-    dm_entity* entities = context->ecs_manager.entities;
-    
-    if(entities[index]==DM_ECS_INVALID_ENTITY) 
-    {
-        entities[index] = entity;
-        context->ecs_manager.entity_count++;
-        return;
-    }
-    
-    uint32_t runner = index + 1;
-    if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
-    
-    while(runner != index)
-    {
-        if(entities[runner]==DM_ECS_INVALID_ENTITY) 
-        {
-            entities[runner] = entity;
-            context->ecs_manager.entity_count++;
-            return;
-        }
-        
-        runner++;
-        if(runner >= DM_ECS_MAX_ENTITIES) runner = 0;
-    }
-    
-    DM_LOG_FATAL("Could not insert entity, should not be here...");
-}
-
-void dm_ecs_insert_entities_into_systems(dm_context* context)
-{
-    dm_ecs_manager* ecs_manager = &context->ecs_manager;
-    dm_ecs_system*  system = NULL;
-    uint32_t        comp_id, comp_index;
-    
-    dm_entity entity = DM_ECS_INVALID_ENTITY;
-    
-    // for all entities
-    for(uint32_t e=0; e<DM_ECS_MAX_ENTITIES; e++)
-    {
-        entity = ecs_manager->entities[e];
-        if(entity == DM_ECS_INVALID_ENTITY) continue;
-        
-        //entity_index = dm_ecs_entity_get_index(entity, context);
-        
-        // for all system timings
-        for(uint32_t t=0; t<DM_ECS_SYSTEM_TIMING_UNKNOWN; t++)
-        {
-            // for all systems in timing
-            for(uint32_t s=0; s<ecs_manager->num_registered_systems[t]; s++)
-            {
-                system = &ecs_manager->systems[t][s];
-                
-                // early out if we don't have what this system needs
-                if(!dm_ecs_entity_has_component_multiple_via_index(e, system->component_mask, context)) continue;
-                
-                // get all component indices
-                for(uint32_t c=0; c<system->component_count; c++)
-                {
-                    comp_id    = system->component_ids[c];
-                    comp_index = ecs_manager->entity_component_indices[e][comp_id];
-                    
-                    system->entity_indices[system->entity_count][comp_id] = comp_index;
-                }
-                
-                system->insert_func(e, (void*)system, (void*)context);
-                
-                system->entity_count++;
-            }
-        }
-    }
-    
-    ecs_manager->flags &= ~DM_ECS_FLAG_REINSERT_ENTITIES;
-}
-
-bool dm_ecs_run_systems(dm_ecs_system_timing timing, dm_context* context)
-{
-    dm_ecs_system* system = NULL;
-    for(uint32_t i=0; i<context->ecs_manager.num_registered_systems[timing]; i++)
-    {
-        system = &context->ecs_manager.systems[timing][i];
-        if(!system->run_func(system, context)) return false;
-        
-        // reset entity_count
-        system->entity_count = 0;
-    }
-    
-    return true;
-}
-
-dm_entity dm_ecs_entity_create(dm_context* context)
-{
-    dm_entity entity;
-    
-    while(true)
-    {
-        entity = dm_random_uint32(context);
-        if(entity!=DM_ECS_INVALID_ENTITY) break;
-    }
-    
-    dm_ecs_entity_insert(entity, context);
-    
-    return entity;
-}
-
-void dm_ecs_entity_destroy(dm_entity entity, dm_context* context)
-{
-    dm_ecs_manager* ecs_manager = &context->ecs_manager;
-    
-    uint32_t index = dm_ecs_entity_get_index(entity, context);
-    
-    // remove components
-    for(uint32_t c=0; c<ecs_manager->num_registered_components; c++)
-    {
-        dm_ecs_entity_remove_component_via_index(index, c, context);
-    }
-    
-    // entity array position set to invalid
-    ecs_manager->entities[index] = DM_ECS_INVALID_ENTITY;
-    // component indices set to invalid
-    dm_memset(ecs_manager->entity_component_indices[index], DM_ECS_INVALID_ID, sizeof(uint32_t) * DM_ECS_MAX);
-    // component mask reset to 0
-    ecs_manager->entity_component_masks[index] = 0;
-    
-    ecs_manager->entity_count--;
-}
-
-void* dm_ecs_get_component_block(dm_ecs_id component_id, dm_context* context)
-{
-    if(component_id==DM_ECS_INVALID_ID) return NULL;
-    
-    return context->ecs_manager.components[component_id].data;
-}
-
-void dm_ecs_get_component_insert_index(dm_ecs_id component_id, uint32_t* index, dm_context* context)
-{
-    if(component_id==DM_ECS_INVALID_ID) return;
-    
-    dm_ecs_component* component = &context->ecs_manager.components[component_id];
-    
-    // if we have dead entities, use their indices.
-    // otherwise iterate
-    if(component->tombstone_count==0) *index = component->entity_count;
-    else                              *index = component->tombstones[component->tombstone_count--];
-}
-
-void dm_ecs_entity_add_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
-{
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    if(component_id==DM_ECS_INVALID_ID) return;
-    if(dm_ecs_entity_has_component_via_index(entity_index, component_id, context)) return;
-    
-    uint32_t c_index = context->ecs_manager.components[component_id].entity_count;
-    
-    context->ecs_manager.entity_component_indices[entity_index][component_id] = c_index;
-    context->ecs_manager.entity_component_masks[entity_index] |= DM_BIT_SHIFT(component_id);
-    context->ecs_manager.components[component_id].entity_count++;
-    
-    context->ecs_manager.flags |= DM_ECS_FLAG_REINSERT_ENTITIES;
-}
-
-void dm_ecs_entity_remove_component(dm_entity entity, dm_ecs_id component_id, dm_context* context)
-{
-    uint32_t entity_index = dm_ecs_entity_get_index(entity, context);
-    
-    dm_ecs_entity_remove_component_via_index(entity_index, component_id, context);
-}
-
-void dm_ecs_entity_remove_component_via_index(uint32_t index, dm_ecs_id component_id, dm_context* context)
-{
-    if(!dm_ecs_entity_has_component_via_index(index, component_id, context)) return;
-    
-    dm_ecs_component* component = &context->ecs_manager.components[component_id];
-    component->tombstones[component->tombstone_count++] = index;
-    
-    context->ecs_manager.flags |= DM_ECS_FLAG_REINSERT_ENTITIES;
+    return *(dm_font_aligned_quad*)&q;
 }
 
 /*********
@@ -2020,100 +1285,72 @@ void dm_threadpool_wait_for_completion(dm_threadpool* threadpool)
     dm_platform_threadpool_wait_for_completion(threadpool);
 }
 
-/*****
-IMGUI
-*******/
-extern bool dm_imgui_init(dm_context* context);
-extern void dm_imgui_shutdown(dm_context* context);
-extern void dm_imgui_render(dm_context* context);
-
-extern void dm_imgui_input_begin(dm_context* context);
-extern void dm_imgui_input_end(dm_context* context);
-extern void dm_imgui_input_event(dm_event e, dm_context* context);
-
 /*********
 FRAMEWORK
 ***********/
 typedef enum dm_context_flags_t
 {
-    DM_CONTEXT_FLAG_IS_RUNNING,
-    DM_CONTEXT_FLAG_UNKNOWN
+    DM_CONTEXT_FLAG_IS_RUNNING = 1,
 } dm_context_flags;
 
-dm_context* dm_init(dm_context_init_packet init_packet)
+bool dm_init(dm_context_init_packet init_packet, dm_context** context)
 {
-    dm_context* context = dm_alloc(sizeof(dm_context));
+    *context = dm_alloc(sizeof(dm_context));
     
-    context->platform_data.window_data.width = init_packet.window_width;
-    context->platform_data.window_data.height = init_packet.window_height;
-    strcpy(context->platform_data.window_data.title, init_packet.window_title);
-    strcpy(context->platform_data.asset_path, init_packet.asset_folder);
-    
-    if(!dm_platform_init(init_packet.window_x, init_packet.window_y, context))
-    {
-        dm_free(context);
-        return NULL;
-    }
-    
-    if(!dm_renderer_init(context))
-    {
-        dm_platform_shutdown(&context->platform_data);
-        dm_free(context);
-        return NULL;
-    }
-    
-    context->renderer.width  = init_packet.window_width;
-    context->renderer.height = init_packet.window_height;
-    context->renderer.vsync  = init_packet.vsync;
-    
-    // ecs
-    dm_ecs_init(context);
-    
-    // random init
-    init_genrand(&context->random, (uint32_t)dm_platform_get_time(&context->platform_data));
-    init_genrand64(&context->random_64, (uint64_t)dm_platform_get_time(&context->platform_data));
+    (*context)->platform_data.window_data.width = init_packet.window_width;
+    (*context)->platform_data.window_data.height = init_packet.window_height;
+    dm_strcpy((*context)->platform_data.window_data.title, init_packet.window_title);
+    dm_strcpy((*context)->platform_data.asset_path, init_packet.asset_folder);
     
     // misc
-    context->delta = 1.0f / DM_DEFAULT_MAX_FPS;
-    context->flags |= DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+    (*context)->delta = 1.0f / 60.f;
+    (*context)->flags |= DM_CONTEXT_FLAG_IS_RUNNING;
+
+    if(!dm_platform_init(init_packet.window_x, init_packet.window_y, *context)) return false;
     
-    // nuklear
-    if(!dm_imgui_init(context)) return false;
+    (*context)->renderer.width  = (*context)->platform_data.window_data.width;
+    (*context)->renderer.height = (*context)->platform_data.window_data.height;
+    if(!dm_renderer_init(*context)) return false;
     
-    return context;
+    (*context)->renderer.width  = init_packet.window_width;
+    (*context)->renderer.height = init_packet.window_height;
+    (*context)->renderer.vsync  = init_packet.vsync;
+    
+    // random init
+    init_genrand(&(*context)->random, (uint32_t)dm_platform_get_time(&(*context)->platform_data));
+    init_genrand64(&(*context)->random_64, (uint64_t)dm_platform_get_time(&(*context)->platform_data));
+    
+    if(init_packet.app_data_size) (*context)->app_data = dm_alloc(init_packet.app_data_size);
+    
+    return true;
 }
 
 void dm_shutdown(dm_context* context)
 {
-    for(uint32_t i=0; i<DM_MAX_RENDER_COMMANDS; i++)
-    {
-        if(context->renderer.command_manager.commands[i].params.data) dm_free(context->renderer.command_manager.commands[i].params.data);
-    }
-    
-    dm_imgui_shutdown(context);
+    if(context->app_data) dm_free((void**)&context->app_data);
+
+    dm_free((void**)&context->renderer.render_command_manager.commands);
     
     dm_renderer_shutdown(context);
     dm_platform_shutdown(&context->platform_data);
-    dm_ecs_shutdown(context);
     
-    dm_free(context);
+    dm_free((void**)&context->renderer.internal_renderer);
+    dm_free((void**)&context->platform_data.internal_data);
+    dm_free((void**)&context);
 }
 
-// also pass through nuklear inputs
-void dm_poll_events(dm_context* context)
+bool dm_poll_events(dm_context* context)
 {
-    dm_imgui_input_begin(context);
-    
-    for(uint32_t i=0; i<context->platform_data.event_list.num; i++)
+    for(uint32_t i=0; i<context->platform_data.event_list.num && i<DM_MAX_EVENTS_PER_FRAME; i++)
     {
         dm_event e = context->platform_data.event_list.events[i];
         switch(e.type)
         {
             case DM_EVENT_WINDOW_CLOSE:
             {
-                context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+                context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
                 DM_LOG_WARN("Window close event received");
-                return;
+                return true;
             } break;
             
             case DM_EVENT_KEY_DOWN:
@@ -2149,24 +1386,27 @@ void dm_poll_events(dm_context* context)
             break;
             
             case DM_EVENT_WINDOW_RESIZE:
+            //DM_LOG_INFO("Window resize event received");
             context->platform_data.window_data.width  = e.new_rect[0];
             context->platform_data.window_data.height = e.new_rect[1];
             
             context->renderer.width = e.new_rect[0];
             context->renderer.height = e.new_rect[1];
-            
-            dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer);
+
+            if(!dm_renderer_backend_resize(e.new_rect[0], e.new_rect[1], &context->renderer))
+            {
+                DM_LOG_FATAL("Resize failed");
+                return false;
+            }
             break;
             
             case DM_EVENT_UNKNOWN:
             DM_LOG_ERROR("Unknown event! Shouldn't be here...");
             break;
         }
-        
-        dm_imgui_input_event(e, context);
     }
     
-    dm_imgui_input_end(context);
+    return true;
 }
 
 void dm_start(dm_context* context)
@@ -2184,31 +1424,26 @@ bool dm_update_begin(dm_context* context)
 {
     // update input states
     context->input_states[1] = context->input_states[0];
-    //dm_memzero(&context->input_states[0], sizeof(context->input_states[0]));
     context->input_states[0].mouse.scroll = 0;
     
     if(!dm_platform_pump_events(&context->platform_data)) 
     {
-        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+        context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
         return false;
     }
     
-    dm_poll_events(context);
-    
-    // reinsert entities
-    dm_ecs_insert_entities_into_systems(context);
-    
-    // systems
-    if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_UPDATE_BEGIN, context)) return false;
+    if(!dm_poll_events(context))
+    {
+        context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
+        return false;
+    }
+    context->platform_data.event_list.num = 0;
     
     return true;
 }
 
 bool dm_update_end(dm_context* context)
 {
-    // systems
-    if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_UPDATE_END, context)) return false;
-    
     // cleaning
     context->platform_data.event_list.num = 0;
     
@@ -2223,33 +1458,25 @@ bool dm_renderer_begin_frame(dm_context* context)
         return false;
     }
     
-    // systems
-    if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_RENDER_BEGIN, context)) return false;
-    
     return true;
 }
 
 bool dm_renderer_end_frame(dm_context* context)
 {
-    // systems
-    if(!dm_ecs_run_systems(DM_ECS_SYSTEM_TIMING_RENDER_END, context)) return false;
-    
-    // imgui
-    dm_imgui_render(context);
-    
     // command submission
     if(!dm_renderer_submit_commands(context)) 
     { 
-        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+        context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
         DM_LOG_FATAL("Submiting render commands failed"); 
         return false; 
     }
     
-    context->renderer.command_manager.command_count = 0;
+    context->renderer.render_command_manager.count  = 0;
+    context->renderer.compute_command_manager.count = 0;
     
     if(!dm_renderer_backend_end_frame(context)) 
     {
-        context->flags &= ~DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+        context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
         DM_LOG_FATAL("End frame failed"); 
         return false; 
     }
@@ -2270,6 +1497,8 @@ void* dm_read_bytes(const char* path, const char* mode, size_t* size)
         buffer = dm_alloc(*size);
         
         size_t t = fread(buffer, *size, 1, fp);
+        char d[512];
+        dm_memcpy(d, buffer, 512);
         if(t!=1) 
         {
             DM_LOG_ERROR("Something bad happened with fread");
@@ -2283,7 +1512,7 @@ void* dm_read_bytes(const char* path, const char* mode, size_t* size)
 
 bool dm_context_is_running(dm_context* context)
 {
-    return context->flags & DM_BIT_SHIFT(DM_CONTEXT_FLAG_IS_RUNNING);
+    return context->flags & DM_CONTEXT_FLAG_IS_RUNNING;
 }
 
 uint32_t __dm_get_screen_width(dm_context* context)
@@ -2294,14 +1523,6 @@ uint32_t __dm_get_screen_width(dm_context* context)
 uint32_t __dm_get_screen_height(dm_context* context)
 {
     return context->platform_data.window_data.height;
-}
-
-void dm_grow_dyn_array(void** array, uint32_t count, uint32_t* capacity, size_t elem_size, float load_factor, uint32_t resize_factor)
-{
-    if((float)count / (float)*capacity < load_factor) return;
-    
-    *capacity *= resize_factor;
-    *array = dm_realloc(*array, *capacity * elem_size);
 }
 
 void dm_qsort(void* array, size_t count, size_t elem_size, int (compar)(const void* a, const void* b))
@@ -2324,6 +1545,19 @@ void dm_qsrot_p(void* array, size_t count, size_t elem_size, int (compar)(void* 
 #endif
 }
 #endif
+
+void dm_assert(bool condition)
+{
+    assert(condition);
+}
+
+void dm_assert_msg(bool condition, const char* message)
+{
+    if(condition) return;
+    
+    DM_LOG_FATAL("%s", message);
+    assert(false);
+}
 
 /*****
 TIMER
@@ -2348,6 +1582,63 @@ double dm_timer_elapsed_ms(dm_timer* timer, dm_context* context)
     return dm_timer_elapsed(timer, context) * 1000;
 }
 
+/****
+HASH
+******/
+dm_hash64 dm_hash_fnv1a(const char* key)
+{
+    dm_hash64 hash = 14695981039346656037UL;
+	for (int i = 0; key[i]; i++)
+	{
+		hash ^= key[i];
+		hash *= 1099511628211;
+	}
+    
+	return hash;
+}
+
+// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+dm_hash dm_hash_32bit(uint32_t key)
+{
+    dm_hash hash = ((key >> 16) ^ key)   * 0x119de1f3;
+    hash         = ((hash >> 16) ^ hash) * 0x119de1f3;
+    hash         = (hash >> 16) ^ hash;
+    
+    return hash;
+}
+
+// https://stackoverflow.com/questions/664014/what-integer-hash-function-are-good-that-accepts-an-integer-hash-key
+dm_hash64 dm_hash_64bit(uint64_t key)
+{
+	dm_hash64 hash = (key ^ (key >> 30))   * UINT64_C(0xbf58476d1ce4e5b9);
+	hash           = (hash ^ (hash >> 27)) * UINT64_C(0x94d049bb133111eb);
+	hash           = hash ^ (hash >> 31);
+    
+	return hash;
+}
+
+// http://blog.andreaskahler.com/2009/06/creating-icosphere-mesh-in-code.html
+dm_hash dm_hash_int_pair(int x, int y)
+{
+    if(y < x) return ( y << 16 ) + x;
+    
+    return (x << 16) + y;
+}
+
+// https://stackoverflow.com/questions/682438/hash-function-providing-unique-uint-from-an-integer-coordinate-pair
+dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y)
+{
+    if(y < x) return ( (uint64_t)y << 32 ) ^ x;
+    
+    return ((uint64_t)x << 32) ^ y;
+}
+
+// alternative to modulo: https://lemire.me/blog/2016/06/27/a-fast-alternative-to-the-modulo-reduction/
+uint32_t dm_hash_reduce(uint32_t x, uint32_t n)
+{
+    return ((uint64_t)x * (uint64_t)n) >> 32;
+}
+
 /*********
 MAIN FUNC
 ***********/
@@ -2358,29 +1649,40 @@ extern bool dm_application_update(dm_context* context);
 extern bool dm_application_render(dm_context* context);
 extern void dm_application_shutdown(dm_context* context);
 
+void dm_kill(dm_context* context)
+{
+    DM_LOG_FATAL("DarkMatter kill received");
+    context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
+}
+
 #ifdef DM_MATH_TESTS
 void dm_math_tests();
 #endif
 
 typedef enum dm_exit_code_t
 {
-    DM_EXIT_CODE_SUCCESS,
-    DM_EXIT_CODE_INIT_FAIL,
-    DM_EXIT_CODE_UNKNOWN
+    DM_EXIT_CODE_SUCCESS                 =  0,
+    DM_EXIT_CODE_INIT_FAIL               = -1,
+    DM_EXIT_CODE_APPLICATION_INIT_FAIL   = -2,
+    DM_EXIT_CODE_BEGIN_UPDATE_FAIL       = -3,
+    DM_EXIT_CODE_APPLICATION_UPDATE_FAIL = -4,
+    DM_EXIT_CODE_END_UPDATE_FAIL         = -5,
+    DM_EXIT_CODE_BEGIN_FRAME_FAIL        = -6,
+    DM_EXIT_CODE_APPLICATION_RENDER_FAIL = -7,
+    DM_EXIT_CODE_END_FRAME_FAIL          = -8,
+    DM_EXIT_CODE_UNKNOWN                 = -9
 } dm_exit_code;
 
 #define DM_DEFAULT_SCREEN_X      100
 #define DM_DEFAULT_SCREEN_Y      100
-#define DM_DEFAULT_SCREEN_WIDTH  1280
-#define DM_DEFAULT_SCREEN_HEIGHT 720
+#define DM_DEFAULT_SCREEN_WIDTH  1920
+#define DM_DEFAULT_SCREEN_HEIGHT 1080
 #define DM_DEFAULT_TITLE         "DarkMatter Application"
 #define DM_DEFAULT_ASSETS_FOLDER "assets"
 int main(int argc, char** argv)
 {
-#ifdef DM_MATH_TESTS
-    dm_math_tests();
-#endif
-    
+    int exit_code = DM_EXIT_CODE_SUCCESS;
+
     dm_context_init_packet init_packet = {
         DM_DEFAULT_SCREEN_X, DM_DEFAULT_SCREEN_Y,
         DM_DEFAULT_SCREEN_WIDTH, DM_DEFAULT_SCREEN_HEIGHT,
@@ -2390,34 +1692,56 @@ int main(int argc, char** argv)
     
     dm_application_setup(&init_packet);
     
-    dm_context* context = dm_init(init_packet);
-    if(!context) 
+    dm_context* context = NULL;
+
+    if(!dm_init(init_packet, &context))
     {
-        int r = getchar();
-        return DM_EXIT_CODE_INIT_FAIL;
+        exit_code = DM_EXIT_CODE_INIT_FAIL;
+        goto DM_EXIT;
     }
     
     if(!dm_application_init(context)) 
     {
         DM_LOG_FATAL("Application init failed");
         
-        dm_shutdown(context);
-        int r = getchar();
-        return DM_EXIT_CODE_INIT_FAIL;
+        exit_code = DM_EXIT_CODE_APPLICATION_INIT_FAIL;
+        goto DM_EXIT;
     }
-    
+   
+    if(!dm_renderer_backend_finish_init(context))
+    {
+        DM_LOG_FATAL("Renderer backend finish init failed");
+
+        exit_code = DM_EXIT_CODE_INIT_FAIL;
+        goto DM_EXIT;
+    }
+
     while(dm_context_is_running(context))
     {
         dm_start(context);
         
         // updating
-        if(!dm_update_begin(context)) break;
+        if(!dm_update_begin(context)) 
+        {
+            DM_LOG_FATAL("DarkMatter begin update failed");
+
+            exit_code = DM_EXIT_CODE_BEGIN_UPDATE_FAIL;
+            goto DM_EXIT;
+        }
         if(!dm_application_update(context))
         {
             DM_LOG_FATAL("Application update failed");
-            break;
+
+            exit_code = DM_EXIT_CODE_APPLICATION_UPDATE_FAIL;
+            goto DM_EXIT;
         }
-        if(!dm_update_end(context)) break;
+        if(!dm_update_end(context))
+        {
+            DM_LOG_FATAL("DarkMatter end update failed");
+
+            exit_code = DM_EXIT_CODE_END_UPDATE_FAIL;
+            goto DM_EXIT;
+        }
         
         // rendering
         if(dm_renderer_begin_frame(context))
@@ -2426,132 +1750,34 @@ int main(int argc, char** argv)
             {
                 DM_LOG_FATAL("Application render failed");
                 
-                break;
+                exit_code = DM_EXIT_CODE_APPLICATION_RENDER_FAIL;
+                goto DM_EXIT;
             }
-            if(!dm_renderer_end_frame(context)) break;
+            if(!dm_renderer_end_frame(context)) 
+            {
+                DM_LOG_FATAL("DarkMatter end frame failed");
+
+                exit_code = DM_EXIT_CODE_END_FRAME_FAIL;
+                goto DM_EXIT;
+            }
+        }
+        else
+        {
+            DM_LOG_FATAL("DarkMatter begin frame failed");
+
+            exit_code = DM_EXIT_CODE_BEGIN_FRAME_FAIL;
+            goto DM_EXIT;
         }
         
         dm_end(context);
     }
     
+DM_EXIT:
     dm_application_shutdown(context);
     dm_shutdown(context);
     
+    DM_LOG_WARN("Press enter to exit...");
     int r = getchar();
     
-    return DM_EXIT_CODE_SUCCESS;
+    return exit_code;
 }
-
-#ifdef DM_MATH_TESTS
-#define DM_MATH_ASSERT(COND, MESSAGE) if(!(COND)) { DM_LOG_FATAL(MESSAGE); assert(false); }
-#define DM_MATH_CLOSE_ENOUGH(X,Y) (dm_fabs((X)-(Y)) < 0.001f)
-
-void dm_vec3_tests()
-{
-    const dm_vec3 v1 = { 1,1,1 };
-    const dm_vec3 v2 = { 2,2,2 };
-    const dm_vec3 v3 = { 0.1f,0.1f,0.1f };
-    const dm_vec3 v4 = { -0.1f,-0.1f,-0.1f };
-    
-    DM_MATH_ASSERT(dm_vec3_dot(v1,v2)==6, "Vec3 dot product failed");
-    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(dm_vec3_dot(v2,v3),0.6f), "Vec3 dot product failed");
-    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(dm_vec3_dot(v3,v4),-0.03f), "Vec3 dot product failed");
-    
-    dm_vec3 result;
-    dm_vec3_sub_vec3(v1,v2, result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],-1.0f)) && (DM_MATH_CLOSE_ENOUGH(result[1],-1.0f)) && (DM_MATH_CLOSE_ENOUGH(result[2],-1.0f)), "Vec3 sub vec3 failed");
-    
-    dm_vec3_sub_vec3(v2,v3, result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],1.9f)) && (DM_MATH_CLOSE_ENOUGH(result[1],1.9f)) && (DM_MATH_CLOSE_ENOUGH(result[2],1.9f)), "Vec3 sub vec3 failed");
-    
-    dm_vec3_add_vec3(v1,v2, result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],3)) && (DM_MATH_CLOSE_ENOUGH(result[1],3)) && (DM_MATH_CLOSE_ENOUGH(result[2],3)), "Vec3 sub vec3 failed");
-    
-    dm_vec3_add_vec3(v2,v3, result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],2.1f)) && (DM_MATH_CLOSE_ENOUGH(result[1],2.1f)) && (DM_MATH_CLOSE_ENOUGH(result[2],2.1f)), "Vec3 sub vec3 failed");
-    
-    dm_vec3_norm(v1,result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],DM_MATH_INV_SQRT3)) && (DM_MATH_CLOSE_ENOUGH(result[1],DM_MATH_INV_SQRT3)) && (DM_MATH_CLOSE_ENOUGH(result[2],DM_MATH_INV_SQRT3)), "Vec3 norm failed");
-    
-    dm_vec3_scale(v1, 4, result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],4)) && (DM_MATH_CLOSE_ENOUGH(result[1],4)) && (DM_MATH_CLOSE_ENOUGH(result[2],4)), "Vec3 scale failed");
-}
-
-void dm_vec4_tests()
-{
-    const dm_vec4 v1 = { 1,1,1,1 };
-    const dm_vec4 v2 = { 2,2,2,2 };
-    const dm_vec4 v3 = { 0.1f,0.1f,0.1f,0.1f };
-    const dm_vec4 v4 = { -0.1f,-0.1f,-0.1f,-0.1f };
-    
-    float t = dm_vec4_dot(v1,v2);
-    DM_MATH_ASSERT(t==8, "Vec4 dot product failed");
-    
-    t = dm_vec4_dot(v2,v3);
-    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(t,0.8f), "Vec4 dot product failed");
-    
-    t = dm_vec4_dot(v3,v4);
-    DM_MATH_ASSERT(DM_MATH_CLOSE_ENOUGH(t,-0.04f), "Vec4 dot product failed");
-    
-    dm_vec4 result;
-    dm_vec4_sub_vec4(v1,v2, result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],-1.0f)) && (DM_MATH_CLOSE_ENOUGH(result[1],-1.0f)) && (DM_MATH_CLOSE_ENOUGH(result[2],-1.0f)) && (DM_MATH_CLOSE_ENOUGH(result[3],-1.0f)), "Vec4 sub vec4 failed");
-    
-    dm_vec4_sub_vec4(v2,v3, result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],1.9f)) && (DM_MATH_CLOSE_ENOUGH(result[1],1.9f)) && (DM_MATH_CLOSE_ENOUGH(result[2],1.9f)) && (DM_MATH_CLOSE_ENOUGH(result[3],1.9f)), "Vec4 sub vec4 failed");
-    
-    dm_vec4_add_vec4(v1,v2, result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],3)) && (DM_MATH_CLOSE_ENOUGH(result[1],3)) && (DM_MATH_CLOSE_ENOUGH(result[2],3)) && (DM_MATH_CLOSE_ENOUGH(result[3],3)), "Vec4 sub vec4 failed");
-    
-    dm_vec4_add_vec4(v2,v3, result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],2.1f)) && (DM_MATH_CLOSE_ENOUGH(result[1],2.1f)) && (DM_MATH_CLOSE_ENOUGH(result[2],2.1f)) && (DM_MATH_CLOSE_ENOUGH(result[3],2.1f)), "Vec4 sub vec4 failed");
-    
-    dm_vec4_norm(v1,result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],0.5f)) && (DM_MATH_CLOSE_ENOUGH(result[1],0.5f)) && (DM_MATH_CLOSE_ENOUGH(result[2],0.5f)) && (DM_MATH_CLOSE_ENOUGH(result[3],0.5f)), "Vec4 norm failed");
-    
-    dm_vec4_scale(v1,4,result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],4)) && (DM_MATH_CLOSE_ENOUGH(result[1],4)) && (DM_MATH_CLOSE_ENOUGH(result[2],4)) && (DM_MATH_CLOSE_ENOUGH(result[3],4)), "Vec4 norm failed");
-}
-
-void dm_mat4_tests()
-{
-    const dm_mat4 m1 = {
-        {1,2,3,4},
-        {1,2,3,4},
-        {1,2,3,4},
-        {1,2,3,4}
-    };
-    
-    const dm_vec4 v1 = {
-        2,2,2,2
-    };
-    
-    dm_vec4 result;
-    dm_mat4_mul_vec4(m1,v1, result);
-    DM_MATH_ASSERT((DM_MATH_CLOSE_ENOUGH(result[0],20.0f)) && (DM_MATH_CLOSE_ENOUGH(result[1],20.0f)) && (DM_MATH_CLOSE_ENOUGH(result[2],20.0f)) && (DM_MATH_CLOSE_ENOUGH(result[3],20.0f)), "Mat4 mul vec4 failed");
-    
-    const dm_mat4 m2 = {
-        { 1,0,10,0 },
-        { 0,1,0,0  },
-        { 0,0,1,0  },
-        { 0,10,0,1 }
-    };
-    const dm_mat4 m3 = {
-        { 1,0,-10,0 },
-        { 0,1,0,0  },
-        { 0,0,1,0  },
-        { 0,-10,0,1 }
-    };
-    
-    dm_mat4 r;
-    dm_mat4_inverse(m2,r);
-    DM_MATH_ASSERT(dm_mat4_is_equal(m3,r), "Mat4 inverse failed");
-}
-
-void dm_math_tests()
-{
-    dm_vec3_tests();
-    dm_vec4_tests();
-    dm_mat4_tests();
-}
-#endif

@@ -418,7 +418,7 @@ void* dm_mac_thread_start_func(void* args)
         if(task)
         {
             task->func(task->args);
-            dm_free(task);
+            dm_free((void**)&task);
         }
 
         // decrement thread working counter

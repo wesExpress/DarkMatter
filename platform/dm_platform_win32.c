@@ -2,16 +2,7 @@
 
 #ifdef DM_PLATFORM_WIN32
 
-#ifdef DM_OPENGL
-#include "glad/glad_wgl.h"
-
-bool dm_win32_load_opengl_functions(WNDCLASSEX window_class, dm_platform_data* platform_data);
-typedef HGLRC(WINAPI* PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int* attribList);
-
-#elif defined(DM_VULKAN)
-#include <vulkan/vulkan.h>
-#include <vulkan/vulkan_win32.h>
-#endif
+#include <stdio.h>
 
 #define DM_WIN32_GET_DATA dm_internal_w32_data* w32_data = platform_data->internal_data
 
@@ -20,6 +11,7 @@ LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 
 void* dm_win32_thread_start_func(void* args);
 void  dm_win32_thread_execute_task(dm_thread_task* task);
+const char* dm_win32_get_last_error();
 
 bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* context)
 {
@@ -31,89 +23,95 @@ bool dm_platform_init(uint32_t window_x_pos, uint32_t window_y_pos, dm_context* 
     
 	const char* window_class_name = "dm_window_class";
     
-#ifdef DM_OPENGL
-	WNDCLASSEX wcex = { 0 };
-	wcex.cbSize = sizeof(wcex);
-	wcex.style = CS_HREDRAW | CS_VREDRAW | CS_OWNDC;
-	wcex.lpfnWndProc = window_callback;
-	wcex.hInstance = w32_data->h_instance;
-	wcex.hIcon = LoadIcon(w32_data->h_instance, IDI_APPLICATION);
-	wcex.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
-	wcex.lpszClassName = window_class_name;
+	WNDCLASSEXW wc = { 0 };
+	wc.style         = CS_DBLCLKS | CS_HREDRAW | CS_OWNDC | CS_VREDRAW;
+	wc.lpfnWndProc   = window_callback;
+	wc.hInstance     = w32_data->h_instance;
+	wc.hIcon         = LoadIcon(NULL, IDI_APPLICATION);
+    wc.hIconSm       = LoadIcon(NULL, IDI_APPLICATION);
+	wc.hCursor       = LoadCursor(NULL, IDC_ARROW);
+	wc.hbrBackground = NULL;
+	wc.lpszClassName = (LPCWSTR)window_class_name;
+	wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+    wc.cbSize        = sizeof(WNDCLASSEX);
     
-	if (!dm_win32_load_opengl_functions(wcex, platform_data)) 
+	if (!RegisterClassExW(&wc)) 
     {
-        DM_LOG_FATAL("Win32 load OpenGL functions failed");
+        printf("Window registration failed\n");
+
+        printf("%s", dm_win32_get_last_error());
+
         return false;
     }
-#else
-	HICON icon = LoadIcon(w32_data->h_instance, IDI_APPLICATION);
-	WNDCLASSA wc = { 0 };
-	wc.style = CS_DBLCLKS | CS_HREDRAW | CS_OWNDC | CS_VREDRAW;
-	wc.lpfnWndProc = window_callback;
-	wc.hInstance = w32_data->h_instance;
-	wc.hIcon = icon;
-	wc.hCursor = LoadCursor(NULL, IDC_ARROW);
-	wc.hbrBackground = NULL;
-	wc.lpszClassName = window_class_name;
-	wc.hbrBackground = (HBRUSH)GetStockObject(BLACK_BRUSH);
+
+    uint32_t window_width, window_height, window_x, window_y;
     
-	if (!RegisterClassA(&wc)) 
+#if 1
+    uint32_t window_style    = WS_OVERLAPPEDWINDOW | WS_VISIBLE; 
+    uint32_t window_ex_style = WS_EX_OVERLAPPEDWINDOW | WS_EX_APPWINDOW;
+
+    RECT border_rect = { 0,0,0,0 };
+    AdjustWindowRectEx(&border_rect, window_style, 0, window_ex_style);
+
+    // Adjust client window to be appropriate
+    uint32_t client_x = window_x_pos;
+    uint32_t client_y = window_y_pos;
+    uint32_t client_width = platform_data->window_data.width;
+    uint32_t client_height = platform_data->window_data.height;
+
+    window_x = client_x;
+    window_y = client_y;
+    window_width = client_width;
+    window_height = client_height;
+
+    window_x += border_rect.left;
+    window_y += border_rect.top;
+    window_width += (border_rect.right - border_rect.left);
+    window_height += (border_rect.bottom - border_rect.top);
+#else
+    uint32_t window_style    = WS_POPUP | WS_VISIBLE;
+    uint32_t window_ex_style = WS_EX_APPWINDOW | WS_EX_TOPMOST;
+    
+    HMONITOR monitor = MonitorFromWindow(w32_data->hwnd, MONITOR_DEFAULTTONEAREST);
+    MONITORINFO info = { 0 };
+    info.cbSize = sizeof(info);
+    if(GetMonitorInfoW(monitor, &info))
     {
-        //DM_LOG_FATAL("Window registering failed");
-        printf("Window registration failed");
-        return false;
+        window_x = info.rcMonitor.left;
+        window_y = info.rcMonitor.top;
+        window_width = info.rcWork.right - info.rcWork.left;
+        window_height = info.rcWork.bottom - info.rcWork.top;
     }
 #endif
     
-	// Adjust client window to be appropriate
-	uint32_t client_x = window_x_pos;
-	uint32_t client_y = window_y_pos;
-	uint32_t client_width = platform_data->window_data.width;
-	uint32_t client_height = platform_data->window_data.height;
-    
-	uint32_t window_x = client_x;
-	uint32_t window_y = client_y;
-	uint32_t window_width = client_width;
-	uint32_t window_height = client_height;
-    
-	uint32_t window_style = WS_OVERLAPPED | WS_SYSMENU | WS_CAPTION | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_THICKFRAME;
-	uint32_t window_ex_style = WS_EX_APPWINDOW;
-    
-	RECT border_rect = { 0,0,0,0 };
-	AdjustWindowRectEx(&border_rect, window_style, 0, window_ex_style);
-    
-	window_x += border_rect.left;
-	window_y += border_rect.top;
-	window_width += (border_rect.right - border_rect.left);
-	window_height += (border_rect.bottom - border_rect.top);
-    
 	// create the window
-	w32_data->hwnd = CreateWindowExA(window_ex_style, 
-                                     window_class_name, platform_data->window_data.title,
-                                     window_style,
-                                     window_x, window_y, 
-                                     window_width, window_height,
-                                     NULL, NULL, 
-                                     w32_data->h_instance, 
-                                     NULL);
+    wchar_t d[512];
+    swprintf(d, 512, L"%hs", platform_data->window_data.title);
+	w32_data->hwnd = CreateWindowExW(window_ex_style, 
+                                    (LPCWSTR)window_class_name, 
+                                    d, 
+                                    window_style,
+                                    window_x, window_y, 
+                                    window_width, window_height,
+                                    NULL, NULL, 
+                                    w32_data->h_instance, 
+                                    NULL);
     
 	if (!w32_data->hwnd) 
     {
-        //DM_LOG_FATAL("Window creation failed");
-        printf("Window creation failed");
+        printf("Window creation failed\n");
+
+        printf("%s", dm_win32_get_last_error());
+
         return false;
     }
     
     // attach platform data to hwnd
-    if(!SetPropA(w32_data->hwnd, "platform_data", platform_data)) return false;
+    if(!SetPropW(w32_data->hwnd, L"platform_data", platform_data)) return false;
     
-#ifndef DM_OPENGL
-	ShowWindow(w32_data->hwnd, SW_SHOW);
-#endif
-    
-    //ShowCursor(FALSE);
+    SetWindowLongW(w32_data->hwnd, GWL_STYLE,   window_style);
+    SetWindowLongW(w32_data->hwnd, GWL_EXSTYLE, window_ex_style);
+	//ShowWindow(w32_data->hwnd, SW_SHOW);
     
 	// clock
 	LARGE_INTEGER frequency;
@@ -147,8 +145,6 @@ void dm_platform_shutdown(dm_platform_data* platform_data)
 		DestroyWindow(w32_data->hwnd);
 		w32_data->hwnd = 0;
 	}
-    
-    dm_free(platform_data->internal_data);
 }
 
 bool dm_platform_pump_events(dm_platform_data* platform_data)
@@ -156,10 +152,10 @@ bool dm_platform_pump_events(dm_platform_data* platform_data)
     DM_WIN32_GET_DATA;
     
     MSG message;
-    while (PeekMessageA(&message, w32_data->hwnd, 0, 0, PM_REMOVE))
+    while (PeekMessageW(&message, w32_data->hwnd, 0, 0, PM_REMOVE))
     {
         TranslateMessage(&message);
-        DispatchMessageA(&message);
+        DispatchMessageW(&message);
     }
     
     return true;
@@ -169,32 +165,33 @@ void dm_platform_write(const char* message, uint8_t color)
 {
 	HANDLE console_handle = GetStdHandle(STD_OUTPUT_HANDLE);
 	static uint8_t levels[6] = { 8, 1, 2, 6, 4, 64 };
+
 	SetConsoleTextAttribute(console_handle, levels[color]);
 	size_t len = strlen(message);
 	LPDWORD number_written = 0;
+
 	WriteConsoleA(console_handle, message, (DWORD)len, number_written, 0);
+
 	// resets to white
 	SetConsoleTextAttribute(console_handle, 7);
 }
 
 LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lparam)
 {
-    dm_platform_data* platform_data = GetPropA(hwnd, "platform_data");
+    dm_platform_data* platform_data = GetPropW(hwnd, L"platform_data");
+
+	if(!platform_data) return DefWindowProcW(hwnd, umsg, wparam, lparam);
     
     switch (umsg)
 	{
         case WM_ERASEBKGND:
 		return 1;
         case WM_CLOSE:
-        {
-            dm_add_window_close_event(&platform_data->event_list);
-            return 0;
-        } break;
+        dm_add_window_close_event(&platform_data->event_list);
+        return 0;
         case WM_DESTROY:
-        {
-            PostQuitMessage(0);
-            return 0;
-        } break;
+        PostQuitMessage(0);
+        return 0;
         
         case WM_SIZE:
         {
@@ -300,7 +297,7 @@ LRESULT CALLBACK window_callback(HWND hwnd, UINT umsg, WPARAM wparam, LPARAM lpa
         break;
 	}
     
-	return DefWindowProcA(hwnd, umsg, wparam, lparam);
+	return DefWindowProcW(hwnd, umsg, wparam, lparam);
 }
 
 LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -308,9 +305,7 @@ LRESULT CALLBACK WndProcTemp(HWND hWnd, UINT message, WPARAM wParam, LPARAM lPar
 	switch (message)
 	{
         case WM_CREATE:
-        {
-            return 0;
-        } 
+        return 0;
         case WM_DESTROY:
 		PostQuitMessage(0);
 		return 0;
@@ -447,7 +442,7 @@ void* dm_win32_thread_start_func(void* args)
         if(task) 
         {
             task->func(task->args);
-            dm_free(task);
+            dm_free((void**)&task);
         }
         
         // decrement thread working counter
@@ -461,24 +456,12 @@ void* dm_win32_thread_start_func(void* args)
 /***************
 ERROR MESSAGING
 *****************/
-const char* dm_get_win32_error_msg(HRESULT hr)
-{
-	char* message = NULL;
-    
-	DWORD msg_len = FormatMessageA(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,NULL, hr, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)(&message), 0, NULL);
-    
-	if (msg_len == 0) return "Unidentified Error Code";
-    
-	return message;
-}
-
-const char* dm_get_win32_last_error()
+const char* dm_win32_get_last_error()
 {
 	DWORD error_message_id = GetLastError();
 	LPSTR message = NULL;
     
-	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
-                  NULL, error_message_id, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)(&message), 0, NULL);
+	FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS, NULL, error_message_id, MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPSTR)(&message), 0, NULL);
     
 	return message;
 }
@@ -530,7 +513,7 @@ void dm_platform_clipboard_paste(void (*callback)(char*,int,void*), void* edit)
     
     callback(utf8, utf8size, edit);
     //nk_textedit_paste(edit, utf8, utf8size);
-    dm_free(utf8);
+    dm_free((void**)&utf8);
     
     GlobalUnlock(mem);
     CloseClipboard();
@@ -547,213 +530,72 @@ uint32_t dm_get_available_processor_count(dm_context* context)
 bool dm_platform_win32_decode_hresult(HRESULT hr)
 {
     if (hr == S_OK) return true;
-
+    
     DM_LOG_ERROR("Hresult failed with:");
-
+    
     switch (hr)
     {
-    case E_ABORT: 
+        case E_ABORT: 
         DM_LOG_ERROR("Operation aborted");
         break;
-
-    case E_ACCESSDENIED:
+        
+        case E_ACCESSDENIED:
         DM_LOG_ERROR("General access denied error");
         break;
-
-    case E_FAIL:
+        
+        case E_FAIL:
         DM_LOG_ERROR("Unspecified failure");
         break;
-
-    case E_HANDLE:
+        
+        case E_HANDLE:
         DM_LOG_ERROR("Handle that is not valid");
         break;
-
-    case E_INVALIDARG:
+        
+        case E_INVALIDARG:
         DM_LOG_ERROR("One or more arguments are not valid");
         break;
-
-    case E_NOINTERFACE:
+        
+        case E_NOINTERFACE:
         DM_LOG_ERROR("No such interface supported");
         break;
-
-    case E_NOTIMPL:
+        
+        case E_NOTIMPL:
         DM_LOG_ERROR("Not implemented");
         break;
-
-    case E_OUTOFMEMORY:
+        
+        case E_OUTOFMEMORY:
         DM_LOG_ERROR("Failed to allocate necessary memory");
         break;
-
-    case E_POINTER:
+        
+        case E_POINTER:
         DM_LOG_ERROR("Pointer that is not valid");
         break;
-
-    case E_UNEXPECTED:
+        
+        case E_UNEXPECTED:
         DM_LOG_ERROR("Unexpected failure");
         break;
+        
+        case 0x80070002:
+        DM_LOG_ERROR("File not found");
+        break;
+        
+        case 0x887A0005:
+        DM_LOG_ERROR("DXGI Error: Device removed: Device hung");
+        break;
+        
+        case 0x887A0006:
+        DM_LOG_ERROR("GPU will not respond to more commands due to invalid command");
+        break;
 
-    default:
+        case 0x8876086c:
+        DM_LOG_ERROR("Invalid call");
+        break;
+        
+        default:
+        DM_LOG_ERROR("Unknown error: %u", hr);
         break;
     }
-
+    
     return false;
 }
-
-/******
-OPENGL
-********/
-#ifdef DM_OPENGL
-bool dm_win32_load_opengl_functions(WNDCLASSEX window_class, dm_platform_data* platform_data)
-{
-    DM_WIN32_GET_DATA;
-    
-	// fake window
-	if (!RegisterClassEx(&window_class)) return false;
-    
-	w32_data->fake_wnd = CreateWindow("dm_window_class",
-                                      "Fake Window",
-                                      WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
-                                      0, 0,
-                                      1, 1,
-                                      NULL, NULL,
-                                      w32_data->h_instance, NULL);
-    
-	// rendering context
-	w32_data->fake_dc = GetDC(w32_data->fake_wnd);
-    
-	PIXELFORMATDESCRIPTOR fake_pfd = { 0 };
-	fake_pfd.nSize = sizeof(fake_pfd);
-	fake_pfd.nVersion = 1;
-	fake_pfd.dwFlags = PFD_DOUBLEBUFFER | PFD_SUPPORT_OPENGL | PFD_DRAW_TO_WINDOW;
-	fake_pfd.iPixelType = PFD_TYPE_RGBA;
-	fake_pfd.cColorBits = 32;
-	fake_pfd.cDepthBits = 24;
-	fake_pfd.cAlphaBits = 8;
-    
-	int format = ChoosePixelFormat(w32_data->fake_dc, &fake_pfd);
-	if (format == 0) return false;
-    if (!SetPixelFormat(w32_data->fake_dc, format, &fake_pfd)) 
-    {
-        DM_LOG_FATAL("SetPixelFormat failed");
-        return false;
-    }
-    
-	w32_data->fake_rc = wglCreateContext(w32_data->fake_dc);
-	if (!w32_data->fake_rc) return false;
-	if (!wglMakeCurrent(w32_data->fake_dc, w32_data->fake_rc)) 
-    {
-        DM_LOG_FATAL("wglMakeCurrent failed");
-        return false;
-    }
-    
-	// load opengl functions with glad
-	if (!gladLoadWGL(w32_data->fake_dc)) 
-    {
-        DM_LOG_FATAL("gladLoadWGL failed");
-        return false;
-    }
-    
-	return true;
-}
-
-bool dm_platform_init_opengl(dm_platform_data* platform_data)
-{
-    DM_WIN32_GET_DATA;
-    
-	w32_data->hdc = GetDC(w32_data->hwnd);
-    
-	const int pixel_attribs[] = {
-		WGL_DRAW_TO_WINDOW_ARB, GL_TRUE,
-		WGL_SUPPORT_OPENGL_ARB, GL_TRUE,
-		WGL_DOUBLE_BUFFER_ARB, GL_TRUE,
-		WGL_PIXEL_TYPE_ARB, WGL_TYPE_RGBA_ARB,
-		WGL_ACCELERATION_ARB, WGL_FULL_ACCELERATION_ARB,
-		WGL_COLOR_BITS_ARB, 32,
-		WGL_ALPHA_BITS_ARB, 8,
-		WGL_DEPTH_BITS_ARB, 24,
-		WGL_STENCIL_BITS_ARB, 8,
-		WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
-		0
-	};
-    
-	int pixel_format_id;
-	uint32_t num_formats;
-    
-	bool status = wglChoosePixelFormatARB(w32_data->hdc, pixel_attribs, NULL, 1, &pixel_format_id, &num_formats);
-	if (!status || (num_formats == 0)) return false;
-    
-	PIXELFORMATDESCRIPTOR PFD;
-	DescribePixelFormat(w32_data->hdc, pixel_format_id, sizeof(PFD), &PFD);
-	SetPixelFormat(w32_data->hdc, pixel_format_id, &PFD);
-    
-	// opengl context
-	const int context_attribs[] = {
-		WGL_CONTEXT_MAJOR_VERSION_ARB, DM_OPENGL_MAJOR,
-		WGL_CONTEXT_MINOR_VERSION_ARB, DM_OPENGL_MINOR,
-		WGL_CONTEXT_FLAGS_ARB, 0,
-		WGL_CONTEXT_PROFILE_MASK_ARB,
-		WGL_CONTEXT_CORE_PROFILE_BIT_ARB, 0,
-	};
-    
-	w32_data->hrc = wglCreateContextAttribsARB(w32_data->hdc, 0, context_attribs);
-	if (!w32_data->hrc) return false;
-    
-	wglMakeCurrent(NULL, NULL);
-	wglDeleteContext(w32_data->fake_rc);
-	ReleaseDC(w32_data->fake_wnd, w32_data->fake_dc);
-	DestroyWindow(w32_data->fake_wnd);
-    
-	if (!wglMakeCurrent(w32_data->hdc, w32_data->hrc)) return false;
-    
-	// load opengl functions with glad
-	if (!gladLoadGL()) 
-    {
-        DM_LOG_FATAL("gladLoadGL failed");
-        return false;
-    }
-    
-	ShowWindow(w32_data->hwnd, SW_SHOW);
-    
-	return true;
-}
-
-void dm_platform_shutdown_opengl(dm_platform_data* platform_data)
-{
-    DM_WIN32_GET_DATA;
-    
-	wglMakeCurrent(NULL, NULL);
-	wglDeleteContext(w32_data->hrc);
-}
-
-void dm_platform_swap_buffers(bool vsync, dm_platform_data* platform_data)
-{
-    DM_WIN32_GET_DATA;
-    
-    uint32_t v = vsync ? 1 : 0;
-    wglSwapIntervalEXT(v);
-	SwapBuffers(w32_data->hdc);
-}
-#endif
-
-/******
-VULKAN
-********/
-#ifdef DM_VULKAN
-bool dm_platform_create_vulkan_surface(dm_platform_data* platform_data, VkInstance* instance, VkSurfaceKHR* surface)
-{
-    DM_WIN32_GET_DATA;
-    
-    VkWin32SurfaceCreateInfoKHR create_info = { 0 };
-    create_info.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
-    create_info.hinstance = w32_data->h_instance;
-    create_info.hwnd = w32_data->hwnd;
-    
-    VkResult result = vkCreateWin32SurfaceKHR(*instance, &create_info, NULL, surface);
-    if(result==VK_SUCCESS) return true;
-    
-    DM_LOG_FATAL("Could not create Win32 Vulkan surface");
-    return false;
-}
-#endif
-
 #endif

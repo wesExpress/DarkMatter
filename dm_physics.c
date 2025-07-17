@@ -39,7 +39,7 @@ void dm_physics_support_func_sphere(const float pos[3], const float cen[3], cons
         (dir_norm[2] * radius) + (pos[2] + cen[2])
     };
     
-    DM_VEC3_COPY(support, sup);
+    dm_vec3_from_vec3(sup, support);
 }
 
 DM_INLINE
@@ -93,18 +93,18 @@ void dm_physics_support(const float pos[2][3], const float rot[2][4], const floa
     dm_physics_support_entity(pos[0], rot[0], cen[0], internals[0], shapes[0], direction, support_a);
     dm_physics_support_entity(pos[1], rot[1], cen[1], internals[1], shapes[1], dir_neg,   support_b);
     
-    DM_VEC3_COPY(supports[0], support_a);
-    DM_VEC3_COPY(supports[1], support_b);
+    dm_vec3_from_vec3(support_a, supports[0]);
+    dm_vec3_from_vec3(support_b, supports[1]);
     
     dm_vec3_sub_vec3(support_a, support_b, support);
 }
 
 void dm_simplex_push_front(float point[3], dm_simplex* simplex)
 {
-    DM_VEC3_COPY(simplex->points[3], simplex->points[2]);
-    DM_VEC3_COPY(simplex->points[2], simplex->points[1]);
-    DM_VEC3_COPY(simplex->points[1], simplex->points[0]);
-    DM_VEC3_COPY(simplex->points[0], point);
+    dm_vec3_from_vec3(simplex->points[2], simplex->points[3]);
+    dm_vec3_from_vec3(simplex->points[1], simplex->points[2]);
+    dm_vec3_from_vec3(simplex->points[0], simplex->points[1]);
+    dm_vec3_from_vec3(point, simplex->points[0]);
     
     simplex->size++;
     simplex->size = DM_CLAMP(simplex->size, 0, 4);
@@ -119,8 +119,8 @@ bool dm_simplex_line(float direction[3], dm_simplex* simplex)
     float a[3], b[3];
     float ab[3]; float ao[3];
     
-    DM_VEC3_COPY(a, simplex->points[0]);
-    DM_VEC3_COPY(b, simplex->points[1]);
+    dm_vec3_from_vec3(simplex->points[0], a);
+    dm_vec3_from_vec3(simplex->points[1], b);
     
     dm_vec3_sub_vec3(b, a, ab);
     dm_vec3_negate(a, ao);
@@ -132,7 +132,7 @@ bool dm_simplex_line(float direction[3], dm_simplex* simplex)
     else 
     {
         simplex->size = 1;
-        DM_VEC3_COPY(direction, ao);
+        dm_vec3_from_vec3(ao, direction);
     }
     
     return false;
@@ -159,9 +159,9 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
     float ab[3], ac[3], ao[3], abc[3];
     float dum[3];
     
-    DM_VEC3_COPY(a, simplex->points[0]);
-    DM_VEC3_COPY(b, simplex->points[1]);
-    DM_VEC3_COPY(c, simplex->points[2]);
+    dm_vec3_from_vec3(simplex->points[0], a);
+    dm_vec3_from_vec3(simplex->points[1], b);
+    dm_vec3_from_vec3(simplex->points[2], c);
     
     dm_vec3_sub_vec3(b, a, ab);
     dm_vec3_sub_vec3(c, a, ac);
@@ -176,7 +176,7 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
         // are we actually in region 1?
         if(dm_vec3_same_direction(ac, ao))
         {
-            DM_VEC3_COPY(simplex->points[1], c);
+            dm_vec3_from_vec3(c, simplex->points[1]);
             simplex->size = 2;
             
             dm_vec3_cross_cross(ac, ao, ac, direction);
@@ -195,7 +195,7 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
             {
                 simplex->size = 1;
                 
-                DM_VEC3_COPY(direction, ao);
+                dm_vec3_from_vec3(ao, direction);
             }
         }
     }
@@ -217,7 +217,7 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
             {
                 simplex->size = 1;
                 
-                DM_VEC3_COPY(direction, ao);
+                dm_vec3_from_vec3(ao, direction);
             }
         }
         // origin must be in triangle
@@ -231,8 +231,8 @@ bool dm_simplex_triangle(float direction[3], dm_simplex* simplex)
             // below plane (region 3)
             else
             {
-                DM_VEC3_COPY(simplex->points[1], c);
-                DM_VEC3_COPY(simplex->points[2], b);
+                dm_vec3_from_vec3(c, simplex->points[1]);
+                dm_vec3_from_vec3(b, simplex->points[2]);
                 simplex->size = 3;
                 
                 dm_vec3_negate(abc, direction);
@@ -250,10 +250,10 @@ bool dm_simplex_tetrahedron(float direction[3], dm_simplex* simplex)
     float ab[3] = { 0 }, ac[3] = { 0 }, ad[3] = { 0 }, ao[3] = { 0 };
     float abc[3], acd[3], adb[3];
     
-    DM_VEC3_COPY(a, simplex->points[0]);
-    DM_VEC3_COPY(b, simplex->points[1]);
-    DM_VEC3_COPY(c, simplex->points[2]);
-    DM_VEC3_COPY(d, simplex->points[3]);
+    dm_vec3_from_vec3(simplex->points[0], a);
+    dm_vec3_from_vec3(simplex->points[1], b);
+    dm_vec3_from_vec3(simplex->points[2], c);
+    dm_vec3_from_vec3(simplex->points[3], d);
     
     dm_vec3_sub_vec3(b, a, ab);
     dm_vec3_sub_vec3(c, a, ac);
@@ -266,29 +266,29 @@ bool dm_simplex_tetrahedron(float direction[3], dm_simplex* simplex)
     
     if(dm_vec3_same_direction(abc, ao))
     {
-        DM_VEC3_COPY(direction, abc);
+        dm_vec3_from_vec3(abc, direction);
         
         return false;
     }
     else if(dm_vec3_same_direction(acd, ao))
     {
-        DM_VEC3_COPY(simplex->points[0], a);
-        DM_VEC3_COPY(simplex->points[1], c);
-        DM_VEC3_COPY(simplex->points[2], d);
+        dm_vec3_from_vec3(a, simplex->points[0]);
+        dm_vec3_from_vec3(c, simplex->points[1]);
+        dm_vec3_from_vec3(d, simplex->points[2]);
         simplex->size = 3;
         
-        DM_VEC3_COPY(direction, acd);
+        dm_vec3_from_vec3(acd, direction);
         
         return false;
     }
     else if(dm_vec3_same_direction(adb, ao))
     {
-        DM_VEC3_COPY(simplex->points[0], a);
-        DM_VEC3_COPY(simplex->points[1], d);
-        DM_VEC3_COPY(simplex->points[2], b);
+        dm_vec3_from_vec3(a, simplex->points[0]);
+        dm_vec3_from_vec3(d, simplex->points[1]);
+        dm_vec3_from_vec3(b, simplex->points[2]);
         simplex->size = 3;
         
-        DM_VEC3_COPY(direction, adb);
+        dm_vec3_from_vec3(adb, direction);
         
         return false;
     }
@@ -369,33 +369,33 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
     float a[3], b[3], c[3], d[3];
     float dum1[3], dum2[3];
     
-    DM_VEC3_COPY(a, simplex->points[0]);
-    DM_VEC3_COPY(b, simplex->points[1]);
-    DM_VEC3_COPY(c, simplex->points[2]);
-    DM_VEC3_COPY(d, simplex->points[3]);
+    dm_vec3_from_vec3(simplex->points[0], a);
+    dm_vec3_from_vec3(simplex->points[1], b);
+    dm_vec3_from_vec3(simplex->points[2], c);
+    dm_vec3_from_vec3(simplex->points[3], d);
     
     // face a,b,c
-    DM_VEC3_COPY(faces[0][0], a);
-    DM_VEC3_COPY(faces[0][1], b);
-    DM_VEC3_COPY(faces[0][2], c);
+    dm_vec3_from_vec3(a, faces[0][0]);
+    dm_vec3_from_vec3(b, faces[0][1]);
+    dm_vec3_from_vec3(c, faces[0][2]);
     dm_triangle_normal(faces[0], normals[0]);
     
     // face a,c,d
-    DM_VEC3_COPY(faces[1][0], a);
-    DM_VEC3_COPY(faces[1][1], c);
-    DM_VEC3_COPY(faces[1][2], d);
+    dm_vec3_from_vec3(a, faces[1][0]);
+    dm_vec3_from_vec3(c, faces[1][1]);
+    dm_vec3_from_vec3(d, faces[1][2]);
     dm_triangle_normal(faces[1], normals[1]);
     
     // face a,d,b
-    DM_VEC3_COPY(faces[2][0], a);
-    DM_VEC3_COPY(faces[2][1], d);
-    DM_VEC3_COPY(faces[2][2], b);
+    dm_vec3_from_vec3(a, faces[2][0]);
+    dm_vec3_from_vec3(d, faces[2][1]);
+    dm_vec3_from_vec3(b, faces[2][2]);
     dm_triangle_normal(faces[2], normals[2]);
     
     // face b,d,c
-    DM_VEC3_COPY(faces[3][0], b);
-    DM_VEC3_COPY(faces[3][1], d);
-    DM_VEC3_COPY(faces[3][2], c);
+    dm_vec3_from_vec3(b, faces[3][0]);
+    dm_vec3_from_vec3(d, faces[3][1]);
+    dm_vec3_from_vec3(c, faces[3][2]);
     dm_triangle_normal(faces[3], normals[3]);
     
     /////////////////////////
@@ -453,8 +453,8 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
             
             for(uint32_t j=0; j<3; j++)
             {
-                DM_VEC3_COPY(current_edge[0], faces[i][j]);
-                DM_VEC3_COPY(current_edge[1], faces[i][(j+1)%3]);
+                dm_vec3_from_vec3(faces[i][j], current_edge[0]);
+                dm_vec3_from_vec3(faces[i][(j+1)%3], current_edge[1]);
                 bool found = false;
                 
                 for(uint32_t k=0; k<num_loose; k++)
@@ -464,8 +464,8 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
                     remove = cond1 && cond2;
                     if(!remove) continue;
                     
-                    DM_VEC3_COPY(loose_edges[k][0], loose_edges[num_loose-1][0]);
-                    DM_VEC3_COPY(loose_edges[k][1], loose_edges[num_loose-1][1]);
+                    dm_vec3_from_vec3(loose_edges[num_loose-1][0], loose_edges[k][0]);
+                    dm_vec3_from_vec3(loose_edges[num_loose-1][1], loose_edges[k][1]);
                     num_loose--;
                     found = true;
                     k = num_loose;
@@ -474,25 +474,25 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
                 if(found) continue;
                 if(num_loose >= DM_PHYSICS_EPA_MAX_FACES) break;
                 
-                DM_VEC3_COPY(loose_edges[num_loose][0], current_edge[0]);
-                DM_VEC3_COPY(loose_edges[num_loose][1], current_edge[1]);
+                dm_vec3_from_vec3(current_edge[0], loose_edges[num_loose][0]);
+                dm_vec3_from_vec3(current_edge[1], loose_edges[num_loose][1]);
                 num_loose++;
             }
             
             // triangle is visible, remove it
-            DM_VEC3_COPY(faces[i][0], faces[num_faces-1][0]);
-            DM_VEC3_COPY(faces[i][1], faces[num_faces-1][1]);
-            DM_VEC3_COPY(faces[i][2], faces[num_faces-1][2]);
-            DM_VEC3_COPY(normals[i],  normals[num_faces-1]);
+            dm_vec3_from_vec3(faces[num_faces-1][0], faces[i][0]);
+            dm_vec3_from_vec3(faces[num_faces-1][1], faces[i][1]);
+            dm_vec3_from_vec3(faces[num_faces-1][2], faces[i][2]);
+            dm_vec3_from_vec3(normals[num_faces-1], normals[i]);
             num_faces--;
             i--;
         }
         
         for(uint32_t i=0; i<num_loose; i++)
         {
-            DM_VEC3_COPY(faces[num_faces][0], loose_edges[i][0]);
-            DM_VEC3_COPY(faces[num_faces][1], loose_edges[i][1]);
-            DM_VEC3_COPY(faces[num_faces][2], support);
+            dm_vec3_from_vec3(loose_edges[i][0], faces[num_faces][0]);
+            dm_vec3_from_vec3(loose_edges[i][1], faces[num_faces][1]);
+            dm_vec3_from_vec3(support, faces[num_faces][2]);
             
             dm_vec3_sub_vec3(faces[num_faces][0], faces[num_faces][1], dum1);
             dm_vec3_sub_vec3(faces[num_faces][0], faces[num_faces][2], dum2);
@@ -503,9 +503,9 @@ void dm_physics_epa(const float pos[2][3], const float rots[2][4], const float c
             if(dm_vec3_dot(faces[num_faces][0], normals[num_faces])+bias < 0)
             {
                 float temp[3];
-                DM_VEC3_COPY(temp, faces[num_faces][0]);
-                DM_VEC3_COPY(faces[num_faces][0], faces[num_faces][1]);
-                DM_VEC3_COPY(faces[num_faces][1], temp);
+                dm_vec3_from_vec3(faces[num_faces][0], temp);
+                dm_vec3_from_vec3(faces[num_faces][0], faces[num_faces][0]);
+                dm_vec3_from_vec3(temp, faces[num_faces][1]);
                 dm_vec3_negate(normals[num_faces], normals[num_faces]);
             }
             
@@ -661,11 +661,11 @@ void dm_support_face_box(const float pos[3], const float rot[4], const float cen
         dm_vec3_add_vec3(points[i], pos, points[i]);
     }
     
-    DM_VEC3_COPY(normal, dm_box_support_axes[best_axis]);
+    dm_vec3_from_vec3(dm_box_support_axes[best_axis], normal);
     dm_vec3_rotate(normal, rot, normal);
     dm_vec3_norm(normal, normal);
     
-    DM_VEC3_COPY(planes[0].normal, normal);
+    dm_vec3_from_vec3(normal, planes[0].normal);
     planes[0].distance = -dm_vec3_dot(planes[0].normal, points[0]);
     
     dm_vec3_rotate(planes[1].normal, rot, planes[1].normal);
@@ -700,7 +700,7 @@ void dm_physics_plane_edge_intersect(dm_plane plane, float start[3], float end[3
     
     if(dm_fabs(ab_d) <= DM_PHYSICS_TEST_EPSILON)
     {
-        DM_VEC3_COPY(out, start);
+        dm_vec3_from_vec3(start, out);
     }
     else
     {
@@ -712,7 +712,7 @@ void dm_physics_plane_edge_intersect(dm_plane plane, float start[3], float end[3
         dm_vec3_scale(ab, fac, ab);
         dm_vec3_add_vec3(start, ab, ab);
         
-        DM_VEC3_COPY(out, ab);
+        dm_vec3_from_vec3(ab, out);
     }
 }
 
@@ -738,34 +738,34 @@ void dm_physics_sutherland_hodgman(float input_face[10][3], uint32_t num_input, 
         output_count = 0;
         
         const dm_plane plane = clip_planes[i];
-        DM_VEC3_COPY(start, input[input_count-1]);
+        dm_vec3_from_vec3(input[input_count-1], start);
         
         for(uint32_t j=0; j<input_count; j++)
         {
-            DM_VEC3_COPY(end, input[j]);
+            dm_vec3_from_vec3(input[j], end);
             
             bool start_in_plane = dm_physics_point_in_plane(start, plane);
             bool end_in_plane   = dm_physics_point_in_plane(end, plane);
             
             if(start_in_plane && end_in_plane)
             {
-                DM_VEC3_COPY(output[output_count++], end);
+                dm_vec3_from_vec3(end, output[output_count++]);
             }
             else if(start_in_plane && !end_in_plane)
             {
                 float new_p[3];
                 dm_physics_plane_edge_intersect(plane, start, end, new_p);
-                DM_VEC3_COPY(output[output_count++], new_p);
+                dm_vec3_from_vec3(new_p, output[output_count++]);
             }
             else if(!start_in_plane && end_in_plane)
             {
                 float new_p[3];
                 dm_physics_plane_edge_intersect(plane, end, start, new_p);
-                DM_VEC3_COPY(output[output_count++], new_p);
-                DM_VEC3_COPY(output[output_count++], end);
+                dm_vec3_from_vec3(new_p, output[output_count++]);
+                dm_vec3_from_vec3(end, output[output_count++]);
             }
             
-            DM_VEC3_COPY(start, end);
+            dm_vec3_from_vec3(end, start);
         }
     }
     
@@ -783,7 +783,7 @@ void dm_physics_init_constraint(float vec[3], float r_a[3], float r_b[3], float 
     dm_vec3_negate(vec, constraint->jacobian[0]);
     dm_vec3_cross(r_a, vec, constraint->jacobian[1]);
     dm_vec3_negate(constraint->jacobian[1], constraint->jacobian[1]);
-    DM_VEC3_COPY(constraint->jacobian[2], vec);
+    dm_vec3_from_vec3(vec, constraint->jacobian[2]);
     dm_vec3_cross(r_b, vec, constraint->jacobian[3]);
     constraint->b = b;
     constraint->impulse_min = impulse_min;
@@ -796,8 +796,8 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
 {
     if(manifold->point_count>=DM_PHYSICS_MAX_MANIFOLDS) return;
     
-    DM_QUAT_COPY(manifold->orientation_a, rot[0]);
-    DM_QUAT_COPY(manifold->orientation_b, rot[1]);
+    dm_quat_from_quat(rot[0], manifold->orientation_a);
+    dm_quat_from_quat(rot[1], manifold->orientation_b);
     
     float dum1[3];
     
@@ -870,8 +870,8 @@ void dm_physics_add_contact_point(const float on_a[3], const float on_b[3], cons
     // point position data
     float inv_rot[4];
     dm_contact_point p = { 0 };
-    DM_VEC3_COPY(p.global_pos[0], on_a);
-    DM_VEC3_COPY(p.global_pos[1], on_b);
+    dm_vec3_from_vec3(on_a, p.global_pos[0]);
+    dm_vec3_from_vec3(on_b, p.global_pos[1]);
     dm_quat_inverse(manifold->orientation_a, inv_rot);
     dm_vec3_rotate(r_a, inv_rot, p.local_pos[0]);
     dm_quat_inverse(manifold->orientation_b, inv_rot);
@@ -941,7 +941,7 @@ void dm_physics_collide_sphere_poly(const float pos[2][3], const float rots[2][4
     dm_support_face_box(pos[1], rots[1], cens[1], internals[1], neg_pen, points, &num_points, planes, &num_planes, normal);
     
     dm_plane ref_plane = { 0 };
-    DM_VEC3_COPY(ref_plane.normal, normal);
+    dm_vec3_from_vec3(normal, ref_plane.normal);
     ref_plane.distance = dm_vec3_dot(points[0], normal);
     
     float div = ref_plane.distance - dm_vec3_dot(sphere_support, ref_plane.normal);
@@ -1003,7 +1003,7 @@ void dm_physics_collide_poly_sphere(const float pos[2][3], const float rots[2][4
     dm_physics_support_func_sphere(pos[1], cens[1], internals[1], neg_pen, sphere_support);
     
     dm_plane ref_plane = { 0 };
-    DM_VEC3_COPY(ref_plane.normal, normal);
+    dm_vec3_from_vec3(normal, ref_plane.normal);
     ref_plane.distance = dm_vec3_dot(points[0], normal);
     
     float div = ref_plane.distance - dm_vec3_dot(sphere_support, ref_plane.normal);
@@ -1068,7 +1068,7 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
     float    clipped_face[10][3] = { 0 };
     uint32_t num_clipped = 0;
     
-    DM_VEC3_COPY(ref_plane.normal, normal_a);
+    dm_vec3_from_vec3(normal_a, ref_plane.normal);
     ref_plane.distance = -dm_vec3_dot(normal_a, points_a[0]);
     
     dm_physics_sutherland_hodgman(points_b, num_pts_b, planes_a, num_planes_a, clipped_face, &num_clipped);
@@ -1084,15 +1084,15 @@ void dm_physics_collide_poly_poly(const float pos[2][3], const float rots[2][4],
     
     for(uint32_t i=0; i<num_clipped; i++)
     {
-        DM_VEC3_COPY(point, clipped_face[i]);
+        dm_vec3_from_vec3(clipped_face[i], point);
         
         contact_pen = -dm_fabs(dm_vec3_dot(point, ref_plane.normal) + ref_plane.distance);
         contact_pen = DM_MIN(contact_pen, pen_depth);
         
         dm_vec3_scale(norm_pen, contact_pen, dum);
-        
+
         dm_vec3_sub_vec3(point, dum, on_a);
-        DM_VEC3_COPY(on_b, point);
+        dm_vec3_from_vec3(point, on_b);
         
         contact_pen = -(dm_fabs(contact_pen) + dm_fabs(pen_depth)) * 0.5f;
         

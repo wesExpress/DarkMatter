@@ -45,12 +45,6 @@ typedef struct dm_internal_w32_data_t
 	HDC       hdc;
 	HGLRC     hrc;
     double    clock_freq;
-    
-#ifdef DM_OPENGL
-    HDC   fake_dc;
-    HGLRC fake_rc;
-    HWND  fake_wnd;
-#endif
 } dm_internal_w32_data;
 
 bool dm_platform_win32_decode_hresult(HRESULT hr);
