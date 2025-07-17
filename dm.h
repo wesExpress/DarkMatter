@@ -324,8 +324,7 @@ typedef enum dm_resource_type_t
     DM_RESOURCE_TYPE_INDEX_BUFFER,
     DM_RESOURCE_TYPE_CONSTANT_BUFFER,
     DM_RESOURCE_TYPE_STORAGE_BUFFER,
-    DM_RESOURCE_TYPE_STORAGE_TEXTURE,
-    DM_RESOURCE_TYPE_SAMPLED_TEXTURE,
+    DM_RESOURCE_TYPE_TEXTURE,
     DM_RESOURCE_TYPE_SAMPLER,
     DM_RESOURCE_TYPE_BLAS,
     DM_RESOURCE_TYPE_TLAS
@@ -858,8 +857,7 @@ bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_ha
 bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
-bool dm_renderer_create_storage_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
-bool dm_renderer_create_sampled_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_sampler(dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_blas(dm_blas_desc desc, dm_resource_handle* handle, dm_context* context);

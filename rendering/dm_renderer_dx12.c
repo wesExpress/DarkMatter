@@ -1579,12 +1579,12 @@ bool dm_dx12_create_texture_resource(uint32_t width, uint32_t height, DXGI_FORMA
     return true;
 }
 
-#ifndef DM_DEBUG
-DM_INLINE
-#endif
-bool dm_dx12_create_texture(dm_texture_desc desc, D3D12_RESOURCE_FLAGS flags, dm_dx12_texture* texture, dm_dx12_renderer* dx12_renderer)
+bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
 {
+    DM_DX12_GET_RENDERER;
     HRESULT hr;
+
+    dm_dx12_texture texture = { 0 };
 
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[0];
 
@@ -1619,11 +1619,13 @@ bool dm_dx12_create_texture(dm_texture_desc desc, D3D12_RESOURCE_FLAGS flags, dm
         return false;
     }
 
-    texture->format            = format;
-    texture->bytes_per_channel = bytes_per_channel;
-    texture->n_channels        = desc.n_channels;
+    texture.format            = format;
+    texture.bytes_per_channel = bytes_per_channel;
+    texture.n_channels        = desc.n_channels;
 
     size *= bytes_per_channel;
+
+    D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
     for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
     {
@@ -1635,7 +1637,7 @@ bool dm_dx12_create_texture(dm_texture_desc desc, D3D12_RESOURCE_FLAGS flags, dm
         swprintf(name, 512, L"%hs %d.%d", "texture_host", dx12_renderer->texture_count, i);
         ID3D12Resource_SetName(*host_resource, name);
 #endif
-        texture->host_textures[i] = dx12_renderer->resource_count++;
+        texture.host_textures[i] = dx12_renderer->resource_count++;
 
         if(desc.data)
         {
@@ -1649,7 +1651,7 @@ bool dm_dx12_create_texture(dm_texture_desc desc, D3D12_RESOURCE_FLAGS flags, dm
         swprintf(name, 512, L"%hs %d.%d", "texture_device", dx12_renderer->texture_count, i);
         ID3D12Resource_SetName(*device_resource, name);
 #endif
-        texture->device_textures[i] = dx12_renderer->resource_count++;
+        texture.device_textures[i] = dx12_renderer->resource_count++;
 
         D3D12_BOX texture_as_box = { 0 };
         texture_as_box.right  = desc.width;
@@ -1671,86 +1673,52 @@ bool dm_dx12_create_texture(dm_texture_desc desc, D3D12_RESOURCE_FLAGS flags, dm
 
         ID3D12GraphicsCommandList7_CopyTextureRegion(command_list, &dest, 0,0,0, &src, &texture_as_box);
     }
-
-    dm_memcpy(dx12_renderer->textures + dx12_renderer->texture_count, texture, sizeof(dm_dx12_texture));
-
-    return true;
-}
-
-bool dm_renderer_backend_create_storage_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
-{
-    DM_DX12_GET_RENDERER;
-    HRESULT hr;
-
-    dm_dx12_texture texture = { 0 };
-    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[0];
-
-    if(!dm_dx12_create_texture(desc, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, &texture, dx12_renderer)) return false;
-
     for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
     {
         ID3D12Resource* device_resource = dx12_renderer->resources[texture.device_textures[i]];
 
-        D3D12_RESOURCE_BARRIER barrier = { 0 };
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource   = device_resource;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        // UAV
+        D3D12_RESOURCE_BARRIER uav_barrier = { 0 };
+        uav_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        uav_barrier.Transition.pResource   = device_resource;
+        uav_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        uav_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 
-        ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
+        ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &uav_barrier);
 
-        D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
-        view_desc.Format        = texture.format;
-        view_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uav_view_desc = { 0 };
+        uav_view_desc.Format        = texture.format;
+        uav_view_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
         
-        ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, device_resource, NULL, &view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
+        ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, device_resource, NULL, &uav_view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
+        dx12_renderer->resource_heap[i].cpu_handle.current.ptr += dx12_renderer->resource_heap[i].size;
+
+        // SRV
+        D3D12_RESOURCE_BARRIER srv_barrier = { 0 };
+        srv_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        srv_barrier.Transition.pResource   = device_resource;
+        srv_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        srv_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
+
+        ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &srv_barrier);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_view_desc = { 0 };
+        srv_view_desc.Format                  = texture.format;
+        srv_view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_view_desc.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srv_view_desc.Texture2D.MipLevels     = 1;
+
+        ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, device_resource, &srv_view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
 
         dx12_renderer->resource_heap[i].cpu_handle.current.ptr += dx12_renderer->resource_heap[i].size;
-        dx12_renderer->resource_heap[i].count++;
+    
+        dx12_renderer->resource_heap[i].count += 2;
     }
 
+    //
+    dm_memcpy(dx12_renderer->textures + dx12_renderer->texture_count, &texture, sizeof(texture));
     handle->index = dx12_renderer->texture_count++;
-    handle->descriptor_index = dx12_renderer->resource_heap[0].count - 1;
-
-    return true;
-}
-
-bool dm_renderer_backend_create_sampled_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
-{
-    DM_DX12_GET_RENDERER;
-    HRESULT hr;
-
-    dm_dx12_texture texture = { 0 };
-    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[0];
-
-    if(!dm_dx12_create_texture(desc, D3D12_RESOURCE_FLAG_NONE, &texture, dx12_renderer)) return false;
-
-    for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        ID3D12Resource* device_resource = dx12_renderer->resources[texture.device_textures[i]];
-
-        D3D12_RESOURCE_BARRIER barrier = { 0 };
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource   = device_resource;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-
-        ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
-
-        D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
-        view_desc.Format                  = texture.format;
-        view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-        view_desc.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D;
-        view_desc.Texture2D.MipLevels     = 1;
-
-        ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, device_resource, &view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
-
-        dx12_renderer->resource_heap[i].cpu_handle.current.ptr += dx12_renderer->resource_heap[i].size;
-        dx12_renderer->resource_heap[i].count++;
-    }
-
-    handle->index = dx12_renderer->texture_count++;
-    handle->descriptor_index = dx12_renderer->resource_heap[0].count - 1;
+    handle->descriptor_index = dx12_renderer->resource_heap[0].count - 2;
 
     return true;
 }

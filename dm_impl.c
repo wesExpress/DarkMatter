@@ -625,8 +625,7 @@ extern bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc d
 extern bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_storage_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_sampled_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_sampler(dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
@@ -675,23 +674,13 @@ bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resourc
     return false;
 }
 
-bool dm_renderer_create_storage_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context)
+bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    handle->type = DM_RESOURCE_TYPE_STORAGE_TEXTURE;
+    handle->type = DM_RESOURCE_TYPE_TEXTURE;
 
-    if(dm_renderer_backend_create_storage_texture(desc, handle, &context->renderer)) return true;
+    if(dm_renderer_backend_create_texture(desc, handle, &context->renderer)) return true;
 
-    DM_LOG_FATAL("Creating storage texture failed");
-    return false;
-}
-
-bool dm_renderer_create_sampled_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context)
-{
-    handle->type = DM_RESOURCE_TYPE_SAMPLED_TEXTURE;
-
-    if(dm_renderer_backend_create_sampled_texture(desc, handle, &context->renderer)) return true;
-
-    DM_LOG_FATAL("Creating sampled texture failed");
+    DM_LOG_FATAL("Creating texture failed");
     return false;
 }
 
@@ -1083,7 +1072,7 @@ bool dm_renderer_submit_commands(dm_context* context)
             return false;
 
             case DM_RENDER_COMMAND_TYPE_RESIZE_TEXTURE:
-            if(params[2].handle_val.type != DM_RESOURCE_TYPE_SAMPLED_TEXTURE || params[2].handle_val.type != DM_RESOURCE_TYPE_STORAGE_TEXTURE) { DM_LOG_FATAL("Resource is not a texture"); return false; }
+            if(params[2].handle_val.type != DM_RESOURCE_TYPE_TEXTURE) { DM_LOG_FATAL("Resource is not a texture"); return false; }
             if(dm_render_command_backend_resize_texture(params[0].u32_val, params[1].u32_val, params[2].handle_val, renderer)) continue;
             DM_LOG_FATAL("Resize texture failed");
             return false;
@@ -1239,7 +1228,7 @@ bool dm_renderer_load_font(const char* path, int font_size, dm_resource_handle s
     desc.format     = DM_TEXTURE_FORMAT_BYTE_4_UNORM;
     desc.sampler    = sampler;
 
-    if(!dm_renderer_create_sampled_texture(desc, &font->texture_handle, context))
+    if(!dm_renderer_create_texture(desc, &font->texture_handle, context))
     { 
         DM_LOG_FATAL("Could not create texture for font: %s"); 
         return false; 
