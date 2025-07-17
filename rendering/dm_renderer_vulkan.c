@@ -1047,7 +1047,7 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_res
     dm_vulkan_vertex_buffer buffer = { 0 }; 
 
     VkBufferUsageFlagBits host_buffer_usage   = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    VkBufferUsageFlagBits device_buffer_usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    VkBufferUsageFlagBits device_buffer_usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 
     VkSharingMode sharing_mode = VK_SHARING_MODE_CONCURRENT;
     
@@ -1073,11 +1073,29 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_res
         copy_region.size = desc.size;
 
         vkCmdCopyBuffer(vulkan_renderer->device.graphics_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
+
+        // descriptors
+        VkDescriptorBufferInfo buffer_info = { 0 };
+        buffer_info.buffer = device_buffer->buffer;
+        buffer_info.range  = desc.size;
+
+        VkWriteDescriptorSet write_set = { 0 };
+        write_set.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_set.descriptorCount = 1;
+        write_set.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write_set.dstSet          = vulkan_renderer->resource_bindless_set[i];
+        write_set.dstArrayElement = vulkan_renderer->resource_heap_count;
+        write_set.dstBinding      = 0;
+        write_set.pBufferInfo     = &buffer_info;
+
+        vkUpdateDescriptorSets(vulkan_renderer->device.logical, 1, &write_set, 0, NULL);
     }
 
     //
     dm_memcpy(vulkan_renderer->vertex_buffers + vulkan_renderer->vb_count, &buffer, sizeof(buffer));
-    handle->index = vulkan_renderer->vb_count++;
+
+    handle->index            = vulkan_renderer->vb_count++;
+    handle->descriptor_index = vulkan_renderer->resource_heap_count++;
 
     return true;
 }
@@ -1103,7 +1121,7 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resou
     }
 
     VkBufferUsageFlagBits host_buffer_usage   = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-    VkBufferUsageFlagBits device_buffer_usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
+    VkBufferUsageFlagBits device_buffer_usage = VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR;
 
     VkSharingMode sharing_mode = VK_SHARING_MODE_CONCURRENT;
     
@@ -1130,11 +1148,29 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resou
         copy_region.size = desc.size;
 
         vkCmdCopyBuffer(vulkan_renderer->device.graphics_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
+
+        // descriptors
+        VkDescriptorBufferInfo buffer_info = { 0 };
+        buffer_info.buffer = device_buffer->buffer;
+        buffer_info.range  = desc.size;
+
+        VkWriteDescriptorSet write_set = { 0 };
+        write_set.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        write_set.descriptorCount = 1;
+        write_set.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+        write_set.dstSet          = vulkan_renderer->resource_bindless_set[i];
+        write_set.dstArrayElement = vulkan_renderer->resource_heap_count;
+        write_set.dstBinding      = 0;
+        write_set.pBufferInfo     = &buffer_info;
+
+        vkUpdateDescriptorSets(vulkan_renderer->device.logical, 1, &write_set, 0, NULL);
     }
 
     //
     dm_memcpy(vulkan_renderer->index_buffers + vulkan_renderer->ib_count, &buffer, sizeof(buffer));
-    handle->index = vulkan_renderer->ib_count++;
+    handle->index            = vulkan_renderer->ib_count++;
+    handle->descriptor_index = vulkan_renderer->resource_heap_count++;
+
     return true;
 }
 
