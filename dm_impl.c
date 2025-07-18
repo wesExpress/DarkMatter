@@ -17,6 +17,9 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype/stb_truetype.h"
 
+#define CGLTF_IMPLEMENTATION
+#include "cgltf/cgltf.h"
+
 /****
 MATH
 ******/
@@ -1249,6 +1252,15 @@ dm_font_aligned_quad dm_font_get_aligned_quad(dm_font font, const char text, flo
     stbtt_GetBakedQuad((stbtt_bakedchar*)font.glyphs, 512,512, text-32, xf,yf, &q, 1);
 
     return *(dm_font_aligned_quad*)&q;
+}
+
+/********
+ * MESH *
+ ********/
+bool dm_renderer_create_mesh(const char* file, dm_mesh_vertex_element* mesh_elements, uint8_t element_count, void** vertices, void** indices, dm_mesh* mesh, dm_context* context)
+{
+
+    return true;
 }
 
 /*********

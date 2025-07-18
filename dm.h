@@ -723,6 +723,28 @@ typedef struct dm_font_t
     dm_resource_handle texture_handle;
 } dm_font;
 
+/********
+ * MESH *
+ ********/
+typedef enum dm_mesh_vertex_element_t
+{
+    DM_MESH_VERTEX_ELEMENT_POSITION_2,
+    DM_MESH_VERTEX_ELEMENT_POSITION_3,
+    DM_MESH_VERTEX_ELEMENT_POSITION_4,
+    DM_MESH_VERTEX_ELEMENT_NORMAL_2,
+    DM_MESH_VERTEX_ELEMENT_NORMAL_3,
+    DM_MESH_VERTEX_ELEMENT_NORMAL_4,
+    DM_MESH_VERTEX_ELEMENT_TEX_COORDS_2,
+    DM_MESH_VERTEX_ELEMENT_COLOR_4,
+    DM_MESH_VERTEX_ELEMENT_UNKNOWN
+} dm_mesh_vertex_element;
+
+typedef struct dm_mest_t
+{
+    dm_resource_handle vb, ib;
+    dm_resource_handle normal_map;
+} dm_mesh;
+
 /******************
 DARKMATTER CONTEXT
 ********************/
@@ -938,5 +960,8 @@ dm_hash64 dm_hash_64bit(uint64_t key);
 dm_hash   dm_hash_int_pair(int x, int y);
 dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y);
 uint32_t  dm_hash_reduce(uint32_t x, uint32_t n);
+
+// mesh
+bool dm_renderer_create_mesh(const char* file, dm_mesh_vertex_element* mesh_elements, uint8_t element_count, void** vertices, void** indices, dm_mesh* mesh, dm_context* context);
 
 #endif //DM_H
