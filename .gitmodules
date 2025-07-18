@@ -7,3 +7,6 @@
 [submodule "lib/VulkanMemoryAllocator"]
 	path = lib/VulkanMemoryAllocator
 	url = https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator.git
+[submodule "lib/tinyobjloader-c"]
+	path = lib/tinyobjloader-c
+	url = https://github.com/syoyo/tinyobjloader-c.git
