@@ -327,8 +327,8 @@ bool dm_renderer_backend_init(dm_context* context)
     if(!dm_vulkan_create_synchronization_objects(vulkan_renderer)) { DM_LOG_FATAL("Could not create Vulkan synchronization objects"); return false; };
     if(!dm_vulkan_create_bindless_layout(vulkan_renderer)) { DM_LOG_FATAL("Could not create Vulkan bindless descriptor set layout"); return false; }
     if(!dm_vulkan_create_bindless_descriptor_pool(vulkan_renderer)) { DM_LOG_FATAL("Could not create Vulkan bindless descriptor pools"); return false; }
-    if(!dm_vulkan_create_bindless_descriptor_sets(vulkan_renderer)) { DM_LOG_FATAL("Could not create Vulkan bindless descriptor sets"); return false; }
     if(!dm_vulkan_create_bindless_pipeline_layout(vulkan_renderer)) { DM_LOG_FATAL("Could not create Vulkan bindless pipeline layout"); return false; }
+    if(!dm_vulkan_create_bindless_descriptor_sets(vulkan_renderer)) { DM_LOG_FATAL("Could not create Vulkan bindless descriptor sets"); return false; }
 
     return true;
 }
@@ -499,6 +499,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     uint32_t current_frame = vulkan_renderer->current_frame;
     VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[current_frame];
 
+#if 0
     vkWaitForFences(vulkan_renderer->device.logical, 1, &vulkan_renderer->front_fences[current_frame], VK_TRUE, INFINITE); 
 
     vr = vkResetCommandBuffer(cmd_buffer, 0);
@@ -509,6 +510,7 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 
     vr = vkBeginCommandBuffer(cmd_buffer, &begin_info);
     if(!dm_vulkan_decode_vr(vr)) { DM_LOG_FATAL("vkBeginCommandBuffer failed"); return false; }
+#endif
 
     vr = vkAcquireNextImageKHR(vulkan_renderer->device.logical, vulkan_renderer->swapchain.swapchain, UINT64_MAX, vulkan_renderer->wait_semaphores[current_frame], VK_NULL_HANDLE, &vulkan_renderer->image_index);
     if(vr == VK_ERROR_OUT_OF_DATE_KHR)
@@ -521,12 +523,15 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
         DM_LOG_FATAL("vkAcquireNextImageKHR failed");
         return false;
     }
+
+#if 0
     if(vulkan_renderer->back_fences[vulkan_renderer->image_index] != VK_NULL_HANDLE)
     {
         vkWaitForFences(vulkan_renderer->device.logical, 1, &vulkan_renderer->back_fences[vulkan_renderer->image_index], VK_TRUE, INFINITE);
     }
     vulkan_renderer->back_fences[vulkan_renderer->image_index] = vulkan_renderer->front_fences[vulkan_renderer->current_frame];
     vkResetFences(vulkan_renderer->device.logical, 1, &vulkan_renderer->front_fences[vulkan_renderer->current_frame]);
+#endif
 
     VkImageSubresourceRange range = { 0 };
     range.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -566,10 +571,12 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
 
     vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, depth_stage_flags, 0,0,NULL,0,NULL, 1, &depth_barrier);
 
+#if 0
     VkDescriptorSet sets[] = { vulkan_renderer->resource_bindless_set[current_frame], vulkan_renderer->sampler_bindless_set[current_frame] };
     vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vulkan_renderer->bindless_pipeline_layout, 0, _countof(sets), sets, 0, NULL);
     vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, vulkan_renderer->bindless_pipeline_layout, 0, _countof(sets), sets, 0, NULL);
     vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, vulkan_renderer->bindless_pipeline_layout, 0, _countof(sets), sets, 0, NULL);
+#endif
 
     // misc
     vulkan_renderer->bound_pipeline_type = DM_PIPELINE_TYPE_UNKNOWN;
@@ -651,6 +658,63 @@ bool dm_renderer_backend_end_frame(dm_context* context)
 #endif
 
     vulkan_renderer->current_frame = (vulkan_renderer->current_frame + 1) % DM_VULKAN_MAX_FRAMES_IN_FLIGHT;
+
+    return true;
+}
+
+bool dm_renderer_backend_begin_update(dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    uint32_t current_frame = vulkan_renderer->current_frame;
+    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[current_frame];
+
+    vkWaitForFences(vulkan_renderer->device.logical, 1, &vulkan_renderer->front_fences[current_frame], VK_TRUE, INFINITE); 
+    if(vulkan_renderer->back_fences[vulkan_renderer->image_index] != VK_NULL_HANDLE)
+    {
+        vkWaitForFences(vulkan_renderer->device.logical, 1, &vulkan_renderer->back_fences[vulkan_renderer->image_index], VK_TRUE, INFINITE);
+    }
+    vulkan_renderer->back_fences[vulkan_renderer->image_index] = vulkan_renderer->front_fences[vulkan_renderer->current_frame];
+    vkResetFences(vulkan_renderer->device.logical, 1, &vulkan_renderer->front_fences[vulkan_renderer->current_frame]);
+
+    vr = vkResetCommandBuffer(cmd_buffer, 0);
+    if(!dm_vulkan_decode_vr(vr)) { DM_LOG_FATAL("vkResetCommandBuffer failed"); return false; }
+
+    VkCommandBufferBeginInfo begin_info = { 0 };
+    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+
+    vr = vkBeginCommandBuffer(cmd_buffer, &begin_info);
+    if(!dm_vulkan_decode_vr(vr)) { DM_LOG_FATAL("vkBeginCommandBuffer failed"); return false; }
+
+    VkDescriptorSet sets[] = { vulkan_renderer->resource_bindless_set[current_frame], vulkan_renderer->sampler_bindless_set[current_frame] };
+    vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vulkan_renderer->bindless_pipeline_layout, 0, _countof(sets), sets, 0, NULL);
+    vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, vulkan_renderer->bindless_pipeline_layout, 0, _countof(sets), sets, 0, NULL);
+    vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, vulkan_renderer->bindless_pipeline_layout, 0, _countof(sets), sets, 0, NULL);
+
+    return true;
+}
+
+bool dm_renderer_backend_end_update(dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+#if 0
+    uint32_t current_frame = vulkan_renderer->current_frame;
+    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[current_frame];
+
+    vr = vkEndCommandBuffer(cmd_buffer);
+    if(!dm_vulkan_decode_vr(vr)) { DM_LOG_FATAL("vkEndCommandBuffer failed"); return false; }
+
+    VkSubmitInfo submit_info = { 0 };
+    submit_info.sType                = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submit_info.pCommandBuffers      = &cmd_buffer;
+    submit_info.commandBufferCount   = 1;
+
+    vr = vkQueueSubmit(vulkan_renderer->device.graphics_queue.queue, 1, &submit_info, vulkan_renderer->front_fences[current_frame]);
+    if(!dm_vulkan_decode_vr(vr)) { DM_LOG_FATAL("vkQueueSubmit failed"); return false; }
+#endif
 
     return true;
 }
@@ -1793,9 +1857,11 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_vulkan_create_acceleration_structure(VkAccelerationStructureBuildGeometryInfoKHR build_info, VkBufferUsageFlags usage_flags, uint32_t primitive_count, dm_vulkan_as* as, dm_vulkan_renderer* vulkan_renderer)
+bool dm_vulkan_create_acceleration_structure(VkAccelerationStructureBuildGeometryInfoKHR build_info, uint32_t primitive_count, dm_vulkan_as* as, dm_vulkan_renderer* vulkan_renderer)
 {
     VkResult vr;
+
+    VkCommandBuffer cmd_buffer  = vulkan_renderer->device.graphics_queue.buffer[0];
 
     VkAccelerationStructureBuildSizesInfoKHR build_sizes_info = { 0 };
     build_sizes_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
@@ -1810,6 +1876,8 @@ bool dm_vulkan_create_acceleration_structure(VkAccelerationStructureBuildGeometr
     // result buffer
     dm_vulkan_buffer* result_buffer = &vulkan_renderer->buffers[vulkan_renderer->buffer_count];
     dm_vulkan_buffer* scratch_buffer = &vulkan_renderer->buffers[vulkan_renderer->buffer_count+1];
+
+    VkBufferUsageFlags usage_flags = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
 
     if(!dm_vulkan_create_buffer(as_size, usage_flags, VK_SHARING_MODE_CONCURRENT, result_buffer, vulkan_renderer)) return false;
     as->result = vulkan_renderer->buffer_count++;
@@ -1848,7 +1916,7 @@ bool dm_vulkan_create_acceleration_structure(VkAccelerationStructureBuildGeometr
     build_range.primitiveCount = primitive_count;
 
     const VkAccelerationStructureBuildRangeInfoKHR* build_range2 = { &build_range };
-    vkCmdBuildAccelerationStructuresKHR(vulkan_renderer->device.graphics_queue.buffer[vulkan_renderer->current_frame], 1, &build_info, &build_range2);
+    vkCmdBuildAccelerationStructuresKHR(cmd_buffer, 1, &build_info, &build_range2);
 
     as->result_size  = as_size;
     as->scratch_size = scratch_size;
@@ -1949,9 +2017,7 @@ bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* hand
         build_info.geometryCount = 1;
         build_info.pGeometries   = &geometry; 
 
-        VkBufferUsageFlagBits usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-
-        if(!dm_vulkan_create_acceleration_structure(build_info, usage_flags, primitive_count, &blas.as[i], vulkan_renderer)) 
+        if(!dm_vulkan_create_acceleration_structure(build_info, primitive_count, &blas.as[i], vulkan_renderer)) 
         {
             DM_LOG_FATAL("Could not create bottom-level acceleration structure");
             return false;
@@ -1999,15 +2065,11 @@ bool dm_renderer_backend_create_tlas(dm_tlas_desc desc, dm_resource_handle* hand
         build_info.sType         = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
         build_info.type          = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
         build_info.mode          = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
-        build_info.flags         = VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
+        build_info.flags         = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
         build_info.pGeometries   = &geometry;
         build_info.geometryCount = 1;
 
-        VkAccelerationStructureBuildSizesInfoKHR build_sizes_info = { 0 };
-        build_sizes_info.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
-        
-        VkBufferUsageFlagBits usage_flags = VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
-        if(!dm_vulkan_create_acceleration_structure(build_info, usage_flags, desc.instance_count, &tlas.as[i], vulkan_renderer)) return false;
+        if(!dm_vulkan_create_acceleration_structure(build_info, desc.instance_count, &tlas.as[i], vulkan_renderer)) return false;
 
         // descriptors
         VkWriteDescriptorSetAccelerationStructureKHR write_info = { 0 };
@@ -2278,12 +2340,14 @@ bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_
     DM_VULKAN_GET_RENDERER;
     VkResult vr;
 
-    dm_vulkan_tlas tlas = vulkan_renderer->tlas[handle.index];
-    dm_vulkan_storage_buffer instance_buffer = vulkan_renderer->storage_buffers[tlas.instance_buffer.index];
+    dm_vulkan_tlas* tlas = &vulkan_renderer->tlas[handle.index];
+    dm_vulkan_storage_buffer instance_buffer = vulkan_renderer->storage_buffers[tlas->instance_buffer.index];
+
     const uint8_t current_frame = vulkan_renderer->current_frame;
+    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[current_frame];
 
     dm_vulkan_buffer* instance_b = &vulkan_renderer->buffers[instance_buffer.device[current_frame]];
-    dm_vulkan_buffer* scratch_buffer = &vulkan_renderer->buffers[tlas.as[current_frame].scratch];
+    dm_vulkan_buffer* scratch_buffer = &vulkan_renderer->buffers[tlas->as[current_frame].scratch];
 
     VkBufferDeviceAddressInfo instance_buffer_address_info = { 0 };
     instance_buffer_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
@@ -2306,10 +2370,9 @@ bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_
     VkAccelerationStructureBuildGeometryInfoKHR build_info = { 0 };
     build_info.sType                     = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
     build_info.type                      = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
-    build_info.mode                      = VK_BUILD_ACCELERATION_STRUCTURE_MODE_UPDATE_KHR;
-    build_info.flags                     = VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT_KHR;
-    build_info.dstAccelerationStructure  = tlas.as[current_frame].as;
-    build_info.srcAccelerationStructure  = tlas.as[current_frame].as;    
+    build_info.mode                      = VK_BUILD_ACCELERATION_STRUCTURE_MODE_BUILD_KHR;
+    build_info.flags                     = VK_BUILD_ACCELERATION_STRUCTURE_PREFER_FAST_TRACE_BIT_KHR;
+    build_info.dstAccelerationStructure  = tlas->as[current_frame].as;
     build_info.scratchData.deviceAddress = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &scratch_buffer_address_info);
     build_info.pGeometries               = &geometry; 
     build_info.geometryCount             = 1;
@@ -2319,7 +2382,14 @@ bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_
 
     const VkAccelerationStructureBuildRangeInfoKHR* build_range2 = { &build_range };
 
-    vkCmdBuildAccelerationStructuresKHR(vulkan_renderer->device.graphics_queue.buffer[current_frame], 1, &build_info, &build_range2);
+    VkMemoryBarrier barrier = { 0 };
+    barrier.sType         = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+
+    vkCmdBuildAccelerationStructuresKHR(cmd_buffer, 1, &build_info, &build_range2);
+
+    barrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+    barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
+    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0,1, &barrier, 0,NULL,0,NULL);
 
     return true;
 }
@@ -2498,11 +2568,35 @@ bool dm_compute_backend_create_compute_pipeline(dm_compute_pipeline_desc desc, d
 
 bool dm_compute_command_backend_begin_recording(dm_renderer* renderer)
 {
+    DM_VULKAN_GET_RENDERER;
+
+    const uint8_t current_frame = vulkan_renderer->current_frame;
+    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[current_frame];
+
+    VkMemoryBarrier barrier = { 0 };
+    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+
+    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, 0, 1, &barrier, 0,NULL,0,NULL);
+
     return true;
 }
 
 bool dm_compute_command_backend_end_recording(dm_renderer* renderer)
 {
+    DM_VULKAN_GET_RENDERER;
+
+    const uint8_t current_frame = vulkan_renderer->current_frame;
+    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[current_frame];
+
+    VkMemoryBarrier barrier = { 0 };
+    barrier.sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER;
+    barrier.srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT | VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 0, 1, &barrier, 0,NULL,0,NULL);
+
     return true;
 }
 
@@ -2520,7 +2614,6 @@ void dm_compute_command_backend_bind_compute_pipeline(dm_resource_handle handle,
 
     vulkan_renderer->bound_pipeline = handle;
     vulkan_renderer->bound_pipeline_type = DM_PIPELINE_TYPE_COMPUTE;
-
 }
 
 void dm_compute_command_backend_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer)
@@ -2531,6 +2624,22 @@ void dm_compute_command_backend_update_constant_buffer(void* data, size_t size, 
     dm_vulkan_constant_buffer buffer = vulkan_renderer->constant_buffers[handle.index];
 
     dm_memcpy(buffer.mapped_memory[current_frame], data, size);
+}
+
+bool dm_compute_command_backend_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer)
+{
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    const uint8_t current_frame = vulkan_renderer->current_frame;
+    dm_vulkan_storage_buffer buffer = vulkan_renderer->storage_buffers[handle.index];
+        
+    dm_vulkan_buffer* host_buffer   = &vulkan_renderer->buffers[buffer.host[current_frame]];
+    dm_vulkan_buffer* device_buffer = &vulkan_renderer->buffers[buffer.device[current_frame]];
+
+    if(!dm_vulkan_copy_buffer(data, size, buffer.host[current_frame], buffer.device[current_frame], vulkan_renderer)) return false;
+
+    return true;
 }
 
 void dm_compute_command_backend_set_root_constants(uint8_t slot, uint32_t count, size_t offset, void* data, dm_renderer* renderer)
@@ -2549,8 +2658,10 @@ void dm_compute_command_backend_dispatch(const uint16_t x, const uint16_t y, con
     VkResult vr;
 
     const uint8_t current_frame = vulkan_renderer->current_frame;
+    VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[current_frame];
     
-    vkCmdDispatch(vulkan_renderer->device.graphics_queue.buffer[current_frame], x,y,z);
+    vkCmdDispatch(cmd_buffer, x,y,z);
+
 }
 
 // === DEBUG AND DECODE ===
@@ -3601,7 +3712,7 @@ bool dm_vulkan_create_bindless_descriptor_sets(dm_vulkan_renderer* vulkan_render
             return false;
         }
     }
-        
+
     return true;
 }
 

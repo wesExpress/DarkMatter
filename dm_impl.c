@@ -607,6 +607,8 @@ extern void dm_renderer_backend_shutdown(dm_context* context);
 extern bool dm_renderer_backend_begin_frame(dm_renderer* renderer);
 extern bool dm_renderer_backend_end_frame(dm_context* context);
 extern bool dm_renderer_backend_resize(uint32_t width, uint32_t height, dm_renderer* renderer);
+extern bool dm_renderer_backend_begin_update(dm_renderer* renderer);
+extern bool dm_renderer_backend_end_update(dm_renderer* renderer);
 
 bool dm_renderer_init(dm_context* context)
 {
@@ -1438,12 +1440,25 @@ bool dm_update_begin(dm_context* context)
         return false;
     }
     context->platform_data.event_list.num = 0;
+
+    // render udpates
+    if(!dm_renderer_backend_begin_update(&context->renderer))
+    {
+        context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
+        return false;
+    }
     
     return true;
 }
 
 bool dm_update_end(dm_context* context)
 {
+    if(!dm_renderer_backend_end_update(&context->renderer))
+    {
+        context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
+        return false;
+    }
+
     // cleaning
     context->platform_data.event_list.num = 0;
     
