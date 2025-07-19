@@ -2146,6 +2146,9 @@ bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* hand
                     return false;
                 }
 
+                // skip for non indexed geometry
+                if(desc.index_count==0) break;
+
                 geometry_desc.Triangles.IndexCount  = desc.index_count;
                 geometry_desc.Triangles.IndexBuffer = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[ib.device_buffers[i]]);
                 switch(desc.index_type)

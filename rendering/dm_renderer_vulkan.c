@@ -1966,11 +1966,6 @@ bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* hand
                 vb_address_info.buffer = vb.buffer;
                 VkDeviceAddress vb_address = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &vb_address_info);
 
-                VkBufferDeviceAddressInfo ib_address_info = { 0 };
-                ib_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
-                ib_address_info.buffer = ib.buffer; 
-                VkDeviceAddress ib_address = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &ib_address_info);
-                    
                 // vertex data
                 switch(desc.vertex_type)
                 {
@@ -1988,6 +1983,20 @@ bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* hand
                 geometry_data.triangles.vertexData.deviceAddress = vb_address;
 
                 // index data
+                if(desc.index_count==0)
+                {
+                    primitive_count = desc.vertex_count / 3;
+
+                    geometry_data.triangles.indexType = VK_INDEX_TYPE_NONE_KHR;
+
+                    break;
+                }
+
+                VkBufferDeviceAddressInfo ib_address_info = { 0 };
+                ib_address_info.sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO;
+                ib_address_info.buffer = ib.buffer; 
+                VkDeviceAddress ib_address = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &ib_address_info);
+
                 primitive_count = desc.index_count / 3; 
 
                 switch(desc.index_type)
