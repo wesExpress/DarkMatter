@@ -726,23 +726,27 @@ typedef struct dm_font_t
 /********
  * MESH *
  ********/
-typedef enum dm_mesh_vertex_element_t
+typedef enum dm_mesh_vertex_attribute_t
 {
-    DM_MESH_VERTEX_ELEMENT_POSITION_2,
-    DM_MESH_VERTEX_ELEMENT_POSITION_3,
-    DM_MESH_VERTEX_ELEMENT_POSITION_4,
-    DM_MESH_VERTEX_ELEMENT_NORMAL_2,
-    DM_MESH_VERTEX_ELEMENT_NORMAL_3,
-    DM_MESH_VERTEX_ELEMENT_NORMAL_4,
-    DM_MESH_VERTEX_ELEMENT_TEX_COORDS_2,
-    DM_MESH_VERTEX_ELEMENT_COLOR_4,
-    DM_MESH_VERTEX_ELEMENT_UNKNOWN
-} dm_mesh_vertex_element;
+    DM_MESH_VERTEX_ATTRIBUTE_POSITION_2,
+    DM_MESH_VERTEX_ATTRIBUTE_POSITION_3,
+    DM_MESH_VERTEX_ATTRIBUTE_POSITION_4,
+    DM_MESH_VERTEX_ATTRIBUTE_NORMAL_2,
+    DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3,
+    DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4,
+    DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2,
+    DM_MESH_VERTEX_ATTRIBUTE_COLOR_4,
+    DM_MESH_VERTEX_ATTRIBUTE_UNKNOWN
+} dm_mesh_vertex_attribute;
 
 typedef struct dm_mest_t
 {
     dm_resource_handle vb, ib;
     dm_resource_handle normal_map;
+
+    uint32_t vertex_count, index_count;
+
+    size_t vertex_stride;
 } dm_mesh;
 
 /******************
@@ -962,6 +966,7 @@ dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y);
 uint32_t  dm_hash_reduce(uint32_t x, uint32_t n);
 
 // mesh
-bool dm_renderer_create_mesh(const char* file, dm_mesh_vertex_element* mesh_elements, uint8_t element_count, void** vertices, void** indices, dm_mesh* mesh, dm_context* context);
+bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, void** vertices, dm_mesh* mesh, dm_context* context);
+bool dm_renderer_load_gltf_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, void** vertices, void** indices, dm_mesh* mesh, dm_context* context);
 
 #endif //DM_H

@@ -20,6 +20,12 @@
 #define CGLTF_IMPLEMENTATION
 #include "cgltf/cgltf.h"
 
+#define TINYOBJ_LOADER_C_IMPLEMENTATION
+#include "tinyobjloader-c/tinyobj_loader_c.h"
+
+#define FAST_OBJ_IMPLEMENTATION
+#include "fast_obj/fast_obj.h"
+
 /****
 MATH
 ******/
@@ -1257,8 +1263,191 @@ dm_font_aligned_quad dm_font_get_aligned_quad(dm_font font, const char text, flo
 /********
  * MESH *
  ********/
-bool dm_renderer_create_mesh(const char* file, dm_mesh_vertex_element* mesh_elements, uint8_t element_count, void** vertices, void** indices, dm_mesh* mesh, dm_context* context)
+bool dm_renderer_load_gltf_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, void** vertices, void** indices, dm_mesh* mesh, dm_context* context)
 {
+    DM_LOG_DEBUG("Loading gltf model: %s", file);
+
+    return true;
+}
+
+bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, void** vertices, dm_mesh* mesh, dm_context* context)
+{
+    assert(mesh);
+
+    DM_LOG_INFO("Loading obj model: %s", file);
+
+    // check if valid path
+    FILE* fp = fopen(file, "r");
+    if(!fp)
+    {
+        DM_LOG_FATAL("Cannot find file: %s", file);
+        return false;
+    }
+
+    // check if file is obj
+    const char* dot = strrchr(file, '.');
+    const char* ext = dot + 1;
+    if(strcmp(ext, "obj")==1)
+    {
+        DM_LOG_FATAL("Trying to load invalid file for obj format: %s", file);
+        return false;
+    }
+
+    // begin
+    fastObjMesh* obj_mesh = fast_obj_read(file);
+
+    // check we have all desired vertex attributes
+    for(uint8_t i=0; i<attribute_count; i++)
+    {
+        switch(mesh_attributes[i])
+        {
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_2:
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3:
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_4:
+            if(obj_mesh->positions==0) DM_LOG_WARN("Requested positions, but mesh has no position data. Setting to zero");
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
+            if(obj_mesh->color_count==0) DM_LOG_WARN("Requested colors, but mesh has no color data. Setting to white");
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_2:
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3:
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4:
+            if(obj_mesh->normal_count==0) DM_LOG_FATAL("Requested normals, but mesh has no normal data. Setting to zero");
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2:
+            if(obj_mesh->texcoord_count==0) DM_LOG_FATAL("Requested texture coords, but mesh has no texture coordinate data. Setting to zero");
+            break;
+
+            default:
+            DM_LOG_FATAL("Unknown mesh attribute");
+            return false;
+        }
+    }
+
+    // check everything has correct number of vertices
+    if(obj_mesh->normal_count && obj_mesh->normal_count != obj_mesh->position_count) { DM_LOG_FATAL("OBJ mesh has different number of positions and normals"); return false; } 
+    if(obj_mesh->color_count && obj_mesh->color_count != obj_mesh->position_count) { DM_LOG_FATAL("OBJ mesh has different number of colors and positions"); return false; }
+
+    size_t vertex_size = 0;
+    for(uint8_t i=0; i<attribute_count; i++)
+    {
+        switch(mesh_attributes[i])
+        {
+            case DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2:
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_2:
+            vertex_size += sizeof(float) * 2;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3:
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3:
+            vertex_size += sizeof(float) * 3;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_4:
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4:
+            case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
+            vertex_size += sizeof(float) * 4;
+            break;
+
+            default:
+            return false;
+        }
+    }
+
+    *vertices = dm_alloc(vertex_size * 3 * obj_mesh->face_count);
+    float* vertex_data = *vertices;
+    
+    // loop over mesh data, fill in vertex_data
+    uint32_t index = 0, idx=0;
+
+    // for all faces
+    for(uint32_t v=0; v<obj_mesh->face_count; v++)
+    {
+        uint32_t fv = obj_mesh->face_vertices[v];
+
+        // for all vertices in face
+        for(uint32_t f=0; f<fv; f++)
+        {
+            fastObjIndex i = obj_mesh->indices[idx];
+    
+            for(uint8_t a=0; a<attribute_count; a++)
+            {
+                switch(mesh_attributes[a])
+                {
+                    case DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2:
+                    vertex_data[index++] = i.t ? obj_mesh->texcoords[2 * i.t + 0] : 0;
+                    vertex_data[index++] = i.t ? obj_mesh->texcoords[2 * i.t + 1] : 0;
+                    break;
+
+                    case DM_MESH_VERTEX_ATTRIBUTE_POSITION_2:
+                    vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 0] : 0;
+                    vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 1] : 0;
+                    break;
+
+                    case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3:
+                    vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 0] : 0;
+                    vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 1] : 0;
+                    vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 2] : 0;
+                    break;
+
+                    case DM_MESH_VERTEX_ATTRIBUTE_POSITION_4:
+                    vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 0] : 0;
+                    vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 1] : 0;
+                    vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 2] : 0;
+                    vertex_data[index++] = 0;
+                    break;
+
+                    case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_2:
+                    vertex_data[index++] = i.n ? obj_mesh->normals[3 * i.n + 0] : 0;
+                    vertex_data[index++] = i.n ? obj_mesh->normals[3 * i.n + 1] : 0;
+                    break;
+
+                    case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3:
+                    vertex_data[index++] = i.n ? obj_mesh->normals[3 * i.n + 0] : 0;
+                    vertex_data[index++] = i.n ? obj_mesh->normals[3 * i.n + 1] : 0;
+                    vertex_data[index++] = i.n ? obj_mesh->normals[3 * i.n + 2] : 0;
+                    break;
+
+                    case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4:
+                    vertex_data[index++] = i.n ? obj_mesh->normals[3 * i.n + 0] : 0;
+                    vertex_data[index++] = i.n ? obj_mesh->normals[3 * i.n + 1] : 0;
+                    vertex_data[index++] = i.n ? obj_mesh->normals[3 * i.n + 2] : 0;
+                    vertex_data[index++] = 0;
+                    break;
+
+                    case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
+                    vertex_data[index++] = dm_random_float(context);
+                    vertex_data[index++] = dm_random_float(context);
+                    vertex_data[index++] = dm_random_float(context);
+                    vertex_data[index++] = 1.f;
+                    break;
+                        
+                    default:
+                    return false;
+                }
+            }
+
+            idx++;
+        }
+    }
+
+    mesh->vertex_count  = obj_mesh->face_count * 3;
+    mesh->vertex_stride = vertex_size;
+
+    // create mesh
+    dm_vertex_buffer_desc vb_desc = { 0 };
+    vb_desc.size         = mesh->vertex_count * vertex_size;
+    vb_desc.stride       = vertex_size;
+    vb_desc.data         = vertex_data;
+    vb_desc.element_size = sizeof(float);
+
+    if(!dm_renderer_create_vertex_buffer(vb_desc, &mesh->vb, context)) return false;
+
+    // cleanup
+    fast_obj_destroy(obj_mesh);
 
     return true;
 }
