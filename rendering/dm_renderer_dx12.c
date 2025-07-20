@@ -1718,7 +1718,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         D3D12_RESOURCE_BARRIER srv_barrier = { 0 };
         srv_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         srv_barrier.Transition.pResource   = device_resource;
-        srv_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
+        srv_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         srv_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
 
         ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &srv_barrier);
@@ -1777,12 +1777,6 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
 
     dm_dx12_storage_buffer buffer = { 0 };
 
-    D3D12_RESOURCE_FLAGS device_flags = D3D12_RESOURCE_FLAG_NONE;
-    if(desc.write) device_flags       = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-    D3D12_RESOURCE_STATES device_states = D3D12_RESOURCE_STATE_COMMON;
-    if(desc.write) device_states        = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-
     buffer.size = desc.size;
 
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[0];
@@ -1794,17 +1788,17 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
         if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, host_buffer, dx12_renderer)) return false;
 #ifdef DM_DEBUG
         wchar_t name[512];
-        swprintf(name, 512, L"%hs %d", "storage_buffer_host", dx12_renderer->sb_count);
+        swprintf(name, 512, L"%hs %d %d", "storage_buffer_host", dx12_renderer->sb_count, i);
         ID3D12Resource_SetName(*host_buffer, name);
 #endif
         buffer.host_buffers[i] = dx12_renderer->resource_count++;
 
         // device buffer and its view
         ID3D12Resource** device_buffer = &dx12_renderer->resources[dx12_renderer->resource_count];
-        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, device_flags, device_buffer, dx12_renderer)) return false;
+        if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, device_buffer, dx12_renderer)) return false;
 #ifdef DM_DEBUG
-        swprintf(name, 512, L"%hs %d", "storage_buffer_device", dx12_renderer->sb_count);
-        ID3D12Resource_SetName(*host_buffer, name);
+        swprintf(name, 512, L"%hs %d %d", "storage_buffer_device", dx12_renderer->sb_count, i);
+        ID3D12Resource_SetName(*device_buffer, name);
 #endif
         buffer.device_buffers[i] = dx12_renderer->resource_count++;
 
@@ -1815,41 +1809,39 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
 
         ID3D12GraphicsCommandList7_CopyBufferRegion(command_list, *device_buffer, 0, *host_buffer, 0, desc.size);
 
-        D3D12_RESOURCE_BARRIER barrier = { 0 };
+        // view
+        D3D12_UNORDERED_ACCESS_VIEW_DESC uav_view_desc = { 0 };
+        uav_view_desc.ViewDimension              = D3D12_UAV_DIMENSION_BUFFER;
+        uav_view_desc.Buffer.NumElements         = desc.size / desc.stride;
+        uav_view_desc.Buffer.StructureByteStride = desc.stride;
 
+        ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, *device_buffer, NULL, &uav_view_desc, dx12_renderer->resource_heap[i].cpu_handle.current); 
+
+        dx12_renderer->resource_heap[i].cpu_handle.current.ptr += dx12_renderer->resource_heap[i].size;
+        dx12_renderer->resource_heap[i].count++;
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_view_desc = { 0 };
+        srv_view_desc.Format                     = DXGI_FORMAT_UNKNOWN;
+        srv_view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
+        srv_view_desc.Buffer.NumElements         = desc.size / desc.stride;
+        srv_view_desc.Buffer.StructureByteStride = desc.stride;
+        srv_view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+        ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, *device_buffer, &srv_view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
+
+        dx12_renderer->resource_heap[i].cpu_handle.current.ptr += dx12_renderer->resource_heap[i].size;
+        dx12_renderer->resource_heap[i].count++;
+
+        D3D12_RESOURCE_BARRIER barrier = { 0 };
         barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        barrier.Transition.StateAfter  = device_states;
+        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COMMON;
         barrier.Transition.pResource   = *device_buffer;
 
         ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
-
-        // view
-        if(desc.write)
-        {
-            D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
-            view_desc.ViewDimension              = D3D12_UAV_DIMENSION_BUFFER;
-            view_desc.Buffer.NumElements         = desc.size / desc.stride;
-            view_desc.Buffer.StructureByteStride = desc.stride;
-
-            ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, *device_buffer, NULL, &view_desc, dx12_renderer->resource_heap[i].cpu_handle.current); 
-        }
-        else
-        {
-            D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
-            view_desc.Format                     = DXGI_FORMAT_UNKNOWN;
-            view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
-            view_desc.Buffer.NumElements         = desc.size / desc.stride;
-            view_desc.Buffer.StructureByteStride = desc.stride;
-            view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-            ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, *device_buffer, &view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
-        }
-        dx12_renderer->resource_heap[i].cpu_handle.current.ptr += dx12_renderer->resource_heap[i].size;
-        dx12_renderer->resource_heap[i].count++;
     }
 
-    handle->descriptor_index = dx12_renderer->resource_heap[0].count - 1;
+    handle->descriptor_index = dx12_renderer->resource_heap[0].count - 2;
 
     //
     dm_memcpy(dx12_renderer->storage_buffers + dx12_renderer->sb_count, &buffer, sizeof(buffer));
@@ -2219,9 +2211,15 @@ bool dm_renderer_backend_create_tlas(dm_tlas_desc desc, dm_resource_handle* hand
 
         D3D12_RESOURCE_BARRIER pre_barrier = { 0 };
         pre_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        pre_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        pre_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
         pre_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
         pre_barrier.Transition.pResource   = internal_buffer;
+
+        D3D12_RESOURCE_BARRIER post_barrier = { 0 };
+        post_barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+        post_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+        post_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COMMON;
+        post_barrier.Transition.pResource   = internal_buffer;
 
         D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs = { 0 };
         inputs.NumDescs      = desc.instance_count;
@@ -2232,6 +2230,7 @@ bool dm_renderer_backend_create_tlas(dm_tlas_desc desc, dm_resource_handle* hand
 
         ID3D12GraphicsCommandList7_ResourceBarrier(dx12_renderer->command_list[0], 1, &pre_barrier);
         if(!dm_dx12_create_acceleration_structure(&inputs, i, &tlas.as[i], dx12_renderer)) return false;
+        ID3D12GraphicsCommandList7_ResourceBarrier(dx12_renderer->command_list[0], 1, &post_barrier);
 
         // srv
         D3D12_SHADER_RESOURCE_VIEW_DESC view_desc = { 0 };
@@ -2478,13 +2477,13 @@ bool dm_render_command_backend_update_vertex_buffer(void* data, size_t size, dm_
     D3D12_RESOURCE_BARRIER barriers[2] = { 0 };
 
     barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[0].Transition.pResource   = device_buffer;
 
     barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[1].Transition.pResource   = device_buffer;
 
     ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barriers[0]);
@@ -2511,13 +2510,13 @@ bool dm_render_command_backend_update_index_buffer(void* data, size_t size, dm_r
     D3D12_RESOURCE_BARRIER barriers[2] = { 0 };
 
     barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_INDEX_BUFFER;
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_INDEX_BUFFER | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[0].Transition.pResource   = device_buffer;
 
     barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_INDEX_BUFFER;
+    barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_INDEX_BUFFER | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
     barriers[1].Transition.pResource   = device_buffer;
 
     ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barriers[0]);
@@ -2576,13 +2575,13 @@ bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm
     D3D12_RESOURCE_BARRIER barriers[2] = { 0 };
 
     barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
     barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
     barriers[0].Transition.pResource   = device_buffer;
 
     barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
     barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+    barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_COMMON;
     barriers[1].Transition.pResource   = device_buffer;
 
     ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barriers[0]);
@@ -2624,7 +2623,7 @@ bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, d
         barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
         barrier.Transition.pResource   = *device_resource;
         barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COMMON;
 
         ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
 
@@ -2640,7 +2639,6 @@ bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, d
     return true;
 }
 
-
 bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
@@ -2653,6 +2651,18 @@ bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_
 
     dm_dx12_storage_buffer instance_buffer = dx12_renderer->storage_buffers[tlas.instance_buffer.index];
 
+    D3D12_RESOURCE_BARRIER pre_barrier = { 0 };
+    pre_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    pre_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COMMON;
+    pre_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    pre_barrier.Transition.pResource   = dx12_renderer->resources[instance_buffer.device_buffers[current_frame]];
+
+    D3D12_RESOURCE_BARRIER post_barrier = { 0 };
+    post_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+    post_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+    post_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COMMON;
+    post_barrier.Transition.pResource   = dx12_renderer->resources[instance_buffer.device_buffers[current_frame]];
+
     D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC build_desc = { 0 };
     build_desc.Inputs.Type                      = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
     build_desc.Inputs.Flags                     = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;
@@ -2660,10 +2670,11 @@ bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_
     build_desc.Inputs.InstanceDescs             = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[instance_buffer.device_buffers[current_frame]]);
     build_desc.Inputs.NumDescs                  = instance_count;
     build_desc.DestAccelerationStructureData    = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[tlas.as[current_frame].result]);
-    //build_desc.SourceAccelerationStructureData  = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[tlas.as[current_frame].result]);
     build_desc.ScratchAccelerationStructureData = ID3D12Resource_GetGPUVirtualAddress(dx12_renderer->resources[tlas.as[current_frame].scratch]);
 
+    ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &pre_barrier);
     ID3D12GraphicsCommandList7_BuildRaytracingAccelerationStructure(command_list, &build_desc, 0, NULL);
+    ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &post_barrier);
 
     return true;
 }
