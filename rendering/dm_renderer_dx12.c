@@ -1693,43 +1693,25 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         dest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
 
         ID3D12GraphicsCommandList7_CopyTextureRegion(command_list, &dest, 0,0,0, &src, &texture_as_box);
-    }
-    for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        ID3D12Resource* device_resource = dx12_renderer->resources[texture.device_textures[i]];
+
+        //ID3D12Resource* device_resource = dx12_renderer->resources[texture.device_textures[i]];
 
         // UAV
-        D3D12_RESOURCE_BARRIER uav_barrier = { 0 };
-        uav_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        uav_barrier.Transition.pResource   = device_resource;
-        uav_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        uav_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-
-        ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &uav_barrier);
-
         D3D12_UNORDERED_ACCESS_VIEW_DESC uav_view_desc = { 0 };
         uav_view_desc.Format        = texture.format;
         uav_view_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
         
-        ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, device_resource, NULL, &uav_view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
+        ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, *device_resource, NULL, &uav_view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
         dx12_renderer->resource_heap[i].cpu_handle.current.ptr += dx12_renderer->resource_heap[i].size;
 
         // SRV
-        D3D12_RESOURCE_BARRIER srv_barrier = { 0 };
-        srv_barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        srv_barrier.Transition.pResource   = device_resource;
-        srv_barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-        srv_barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-
-        ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &srv_barrier);
-
         D3D12_SHADER_RESOURCE_VIEW_DESC srv_view_desc = { 0 };
         srv_view_desc.Format                  = texture.format;
         srv_view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         srv_view_desc.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D;
         srv_view_desc.Texture2D.MipLevels     = 1;
 
-        ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, device_resource, &srv_view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
+        ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, *device_resource, &srv_view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
 
         dx12_renderer->resource_heap[i].cpu_handle.current.ptr += dx12_renderer->resource_heap[i].size;
     
@@ -2613,27 +2595,29 @@ bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, d
 
         // recreate resources
         ID3D12Resource** host_resource = &dx12_renderer->resources[texture->host_textures[i]];
-        if(!dm_dx12_create_buffer(size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, host_resource, dx12_renderer)) return false;
-
         ID3D12Resource** device_resource = &dx12_renderer->resources[texture->device_textures[i]];
+
+        if(!dm_dx12_create_buffer(size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, host_resource, dx12_renderer)) return false;
         if(!dm_dx12_create_texture_resource(width, height, texture->format, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST, flags, device_resource, dx12_renderer->device)) return false;
 
         // view
-        D3D12_RESOURCE_BARRIER barrier = { 0 };
-        barrier.Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-        barrier.Transition.pResource   = *device_resource;
-        barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-        barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_COMMON;
-
-        ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
-
         D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
         view_desc.Format        = texture->format;
         view_desc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
         
         D3D12_CPU_DESCRIPTOR_HANDLE heap_handle = dx12_renderer->resource_heap[i].cpu_handle.begin;
         heap_handle.ptr += dx12_renderer->resource_heap[i].size * handle.descriptor_index;
+
         ID3D12Device5_CreateUnorderedAccessView(dx12_renderer->device, *device_resource, NULL, &view_desc, heap_handle);
+
+        D3D12_SHADER_RESOURCE_VIEW_DESC srv_view_desc = { 0 };
+        srv_view_desc.Format                  = texture->format;
+        srv_view_desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+        srv_view_desc.ViewDimension           = D3D12_SRV_DIMENSION_TEXTURE2D;
+        srv_view_desc.Texture2D.MipLevels     = 1;
+
+        heap_handle.ptr += dx12_renderer->resource_heap[i].size;
+        ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, *device_resource, &srv_view_desc, heap_handle);
     }
 
     return true;
