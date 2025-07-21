@@ -490,7 +490,6 @@ typedef struct dm_storage_buffer_desc_t
 {
     size_t size, stride;
     void*  data;
-    bool   write;
 } dm_storage_buffer_desc;
 
 typedef enum dm_texture_format_t
@@ -509,6 +508,18 @@ typedef struct dm_texture_desc_t
     void*             data;
     dm_resource_handle sampler;
 } dm_texture_desc;
+
+typedef enum dm_sampler_address_mode_t
+{
+    DM_SAMPLER_ADDRESS_MODE_BORDER,
+    DM_SAMPLER_ADDRESS_MODE_WRAP,
+    DM_SAMPLER_ADDRESS_MODE_UNKNOWN
+} dm_sampler_address_mode;
+
+typedef struct dm_sampler_desc_t
+{
+    dm_sampler_address_mode address_u, address_v, address_w;
+} dm_sampler_desc;
 
 // raytracing
 typedef enum dm_blas_geometry_type_t
@@ -735,6 +746,8 @@ typedef enum dm_mesh_vertex_attribute_t
     DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3,
     DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4,
     DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2,
+    DM_MESH_VERTEX_ATTRIBUTE_POSITION_3_TEX_COORD_U,
+    DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3_TEX_COOR_V,
     DM_MESH_VERTEX_ATTRIBUTE_COLOR_4,
     DM_MESH_VERTEX_ATTRIBUTE_UNKNOWN
 } dm_mesh_vertex_attribute;
@@ -742,11 +755,14 @@ typedef enum dm_mesh_vertex_attribute_t
 typedef struct dm_mest_t
 {
     dm_resource_handle vb, ib;
-    dm_resource_handle normal_map;
+    dm_resource_handle diffuse_texture, normal_map;
+    dm_resource_handle sampler;
 
     uint32_t vertex_count, index_count;
 
     size_t vertex_stride;
+
+    dm_index_buffer_index_type index_type;
 } dm_mesh;
 
 /******************
@@ -884,7 +900,7 @@ bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_resource_hand
 bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
-bool dm_renderer_create_sampler(dm_resource_handle* handle, dm_context* context);
+bool dm_renderer_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_blas(dm_blas_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_renderer_create_tlas(dm_tlas_desc desc, dm_resource_handle* handle, dm_context* context);
@@ -966,7 +982,7 @@ dm_hash64 dm_hash_uint_pair(uint32_t x, uint32_t y);
 uint32_t  dm_hash_reduce(uint32_t x, uint32_t n);
 
 // mesh
-bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, void** vertices, dm_mesh* mesh, dm_context* context);
-bool dm_renderer_load_gltf_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, void** vertices, void** indices, dm_mesh* mesh, dm_context* context);
+bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_context* context);
+bool dm_renderer_load_gltf_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, uint8_t mesh_index, dm_mesh* mesh, dm_context* context);
 
 #endif //DM_H

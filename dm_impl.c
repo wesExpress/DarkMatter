@@ -637,7 +637,7 @@ extern bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc,
 extern bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
-extern bool dm_renderer_backend_create_sampler(dm_resource_handle* handle, dm_renderer* renderer);
+extern bool dm_renderer_backend_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
 extern bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
@@ -695,11 +695,11 @@ bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle
     return false;
 }
 
-bool dm_renderer_create_sampler(dm_resource_handle* handle, dm_context* context)
+bool dm_renderer_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_context* context)
 {
     handle->type = DM_RESOURCE_TYPE_SAMPLER;
 
-    if(dm_renderer_backend_create_sampler(handle, &context->renderer)) return true;
+    if(dm_renderer_backend_create_sampler(desc, handle, &context->renderer)) return true;
 
     DM_LOG_FATAL("Creating sampler failed");
     return false;
@@ -1263,14 +1263,313 @@ dm_font_aligned_quad dm_font_get_aligned_quad(dm_font font, const char text, flo
 /********
  * MESH *
  ********/
-bool dm_renderer_load_gltf_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, void** vertices, void** indices, dm_mesh* mesh, dm_context* context)
+bool dm_renderer_load_gltf_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, uint8_t mesh_index, dm_mesh* mesh, dm_context* context)
 {
-    DM_LOG_DEBUG("Loading gltf model: %s", file);
+    assert(mesh);
+
+    DM_LOG_INFO("Loading gltf/glfb model: %s", file);
+
+    // check if valid path
+    FILE* fp = fopen(file, "r");
+    if(!fp)
+    {
+        DM_LOG_FATAL("Cannot find file: %s", file);
+        return false;
+    }
+
+    // check if file is valid 
+    const char* dot = strrchr(file, '.');
+    const char* ext = dot + 1;
+    if(strcmp(ext, "gltf")==1 && strcmp(ext, "glb")==1)
+    {
+        DM_LOG_FATAL("Trying to load invalid file for gltf/glb format: %s", file);
+        return false;
+    }
+
+    // begin
+    cgltf_options options = { 0 };
+    cgltf_data*   data = NULL;
+    cgltf_result  result = cgltf_parse_file(&options, file, &data);
+    if(result != cgltf_result_success)
+    {
+        DM_LOG_FATAL("cgltf_parse_file failed");
+        cgltf_free(data);
+        return false;
+    }
+
+    // load buffers
+    result = cgltf_load_buffers(&options, data, file);
+    if(result != cgltf_result_success)
+    {
+        DM_LOG_FATAL("cgltf_load_buffers failed");
+        cgltf_free(data);
+        return false;
+    }
+
+    if(mesh_index>data->meshes_count)
+    {
+        DM_LOG_FATAL("Trying to access an invalid mesh from gltf model");
+        return false;
+    }
+
+    // begin
+    float*    vertex_data = NULL;
+    uint16_t* index_data  = NULL;
+
+    size_t vertex_size = 0;
+    for(uint8_t i=0; i<attribute_count; i++)
+    {
+        switch(mesh_attributes[i])
+        {
+            case DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2:
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_2:
+            vertex_size += sizeof(float) * 2;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3:
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3:
+            vertex_size += sizeof(float) * 3;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3_TEX_COORD_U:
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3_TEX_COOR_V:
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_4:
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4:
+            case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
+            vertex_size += sizeof(float) * 4;
+            break;
+
+            default:
+            return false;
+        }
+    }
+
+    mesh->vertex_stride = vertex_size;
+
+    // data arrays
+    float* positions  = NULL;
+    float* normals    = NULL;
+    float* tex_coords = NULL;
+    float* colors     = NULL;
+
+    cgltf_type position_type   = cgltf_type_invalid;
+    cgltf_type normal_type     = cgltf_type_invalid;
+    cgltf_type tex_coords_type = cgltf_type_invalid;
+    cgltf_type color_type      = cgltf_type_invalid;
+
+    size_t pos_count=0, normal_count=0, tex_coord_count=0, color_count=0;
+
+    // set up attributes arrays
+    cgltf_mesh cm = data->meshes[mesh_index];
+
+    // for each primitive in mesh
+    for(uint32_t p=0; p<cm.primitives_count; p++)
+    {
+        // only supporting triangles for now
+        if(cm.primitives[p].type != cgltf_primitive_type_triangles) continue;
+
+        cgltf_primitive cp = data->meshes[0].primitives[p];
+
+        // set up attributes
+        for(uint32_t a=0; a<cp.attributes_count; a++)
+        {
+            cgltf_accessor* accessor = cp.attributes[a].data;
+            void* src = accessor->buffer_view->buffer->data + accessor->offset + accessor->buffer_view->offset;
+
+            size_t size = accessor->stride * accessor->count;
+            switch(cp.attributes[a].type)
+            {
+                case cgltf_attribute_type_position:
+                positions = dm_alloc(size);
+                dm_memcpy(positions, src, size);
+                position_type = accessor->type;
+                pos_count = accessor->count;
+                break;
+
+                case cgltf_attribute_type_normal:
+                normals = dm_alloc(size);
+                dm_memcpy(normals, src, size);
+                normal_type = accessor->type;
+                normal_count = accessor->count;
+                break;
+
+                case cgltf_attribute_type_texcoord:
+                tex_coords = dm_alloc(size);
+                dm_memcpy(tex_coords, src, size);
+                tex_coords_type = accessor->type;
+                tex_coord_count = accessor->count;
+                break;
+
+                case cgltf_attribute_type_color:
+                colors = dm_alloc(size);
+                dm_memcpy(colors, src, size);
+                color_type = accessor->type;
+                color_count = accessor->count;
+                break;
+
+                default:
+                break;
+            }
+        }
+
+        // set up indices
+        if(cp.indices->count==0) continue; 
+
+        mesh->index_count  = cp.indices->count;
+        mesh->vertex_count = pos_count; 
+
+        cgltf_accessor* index_accessor = cp.indices;    
+        void* src = index_accessor->buffer_view->buffer->data + index_accessor->offset + index_accessor->buffer_view->offset;
+
+        size_t size = index_accessor->stride * index_accessor->count;
+
+        index_data  = dm_alloc(sizeof(uint16_t) * mesh->index_count);
+        dm_memcpy(index_data, src, size);
+    }
+
+    vertex_data = dm_alloc(vertex_size * mesh->vertex_count);
+
+    uint32_t index=0, p=0, n=0, t=0, c=0;
+    uint32_t vertex_data_count = vertex_size * mesh->vertex_count / sizeof(float);
+    // fill in vertex array
+    while(index < vertex_data_count)
+    {
+        for(uint8_t a=0; a<attribute_count; a++)
+        {
+            switch(mesh_attributes[a])
+            {
+                case DM_MESH_VERTEX_ATTRIBUTE_POSITION_2:
+                vertex_data[index++] = positions ? positions[p++] : 0;
+                vertex_data[index++] = positions ? positions[p++] : 0;
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3:
+                vertex_data[index++] = positions ? positions[p++] : 0;
+                vertex_data[index++] = positions ? positions[p++] : 0;
+                vertex_data[index++] = positions ? positions[p++] : 0;
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_POSITION_4:
+                vertex_data[index++] = positions ? positions[p++] : 0;
+                vertex_data[index++] = positions ? positions[p++] : 0;
+                vertex_data[index++] = positions ? positions[p++] : 0;
+                vertex_data[index++] = 1; 
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_2:
+                vertex_data[index++] = normals ? normals[n++] : 0;
+                vertex_data[index++] = normals ? normals[n++] : 0;
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3:
+                vertex_data[index++] = normals ? normals[n++] : 0;
+                vertex_data[index++] = normals ? normals[n++] : 0;
+                vertex_data[index++] = normals ? normals[n++] : 0;
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4:
+                vertex_data[index++] = normals ? normals[n++] : 0;
+                vertex_data[index++] = normals ? normals[n++] : 0;
+                vertex_data[index++] = normals ? normals[n++] : 0;
+                vertex_data[index++] = 0; 
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
+                vertex_data[index++] = colors ? colors[c++] : 1;
+                vertex_data[index++] = colors ? colors[c++] : 1;
+                vertex_data[index++] = colors ? colors[c++] : 1;
+                vertex_data[index++] = 1; 
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2:
+                vertex_data[index++] = tex_coords ? tex_coords[t++] : 0;
+                vertex_data[index++] = tex_coords ? tex_coords[t++] : 0;
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3_TEX_COORD_U:
+                vertex_data[index++] = positions  ? positions[p++]  : 0;
+                vertex_data[index++] = positions  ? positions[p++]  : 0;
+                vertex_data[index++] = positions  ? positions[p++]  : 0;
+                vertex_data[index++] = tex_coords ? tex_coords[t++] : 0;
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3_TEX_COOR_V:
+                vertex_data[index++] = normals    ? normals[n++]    : 0;
+                vertex_data[index++] = normals    ? normals[n++]    : 0;
+                vertex_data[index++] = normals    ? normals[n++]    : 0;
+                vertex_data[index++] = tex_coords ? tex_coords[t++] : 0;
+                break;
+
+                default:
+                return false;
+            }
+        }
+    }
+
+    float v[24][12] = { 0 };
+    dm_memcpy(v, vertex_data, sizeof(v));
+
+    mesh->index_type = DM_INDEX_BUFFER_INDEX_TYPE_UINT16;
+
+    dm_vertex_buffer_desc vb_desc = { 0 };
+    vb_desc.stride       = mesh->vertex_stride;
+    vb_desc.element_size = sizeof(float);
+    vb_desc.size         = mesh->vertex_count * mesh->vertex_stride;
+    vb_desc.data         = vertex_data;
+    
+    dm_index_buffer_desc ib_desc = { 0 };
+    ib_desc.element_size = sizeof(uint16_t);
+    ib_desc.index_type   = mesh->index_type;
+    ib_desc.size         = sizeof(uint16_t) * mesh->index_count;
+    ib_desc.data         = index_data;
+
+    if(!dm_renderer_create_vertex_buffer(vb_desc, &mesh->vb, context)) return false;
+    if(!dm_renderer_create_index_buffer(ib_desc, &mesh->ib, context)) return false;
+
+    // materials
+    if(data->materials_count>0)
+    {
+        if(data->materials->pbr_metallic_roughness.base_color_texture.texture)
+        {
+            int width, height, n_channels;
+            cgltf_image* diffuse_image = data->materials->pbr_metallic_roughness.base_color_texture.texture->image;
+            void* src = diffuse_image->buffer_view->buffer->data + diffuse_image->buffer_view->offset;
+
+            size_t diffuse_color_texture_size = diffuse_image->buffer_view->size; 
+            void* diffuse_color_texture_data = stbi_load_from_memory(src, diffuse_color_texture_size, &width, &height, &n_channels, 4);
+
+            dm_texture_desc desc = { 0 };
+            desc.width      = width;
+            desc.height     = height;
+            desc.n_channels = 4;
+            desc.format     = DM_TEXTURE_FORMAT_BYTE_4_UNORM; 
+            desc.sampler    = mesh->sampler; 
+            desc.data       = diffuse_color_texture_data;
+
+            if(!dm_renderer_create_texture(desc, &mesh->diffuse_texture, context)) 
+            {
+                stbi_image_free(diffuse_color_texture_data);
+                return false;
+            }
+
+            stbi_image_free(diffuse_color_texture_data);
+        }
+    }
+
+    //
+    cgltf_free(data);
+    if(positions)  dm_free((void**)&positions);
+    if(normals)    dm_free((void**)&normals);
+    if(tex_coords) dm_free((void**)&tex_coords);
+    if(colors)     dm_free((void**)&colors);
+
+    dm_free((void**)&vertex_data);
+    dm_free((void**)&index_data);
 
     return true;
 }
 
-bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, void** vertices, dm_mesh* mesh, dm_context* context)
+bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_context* context)
 {
     assert(mesh);
 
@@ -1296,41 +1595,6 @@ bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh
     // begin
     fastObjMesh* obj_mesh = fast_obj_read(file);
 
-    // check we have all desired vertex attributes
-    for(uint8_t i=0; i<attribute_count; i++)
-    {
-        switch(mesh_attributes[i])
-        {
-            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_2:
-            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3:
-            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_4:
-            if(obj_mesh->positions==0) DM_LOG_WARN("Requested positions, but mesh has no position data. Setting to zero");
-            break;
-
-            case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
-            if(obj_mesh->color_count==0) DM_LOG_WARN("Requested colors, but mesh has no color data. Setting to white");
-            break;
-
-            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_2:
-            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3:
-            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4:
-            if(obj_mesh->normal_count==0) DM_LOG_FATAL("Requested normals, but mesh has no normal data. Setting to zero");
-            break;
-
-            case DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2:
-            if(obj_mesh->texcoord_count==0) DM_LOG_FATAL("Requested texture coords, but mesh has no texture coordinate data. Setting to zero");
-            break;
-
-            default:
-            DM_LOG_FATAL("Unknown mesh attribute");
-            return false;
-        }
-    }
-
-    // check everything has correct number of vertices
-    if(obj_mesh->normal_count && obj_mesh->normal_count != obj_mesh->position_count) { DM_LOG_FATAL("OBJ mesh has different number of positions and normals"); return false; } 
-    if(obj_mesh->color_count && obj_mesh->color_count != obj_mesh->position_count) { DM_LOG_FATAL("OBJ mesh has different number of colors and positions"); return false; }
-
     size_t vertex_size = 0;
     for(uint8_t i=0; i<attribute_count; i++)
     {
@@ -1346,6 +1610,8 @@ bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh
             vertex_size += sizeof(float) * 3;
             break;
 
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3_TEX_COORD_U:
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3_TEX_COOR_V:
             case DM_MESH_VERTEX_ATTRIBUTE_POSITION_4:
             case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4:
             case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
@@ -1357,8 +1623,7 @@ bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh
         }
     }
 
-    *vertices = dm_alloc(vertex_size * 3 * obj_mesh->face_count);
-    float* vertex_data = *vertices;
+    float* vertex_data = dm_alloc(vertex_size * 3 * obj_mesh->face_count);
     
     // loop over mesh data, fill in vertex_data
     uint32_t index = 0, idx=0;
@@ -1397,7 +1662,7 @@ bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh
                     vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 0] : 0;
                     vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 1] : 0;
                     vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 2] : 0;
-                    vertex_data[index++] = 0;
+                    vertex_data[index++] = 1;
                     break;
 
                     case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_2:
@@ -1418,10 +1683,24 @@ bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh
                     vertex_data[index++] = 0;
                     break;
 
+                    case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3_TEX_COORD_U:
+                    vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 0] : 0;
+                    vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 1] : 0;
+                    vertex_data[index++] = i.p ? obj_mesh->positions[3 * i.p + 2] : 0;
+                    vertex_data[index++] = i.t ? obj_mesh->texcoords[2 * i.t + 0] : 0;
+                    break;
+
+                    case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3_TEX_COOR_V:
+                    vertex_data[index++] = i.n ? obj_mesh->normals[3 * i.n + 0]   : 0;
+                    vertex_data[index++] = i.n ? obj_mesh->normals[3 * i.n + 1]   : 0;
+                    vertex_data[index++] = i.n ? obj_mesh->normals[3 * i.n + 2]   : 0;
+                    vertex_data[index++] = i.t ? obj_mesh->texcoords[2 * i.t + 1] : 0;
+                    break;
+                        
                     case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
-                    vertex_data[index++] = dm_random_float(context);
-                    vertex_data[index++] = dm_random_float(context);
-                    vertex_data[index++] = dm_random_float(context);
+                    vertex_data[index++] = 1.f; 
+                    vertex_data[index++] = 1.f; 
+                    vertex_data[index++] = 1.f; 
                     vertex_data[index++] = 1.f;
                     break;
                         
@@ -1436,6 +1715,7 @@ bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh
 
     mesh->vertex_count  = obj_mesh->face_count * 3;
     mesh->vertex_stride = vertex_size;
+    mesh->index_type    = DM_INDEX_BUFFER_INDEX_TYPE_UNKNOWN;
 
     // create mesh
     dm_vertex_buffer_desc vb_desc = { 0 };
@@ -1448,6 +1728,8 @@ bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh
 
     // cleanup
     fast_obj_destroy(obj_mesh);
+
+    dm_free((void**)&vertex_data);
 
     return true;
 }
