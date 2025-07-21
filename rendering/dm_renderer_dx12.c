@@ -856,7 +856,6 @@ bool dm_renderer_backend_end_frame(dm_context* context)
 
     ID3D12CommandQueue_ExecuteCommandLists(command_queue, _countof(command_lists), command_lists);
 
-
     UINT present_flag = 0;
     present_flag = DXGI_PRESENT_ALLOW_TEARING;
 

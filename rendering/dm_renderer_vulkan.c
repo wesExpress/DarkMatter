@@ -499,19 +499,6 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     uint32_t current_frame = vulkan_renderer->current_frame;
     VkCommandBuffer cmd_buffer = vulkan_renderer->device.graphics_queue.buffer[current_frame];
 
-#if 0
-    vkWaitForFences(vulkan_renderer->device.logical, 1, &vulkan_renderer->front_fences[current_frame], VK_TRUE, INFINITE); 
-
-    vr = vkResetCommandBuffer(cmd_buffer, 0);
-    if(!dm_vulkan_decode_vr(vr)) { DM_LOG_FATAL("vkResetCommandBuffer failed"); return false; }
-
-    VkCommandBufferBeginInfo begin_info = { 0 };
-    begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-
-    vr = vkBeginCommandBuffer(cmd_buffer, &begin_info);
-    if(!dm_vulkan_decode_vr(vr)) { DM_LOG_FATAL("vkBeginCommandBuffer failed"); return false; }
-#endif
-
     vr = vkAcquireNextImageKHR(vulkan_renderer->device.logical, vulkan_renderer->swapchain.swapchain, UINT64_MAX, vulkan_renderer->wait_semaphores[current_frame], VK_NULL_HANDLE, &vulkan_renderer->image_index);
     if(vr == VK_ERROR_OUT_OF_DATE_KHR)
     {
@@ -570,13 +557,6 @@ bool dm_renderer_backend_begin_frame(dm_renderer* renderer)
     VkPipelineStageFlags depth_stage_flags = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT; 
 
     vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, depth_stage_flags, 0,0,NULL,0,NULL, 1, &depth_barrier);
-
-#if 0
-    VkDescriptorSet sets[] = { vulkan_renderer->resource_bindless_set[current_frame], vulkan_renderer->sampler_bindless_set[current_frame] };
-    vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vulkan_renderer->bindless_pipeline_layout, 0, _countof(sets), sets, 0, NULL);
-    vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_COMPUTE, vulkan_renderer->bindless_pipeline_layout, 0, _countof(sets), sets, 0, NULL);
-    vkCmdBindDescriptorSets(cmd_buffer, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, vulkan_renderer->bindless_pipeline_layout, 0, _countof(sets), sets, 0, NULL);
-#endif
 
     // misc
     vulkan_renderer->bound_pipeline_type = DM_PIPELINE_TYPE_UNKNOWN;
