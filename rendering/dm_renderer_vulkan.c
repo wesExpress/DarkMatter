@@ -807,6 +807,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
     bind_descriptions[1].inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
     
     uint8_t element_count = 0;
+    uint8_t instance_data = 0;
 
     for(uint8_t i=0; i<desc.input_assembler.input_element_count; i++)
     {
@@ -851,6 +852,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
                 case DM_INPUT_ELEMENT_CLASS_PER_INSTANCE:
                 input->binding = 1;
                 bind_descriptions[1].stride = d.stride;
+                instance_data = 1;
                 break;
 
                 default:
@@ -864,7 +866,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
         }
     }
 
-    vertex_input_create_info.vertexBindingDescriptionCount = 1;
+    vertex_input_create_info.vertexBindingDescriptionCount = instance_data==1 ? 2 : 1;
     vertex_input_create_info.pVertexBindingDescriptions    = bind_descriptions;
 
     vertex_input_create_info.vertexAttributeDescriptionCount = element_count;
@@ -1660,7 +1662,24 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
     return true;
 }
 
-bool dm_renderer_backend_create_sampler(dm_resource_handle* handle, dm_renderer* renderer)
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+VkSamplerAddressMode dm_vulkan_convert_address_mode(dm_sampler_address_mode mode)
+{
+    switch(mode)
+    {
+        case DM_SAMPLER_ADDRESS_MODE_WRAP:
+        return VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+        default:
+        DM_LOG_ERROR("Unknown/unsupported address mode. Assuming VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER");
+        case DM_SAMPLER_ADDRESS_MODE_BORDER:
+        return VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
+    }
+}
+
+bool dm_renderer_backend_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
 {
     DM_VULKAN_GET_RENDERER;
     VkResult vr;
@@ -1671,9 +1690,9 @@ bool dm_renderer_backend_create_sampler(dm_resource_handle* handle, dm_renderer*
     sampler_create_info.sType            = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     sampler_create_info.magFilter        = VK_FILTER_LINEAR;
     sampler_create_info.minFilter        = VK_FILTER_LINEAR;
-    sampler_create_info.addressModeU     = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_create_info.addressModeV     = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    sampler_create_info.addressModeW     = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+    sampler_create_info.addressModeU     = dm_vulkan_convert_address_mode(desc.address_u);
+    sampler_create_info.addressModeV     = dm_vulkan_convert_address_mode(desc.address_v);
+    sampler_create_info.addressModeW     = dm_vulkan_convert_address_mode(desc.address_w);
     sampler_create_info.anisotropyEnable = VK_TRUE;
     sampler_create_info.maxAnisotropy    = vulkan_renderer->device.properties.properties.limits.maxSamplerAnisotropy;
     sampler_create_info.borderColor      = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
@@ -2005,6 +2024,10 @@ bool dm_renderer_backend_create_blas(dm_blas_desc desc, dm_resource_handle* hand
                     geometry_data.triangles.indexType = VK_INDEX_TYPE_UINT32;
                     break;
 
+                    case DM_INDEX_BUFFER_INDEX_TYPE_UINT16:
+                    geometry_data.triangles.indexType = VK_INDEX_TYPE_UINT16;
+                    break;
+
                     default:
                     DM_LOG_FATAL("Unsupported index type");
                     return false;
@@ -2246,7 +2269,7 @@ bool dm_render_command_backend_bind_vertex_buffer(dm_resource_handle handle, uin
     VkBuffer buffers[]     = { vulkan_renderer->buffers[buffer.device[current_frame]].buffer };
     VkDeviceSize offsets[] = { 0 };
 
-    vkCmdBindVertexBuffers(cmd_buffer, 0, _countof(buffers),buffers, offsets);
+    vkCmdBindVertexBuffers(cmd_buffer, slot, _countof(buffers),buffers, offsets);
 
     return true;
 }
@@ -3628,7 +3651,7 @@ bool dm_vulkan_create_bindless_layout(dm_vulkan_renderer* vulkan_renderer)
     sampler_binding.binding         = 0;
     sampler_binding.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLER;
     sampler_binding.descriptorCount = DM_VULKAN_MAX_DESCRIPTORS;
-    sampler_binding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+    sampler_binding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
 
     VkDescriptorSetLayoutCreateInfo sampler_create_info = { 0 };
     sampler_create_info.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;

@@ -543,23 +543,11 @@ bool dm_renderer_backend_init(dm_context* context)
         root_params[0].Constants.Num32BitValues = DM_MAX_ROOT_CONSTANTS;
         root_params[0].ShaderVisibility         = D3D12_SHADER_VISIBILITY_ALL;
 
-        D3D12_STATIC_SAMPLER_DESC sampler = { 0 };
-        sampler.Filter           = D3D12_FILTER_MIN_MAG_MIP_POINT;
-        sampler.AddressU         = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-        sampler.AddressV         = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-        sampler.AddressW         = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-        sampler.ComparisonFunc   = D3D12_COMPARISON_FUNC_NEVER;
-        sampler.BorderColor      = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-        sampler.MaxLOD           = D3D12_FLOAT32_MAX;
-        sampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
         D3D12_VERSIONED_ROOT_SIGNATURE_DESC root_sig_desc = { 0 };
         root_sig_desc.Version                = D3D_ROOT_SIGNATURE_VERSION_1_1;
         root_sig_desc.Desc_1_1.Flags         = D3D12_ROOT_SIGNATURE_FLAG_CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT | D3D12_ROOT_SIGNATURE_FLAG_SAMPLER_HEAP_DIRECTLY_INDEXED;
         root_sig_desc.Desc_1_1.NumParameters = 1;
         root_sig_desc.Desc_1_1.pParameters   = root_params;
-        root_sig_desc.Desc_1_1.NumStaticSamplers = 1;
-        root_sig_desc.Desc_1_1.pStaticSamplers = &sampler;
 
         ID3DBlob* blob = NULL;
         void* temp = NULL;
@@ -1617,22 +1605,22 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
     {
         case DM_TEXTURE_FORMAT_BYTE_4_UINT:
         format            = DXGI_FORMAT_R8G8B8A8_UINT;
-        bytes_per_channel = 1;
+        bytes_per_channel = sizeof(char);
         break;
 
         case DM_TEXTURE_FORMAT_BYTE_4_UNORM:
         format            = DXGI_FORMAT_R8G8B8A8_UNORM;
-        bytes_per_channel = 1;
+        bytes_per_channel = sizeof(char);
         break;
 
         case DM_TEXTURE_FORMAT_FLOAT_3:
         format            = DXGI_FORMAT_R32G32B32_FLOAT;
-        bytes_per_channel = 4;
+        bytes_per_channel = sizeof(float);
         break;
 
         case DM_TEXTURE_FORMAT_FLOAT_4:
         format            = DXGI_FORMAT_R32G32B32A32_FLOAT;
-        bytes_per_channel = 4;
+        bytes_per_channel = sizeof(float);
         break;
 
         default:
@@ -1726,16 +1714,34 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
     return true;
 }
 
-bool dm_renderer_backend_create_sampler(dm_resource_handle* handle, dm_renderer* renderer)
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+D3D12_TEXTURE_ADDRESS_MODE dm_dx12_convert_address_mode(dm_sampler_address_mode mode)
+{
+    switch(mode)
+    {
+        default:
+        DM_LOG_ERROR("Unknown/unsupported address mode. Assuming D3D12_TEXTURE_ADDRESS_MODE_BORDER");
+        case DM_SAMPLER_ADDRESS_MODE_BORDER:
+        return D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+        
+        case DM_SAMPLER_ADDRESS_MODE_WRAP:
+        return D3D12_TEXTURE_ADDRESS_MODE_WRAP;
+
+    }
+}
+
+bool dm_renderer_backend_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
 
     D3D12_SAMPLER_DESC sampler = { 0 };
     sampler.Filter         = D3D12_FILTER_MIN_MAG_MIP_POINT;
-    sampler.AddressU       = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-    sampler.AddressV       = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
-    sampler.AddressW       = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
+    sampler.AddressU       = dm_dx12_convert_address_mode(desc.address_u);
+    sampler.AddressV       = dm_dx12_convert_address_mode(desc.address_v);
+    sampler.AddressW       = dm_dx12_convert_address_mode(desc.address_w);
     sampler.MaxLOD         = D3D12_FLOAT32_MAX;
     sampler.ComparisonFunc = D3D12_COMPARISON_FUNC_NEVER;
 
