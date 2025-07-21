@@ -1532,11 +1532,11 @@ bool dm_renderer_load_gltf_model(const char* file, dm_mesh_vertex_attribute* mes
         if(data->materials->pbr_metallic_roughness.base_color_texture.texture)
         {
             int width, height, n_channels;
-            cgltf_image* diffuse_image = data->materials->pbr_metallic_roughness.base_color_texture.texture->image;
-            void* src = diffuse_image->buffer_view->buffer->data + diffuse_image->buffer_view->offset;
+            cgltf_image* image = data->materials->pbr_metallic_roughness.base_color_texture.texture->image;
+            void* src = image->buffer_view->buffer->data + image->buffer_view->offset;
 
-            size_t diffuse_color_texture_size = diffuse_image->buffer_view->size; 
-            void* diffuse_color_texture_data = stbi_load_from_memory(src, diffuse_color_texture_size, &width, &height, &n_channels, 4);
+            size_t size = image->buffer_view->size; 
+            void* image_data = stbi_load_from_memory(src, size, &width, &height, &n_channels, 4);
 
             dm_texture_desc desc = { 0 };
             desc.width      = width;
@@ -1544,15 +1544,41 @@ bool dm_renderer_load_gltf_model(const char* file, dm_mesh_vertex_attribute* mes
             desc.n_channels = 4;
             desc.format     = DM_TEXTURE_FORMAT_BYTE_4_UNORM; 
             desc.sampler    = mesh->sampler; 
-            desc.data       = diffuse_color_texture_data;
+            desc.data       = image_data;
 
             if(!dm_renderer_create_texture(desc, &mesh->diffuse_texture, context)) 
             {
-                stbi_image_free(diffuse_color_texture_data);
+                stbi_image_free(image_data);
                 return false;
             }
 
-            stbi_image_free(diffuse_color_texture_data);
+            stbi_image_free(image_data);
+        }
+
+        if(data->materials->normal_texture.texture)
+        {
+            int width, height, n_channels;
+            cgltf_image* image = data->materials->normal_texture.texture->image;
+            void* src = image->buffer_view->buffer->data + image->buffer_view->offset;
+
+            size_t size = image->buffer_view->size; 
+            void* image_data = stbi_load_from_memory(src, size, &width, &height, &n_channels, 4);
+
+            dm_texture_desc desc = { 0 };
+            desc.width      = width;
+            desc.height     = height;
+            desc.n_channels = 4;
+            desc.format     = DM_TEXTURE_FORMAT_BYTE_4_UNORM; 
+            desc.sampler    = mesh->sampler; 
+            desc.data       = image_data;
+
+            if(!dm_renderer_create_texture(desc, &mesh->normal_map, context)) 
+            {
+                stbi_image_free(image_data);
+                return false;
+            }
+
+            stbi_image_free(image_data);
         }
     }
 
