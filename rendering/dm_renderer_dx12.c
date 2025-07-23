@@ -1464,7 +1464,6 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resou
         view_desc.Format                     = DXGI_FORMAT_UNKNOWN;
         view_desc.Shader4ComponentMapping    = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
         view_desc.ViewDimension              = D3D12_SRV_DIMENSION_BUFFER;
-        view_desc.Buffer.NumElements         = desc.size / desc.element_size;
         switch(desc.index_type)
         {
             case DM_INDEX_BUFFER_INDEX_TYPE_UINT16:
@@ -1479,6 +1478,7 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resou
             DM_LOG_FATAL("Should NOT be here");
             return false;
         }
+        view_desc.Buffer.NumElements         = desc.size / view_desc.Buffer.StructureByteStride;
         
         ID3D12Device5_CreateShaderResourceView(dx12_renderer->device, *device_buffer, &view_desc, dx12_renderer->resource_heap[i].cpu_handle.current);
         dx12_renderer->resource_heap[i].cpu_handle.current.ptr += dx12_renderer->resource_heap[i].size;

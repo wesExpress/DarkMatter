@@ -462,7 +462,7 @@ typedef struct dm_raster_pipeline_desc_t
 
 typedef struct dm_vertex_buffer_desc_t
 {
-    size_t size, stride, element_size;
+    size_t size, stride;
     void*  data;
 } dm_vertex_buffer_desc;
 
@@ -475,7 +475,7 @@ typedef enum dm_index_buffer_index_type_t
 
 typedef struct dm_index_buffer_desc_t
 {
-    size_t size, element_size;
+    size_t size;
     dm_index_buffer_index_type index_type;
     void* data;
 } dm_index_buffer_desc;
@@ -748,14 +748,26 @@ typedef enum dm_mesh_vertex_attribute_t
     DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2,
     DM_MESH_VERTEX_ATTRIBUTE_POSITION_3_TEX_COORD_U,
     DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3_TEX_COOR_V,
+    DM_MESH_VERTEX_ATTRIBUTE_TANGENT_3,
+    DM_MESH_VERTEX_ATTRIBUTE_TANGENT_4,
+    DM_MESH_VERTEX_ATTRIBUTE_BITANGENT_3,
+    DM_MESH_VERTEX_ATTRIBUTE_BITANGENT_4,
     DM_MESH_VERTEX_ATTRIBUTE_COLOR_4,
     DM_MESH_VERTEX_ATTRIBUTE_UNKNOWN
 } dm_mesh_vertex_attribute;
 
+typedef enum dm_mesh_material_t
+{
+    DM_MESH_MATERIAL_DIFFUSE,
+    DM_MESH_MATERIAL_NORMAL_MAP,
+    DM_MESH_MATERIAL_SPECULAR_MAP,
+    DM_MESH_MATERIAL_UNKNOWN
+} dm_mesh_material;
+
 typedef struct dm_mest_t
 {
     dm_resource_handle vb, ib;
-    dm_resource_handle diffuse_texture, normal_map;
+    dm_resource_handle materials[DM_MESH_MATERIAL_UNKNOWN];
     dm_resource_handle sampler;
 
     uint32_t vertex_count, index_count;
@@ -983,6 +995,6 @@ uint32_t  dm_hash_reduce(uint32_t x, uint32_t n);
 
 // mesh
 bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_context* context);
-bool dm_renderer_load_gltf_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, uint8_t mesh_index, dm_mesh* mesh, dm_context* context);
+bool dm_renderer_load_gltf_model(const char* file, uint8_t mesh_index, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_context* context);
 
 #endif //DM_H
