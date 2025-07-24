@@ -1724,7 +1724,7 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     VkShaderModule raygen, miss, clossest_hit;
 
     if(!dm_vulkan_create_shader_module(desc.raygen, &raygen, vulkan_renderer->device.logical)) return false;
-    if(!dm_vulkan_create_shader_module(desc.miss, &miss, vulkan_renderer->device.logical)) return false;
+    if(!dm_vulkan_create_shader_module(desc.miss[0], &miss, vulkan_renderer->device.logical)) return false;
     if(!dm_vulkan_create_shader_module(desc.hit_groups[0].shaders[DM_RT_PIPE_HIT_GROUP_STAGE_CLOSEST], &clossest_hit, vulkan_renderer->device.logical)) return false;
 
     VkPipelineShaderStageCreateInfo raygen_create_info = { 0 };
