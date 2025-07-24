@@ -107,6 +107,7 @@ typedef struct dm_dx12_sbt_t
 {
     uint8_t index[DM_DX12_MAX_FRAMES_IN_FLIGHT];
     size_t  stride, size;
+    size_t  offset[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 } dm_dx12_sbt;
 
 typedef struct dm_dx12_raytracing_pipeline_t
@@ -1843,7 +1844,7 @@ bool dm_renderer_backend_create_storage_buffer(dm_storage_buffer_desc desc, dm_r
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_dx12_add_sbt_record(size_t size, uint8_t index, wchar_t* name, ID3D12StateObjectProperties* props, dm_dx12_sbt* sbt, dm_dx12_renderer* dx12_renderer)
+bool dm_dx12_create_sbt(size_t size, uint8_t index, dm_dx12_sbt* sbt, dm_dx12_renderer* dx12_renderer)
 {
     HRESULT hr;
 
@@ -1860,25 +1861,41 @@ bool dm_dx12_add_sbt_record(size_t size, uint8_t index, wchar_t* name, ID3D12Sta
 
     ID3D12GraphicsCommandList7_ResourceBarrier(dx12_renderer->command_list[0], 1, &barrier);
 
+    return true;
+}
+
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_dx12_add_sbt_record(uint8_t index, wchar_t* name, ID3D12StateObjectProperties* props, dm_dx12_sbt* sbt, dm_dx12_renderer* dx12_renderer)
+{
+    HRESULT hr;
+
     void* id = ID3D12StateObjectProperties_GetShaderIdentifier(props, name);
     if(!id)
     {
         DM_LOG_FATAL("ID3D12StateObjectProperties_GetShaderIdentifier failed");
         return false;
     }
+
+    ID3D12Resource* resource = dx12_renderer->resources[sbt->index[index]];
     
     void* temp = NULL;
-    hr = ID3D12Resource_Map(*resource, 0,0, &temp);
+    hr = ID3D12Resource_Map(resource, 0,0, &temp);
     if(!dm_platform_win32_decode_hresult(hr) || !temp)
     {
         DM_LOG_FATAL("ID3D12Resource_Map failed");
         return false;
     }
 
+    temp = (char*)temp + sbt->offset[index];
+
     dm_memcpy(temp, id, D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES);
 
-    ID3D12Resource_Unmap(*resource, 0,0);
+    ID3D12Resource_Unmap(resource, 0,0);
     temp = NULL;
+
+    sbt->offset[index] += D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
     
     return true;
 }
@@ -1910,6 +1927,7 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     library_desc.DXILLibrary.pShaderBytecode = ID3D10Blob_GetBufferPointer(shader);
     library_desc.DXILLibrary.BytecodeLength  = ID3D10Blob_GetBufferSize(shader);
 
+    wchar_t miss_name[DM_RT_PIPE_MAX_HIT_GROUPS][512];
     wchar_t hit_group_name[DM_RT_PIPE_MAX_HIT_GROUPS][512];
     wchar_t closest_hit[DM_RT_PIPE_MAX_HIT_GROUPS][512];
     wchar_t any_hit[DM_RT_PIPE_MAX_HIT_GROUPS][512];
@@ -1928,6 +1946,8 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
             return false;
         }
 
+        swprintf(miss_name[i], 512, L"%hs", desc.miss[i]);
+        
         swprintf(hit_group_name[i], 512, L"%hs", desc.hit_groups[i].name);
         hit_group_desc[i].HitGroupExport = hit_group_name[i];
 
@@ -1968,9 +1988,12 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     dxil_subobject.Type  = D3D12_STATE_SUBOBJECT_TYPE_DXIL_LIBRARY;
     dxil_subobject.pDesc = &library_desc;
 
-    D3D12_STATE_SUBOBJECT hit_group_subobject = { 0 };
-    hit_group_subobject.Type  = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
-    hit_group_subobject.pDesc = &hit_group_desc[0];
+    D3D12_STATE_SUBOBJECT hit_group_subobjects[DM_RT_PIPE_MAX_HIT_GROUPS] = { 0 };
+    for(uint8_t i=0; i<desc.hit_group_count; i++)
+    {
+        hit_group_subobjects[i].Type  = D3D12_STATE_SUBOBJECT_TYPE_HIT_GROUP;
+        hit_group_subobjects[i].pDesc = &hit_group_desc[i];
+    }
 
     D3D12_STATE_SUBOBJECT shader_config_subobject = { 0 };
     shader_config_subobject.Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_SHADER_CONFIG;
@@ -1984,7 +2007,13 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     pipeline_config_subobject.Type  = D3D12_STATE_SUBOBJECT_TYPE_RAYTRACING_PIPELINE_CONFIG;
     pipeline_config_subobject.pDesc = &pipeline_config;
 
-    D3D12_STATE_SUBOBJECT subobjects[] = { dxil_subobject, hit_group_subobject, shader_config_subobject, global_sig_subobject, pipeline_config_subobject };
+    D3D12_STATE_SUBOBJECT subobjects[] = { 
+        dxil_subobject, 
+        hit_group_subobjects[0], hit_group_subobjects[1], 
+        shader_config_subobject, 
+        global_sig_subobject, 
+        pipeline_config_subobject 
+    };
 
     D3D12_STATE_OBJECT_DESC object_desc = { 0 };
     object_desc.Type          = D3D12_STATE_OBJECT_TYPE_RAYTRACING_PIPELINE;
@@ -2004,9 +2033,14 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
     {
         const size_t ray_gen_size = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
-        const size_t miss_size    = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
+        size_t miss_size          = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES * desc.hit_group_count;
+        miss_size                 = DM_ALIGN_BYTES(miss_size, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
         size_t hit_size           = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES * desc.hit_group_count;
         hit_size                  = DM_ALIGN_BYTES(hit_size, D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT);
+
+        if(!dm_dx12_create_sbt(ray_gen_size, i, &pipeline.raygen_sbt,   dx12_renderer)) return false;
+        if(!dm_dx12_create_sbt(miss_size,    i, &pipeline.miss_sbt,     dx12_renderer)) return false;
+        if(!dm_dx12_create_sbt(hit_size,     i, &pipeline.hitgroup_sbt, dx12_renderer)) return false;
         
         ID3D12StateObjectProperties* props = { 0 };
         hr = ID3D12PipelineState_QueryInterface(pipeline.pso, &IID_ID3D12StateObjectProperties, &temp);
@@ -2019,15 +2053,17 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         temp = NULL;
 
         wchar_t raygen_name[512];
-        wchar_t miss_name[512];
 
         swprintf(raygen_name, 512, L"%hs", desc.raygen);
-        swprintf(miss_name,   512, L"%hs", desc.miss);
 
-        if(!dm_dx12_add_sbt_record(ray_gen_size, i, raygen_name, props, &pipeline.raygen_sbt, dx12_renderer)) return false;
-        if(!dm_dx12_add_sbt_record(miss_size, i, miss_name, props, &pipeline.miss_sbt, dx12_renderer)) return false;
-        if(!dm_dx12_add_sbt_record(hit_size, i, hit_group_name[0], props, &pipeline.hitgroup_sbt, dx12_renderer)) return false;
+        if(!dm_dx12_add_sbt_record(i, raygen_name, props, &pipeline.raygen_sbt, dx12_renderer)) return false;
 
+        for(uint8_t j=0; j<desc.hit_group_count; j++)
+        {
+            if(!dm_dx12_add_sbt_record(i, miss_name[j], props, &pipeline.miss_sbt, dx12_renderer)) return false;
+            if(!dm_dx12_add_sbt_record(i, hit_group_name[j], props, &pipeline.hitgroup_sbt, dx12_renderer)) return false;
+        }
+    
         pipeline.raygen_sbt.stride   = D3D12_RAYTRACING_SHADER_TABLE_BYTE_ALIGNMENT;
         pipeline.raygen_sbt.size     = ray_gen_size;
 

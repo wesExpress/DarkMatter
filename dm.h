@@ -611,12 +611,12 @@ typedef struct dm_raytracing_pipeline_hit_group_t
 #define DM_RT_PIPE_MAX_HIT_GROUPS 5
 typedef struct dm_raytracing_pipeline_desc_t
 {
-    dm_raytracing_pipeline_hit_group hit_groups[DM_RT_PIPE_MAX_HIT_GROUPS];
-    uint8_t                          hit_group_count;
-
     char shader_path[512];
     char raygen[512];
-    char miss[512];
+
+    char miss[DM_RT_PIPE_MAX_HIT_GROUPS][512];
+    dm_raytracing_pipeline_hit_group hit_groups[DM_RT_PIPE_MAX_HIT_GROUPS];
+    uint8_t                          hit_group_count;
 
     uint8_t  max_depth;
     uint32_t max_instance_count;
@@ -756,19 +756,28 @@ typedef enum dm_mesh_vertex_attribute_t
     DM_MESH_VERTEX_ATTRIBUTE_UNKNOWN
 } dm_mesh_vertex_attribute;
 
-typedef enum dm_mesh_material_t
+typedef enum dm_material_type_t
 {
-    DM_MESH_MATERIAL_DIFFUSE,
-    DM_MESH_MATERIAL_NORMAL_MAP,
-    DM_MESH_MATERIAL_SPECULAR_MAP,
-    DM_MESH_MATERIAL_UNKNOWN
-} dm_mesh_material;
+    DM_MATERIAL_TYPE_DIFFUSE,
+    DM_MATERIAL_TYPE_METALLIC_ROUGHNESS,
+    DM_MATERIAL_TYPE_NORMAL_MAP,
+    DM_MATERIAL_TYPE_SPECULAR_MAP,
+    DM_MATERIAL_TYPE_OCCLUSION,
+    DM_MATERIAL_TYPE_EMISSION,
+    DM_MATERIAL_TYPE_UNKNOWN
+} dm_material_type;
+
+typedef struct dm_material_t
+{
+    dm_resource_handle textures[DM_MATERIAL_TYPE_UNKNOWN];
+    dm_resource_handle samplers[DM_MATERIAL_TYPE_UNKNOWN];
+} dm_material;
 
 typedef struct dm_mest_t
 {
     dm_resource_handle vb, ib;
-    dm_resource_handle materials[DM_MESH_MATERIAL_UNKNOWN];
-    dm_resource_handle sampler;
+
+    dm_material materials;
 
     uint32_t vertex_count, index_count;
 
@@ -995,6 +1004,6 @@ uint32_t  dm_hash_reduce(uint32_t x, uint32_t n);
 
 // mesh
 bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_context* context);
-bool dm_renderer_load_gltf_model(const char* file, uint8_t mesh_index, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_context* context);
+bool dm_renderer_load_gltf_model(const char* file, uint8_t mesh_index, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_material* material, dm_context* context);
 
 #endif //DM_H

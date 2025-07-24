@@ -1266,23 +1266,64 @@ dm_font_aligned_quad dm_font_get_aligned_quad(dm_font font, const char text, flo
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_renderer_gltf_load_material(dm_mesh_material material, cgltf_image* image, dm_mesh* mesh, dm_context* context)
+bool dm_renderer_gltf_load_material(dm_material_type type, cgltf_texture* texture, dm_material* material, dm_context* context)
 {
     int width, height, n_channels;
-    void* src = image->buffer_view->buffer->data + image->buffer_view->offset;
+    void* src = texture->image->buffer_view->buffer->data + texture->image->buffer_view->offset;
 
-    size_t size = image->buffer_view->size; 
+    size_t size = texture->image->buffer_view->size; 
     void* image_data = stbi_load_from_memory(src, size, &width, &height, &n_channels, 4);
+
+    dm_sampler_desc sampler_desc = { 0 };
+    if(texture->sampler)
+    {
+        switch(texture->sampler->wrap_s)
+        {
+            case cgltf_wrap_mode_clamp_to_edge:
+            sampler_desc.address_u = DM_SAMPLER_ADDRESS_MODE_BORDER;
+            break;
+
+            case cgltf_wrap_mode_repeat:
+            sampler_desc.address_u = DM_SAMPLER_ADDRESS_MODE_WRAP;
+            break;
+
+            default:
+            return false;
+        }
+
+        switch(texture->sampler->wrap_t)
+        {
+            case cgltf_wrap_mode_clamp_to_edge:
+            sampler_desc.address_v = DM_SAMPLER_ADDRESS_MODE_BORDER;
+            break;
+
+            case cgltf_wrap_mode_repeat:
+            sampler_desc.address_v = DM_SAMPLER_ADDRESS_MODE_WRAP;
+            break;
+
+            default:
+            return false;
+        }
+        sampler_desc.address_w = sampler_desc.address_u;
+    }
+    else
+    {
+        sampler_desc.address_u = DM_SAMPLER_ADDRESS_MODE_WRAP;
+        sampler_desc.address_v = DM_SAMPLER_ADDRESS_MODE_WRAP;
+        sampler_desc.address_w = DM_SAMPLER_ADDRESS_MODE_WRAP;
+    }
+
+    if(!dm_renderer_create_sampler(sampler_desc, &material->samplers[type], context)) return false;
 
     dm_texture_desc desc = { 0 };
     desc.width      = width;
     desc.height     = height;
     desc.n_channels = 4;
     desc.format     = DM_TEXTURE_FORMAT_BYTE_4_UNORM; 
-    desc.sampler    = mesh->sampler; 
+    desc.sampler    = material->samplers[type]; 
     desc.data       = image_data;
 
-    if(!dm_renderer_create_texture(desc, &mesh->materials[material], context)) 
+    if(!dm_renderer_create_texture(desc, &material->textures[type], context)) 
     {
         stbi_image_free(image_data);
         return false;
@@ -1293,7 +1334,7 @@ bool dm_renderer_gltf_load_material(dm_mesh_material material, cgltf_image* imag
     return true;
 }
 
-bool dm_renderer_load_gltf_model(const char* file, uint8_t mesh_index, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_context* context)
+bool dm_renderer_load_gltf_model(const char* file, uint8_t mesh_index, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_material* material, dm_context* context)
 {
     assert(mesh);
 
@@ -1739,22 +1780,38 @@ bool dm_renderer_load_gltf_model(const char* file, uint8_t mesh_index, dm_mesh_v
     // materials
     if(data->materials_count>0)
     {
+        cgltf_texture* texture;
         if(data->materials->has_pbr_metallic_roughness)
         {
-            cgltf_image* image = data->materials->pbr_metallic_roughness.base_color_texture.texture->image;
-            if(!dm_renderer_gltf_load_material(DM_MESH_MATERIAL_DIFFUSE, image, mesh, context)) return false;
+            texture = data->materials->pbr_metallic_roughness.base_color_texture.texture;
+            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_DIFFUSE, texture, material, context)) return false;
+
+            texture = data->materials->pbr_metallic_roughness.metallic_roughness_texture.texture;
+            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_METALLIC_ROUGHNESS, texture, material, context)) return false;
         }
 
         if(data->materials->normal_texture.texture)
         {
-            cgltf_image* image = data->materials->normal_texture.texture->image;
-            if(!dm_renderer_gltf_load_material(DM_MESH_MATERIAL_NORMAL_MAP, image, mesh, context)) return false;
+            texture  = data->materials->normal_texture.texture;
+            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_NORMAL_MAP, texture, material, context)) return false;
         }
 
         if(data->materials->specular.specular_texture.texture)
         {
-            cgltf_image* image = data->materials->specular.specular_texture.texture->image;
-            if(!dm_renderer_gltf_load_material(DM_MESH_MATERIAL_SPECULAR_MAP, image, mesh, context)) return false;
+            texture = data->materials->specular.specular_texture.texture;
+            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_SPECULAR_MAP, texture, material, context)) return false;
+        }
+
+        if(data->materials->occlusion_texture.texture)
+        {
+            texture = data->materials->occlusion_texture.texture;
+            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_OCCLUSION, texture, material, context)) return false;
+        }
+
+        if(data->materials->emissive_texture.texture)
+        {
+            texture = data->materials->emissive_texture.texture;
+            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_EMISSION, texture, material, context)) return false;
         }
     }
 
