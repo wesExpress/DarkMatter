@@ -14,7 +14,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image/stb_image.h"
 
-#define STB_TRUETYPE_IMPLEMENTATION
+//#define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype/stb_truetype.h"
 
 #define CGLTF_IMPLEMENTATION
@@ -1182,12 +1182,12 @@ void dm_compute_command_dispatch(const uint16_t x, const uint16_t y, const uint1
 /***************
  * FONT 
  ****************/
-bool dm_renderer_load_font(const char* path, int font_size, dm_resource_handle sampler, dm_font* font, dm_context* context)
+bool dm_renderer_load_font(dm_font_desc font_desc, dm_resource_handle sampler, dm_font* font, dm_context* context)
 {
-    DM_LOG_INFO("Loading font: %s", path);
+    DM_LOG_INFO("Loading font: %s", font_desc.path);
     
     size_t size = 0;
-    void* buffer = dm_read_bytes(path, "rb", &size);
+    void* buffer = dm_read_bytes(font_desc.path, "rb", &size);
     
     if(!buffer) 
     {
@@ -1198,7 +1198,7 @@ bool dm_renderer_load_font(const char* path, int font_size, dm_resource_handle s
     stbtt_fontinfo info;
     if(!stbtt_InitFont(&info, buffer, 0))
     {
-        DM_LOG_FATAL("Could not initialize font: %s", path);
+        DM_LOG_FATAL("Could not initialize font: %s", font_desc.path);
         return false;
     }
     
@@ -1211,7 +1211,7 @@ bool dm_renderer_load_font(const char* path, int font_size, dm_resource_handle s
     dm_memzero(alpha_bitmap, w * h);
     dm_memzero(bitmap, w * h * n_channels);
     
-    stbtt_BakeFontBitmap(buffer, 0, font_size, alpha_bitmap, w,h, 32, 96, (stbtt_bakedchar*)font->glyphs);
+    stbtt_BakeFontBitmap(buffer, 0, font_desc.size, alpha_bitmap, w,h, 32, 96, (stbtt_bakedchar*)font->glyphs);
     
     // bitmaps are single alpha values, so make 4 channel texture
     for(uint16_t y=0; y<h; y++)
@@ -2181,7 +2181,6 @@ bool dm_update_begin(dm_context* context)
         context->flags &= ~DM_CONTEXT_FLAG_IS_RUNNING;
         return false;
     }
-    context->platform_data.event_list.num = 0;
 
     // render udpates
     if(!dm_renderer_backend_begin_update(&context->renderer))

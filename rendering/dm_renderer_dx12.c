@@ -1298,7 +1298,7 @@ bool dm_dx12_create_committed_resource(D3D12_HEAP_PROPERTIES properties, D3D12_R
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_dx12_copy_memory(ID3D12Resource* resource, void* data, size_t size)
+bool dm_dx12_copy_memory(ID3D12Resource* resource, const void* data, size_t size)
 {
     void* temp = NULL;
 

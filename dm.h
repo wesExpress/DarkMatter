@@ -456,8 +456,6 @@ typedef struct dm_raster_pipeline_desc_t
 
     dm_viewport viewport;
     dm_scissor  scissor;
-
-    bool sampler;
 } dm_raster_pipeline_desc;
 
 typedef struct dm_vertex_buffer_desc_t
@@ -503,9 +501,9 @@ typedef enum dm_texture_format_t
 
 typedef struct dm_texture_desc_t
 {
-    uint32_t          width, height, n_channels;
-    dm_texture_format format;
-    void*             data;
+    uint32_t           width, height, n_channels;
+    dm_texture_format  format;
+    const void*        data;
     dm_resource_handle sampler;
 } dm_texture_desc;
 
@@ -734,6 +732,12 @@ typedef struct dm_font_t
     dm_resource_handle texture_handle;
 } dm_font;
 
+typedef struct dm_font_desc_t
+{
+    uint8_t size;
+    char path[512];
+} dm_font_desc;
+
 /********
  * MESH *
  ********/
@@ -952,7 +956,7 @@ void dm_render_command_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle 
 void dm_render_command_copy_image_to_screen(dm_resource_handle image, dm_context* context);
 
 // font loading
-bool dm_renderer_load_font(const char* path, int font_size, dm_resource_handle sampler, dm_font* font, dm_context* context);
+bool dm_renderer_load_font(dm_font_desc font_desc, dm_resource_handle sampler, dm_font* font, dm_context* context);
 dm_font_aligned_quad dm_font_get_aligned_quad(dm_font font, const char text, float* xf, float* yf);
 
 // compute

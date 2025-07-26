@@ -1034,7 +1034,7 @@ bool dm_renderer_backend_create_raster_pipeline(dm_raster_pipeline_desc desc, dm
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_vulkan_copy_memory(VmaAllocation allocation, void* data, const size_t size, dm_vulkan_renderer* vulkan_renderer)
+bool dm_vulkan_copy_memory(VmaAllocation allocation, const void* data, const size_t size, dm_vulkan_renderer* vulkan_renderer)
 {
     void* temp = NULL;
 
