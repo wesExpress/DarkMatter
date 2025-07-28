@@ -573,6 +573,11 @@ typedef struct dm_tlas_desc_t
     uint32_t           instance_count;
 } dm_tlas_desc;
 
+typedef struct dm_raytracing_pipeline_miss_t
+{
+    char name[512];
+} dm_raytracing_pipeline_miss;
+
 typedef enum dm_rt_pipe_hit_group_stage_t
 {
     DM_RT_PIPE_HIT_GROUP_STAGE_CLOSEST,
@@ -606,15 +611,16 @@ typedef struct dm_raytracing_pipeline_hit_group_t
     uint8_t geometry_count;
 } dm_raytracing_pipeline_hit_group;
 
+#define DM_RT_PIPE_MAX_MISS       5
 #define DM_RT_PIPE_MAX_HIT_GROUPS 5
 typedef struct dm_raytracing_pipeline_desc_t
 {
     char shader_path[512];
     char raygen[512];
 
-    char miss[DM_RT_PIPE_MAX_HIT_GROUPS][512];
+    dm_raytracing_pipeline_miss      misses[DM_RT_PIPE_MAX_MISS];
     dm_raytracing_pipeline_hit_group hit_groups[DM_RT_PIPE_MAX_HIT_GROUPS];
-    uint8_t                          hit_group_count;
+    uint8_t                          miss_count, hit_group_count;
 
     uint8_t  max_depth;
     uint32_t max_instance_count;
