@@ -1266,13 +1266,89 @@ dm_font_aligned_quad dm_font_get_aligned_quad(dm_font font, const char text, flo
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_renderer_gltf_load_material(dm_material_type type, cgltf_texture* texture, dm_material* material, dm_context* context)
+bool dm_renderer_gltf_load_material(const char* directory, dm_material_type type, cgltf_material material, dm_scene* scene, dm_context* context)
 {
-    int width, height, n_channels;
-    void* src = texture->image->buffer_view->buffer->data + texture->image->buffer_view->offset;
+    cgltf_texture* texture;
+    switch(type)
+    {
+        case DM_MATERIAL_TYPE_DIFFUSE:
+        texture = material.pbr_metallic_roughness.base_color_texture.texture;
+        break;
 
-    size_t size = texture->image->buffer_view->size; 
-    void* image_data = stbi_load_from_memory(src, size, &width, &height, &n_channels, 4);
+        case DM_MATERIAL_TYPE_METALLIC_ROUGHNESS:
+        if(!material.pbr_metallic_roughness.metallic_roughness_texture.texture) 
+        {
+            scene->materials[scene->material_count].textures[type] = scene->white_texture;
+            scene->materials[scene->material_count].samplers[type] = scene->default_sampler;
+            return true; 
+        }
+        texture = material.pbr_metallic_roughness.metallic_roughness_texture.texture;
+        break;
+
+        case DM_MATERIAL_TYPE_NORMAL_MAP:
+        if(!material.normal_texture.texture) 
+        {
+            scene->materials[scene->material_count].textures[type] = scene->white_texture;
+            scene->materials[scene->material_count].samplers[type] = scene->default_sampler;
+            return true; 
+        }
+        texture = material.normal_texture.texture;
+        break;
+
+        case DM_MATERIAL_TYPE_SPECULAR_MAP:
+        if(!material.specular.specular_texture.texture) 
+        {
+            scene->materials[scene->material_count].textures[type] = scene->black_texture;
+            scene->materials[scene->material_count].samplers[type] = scene->default_sampler;
+            return true; 
+        }
+        texture = material.specular.specular_texture.texture;
+        break;
+
+        case DM_MATERIAL_TYPE_OCCLUSION:
+        if(!material.occlusion_texture.texture) 
+        {
+            scene->materials[scene->material_count].textures[type] = scene->white_texture;
+            scene->materials[scene->material_count].samplers[type] = scene->default_sampler;
+            return true; 
+        }
+        texture = material.occlusion_texture.texture;
+        break;
+
+        case DM_MATERIAL_TYPE_EMISSION:
+        if(!material.emissive_texture.texture) 
+        {
+            scene->materials[scene->material_count].textures[type] = scene->black_texture;
+            scene->materials[scene->material_count].samplers[type] = scene->default_sampler;
+            return true; 
+        }
+        texture = material.emissive_texture.texture;
+        break;
+
+        default:
+        return true;
+    }
+
+    dm_material* m = &scene->materials[scene->material_count];
+
+    int width, height, n_channels;
+
+    void* image_data = NULL;
+    if(texture->image->buffer_view)
+    {
+        void* src = texture->image->buffer_view->buffer->data + texture->image->buffer_view->offset;
+        size_t size = texture->image->buffer_view->size; 
+        image_data = stbi_load_from_memory(src, size, &width, &height, &n_channels, 4);
+    }
+    else
+    {
+        char full_path[512];
+        sprintf(full_path, "%s/%s", directory, texture->image->uri);
+        size_t size;
+        void* temp = dm_read_bytes(full_path, "rb", &size);
+        if(!temp) return false;
+        image_data = stbi_load_from_memory(temp, size, &width, &height, &n_channels, 4);
+    }
 
     dm_sampler_desc sampler_desc = { 0 };
     if(texture->sampler)
@@ -1313,17 +1389,17 @@ bool dm_renderer_gltf_load_material(dm_material_type type, cgltf_texture* textur
         sampler_desc.address_w = DM_SAMPLER_ADDRESS_MODE_WRAP;
     }
 
-    if(!dm_renderer_create_sampler(sampler_desc, &material->samplers[type], context)) return false;
+    if(!dm_renderer_create_sampler(sampler_desc, &scene->materials[scene->material_count].samplers[type], context)) return false;
 
     dm_texture_desc desc = { 0 };
     desc.width      = width;
     desc.height     = height;
     desc.n_channels = 4;
     desc.format     = DM_TEXTURE_FORMAT_BYTE_4_UNORM; 
-    desc.sampler    = material->samplers[type]; 
+    desc.sampler    = m->samplers[type]; 
     desc.data       = image_data;
 
-    if(!dm_renderer_create_texture(desc, &material->textures[type], context)) 
+    if(!dm_renderer_create_texture(desc, &m->textures[type], context)) 
     {
         stbi_image_free(image_data);
         return false;
@@ -1334,11 +1410,266 @@ bool dm_renderer_gltf_load_material(dm_material_type type, cgltf_texture* textur
     return true;
 }
 
-bool dm_renderer_load_gltf_model(const char* file, uint8_t mesh_index, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_material* material, dm_context* context)
+bool dm_renderer_load_gltf_mesh(cgltf_data* data, uint8_t mesh_index, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_scene* scene, dm_context* context)
 {
-    assert(mesh);
+    if(mesh_index>data->meshes_count)
+    {
+        DM_LOG_FATAL("Trying to access an invalid mesh from gltf model");
+        return false;
+    }
 
-    DM_LOG_INFO("Loading gltf/glfb model: %s", file);
+    dm_mesh* mesh = &scene->meshes[scene->mesh_count];
+
+    // begin
+    float* vertex_data = NULL;
+    void*  index_data  = NULL;
+
+    size_t vertex_size = 0;
+    size_t vertex_pos_offset=-1, vertex_normal_offset=-1, vertex_tangent_offset=-1, vertex_uv_offset=-1, vertex_color_offset=-1;
+    bool calculate_tangents = true;
+    bool packed_uv = false;
+    for(uint8_t i=0; i<attribute_count; i++)
+    {
+        switch(mesh_attributes[i])
+        {
+            case DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2:
+            vertex_uv_offset = vertex_size;
+            vertex_size += 2;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_2:
+            vertex_pos_offset = vertex_size;
+            vertex_size += 2;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_TANGENT_3:
+            vertex_tangent_offset = vertex_size;
+            vertex_size += 3;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3:
+            vertex_pos_offset = vertex_size;
+            vertex_size += 3;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3:
+            vertex_normal_offset = vertex_size;
+            vertex_size += 3;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3_TEX_COORD_U:
+            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_4:
+            vertex_pos_offset = vertex_size;
+            vertex_size += 4;
+            packed_uv = true;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3_TEX_COOR_V:
+            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4:
+            vertex_pos_offset = vertex_size;
+            vertex_size += 4;
+            packed_uv = true;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_TANGENT_4:
+            vertex_tangent_offset = vertex_size;
+            vertex_size += 4;
+            break;
+
+            case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
+            vertex_color_offset = vertex_size;
+            vertex_size += 4;
+            break;
+
+            default:
+            DM_LOG_FATAL("Unknown or unsupported mesh vertex attribute");
+            return false;
+        }
+    }
+
+    mesh->vertex_stride = vertex_size * sizeof(float);
+
+    // data array
+    float* vertices = NULL;
+
+    size_t position_stride=0, normal_stride=0, uv_stride=0, color_stride=0, tangent_stride=0;
+    float* position_buffer, *normal_buffer, *uv_buffer, *color_buffer, *tangent_buffer;
+
+    // set up attributes arrays
+    cgltf_mesh cm = data->meshes[mesh_index];
+
+    // for each primitive in mesh
+    // only supporting triangles for now
+    cgltf_primitive cp;
+    cp.type = cgltf_primitive_type_invalid;
+
+    for(uint32_t p=0; p<cm.primitives_count; p++)
+    {
+        if(cm.primitives[p].type != cgltf_primitive_type_triangles) continue;
+
+        cp = cm.primitives[p];
+    }
+
+    if(cp.type==cgltf_primitive_type_invalid)
+    {
+        DM_LOG_FATAL("GLTF mesh does not contain triangle primitives");
+        return false;
+    }
+
+    // set up attributes
+    for(uint32_t a=0; a<cp.attributes_count; a++)
+    {
+        cgltf_attribute attribute = cp.attributes[a];
+        cgltf_accessor* accessor = attribute.data;
+        void* buffer = accessor->buffer_view->buffer->data + accessor->buffer_view->offset + accessor->offset;
+        size_t stride = accessor->stride / sizeof(float);
+
+        switch(attribute.type)
+        {
+            case cgltf_attribute_type_position:
+            position_stride = stride;
+            position_buffer = buffer;
+            break;
+
+            case cgltf_attribute_type_normal:
+            normal_stride = stride;
+            normal_buffer = buffer;
+            break;
+
+            case cgltf_attribute_type_texcoord:
+            uv_stride = stride;
+            uv_buffer = buffer;
+            break;
+
+            case cgltf_attribute_type_color:
+            color_stride = stride;
+            color_buffer = buffer;
+            break;
+
+            case cgltf_attribute_type_tangent:
+            tangent_stride = stride;
+            tangent_buffer = buffer;
+            calculate_tangents = false;
+            break;
+
+            default:
+            break;
+        }
+    }
+
+    if(calculate_tangents) { DM_LOG_FATAL("DarkMatter does not calculate tangents for you."); return false; }
+
+    // indices
+    mesh->index_count  = cp.indices->count;
+
+    cgltf_accessor* index_accessor = cp.indices;    
+    void* src = index_accessor->buffer_view->buffer->data + index_accessor->offset + index_accessor->buffer_view->offset;
+    size_t size = index_accessor->stride * index_accessor->count;
+
+    dm_index_buffer_desc ib_desc = { 0 };
+
+    mesh->index_type = DM_INDEX_BUFFER_INDEX_TYPE_UINT32;
+    index_data  = dm_alloc(sizeof(uint32_t) * index_accessor->count);
+    uint32_t* indices = index_data;
+
+    uint32_t max_vertex = 0;
+    for(uint32_t i=0; i<index_accessor->count; i++)
+    {
+        switch(cm.primitives->indices->component_type)
+        {
+            case cgltf_component_type_r_16u:
+            indices[i] = *((uint16_t*)src + i);   
+            break;
+
+            case cgltf_component_type_r_32u:
+            indices[i] = *((uint32_t*)src + i);
+            break;
+
+            default:
+            DM_LOG_FATAL("Unsupported index type (is not u16 or u32)");
+            return false;
+        }
+
+        max_vertex = indices[i] > max_vertex ? indices[i] : max_vertex;
+    }
+
+    ib_desc.data         = index_data;
+    ib_desc.index_type   = mesh->index_type;
+    ib_desc.size         = sizeof(uint32_t) * index_accessor->count;
+
+    // fill in vertex array
+    mesh->vertex_count = max_vertex + 1; 
+    vertex_data = dm_alloc(mesh->vertex_stride * mesh->vertex_count);
+
+    uint32_t index=0;
+    uint32_t vertex_data_count = vertex_size * mesh->vertex_count;
+
+    while(index < vertex_data_count)
+    {
+        for(uint8_t a=0; a<attribute_count; a++)
+        {
+            switch(mesh_attributes[a])
+            {
+                case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3_TEX_COORD_U:
+                vertex_data[index++] = position_buffer ? *(position_buffer + 0) : 0;
+                vertex_data[index++] = position_buffer ? *(position_buffer + 1) : 0;
+                vertex_data[index++] = position_buffer ? *(position_buffer + 2) : 0;
+                vertex_data[index++] = uv_buffer ? *(uv_buffer + 0) : 0;
+
+                if(position_buffer) position_buffer += position_stride;
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3_TEX_COOR_V:
+                vertex_data[index++] = normal_buffer ? *(normal_buffer + 0) : 0;
+                vertex_data[index++] = normal_buffer ? *(normal_buffer + 1) : 0;
+                vertex_data[index++] = normal_buffer ? *(normal_buffer + 2) : 0;
+                vertex_data[index++] = uv_buffer ? *(uv_buffer + 1) : 0;
+
+                if(normal_buffer) normal_buffer += normal_stride;
+                if(uv_buffer)     uv_buffer += uv_stride;
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_TANGENT_4:
+                vertex_data[index++] = tangent_buffer ? *(tangent_buffer + 0) : 0;
+                vertex_data[index++] = tangent_buffer ? *(tangent_buffer + 1) : 0;
+                vertex_data[index++] = tangent_buffer ? *(tangent_buffer + 2) : 0;
+                vertex_data[index++] = 0;
+
+                if(tangent_buffer) tangent_buffer += tangent_stride;
+                break;
+
+                case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
+                vertex_data[index++] = color_buffer ? *(color_buffer + 0) : 0;
+                vertex_data[index++] = color_buffer ? *(color_buffer + 1) : 0;
+                vertex_data[index++] = color_buffer ? *(color_buffer + 2) : 0;
+                vertex_data[index++] = color_buffer ? *(color_buffer + 3) : 0;
+
+                if(color_buffer) color_buffer += color_stride;
+                break;
+
+                default:
+                continue;
+            }
+        }
+    }
+
+    dm_vertex_buffer_desc vb_desc = { 0 };
+    vb_desc.stride       = mesh->vertex_stride;
+    vb_desc.size         = mesh->vertex_count * mesh->vertex_stride;
+    vb_desc.data         = vertex_data;
+
+    if(!dm_renderer_create_vertex_buffer(vb_desc, &mesh->vb, context)) return false;
+    if(!dm_renderer_create_index_buffer(ib_desc, &mesh->ib, context)) return false;
+
+    dm_free((void**)&vertex_data);
+    dm_free((void**)&index_data);
+
+    return true;
+}
+
+bool dm_renderer_load_gltf_file(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_scene* scene, dm_context* context)
+{
+    DM_LOG_INFO("Loading gltf/glfb file: %s", file);
 
     // check if valid path
     FILE* fp = fopen(file, "r");
@@ -1356,6 +1687,10 @@ bool dm_renderer_load_gltf_model(const char* file, uint8_t mesh_index, dm_mesh_v
         DM_LOG_FATAL("Trying to load invalid file for gltf/glb format: %s", file);
         return false;
     }
+
+    char* directory = dm_alloc(strlen(file));
+    strcpy(directory, file);
+    *(strrchr(directory, '/')) = '\0';
 
     // begin
     cgltf_options options = { 0 };
@@ -1377,454 +1712,92 @@ bool dm_renderer_load_gltf_model(const char* file, uint8_t mesh_index, dm_mesh_v
         return false;
     }
 
-    if(mesh_index>data->meshes_count)
+    // meshes
+    for(uint16_t i=0; i<data->meshes_count; i++)
     {
-        DM_LOG_FATAL("Trying to access an invalid mesh from gltf model");
-        cgltf_free(data);
-        return false;
+        DM_LOG_INFO("Loading mesh: %u", i);
+        if(!dm_renderer_load_gltf_mesh(data, i, mesh_attributes, attribute_count, scene, context)) { cgltf_free(data); return false; }
+        scene->mesh_count++;
     }
-
-    // begin
-    float* vertex_data = NULL;
-    void*  index_data  = NULL;
-
-    size_t vertex_size = 0;
-    size_t pos_offset=-1, normal_offset=-1, tangent_offset=-1, tex_coords_offset=-1, color_offset=-1;
-    bool calculate_tangents = true;
-    bool packed_uv = false;
-    for(uint8_t i=0; i<attribute_count; i++)
-    {
-        switch(mesh_attributes[i])
-        {
-            case DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2:
-            tex_coords_offset = vertex_size;
-            vertex_size += 2;
-            break;
-
-            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_2:
-            pos_offset = vertex_size;
-            vertex_size += 2;
-            break;
-
-            case DM_MESH_VERTEX_ATTRIBUTE_TANGENT_3:
-            tangent_offset = vertex_size;
-            vertex_size += 3;
-            break;
-
-            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3:
-            pos_offset = vertex_size;
-            vertex_size += 3;
-            break;
-
-            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3:
-            normal_offset = vertex_size;
-            vertex_size += 3;
-            break;
-
-            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3_TEX_COORD_U:
-            case DM_MESH_VERTEX_ATTRIBUTE_POSITION_4:
-            pos_offset = vertex_size;
-            vertex_size += 4;
-            packed_uv = true;
-            break;
-
-            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3_TEX_COOR_V:
-            case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4:
-            normal_offset = vertex_size;
-            vertex_size += 4;
-            packed_uv = true;
-            break;
-
-            case DM_MESH_VERTEX_ATTRIBUTE_TANGENT_4:
-            tangent_offset = vertex_size;
-            vertex_size += 4;
-            break;
-
-            case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
-            color_offset = vertex_size;
-            vertex_size += 4;
-            break;
-
-            default:
-            DM_LOG_FATAL("Unknown or unsupported mesh vertex attribute");
-            cgltf_free(data);
-            return false;
-        }
-    }
-
-    mesh->vertex_stride = vertex_size * sizeof(float);
-
-    // data arrays
-    float* positions  = NULL;
-    float* normals    = NULL;
-    float* tex_coords = NULL;
-    float* colors     = NULL;
-    float* tangents   = NULL;
-
-    cgltf_type position_type   = cgltf_type_invalid;
-    cgltf_type normal_type     = cgltf_type_invalid;
-    cgltf_type tex_coords_type = cgltf_type_invalid;
-    cgltf_type color_type      = cgltf_type_invalid;
-    cgltf_type tangent_type    = cgltf_type_invalid;
-
-    size_t pos_count=0, normal_count=0, tex_coord_count=0, color_count=0, tangent_count=0;
-
-    // set up attributes arrays
-    cgltf_mesh cm = data->meshes[mesh_index];
-
-    // for each primitive in mesh
-    // only supporting triangles for now
-    cgltf_primitive cp;
-    cp.type = cgltf_primitive_type_invalid;
-
-    for(uint32_t p=0; p<cm.primitives_count; p++)
-    {
-        if(cm.primitives[p].type != cgltf_primitive_type_triangles) continue;
-
-        cp = cm.primitives[p];
-    }
-
-    if(cp.type==cgltf_primitive_type_invalid)
-    {
-        DM_LOG_FATAL("GLTF mesh does not contain triangle primitives");
-        cgltf_free(data);
-        return false;
-    }
-
-    // set up attributes
-    for(uint32_t a=0; a<cp.attributes_count; a++)
-    {
-        cgltf_attribute attribute = cp.attributes[a];
-        cgltf_accessor* accessor = attribute.data;
-        void* src = accessor->buffer_view->buffer->data + accessor->offset + accessor->buffer_view->offset;
-
-        size_t size = accessor->stride * accessor->count;
-        switch(attribute.type)
-        {
-            case cgltf_attribute_type_position:
-            positions = dm_alloc(size);
-            dm_memcpy(positions, src, size);
-            position_type = accessor->type;
-            pos_count     = accessor->count;
-            break;
-
-            case cgltf_attribute_type_normal:
-            normals = dm_alloc(size);
-            dm_memcpy(normals, src, size);
-            normal_type  = accessor->type;
-            normal_count = accessor->count;
-            break;
-
-            case cgltf_attribute_type_texcoord:
-            tex_coords = dm_alloc(size);
-            dm_memcpy(tex_coords, src, size);
-            tex_coords_type = accessor->type;
-            tex_coord_count = accessor->count;
-            break;
-
-            case cgltf_attribute_type_color:
-            colors = dm_alloc(size);
-            dm_memcpy(colors, src, size);
-            color_type  = accessor->type;
-            color_count = accessor->count;
-            break;
-
-            case cgltf_attribute_type_tangent:
-            tangents = dm_alloc(size);
-            dm_memcpy(tangents, src, size);
-            tangent_type  = accessor->type;
-            tangent_count = accessor->count;
-            calculate_tangents = false;
-            break;
-
-            default:
-            break;
-        }
-    }
-
-    // indices
-    mesh->index_count  = cp.indices->count;
-
-    cgltf_accessor* index_accessor = cp.indices;    
-    void* src = index_accessor->buffer_view->buffer->data + index_accessor->offset + index_accessor->buffer_view->offset;
-    size_t size = index_accessor->stride * index_accessor->count;
-
-    dm_index_buffer_desc ib_desc = { 0 };
-
-    mesh->index_type = DM_INDEX_BUFFER_INDEX_TYPE_UINT32;
-    index_data  = dm_alloc(sizeof(uint32_t) * index_accessor->count);
-    uint32_t* indices = index_data;
-
-    for(uint32_t i=0; i<index_accessor->count; i++)
-    {
-        switch(cm.primitives->indices->component_type)
-        {
-            case cgltf_component_type_r_16u:
-            indices[i] = *((uint16_t*)src + i);   
-            break;
-
-            case cgltf_component_type_r_32u:
-            indices[i] = *((uint32_t*)src + i);
-            break;
-
-            default:
-            DM_LOG_FATAL("Unsupported index type (is not u16 or u32)");
-            return false;
-        }
-    }
-
-    ib_desc.data         = index_data;
-    ib_desc.index_type   = mesh->index_type;
-    ib_desc.size         = sizeof(uint32_t) * index_accessor->count;
-
-    // fill in vertex array
-    mesh->vertex_count = pos_count; 
-    vertex_data = dm_alloc(vertex_size * sizeof(float) * mesh->vertex_count);
-
-    uint32_t index=0, p=0, n=0, t=0, c=0, ta=0;
-    uint32_t vertex_data_count = vertex_size * mesh->vertex_count;
-
-    while(index < vertex_data_count)
-    {
-        for(uint8_t a=0; a<attribute_count; a++)
-        {
-            switch(mesh_attributes[a])
-            {
-                case DM_MESH_VERTEX_ATTRIBUTE_POSITION_2:
-                vertex_data[index++] = positions ? positions[p++] : 0;
-                vertex_data[index++] = positions ? positions[p++] : 0;
-                break;
-
-                case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3:
-                vertex_data[index++] = positions ? positions[p++] : 0;
-                vertex_data[index++] = positions ? positions[p++] : 0;
-                vertex_data[index++] = positions ? positions[p++] : 0;
-                break;
-
-                case DM_MESH_VERTEX_ATTRIBUTE_POSITION_4:
-                vertex_data[index++] = positions ? positions[p++] : 0;
-                vertex_data[index++] = positions ? positions[p++] : 0;
-                vertex_data[index++] = positions ? positions[p++] : 0;
-                vertex_data[index++] = 1; 
-                break;
-
-                case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_2:
-                vertex_data[index++] = normals ? normals[n++] : 0;
-                vertex_data[index++] = normals ? normals[n++] : 0;
-                break;
-
-                case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3:
-                vertex_data[index++] = normals ? normals[n++] : 0;
-                vertex_data[index++] = normals ? normals[n++] : 0;
-                vertex_data[index++] = normals ? normals[n++] : 0;
-                break;
-
-                case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_4:
-                vertex_data[index++] = normals ? normals[n++] : 0;
-                vertex_data[index++] = normals ? normals[n++] : 0;
-                vertex_data[index++] = normals ? normals[n++] : 0;
-                vertex_data[index++] = 0; 
-                break;
-
-                case DM_MESH_VERTEX_ATTRIBUTE_TANGENT_3:
-                vertex_data[index++] = tangents ? tangents[ta++] : 1; 
-                vertex_data[index++] = tangents ? tangents[ta++] : 1; 
-                vertex_data[index++] = tangents ? tangents[ta++] : 1; 
-                break;
-                    
-                case DM_MESH_VERTEX_ATTRIBUTE_TANGENT_4:
-                vertex_data[index++] = tangents ? tangents[ta++] : 1; 
-                vertex_data[index++] = tangents ? tangents[ta++] : 1; 
-                vertex_data[index++] = tangents ? tangents[ta++] : 1; 
-                vertex_data[index++] = 0; 
-                break;
-
-                case DM_MESH_VERTEX_ATTRIBUTE_COLOR_4:
-                vertex_data[index++] = colors ? colors[c++] : 1;
-                vertex_data[index++] = colors ? colors[c++] : 1;
-                vertex_data[index++] = colors ? colors[c++] : 1;
-                vertex_data[index++] = 1; 
-                break;
-
-                case DM_MESH_VERTEX_ATTRIBUTE_TEX_COORDS_2:
-                vertex_data[index++] = tex_coords ? tex_coords[t++] : 0;
-                vertex_data[index++] = tex_coords ? tex_coords[t++] : 0;
-                break;
-
-                case DM_MESH_VERTEX_ATTRIBUTE_POSITION_3_TEX_COORD_U:
-                vertex_data[index++] = positions  ? positions[p++]  : 0;
-                vertex_data[index++] = positions  ? positions[p++]  : 0;
-                vertex_data[index++] = positions  ? positions[p++]  : 0;
-                vertex_data[index++] = tex_coords ? tex_coords[t++] : 0; 
-                break;
-
-                case DM_MESH_VERTEX_ATTRIBUTE_NORMAL_3_TEX_COOR_V:
-                vertex_data[index++] = normals    ? normals[n++]    : 0;
-                vertex_data[index++] = normals    ? normals[n++]    : 0;
-                vertex_data[index++] = normals    ? normals[n++]    : 0;
-                vertex_data[index++] = tex_coords ? tex_coords[t++] : 0;
-                break;
-
-                default:
-                DM_LOG_FATAL("Unsupported/unknown mesh vertex attribute");
-                return false;
-            }
-        }
-    }
-
-    // calculate tangents if needed
-    if(calculate_tangents)
-    {
-        for(uint32_t i=0; i<mesh->index_count; i+=3)
-        {
-            uint32_t triangle[3];
-
-            float* vertices[3];
-
-            float pos[3][3]  = { 0 };
-            float norm[3][3] = { 0 };
-            float uv[3][2]   = { 0 };
-            float tangent[3] = { 0 };
-
-            uint32_t* indices = index_data;
-            triangle[0] = *(indices + i + 0);
-            triangle[1] = *(indices + i + 1);
-            triangle[2] = *(indices + i + 2);
-
-            vertices[0] = vertex_data + triangle[0] * vertex_size;
-            vertices[1] = vertex_data + triangle[1] * vertex_size;
-            vertices[2] = vertex_data + triangle[2] * vertex_size;
-
-            pos[0][0] = *(vertices[0] + pos_offset);
-            pos[0][1] = *(vertices[0] + pos_offset + 1);
-            pos[0][2] = *(vertices[0] + pos_offset + 2);
-
-            pos[1][0] = *(vertices[1] + pos_offset);
-            pos[1][1] = *(vertices[1] + pos_offset + 1);
-            pos[1][2] = *(vertices[1] + pos_offset + 2);
-
-            pos[2][0] = *(vertices[2] + pos_offset);
-            pos[2][1] = *(vertices[2] + pos_offset + 1);
-            pos[2][2] = *(vertices[2] + pos_offset + 2);
-
-            norm[0][0] = *(vertices[0] + normal_offset);
-            norm[0][1] = *(vertices[0] + normal_offset + 1);
-            norm[0][2] = *(vertices[0] + normal_offset + 2);
-
-            norm[1][0] = *(vertices[1] + normal_offset);
-            norm[1][1] = *(vertices[1] + normal_offset + 1);
-            norm[1][2] = *(vertices[1] + normal_offset + 2);
-
-            norm[2][0] = *(vertices[2] + normal_offset);
-            norm[2][1] = *(vertices[2] + normal_offset + 1);
-            norm[2][2] = *(vertices[2] + normal_offset + 2);
-
-            if(packed_uv)
-            {
-                uv[0][0] = *(vertices[0] + pos_offset + 3);
-                uv[0][1] = *(vertices[0] + normal_offset + 3);
-
-                uv[1][0] = *(vertices[1] + pos_offset + 3);
-                uv[1][1] = *(vertices[1] + normal_offset + 3);
-
-                uv[2][0] = *(vertices[2] + pos_offset + 3);
-                uv[2][1] = *(vertices[2] + normal_offset + 3);
-            }
-            else
-            {
-                uv[0][0] = *(vertices[0] + tex_coords_offset);
-                uv[0][1] = *(vertices[0] + tex_coords_offset + 1);
-
-                uv[1][0] = *(vertices[1] + tex_coords_offset);
-                uv[1][1] = *(vertices[1] + tex_coords_offset + 1);
-
-                uv[2][0] = *(vertices[2] + tex_coords_offset);
-                uv[2][1] = *(vertices[2] + tex_coords_offset + 1);
-            }
-
-            dm_vec3 edge1, edge2;
-            dm_vec2 deltauv1, deltauv2;
-            dm_vec3_sub_vec3(pos[1],pos[0],edge1);
-            dm_vec3_sub_vec3(pos[2],pos[0],edge2);
-            dm_vec2_sub_vec2(uv[1],uv[0],deltauv1);
-            dm_vec2_sub_vec2(uv[2],uv[0],deltauv2);
-
-            float f = 1.f / (deltauv1[0] * deltauv2[1] - deltauv1[1] * deltauv2[0]);
-
-            tangent[0] = f * (deltauv2[1] * edge1[0] - deltauv1[1] * edge2[0]);
-            tangent[1] = f * (deltauv2[1] * edge1[1] - deltauv1[1] * edge2[1]);
-            tangent[2] = f * (deltauv2[1] * edge1[2] - deltauv1[1] * edge2[2]);
-
-            vertex_data[vertex_size * triangle[0] + tangent_offset + 0] = tangent[0];
-            vertex_data[vertex_size * triangle[0] + tangent_offset + 1] = tangent[1];
-            vertex_data[vertex_size * triangle[0] + tangent_offset + 2] = tangent[2];
-
-            vertex_data[vertex_size * triangle[1] + tangent_offset + 0] = tangent[0];
-            vertex_data[vertex_size * triangle[1] + tangent_offset + 1] = tangent[1];
-            vertex_data[vertex_size * triangle[1] + tangent_offset + 2] = tangent[2];
-
-            vertex_data[vertex_size * triangle[2] + tangent_offset + 0] = tangent[0];
-            vertex_data[vertex_size * triangle[2] + tangent_offset + 1] = tangent[1];
-            vertex_data[vertex_size * triangle[2] + tangent_offset + 2] = tangent[2];
-        }
-    }
-
-    dm_vertex_buffer_desc vb_desc = { 0 };
-    vb_desc.stride       = mesh->vertex_stride;
-    vb_desc.size         = mesh->vertex_count * mesh->vertex_stride;
-    vb_desc.data         = vertex_data;
-
-    if(!dm_renderer_create_vertex_buffer(vb_desc, &mesh->vb, context)) return false;
-    if(!dm_renderer_create_index_buffer(ib_desc, &mesh->ib, context)) return false;
 
     // materials
-    if(data->materials_count>0)
+    // TODO: this *NEEDS* to be optimized, very slow to create all the textures
+    for(uint16_t i=0; i<data->materials_count; i++)
     {
-        cgltf_texture* texture;
-        if(data->materials->has_pbr_metallic_roughness)
+        DM_LOG_INFO("Loading material: %u", i);
+        for(uint8_t m=0; m<DM_MATERIAL_TYPE_UNKNOWN; m++)
         {
-            texture = data->materials->pbr_metallic_roughness.base_color_texture.texture;
-            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_DIFFUSE, texture, material, context)) return false;
+            if(!dm_renderer_gltf_load_material(directory, m, data->materials[i], scene, context)) { cgltf_free(data); return false; }
+        }
+        scene->material_count++;
+    }
 
-            texture = data->materials->pbr_metallic_roughness.metallic_roughness_texture.texture;
-            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_METALLIC_ROUGHNESS, texture, material, context)) return false;
+    // nodes 
+    scene->nodes = dm_alloc(sizeof(dm_scene_node) * data->scene->nodes_count);
+
+    for(uint16_t i=0; i<data->scene->nodes_count; i++)
+    {
+        DM_LOG_INFO("Loading node: %u", i);
+        cgltf_node* node = data->scene->nodes[i];
+        dm_scene_node* scene_node = &scene->nodes[scene->node_count++];
+
+        // find mesh index
+        for(uint32_t m=0; m<data->meshes_count; m++)
+        {
+            if(strcmp(node->mesh->name, data->meshes[m].name)!=0) continue;
+
+            scene_node->mesh_index = m;
+            break;
         }
 
-        if(data->materials->normal_texture.texture)
+        cgltf_mesh      mesh = data->meshes[scene_node->mesh_index];
+        cgltf_primitive primitive;
+        for(uint8_t p=0; p<mesh.primitives_count; p++)
         {
-            texture  = data->materials->normal_texture.texture;
-            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_NORMAL_MAP, texture, material, context)) return false;
+            if(mesh.primitives[p].type != cgltf_primitive_type_triangles) continue;
+
+            primitive = mesh.primitives[p];
         }
 
-        if(data->materials->specular.specular_texture.texture)
+        // find material index
+        for(uint32_t m=0; m<data->materials_count; m++)
         {
-            texture = data->materials->specular.specular_texture.texture;
-            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_SPECULAR_MAP, texture, material, context)) return false;
+            if(strcmp(primitive.material->name, data->materials[m].name)!=0) continue;
+
+            scene_node->material_index = m;
+            break;
         }
 
-        if(data->materials->occlusion_texture.texture)
+        // model matrix
+        if(node->has_matrix)
         {
-            texture = data->materials->occlusion_texture.texture;
-            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_OCCLUSION, texture, material, context)) return false;
+            dm_memcpy(scene_node->model_matrix, node->matrix, sizeof(dm_mat4));
         }
-
-        if(data->materials->emissive_texture.texture)
+        else
         {
-            texture = data->materials->emissive_texture.texture;
-            if(!dm_renderer_gltf_load_material(DM_MATERIAL_TYPE_EMISSION, texture, material, context)) return false;
+            dm_mat4 translation, rotation, scale;
+
+            dm_mat4_identity(translation);
+            dm_mat4_identity(rotation);
+            dm_mat4_identity(scale);
+            
+            if(node->has_translation) dm_mat_translate_make(node->translation, translation);
+            if(node->has_rotation)    dm_mat4_rotate_from_quat(node->rotation, rotation);
+            if(node->has_scale)       dm_mat_scale_make(node->scale, scale);
+
+            dm_mat4_identity(scene_node->model_matrix);
+
+            dm_mat4_mul_mat4(scene_node->model_matrix, scale, scene_node->model_matrix);
+            dm_mat4_mul_mat4(scene_node->model_matrix, rotation, scene_node->model_matrix);
+            dm_mat4_mul_mat4(scene_node->model_matrix, translation, scene_node->model_matrix);
+#ifdef DM_DIRECTX12
+            dm_mat4_transpose(scene_node->model_matrix, scene_node->model_matrix);
+#endif
         }
     }
 
     //
     cgltf_free(data);
-    if(positions)  dm_free((void**)&positions);
-    if(normals)    dm_free((void**)&normals);
-    if(tex_coords) dm_free((void**)&tex_coords);
-    if(colors)     dm_free((void**)&colors);
-    if(tangents)   dm_free((void**)&tangents);
-
-    dm_free((void**)&vertex_data);
-    dm_free((void**)&index_data);
 
     return true;
 }

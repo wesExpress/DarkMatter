@@ -623,7 +623,6 @@ typedef struct dm_raytracing_pipeline_desc_t
     uint8_t                          miss_count, hit_group_count;
 
     uint8_t  max_depth;
-    uint32_t max_instance_count;
     size_t   payload_size;
 } dm_raytracing_pipeline_desc;
 
@@ -783,18 +782,39 @@ typedef struct dm_material_t
     dm_resource_handle samplers[DM_MATERIAL_TYPE_UNKNOWN];
 } dm_material;
 
-typedef struct dm_mest_t
+typedef struct dm_mesh_t
 {
     dm_resource_handle vb, ib;
-
-    dm_material materials;
 
     uint32_t vertex_count, index_count;
 
     size_t vertex_stride;
 
     dm_index_buffer_index_type index_type;
+
+    uint32_t material_index;
 } dm_mesh;
+
+typedef struct dm_scene_node_t
+{
+    uint32_t mesh_index;
+    uint32_t material_index;
+    uint32_t padding[2];
+    dm_mat4  model_matrix;
+} dm_scene_node;
+
+#define DM_SCENE_MAX_MESHES    100
+#define DM_SCENE_MAX_MATERIALS 100
+typedef struct dm_scene_t
+{
+    dm_mesh        meshes[DM_SCENE_MAX_MESHES];
+    dm_material    materials[DM_SCENE_MAX_MATERIALS];
+    dm_scene_node* nodes;
+
+    uint32_t mesh_count, material_count, node_count;
+
+    dm_resource_handle white_texture, black_texture, default_sampler;
+} dm_scene;
 
 /******************
 DARKMATTER CONTEXT
@@ -1014,6 +1034,6 @@ uint32_t  dm_hash_reduce(uint32_t x, uint32_t n);
 
 // mesh
 bool dm_renderer_load_obj_model(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_context* context);
-bool dm_renderer_load_gltf_model(const char* file, uint8_t mesh_index, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_mesh* mesh, dm_material* material, dm_context* context);
+bool dm_renderer_load_gltf_file(const char* file, dm_mesh_vertex_attribute* mesh_attributes, uint8_t attribute_count, dm_scene* scene, dm_context* context);
 
 #endif //DM_H
