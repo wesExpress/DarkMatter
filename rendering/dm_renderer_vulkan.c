@@ -187,13 +187,13 @@ typedef struct dm_vulkan_tlas_t
 #define DM_VULKAN_MAX_RASTER_PIPES  10
 #define DM_VULKAN_MAX_RT_PIPES      10
 #define DM_VULKAN_MAX_COMPUTE_PIPES 10
-#define DM_VULKAN_MAX_VBS           10
-#define DM_VULKAN_MAX_IBS           10
-#define DM_VULKAN_MAX_CBS           10
-#define DM_VULKAN_MAX_SBS           10
-#define DM_VULKAN_MAX_TEXTURES      10
-#define DM_VULKAN_MAX_SAMPLERS      10
-#define DM_VULKAN_MAX_BLAS          10
+#define DM_VULKAN_MAX_VBS           200
+#define DM_VULKAN_MAX_IBS           200
+#define DM_VULKAN_MAX_CBS           50
+#define DM_VULKAN_MAX_SBS           200
+#define DM_VULKAN_MAX_TEXTURES      300
+#define DM_VULKAN_MAX_SAMPLERS      300
+#define DM_VULKAN_MAX_BLAS          DM_VULKAN_MAX_VBS
 #define DM_VULKAN_MAX_TLAS          10
 
 #define DM_VULKAN_MAX_BUFFERS DM_VULKAN_MAX_DESCRIPTORS * DM_VULKAN_MAX_FRAMES_IN_FLIGHT * 10
@@ -1111,14 +1111,15 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_res
         buffer.device[i] = vulkan_renderer->buffer_count++;
 
         // buffer data
-        if(!desc.data) continue;
+        if(desc.data) 
+        {
+            if(!dm_vulkan_copy_memory(host_buffer->memory, desc.data, desc.size, vulkan_renderer)) return false;
 
-        if(!dm_vulkan_copy_memory(host_buffer->memory, desc.data, desc.size, vulkan_renderer)) return false;
+            VkBufferCopy copy_region = { 0 };
+            copy_region.size = desc.size;
 
-        VkBufferCopy copy_region = { 0 };
-        copy_region.size = desc.size;
-
-        vkCmdCopyBuffer(vulkan_renderer->device.graphics_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
+            vkCmdCopyBuffer(vulkan_renderer->device.graphics_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
+        };
 
         // descriptors
         VkDescriptorBufferInfo buffer_info = { 0 };
@@ -1186,14 +1187,15 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resou
         buffer.device[i] = vulkan_renderer->buffer_count++;
 
         // buffer data
-        if(!desc.data) continue;
+        if(desc.data) 
+        {
+            if(!dm_vulkan_copy_memory(host_buffer->memory, desc.data, desc.size, vulkan_renderer)) return false;
 
-        if(!dm_vulkan_copy_memory(host_buffer->memory, desc.data, desc.size, vulkan_renderer)) return false;
+            VkBufferCopy copy_region = { 0 };
+            copy_region.size = desc.size;
 
-        VkBufferCopy copy_region = { 0 };
-        copy_region.size = desc.size;
-
-        vkCmdCopyBuffer(vulkan_renderer->device.graphics_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
+            vkCmdCopyBuffer(vulkan_renderer->device.graphics_queue.buffer[vulkan_renderer->current_frame], host_buffer->buffer, device_buffer->buffer, 1, &copy_region);
+        }
 
         // descriptors
         VkDescriptorBufferInfo buffer_info = { 0 };
@@ -1721,64 +1723,72 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
 
     dm_vulkan_raytracing_pipeline pipeline = { 0 };
 
-    VkShaderModule raygen, miss, clossest_hit;
+    VkShaderModule raygen = { 0 }, miss[DM_RT_PIPE_MAX_MISS] = { 0 }, clossest_hit[DM_RT_PIPE_MAX_HIT_GROUPS] = { 0 };
+    VkPipelineShaderStageCreateInfo shader_stages[1 + DM_RT_PIPE_MAX_MISS + DM_RT_PIPE_MAX_HIT_GROUPS] = { 0 };
+    VkRayTracingShaderGroupCreateInfoKHR shader_groups[1 + DM_RT_PIPE_MAX_MISS + DM_RT_PIPE_MAX_HIT_GROUPS] = { 0 };
 
     if(!dm_vulkan_create_shader_module(desc.raygen, &raygen, vulkan_renderer->device.logical)) return false;
-    if(!dm_vulkan_create_shader_module(desc.miss[0], &miss, vulkan_renderer->device.logical)) return false;
-    if(!dm_vulkan_create_shader_module(desc.hit_groups[0].shaders[DM_RT_PIPE_HIT_GROUP_STAGE_CLOSEST], &clossest_hit, vulkan_renderer->device.logical)) return false;
 
-    VkPipelineShaderStageCreateInfo raygen_create_info = { 0 };
-    raygen_create_info.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    raygen_create_info.stage  = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
-    raygen_create_info.module = raygen;
-    raygen_create_info.pName  = "main";
+    shader_stages[0].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    shader_stages[0].stage  = VK_SHADER_STAGE_RAYGEN_BIT_KHR;
+    shader_stages[0].module = raygen;
+    shader_stages[0].pName  = "main";
 
-    VkPipelineShaderStageCreateInfo miss_create_info = { 0 };
-    miss_create_info.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    miss_create_info.stage  = VK_SHADER_STAGE_MISS_BIT_KHR;
-    miss_create_info.module = miss;
-    miss_create_info.pName  = "main";
+    shader_groups[0].sType              = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+    shader_groups[0].type               = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+    shader_groups[0].generalShader      = 0;
+    shader_groups[0].anyHitShader       = VK_SHADER_UNUSED_KHR;
+    shader_groups[0].closestHitShader   = VK_SHADER_UNUSED_KHR;
+    shader_groups[0].intersectionShader = VK_SHADER_UNUSED_KHR;
 
-    VkPipelineShaderStageCreateInfo hit_create_info = { 0 };
-    hit_create_info.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    hit_create_info.stage  = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
-    hit_create_info.module = clossest_hit;
-    hit_create_info.pName  = "main";
+    size_t offset = 1;
 
-    VkPipelineShaderStageCreateInfo shader_stages[] = { raygen_create_info, miss_create_info, hit_create_info };
+    for(uint8_t i=0; i<desc.miss_count; i++)
+    {
+        if(!dm_vulkan_create_shader_module(desc.misses[i].name, &miss[i], vulkan_renderer->device.logical)) return false;
 
-    VkRayTracingShaderGroupCreateInfoKHR raygen_group = { 0 };
-    raygen_group.sType              = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-    raygen_group.type               = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-    raygen_group.generalShader      = 0;
-    raygen_group.anyHitShader       = VK_SHADER_UNUSED_KHR;
-    raygen_group.closestHitShader   = VK_SHADER_UNUSED_KHR;
-    raygen_group.intersectionShader = VK_SHADER_UNUSED_KHR;
+        offset += i;
 
-    VkRayTracingShaderGroupCreateInfoKHR miss_group = { 0 };
-    miss_group.sType              = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-    miss_group.type               = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
-    miss_group.generalShader      = 1;
-    miss_group.anyHitShader       = VK_SHADER_UNUSED_KHR;
-    miss_group.closestHitShader   = VK_SHADER_UNUSED_KHR;
-    miss_group.intersectionShader = VK_SHADER_UNUSED_KHR;
+        shader_stages[offset].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        shader_stages[offset].stage  = VK_SHADER_STAGE_MISS_BIT_KHR;
+        shader_stages[offset].module = miss[i];
+        shader_stages[offset].pName  = "main";
 
-    VkRayTracingShaderGroupCreateInfoKHR hit_group = { 0 };
-    hit_group.sType              = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
-    hit_group.type               = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
-    hit_group.generalShader      = VK_SHADER_UNUSED_KHR;
-    hit_group.anyHitShader       = VK_SHADER_UNUSED_KHR;
-    hit_group.closestHitShader   = 2;
-    hit_group.intersectionShader = VK_SHADER_UNUSED_KHR;
+        shader_groups[offset].sType              = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+        shader_groups[offset].type               = VK_RAY_TRACING_SHADER_GROUP_TYPE_GENERAL_KHR;
+        shader_groups[offset].generalShader      = offset;
+        shader_groups[offset].anyHitShader       = VK_SHADER_UNUSED_KHR;
+        shader_groups[offset].closestHitShader   = VK_SHADER_UNUSED_KHR;
+        shader_groups[offset].intersectionShader = VK_SHADER_UNUSED_KHR;
+    }
 
-    VkRayTracingShaderGroupCreateInfoKHR shader_groups[] = { raygen_group, miss_group, hit_group };
+    offset++;
+
+    for(uint8_t i=0; i<desc.hit_group_count; i++)
+    {
+        if(!dm_vulkan_create_shader_module(desc.hit_groups[i].shaders[DM_RT_PIPE_HIT_GROUP_STAGE_CLOSEST], &clossest_hit[i], vulkan_renderer->device.logical)) return false;
+
+        offset += i;
+
+        shader_stages[offset].sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        shader_stages[offset].stage  = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR;
+        shader_stages[offset].module = clossest_hit[i];
+        shader_stages[offset].pName  = "main";
+
+        shader_groups[offset].sType              = VK_STRUCTURE_TYPE_RAY_TRACING_SHADER_GROUP_CREATE_INFO_KHR;
+        shader_groups[offset].type               = VK_RAY_TRACING_SHADER_GROUP_TYPE_TRIANGLES_HIT_GROUP_KHR;
+        shader_groups[offset].generalShader      = VK_SHADER_UNUSED_KHR;
+        shader_groups[offset].anyHitShader       = VK_SHADER_UNUSED_KHR;
+        shader_groups[offset].closestHitShader   = offset;
+        shader_groups[offset].intersectionShader = VK_SHADER_UNUSED_KHR;
+    }   
 
     VkRayTracingPipelineCreateInfoKHR pipeline_create_info = { 0 };
     pipeline_create_info.sType                        = VK_STRUCTURE_TYPE_RAY_TRACING_PIPELINE_CREATE_INFO_KHR;
-    pipeline_create_info.stageCount                   = _countof(shader_stages);
     pipeline_create_info.pStages                      = shader_stages;
-    pipeline_create_info.groupCount                   = _countof(shader_groups);
+    pipeline_create_info.stageCount                   = 1 + desc.miss_count + desc.hit_group_count; 
     pipeline_create_info.pGroups                      = shader_groups;
+    pipeline_create_info.groupCount                   = 1 + desc.miss_count + desc.hit_group_count;
     pipeline_create_info.maxPipelineRayRecursionDepth = desc.max_depth;
     pipeline_create_info.layout                       = vulkan_renderer->bindless_pipeline_layout;
 
@@ -1795,13 +1805,14 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
         const size_t ray_gen_size = handle_size;
-        const size_t miss_size    = handle_size;
-        size_t hit_size           = handle_size;
+
+        size_t miss_size = handle_size * desc.miss_count;
+        size_t hit_size  = handle_size * desc.hit_group_count;
 
         size_t size = ray_gen_size + miss_size + hit_size;
         size_t aligned_size = DM_ALIGN_BYTES(size, shader_alignment);
         uint8_t* handle_sizes = dm_alloc(size);
-        vr = vkGetRayTracingShaderGroupHandlesKHR(vulkan_renderer->device.logical, pipeline.pipeline, 0,3, size, handle_sizes); 
+        vr = vkGetRayTracingShaderGroupHandlesKHR(vulkan_renderer->device.logical, pipeline.pipeline, 0,1+desc.miss_count+desc.hit_group_count, size, handle_sizes); 
 
         void* dest = NULL;
 
@@ -1819,22 +1830,24 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
         if(!dm_vulkan_copy_memory(buffer->memory, handle_sizes, handle_size, vulkan_renderer)) return false;
         buffer++;
 
-        if(!dm_vulkan_create_buffer(DM_ALIGN_BYTES(handle_size_aligned, shader_alignment), usage_flags, VK_SHARING_MODE_EXCLUSIVE, buffer, vulkan_renderer)) return false;
+        size_t miss_sbt_size = DM_ALIGN_BYTES(desc.miss_count * handle_size_aligned, shader_alignment);
+        if(!dm_vulkan_create_buffer(miss_sbt_size, usage_flags, VK_SHARING_MODE_EXCLUSIVE, buffer, vulkan_renderer)) return false;
         pipeline.miss_sbt.index[i]   = vulkan_renderer->buffer_count++;
-        pipeline.miss_sbt.size       = DM_ALIGN_BYTES(handle_size_aligned, shader_alignment);
+        pipeline.miss_sbt.size       = miss_sbt_size;
         pipeline.miss_sbt.stride     = handle_size_aligned;
         buffer_address_info.buffer   = buffer->buffer;
         pipeline.miss_sbt.address[i] = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &buffer_address_info);
-        if(!dm_vulkan_copy_memory(buffer->memory, handle_sizes + ray_gen_size, handle_size, vulkan_renderer)) return false;
+        if(!dm_vulkan_copy_memory(buffer->memory, handle_sizes + ray_gen_size, handle_size * desc.miss_count, vulkan_renderer)) return false;
         buffer++;
 
-        if(!dm_vulkan_create_buffer(DM_ALIGN_BYTES(handle_size_aligned, shader_alignment), usage_flags, VK_SHARING_MODE_EXCLUSIVE, buffer, vulkan_renderer)) return false;
+        size_t hit_sbt_size = DM_ALIGN_BYTES(desc.hit_group_count * handle_size_aligned, shader_alignment);
+        if(!dm_vulkan_create_buffer(hit_sbt_size, usage_flags, VK_SHARING_MODE_EXCLUSIVE, buffer, vulkan_renderer)) return false;
         pipeline.hit_group_sbt.index[i]   = vulkan_renderer->buffer_count++;
-        pipeline.hit_group_sbt.size       = DM_ALIGN_BYTES(handle_size_aligned, shader_alignment);
+        pipeline.hit_group_sbt.size       = hit_sbt_size;
         pipeline.hit_group_sbt.stride     = handle_size_aligned;
         buffer_address_info.buffer        = buffer->buffer;
         pipeline.hit_group_sbt.address[i] = vkGetBufferDeviceAddress(vulkan_renderer->device.logical, &buffer_address_info);
-        if(!dm_vulkan_copy_memory(buffer->memory, handle_sizes + ray_gen_size + miss_size, handle_size, vulkan_renderer)) return false;
+        if(!dm_vulkan_copy_memory(buffer->memory, handle_sizes + ray_gen_size + miss_size, handle_size * desc.hit_group_count, vulkan_renderer)) return false;
 
         //
         dest = NULL;
@@ -1847,8 +1860,14 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
     handle->index = vulkan_renderer->rt_pipe_count++;
 
     vkDestroyShaderModule(vulkan_renderer->device.logical, raygen, NULL);
-    vkDestroyShaderModule(vulkan_renderer->device.logical, miss, NULL);
-    vkDestroyShaderModule(vulkan_renderer->device.logical, clossest_hit, NULL);
+    for(uint8_t i=0; i<desc.miss_count; i++)
+    {
+        vkDestroyShaderModule(vulkan_renderer->device.logical, miss[i], NULL);
+    }
+    for(uint8_t i=0; i<desc.hit_group_count; i++)
+    {
+        vkDestroyShaderModule(vulkan_renderer->device.logical, clossest_hit[i], NULL);
+    }
 
     return true;
 }

@@ -1790,9 +1790,6 @@ bool dm_renderer_load_gltf_file(const char* file, dm_mesh_vertex_attribute* mesh
             dm_mat4_mul_mat4(scene_node->model_matrix, scale, scene_node->model_matrix);
             dm_mat4_mul_mat4(scene_node->model_matrix, rotation, scene_node->model_matrix);
             dm_mat4_mul_mat4(scene_node->model_matrix, translation, scene_node->model_matrix);
-#ifdef DM_DIRECTX12
-            dm_mat4_transpose(scene_node->model_matrix, scene_node->model_matrix);
-#endif
         }
     }
 

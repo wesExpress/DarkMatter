@@ -59,10 +59,12 @@ typedef struct dm_dx12_compute_pipeline_t
     ID3D12PipelineState* state;
 } dm_dx12_compute_pipeline;
 
+typedef uint16_t dm_dx12_resource_index;
+
 typedef struct dm_dx12_vertex_buffer_t
 {
-    uint8_t host_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
-    uint8_t device_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    dm_dx12_resource_index host_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    dm_dx12_resource_index device_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 
     D3D12_VERTEX_BUFFER_VIEW views[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 } dm_dx12_vertex_buffer;
@@ -71,16 +73,16 @@ typedef struct dm_dx12_index_buffer_t
 {
     DXGI_FORMAT             index_format;
 
-    uint8_t host_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
-    uint8_t device_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    dm_dx12_resource_index host_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    dm_dx12_resource_index device_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 
     D3D12_INDEX_BUFFER_VIEW views[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 } dm_dx12_index_buffer;
 
 typedef struct dm_dx12_constant_buffer_t
 {
-    uint8_t host_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
-    uint8_t device_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    dm_dx12_resource_index host_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    dm_dx12_resource_index device_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 
     size_t                      size, big_size;
     void*                       mapped_addresses[DM_DX12_MAX_FRAMES_IN_FLIGHT];
@@ -88,8 +90,8 @@ typedef struct dm_dx12_constant_buffer_t
 
 typedef struct dm_dx12_texture_t
 {
-    uint8_t host_textures[DM_DX12_MAX_FRAMES_IN_FLIGHT];
-    uint8_t device_textures[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    dm_dx12_resource_index host_textures[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    dm_dx12_resource_index device_textures[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 
     DXGI_FORMAT format;
     uint8_t     bytes_per_channel, n_channels;
@@ -97,15 +99,15 @@ typedef struct dm_dx12_texture_t
 
 typedef struct dm_dx12_storage_buffer_t
 {
-    uint8_t host_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
-    uint8_t device_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    dm_dx12_resource_index host_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    dm_dx12_resource_index device_buffers[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 
     size_t                      size;
 } dm_dx12_storage_buffer;
 
 typedef struct dm_dx12_sbt_t
 {
-    uint8_t index[DM_DX12_MAX_FRAMES_IN_FLIGHT];
+    dm_dx12_resource_index index[DM_DX12_MAX_FRAMES_IN_FLIGHT];
     size_t  stride, size;
     size_t  offset[DM_DX12_MAX_FRAMES_IN_FLIGHT];
 } dm_dx12_sbt;
@@ -114,13 +116,12 @@ typedef struct dm_dx12_raytracing_pipeline_t
 {
     ID3D12StateObject*   pso;
     dm_dx12_sbt          raygen_sbt, miss_sbt, hitgroup_sbt;
-    uint32_t             max_instance_count, hit_group_count;
 } dm_dx12_raytracing_pipeline;
 
 typedef struct dm_dx12_as_t
 {
-    uint8_t result;
-    uint8_t scratch;
+    dm_dx12_resource_index result;
+    dm_dx12_resource_index scratch;
     size_t  scratch_size;
 } dm_dx12_as;
 
@@ -140,17 +141,18 @@ typedef struct dm_dx12_tlas_t
 #define DM_DX12_MAX_RT_PIPES   10
 #define DM_DX12_MAX_COMP_PIPES 10
 
-#define DM_DX12_MAX_VBS        100
-#define DM_DX12_MAX_IBS        100
-#define DM_DX12_MAX_CBS        100
-#define DM_DX12_MAX_SBS        100
-#define DM_DX12_MAX_AS         10 
-#define DM_DX12_MAX_TEXTURES   100
+#define DM_DX12_MAX_VBS      50 
+#define DM_DX12_MAX_IBS      50
+#define DM_DX12_MAX_CBS      20
+#define DM_DX12_MAX_SBS      50
+#define DM_DX12_MAX_TEXTURES 200
+#define DM_DX12_MAX_BLAS     DM_DX12_MAX_VBS
+#define DM_DX12_MAX_TLAS     10 
 
-#define DM_DX12_MAX_CBV 1000
-#define DM_DX12_MAX_UBV 1000
-#define DM_DX12_MAX_SRV 1000
-#define DM_DX12_MAX_RESOURCES (DM_DX12_MAX_CBV + DM_DX12_MAX_UBV + DM_DX12_MAX_SRV)
+#define DM_DX12_MAX_SAMPLERS DM_DX12_MAX_TEXTURES 
+
+// render target, depth target, all buffers have two internal resources, textures as well, rt pipes have 3 shader binding tables
+#define DM_DX12_MAX_RESOURCES ((2 + 3 + DM_DX12_MAX_VBS * 2 + DM_DX12_MAX_IBS * 2 + DM_DX12_MAX_CBS + DM_DX12_MAX_SBS * 2 + DM_DX12_MAX_TEXTURES * 2 + DM_DX12_MAX_BLAS * 2 + DM_DX12_MAX_TLAS * 2) * DM_DX12_MAX_FRAMES_IN_FLIGHT)
 
 typedef struct dm_dx12_renderer_t
 {
@@ -204,10 +206,10 @@ typedef struct dm_dx12_renderer_t
     dm_dx12_storage_buffer storage_buffers[DM_DX12_MAX_SBS];
     uint32_t               sb_count;
 
-    dm_dx12_tlas tlas[DM_DX12_MAX_AS];
+    dm_dx12_tlas tlas[DM_DX12_MAX_TLAS];
     uint32_t     tlas_count;
 
-    dm_dx12_blas blas[DM_DX12_MAX_AS];
+    dm_dx12_blas blas[DM_DX12_MAX_BLAS];
     uint32_t     blas_count;
 
     ID3D12Resource* resources[DM_DX12_MAX_RESOURCES];
@@ -533,10 +535,10 @@ bool dm_renderer_backend_init(dm_context* context)
         for(uint8_t i=0; i<DM_DX12_MAX_FRAMES_IN_FLIGHT; i++)
         {
             if(!dm_dx12_create_descriptor_heap(DM_DX12_MAX_RESOURCES, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, &dx12_renderer->resource_heap[i], dx12_renderer)) return false;
-            if(!dm_dx12_create_descriptor_heap(100, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, &dx12_renderer->sampler_heap[i], dx12_renderer)) return false;
+            if(!dm_dx12_create_descriptor_heap(DM_DX12_MAX_SAMPLERS, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE, &dx12_renderer->sampler_heap[i], dx12_renderer)) return false;
         }
 
-        // bindless heap
+        // bindless root signature 
         D3D12_ROOT_PARAMETER1 root_params[1] = { 0 };
         root_params[0].ParameterType            = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
         root_params[0].Constants.ShaderRegister = 0;
@@ -1348,6 +1350,12 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_res
     DM_DX12_GET_RENDERER;
     HRESULT hr;
 
+    if(dx12_renderer->vb_count >= DM_DX12_MAX_VBS)
+    {
+        DM_LOG_FATAL("Trying to create too many vertex buffers. Increase max dx12 vertex buffer count.");
+        return false;
+    }
+
     dm_dx12_vertex_buffer buffer = { 0 };
 
     ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[0];
@@ -1359,7 +1367,7 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_res
         if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, host_buffer, dx12_renderer)) return false;
 #ifdef DM_DEBUG
         wchar_t name[512];
-        swprintf(name, 512, L"%hs %d", "vertex_host_buffer", dx12_renderer->vb_count);
+        swprintf(name, 512, L"%hs %d.%d", "vertex_host_buffer", dx12_renderer->vb_count, i);
         ID3D12Resource_SetName(*host_buffer, name);
 #endif
         buffer.host_buffers[i] = dx12_renderer->resource_count++;
@@ -1368,7 +1376,7 @@ bool dm_renderer_backend_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_res
         ID3D12Resource** device_buffer = &dx12_renderer->resources[dx12_renderer->resource_count];
         if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_FLAG_NONE, device_buffer, dx12_renderer)) return false;
 #ifdef DM_DEBUG
-        swprintf(name, 512, L"%hs %d", "vertex_device_buffer", dx12_renderer->vb_count);
+        swprintf(name, 512, L"%hs %d.%d", "vertex_device_buffer", dx12_renderer->vb_count, i);
         ID3D12Resource_SetName(*device_buffer, name);
 #endif
         buffer.device_buffers[i] = dx12_renderer->resource_count++;
@@ -1419,6 +1427,12 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resou
     DM_DX12_GET_RENDERER;
     HRESULT hr;
 
+    if(dx12_renderer->ib_count >= DM_DX12_MAX_IBS)
+    {
+        DM_LOG_FATAL("Trying to create too many index buffers. Increase max dx12 index buffer count.");
+        return false;
+    }
+
     dm_dx12_index_buffer buffer = { 0 };
     
     switch(desc.index_type)
@@ -1443,7 +1457,7 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resou
         if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, host_buffer, dx12_renderer)) return false;
 #ifdef DM_DEBUG
         wchar_t name[512];
-        swprintf(name, 512, L"%hs %d", "index_host_buffer", dx12_renderer->ib_count);
+        swprintf(name, 512, L"%hs %d.%d", "index_host_buffer", dx12_renderer->ib_count, i);
         ID3D12Resource_SetName(*host_buffer, name);
 #endif
         buffer.host_buffers[i] = dx12_renderer->resource_count++;
@@ -1452,7 +1466,7 @@ bool dm_renderer_backend_create_index_buffer(dm_index_buffer_desc desc, dm_resou
         ID3D12Resource** device_buffer = &dx12_renderer->resources[dx12_renderer->resource_count];
         if(!dm_dx12_create_buffer(desc.size, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COMMON, D3D12_RESOURCE_FLAG_NONE, device_buffer, dx12_renderer)) return false;
 #ifdef DM_DEBUG
-        swprintf(name, 512, L"%hs %d", "index_device_buffer", dx12_renderer->ib_count);
+        swprintf(name, 512, L"%hs %d.%d", "index_device_buffer", dx12_renderer->ib_count, i);
         ID3D12Resource_SetName(*device_buffer, name);
 #endif
         buffer.device_buffers[i] = dx12_renderer->resource_count++;
@@ -1515,6 +1529,12 @@ bool dm_renderer_backend_create_constant_buffer(dm_constant_buffer_desc desc, dm
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
+
+    if(dx12_renderer->cb_count >= DM_DX12_MAX_CBS)
+    {
+        DM_LOG_FATAL("Trying to create too many constant buffers. Increase max dx12 constant buffer count");
+        return false;
+    }
 
     dm_dx12_constant_buffer buffer = { 0 };
     const size_t aligned_size = (desc.size + 255) & ~255;
@@ -1592,6 +1612,12 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
+
+    if(dx12_renderer->texture_count >= DM_DX12_MAX_TEXTURES)
+    {
+        DM_LOG_FATAL("Trying to create too many textures. Increase max dx12 texture count");
+        return false;
+    }
 
     dm_dx12_texture texture = { 0 };
 
@@ -1736,6 +1762,12 @@ bool dm_renderer_backend_create_sampler(dm_sampler_desc desc, dm_resource_handle
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
+
+    if(dx12_renderer->sampler_heap[0].count + 1 > DM_DX12_MAX_SAMPLERS)
+    {
+        DM_LOG_FATAL("Trying to create too many samplers. Increase max dx12 sampler count.");
+        return false;
+    }
 
     D3D12_SAMPLER_DESC sampler = { 0 };
     sampler.Filter         = D3D12_FILTER_MIN_MAG_MIP_POINT;
@@ -2083,9 +2115,6 @@ bool dm_renderer_backend_create_raytracing_pipeline(dm_raytracing_pipeline_desc 
 
         ID3D12StateObjectProperties_Release(props);
     }
-
-    pipeline.hit_group_count    = desc.hit_group_count;
-    pipeline.max_instance_count = desc.max_instance_count;
 
     // 
     dm_memcpy(dx12_renderer->rt_pipelines + dx12_renderer->rt_pipe_count, &pipeline, sizeof(pipeline));
