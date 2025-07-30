@@ -649,7 +649,6 @@ typedef enum dm_render_command_type_t
     DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER,
     DM_RENDER_COMMAND_TYPE_RESIZE_TEXTURE,
     DM_RENDER_COMMAND_TYPE_UPDATE_TLAS,
-    DM_RENDER_COMMAND_TYPE_COPY_IMAGE_TO_SCREEN,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
     DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED,
     DM_RENDER_COMMAND_TYPE_DISPATCH_RAYS
@@ -979,7 +978,6 @@ void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance
 void dm_render_command_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_context* context);
 
 void dm_render_command_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_context* context);
-void dm_render_command_copy_image_to_screen(dm_resource_handle image, dm_context* context);
 
 // font loading
 bool dm_renderer_load_font(dm_font_desc font_desc, dm_resource_handle sampler, dm_font* font, dm_context* context);

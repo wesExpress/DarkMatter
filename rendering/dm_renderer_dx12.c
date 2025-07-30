@@ -2775,49 +2775,6 @@ bool dm_render_command_backend_dispatch_rays(uint16_t x, uint16_t y, dm_resource
     return true;
 }
 
-bool dm_render_command_backend_copy_image_to_screen(dm_resource_handle image, dm_renderer* renderer)
-{
-    DM_DX12_GET_RENDERER;
-
-    dm_dx12_texture texture = dx12_renderer->textures[image.index];
-
-    const uint8_t current_frame = dx12_renderer->current_frame;
-    ID3D12GraphicsCommandList7* command_list = dx12_renderer->command_list[current_frame];
-
-    ID3D12Resource* image_resource = dx12_renderer->resources[texture.device_textures[current_frame]];
-    ID3D12Resource* render_target  = dx12_renderer->resources[dx12_renderer->render_targets[current_frame]];
-
-    D3D12_RESOURCE_BARRIER before_barriers[2] = { 0 };
-
-    before_barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    before_barriers[0].Transition.pResource   = image_resource;
-    before_barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-    before_barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_SOURCE;
-
-    before_barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    before_barriers[1].Transition.pResource   = render_target;
-    before_barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-    before_barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_COPY_DEST;
-
-    D3D12_RESOURCE_BARRIER after_barriers[2] = { 0 };
-
-    after_barriers[0].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    after_barriers[0].Transition.pResource   = render_target;
-    after_barriers[0].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-    after_barriers[0].Transition.StateAfter  = D3D12_RESOURCE_STATE_RENDER_TARGET;
-
-    after_barriers[1].Type                   = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-    after_barriers[1].Transition.pResource   = image_resource;
-    after_barriers[1].Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_SOURCE;
-    after_barriers[1].Transition.StateAfter  = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-
-    ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 2, before_barriers);
-    ID3D12GraphicsCommandList7_CopyResource(command_list, render_target, image_resource); 
-    ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 2, after_barriers);
-
-    return true;
-}
-
 bool dm_render_command_backend_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;

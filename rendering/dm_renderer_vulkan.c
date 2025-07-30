@@ -155,6 +155,7 @@ typedef struct dm_vulkan_texture_t
     uint32_t staging_buffer[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     uint32_t image[DM_VULKAN_MAX_FRAMES_IN_FLIGHT];
     VkFormat format;
+    dm_resource_handle sampler;
 } dm_vulkan_texture;
 
 typedef struct dm_vulkan_sampler_t
@@ -1377,118 +1378,6 @@ bool dm_vulkan_copy_buffer_to_image(dm_vulkan_buffer* buffer, dm_vulkan_image* i
     return true;
 }
 
-#ifndef DM_DEBUG
-DM_INLINE
-#endif
-bool dm_vulkan_create_texture(dm_texture_desc desc, VkImageUsageFlagBits usage_flags, dm_vulkan_texture* texture, dm_vulkan_renderer* vulkan_renderer)
-{
-    VkResult vr;
-
-    VkBufferUsageFlagBits buffer_usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-    VkSharingMode         sharing_mode = VK_SHARING_MODE_CONCURRENT;
-
-    const size_t size = desc.height * desc.width * desc.n_channels;
-
-    switch(desc.format)
-    {
-        case DM_TEXTURE_FORMAT_BYTE_4_UINT:
-        texture->format = VK_FORMAT_R8G8B8A8_UINT;
-        break;
-
-        case DM_TEXTURE_FORMAT_BYTE_4_UNORM:
-        texture->format = VK_FORMAT_R8G8B8A8_UNORM;
-        break;
-
-        case DM_TEXTURE_FORMAT_FLOAT_3:
-        texture->format = VK_FORMAT_R32G32B32_SFLOAT;
-        break;
-
-        case DM_TEXTURE_FORMAT_FLOAT_4:
-        texture->format = VK_FORMAT_R32G32B32A32_SFLOAT;
-        break;
-
-        default:
-        DM_LOG_FATAL("Unknown or unsupported texture format");
-        return false;
-    }
-
-    VkImageCreateInfo image_create_info = { 0 };
-    image_create_info.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    image_create_info.imageType     = VK_IMAGE_TYPE_2D;
-    image_create_info.extent.width  = desc.width;
-    image_create_info.extent.height = desc.height;
-    image_create_info.extent.depth  = 1;
-    image_create_info.mipLevels     = 1;
-    image_create_info.arrayLayers   = 1;
-    image_create_info.tiling        = VK_IMAGE_TILING_OPTIMAL;
-    image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    image_create_info.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
-    image_create_info.samples       = VK_SAMPLE_COUNT_1_BIT;
-    image_create_info.usage         = usage_flags;
-    image_create_info.format        = texture->format;
-
-    VmaAllocationCreateInfo allocation_create_info = { 0 };
-    allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO;
-
-    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        dm_vulkan_buffer* staging_buffer = &vulkan_renderer->buffers[vulkan_renderer->buffer_count];
-
-        if(!dm_vulkan_create_buffer(size, buffer_usage, sharing_mode, staging_buffer, vulkan_renderer)) return false;
-        texture->staging_buffer[i] = vulkan_renderer->buffer_count++;
-
-        // buffer data
-        if(desc.data) 
-        {
-            if(!dm_vulkan_copy_memory(staging_buffer->memory, desc.data, size, vulkan_renderer)) return false;
-        }
-
-        // sampled image
-        dm_vulkan_image* image = &vulkan_renderer->images[vulkan_renderer->image_count];
-
-        vr = vmaCreateImage(vulkan_renderer->allocator, &image_create_info, &allocation_create_info, &image->image, &image->memory, NULL);
-        if(!dm_vulkan_decode_vr(vr))
-        {
-            DM_LOG_FATAL("vmaCreateImage failed");
-            return false;
-        }
-        texture->image[i] = vulkan_renderer->image_count++;
-
-        if(desc.data)
-        {
-            VkBufferImageCopy copy = { 0 };
-            copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-            copy.imageSubresource.layerCount = 1;
-            copy.imageExtent.width           = desc.width;
-            copy.imageExtent.height          = desc.height;
-            copy.imageExtent.depth           = 1;
-
-            if(!dm_vulkan_copy_buffer_to_image(staging_buffer, image, copy, true, vulkan_renderer)) return false;
-        }
-
-        // view(s)
-        VkImageViewCreateInfo view_info = { 0 };
-        view_info.sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-        view_info.image    = image->image;
-        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
-        view_info.format   = texture->format;
-        view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-        view_info.subresourceRange.levelCount = 1;
-        view_info.subresourceRange.layerCount = 1;
-
-        vr = vkCreateImageView(vulkan_renderer->device.logical, &view_info, NULL, &image->view);
-        if(!dm_vulkan_decode_vr(vr))
-        {
-            DM_LOG_FATAL("vkCreateImageView failed");
-            return false;
-        }
-    }
-
-    dm_memcpy(vulkan_renderer->textures + vulkan_renderer->texture_count, texture, sizeof(dm_vulkan_texture));
-
-    return true;
-}
-
 bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
 {
     DM_VULKAN_GET_RENDERER;
@@ -1546,6 +1435,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
     for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
     {
         dm_vulkan_buffer* staging_buffer = &vulkan_renderer->buffers[vulkan_renderer->buffer_count];
+        dm_vulkan_image* image = &vulkan_renderer->images[vulkan_renderer->image_count];
 
         if(!dm_vulkan_create_buffer(size, buffer_usage, sharing_mode, staging_buffer, vulkan_renderer)) return false;
         texture.staging_buffer[i] = vulkan_renderer->buffer_count++;
@@ -1555,9 +1445,6 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
         {
             if(!dm_vulkan_copy_memory(staging_buffer->memory, desc.data, size, vulkan_renderer)) return false;
         }
-
-        // sampled image
-        dm_vulkan_image* image = &vulkan_renderer->images[vulkan_renderer->image_count];
 
         vr = vmaCreateImage(vulkan_renderer->allocator, &image_create_info, &allocation_create_info, &image->image, &image->memory, NULL);
         if(!dm_vulkan_decode_vr(vr))
@@ -1596,13 +1483,10 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
             DM_LOG_FATAL("vkCreateImageView failed");
             return false;
         }
-    }
 
-    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
-    {
         // storage image descriptor
         VkDescriptorImageInfo storage_info = { 0 };
-        storage_info.imageView   = vulkan_renderer->images[texture.image[i]].view;
+        storage_info.imageView   = image->view;
         storage_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
 
         VkWriteDescriptorSet storage_descriptor = { 0 };
@@ -1618,7 +1502,7 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
 
         // sampled image descriptor
         VkDescriptorImageInfo sampled_info = { 0 };
-        sampled_info.imageView   = vulkan_renderer->images[texture.image[i]].view;
+        sampled_info.imageView   = image->view;
         sampled_info.sampler     = vulkan_renderer->samplers[desc.sampler.index].sampler;
         sampled_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 
@@ -1633,6 +1517,8 @@ bool dm_renderer_backend_create_texture(dm_texture_desc desc, dm_resource_handle
 
         vkUpdateDescriptorSets(vulkan_renderer->device.logical, 1, &sampled_descriptor, 0, NULL);
     }
+
+    texture.sampler = desc.sampler;
 
     //
     dm_memcpy(vulkan_renderer->textures + vulkan_renderer->texture_count, &texture, sizeof(texture));
@@ -2363,6 +2249,111 @@ bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm
 
 bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, dm_resource_handle handle, dm_renderer* renderer)
 {
+    DM_VULKAN_GET_RENDERER;
+    VkResult vr;
+
+    dm_vulkan_texture* texture = &vulkan_renderer->textures[handle.index];
+
+    // destroy existing resources
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        dm_vulkan_buffer* buffer = &vulkan_renderer->buffers[texture->staging_buffer[i]];
+        dm_vulkan_image*  image  = &vulkan_renderer->images[texture->image[i]];
+
+        vmaDestroyBuffer(vulkan_renderer->allocator, buffer->buffer, buffer->memory);
+        vmaDestroyImage(vulkan_renderer->allocator, image->image, image->memory);
+        vkDestroyImageView(vulkan_renderer->device.logical, image->view, NULL);
+    }
+
+    // recreate!
+    VkImageUsageFlagBits  image_usage  = VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT;
+    VkBufferUsageFlagBits buffer_usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    VkSharingMode         sharing_mode = VK_SHARING_MODE_CONCURRENT;
+
+    VkImageCreateInfo image_create_info = { 0 };
+    image_create_info.sType         = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_create_info.imageType     = VK_IMAGE_TYPE_2D;
+    image_create_info.extent.width  = width;
+    image_create_info.extent.height = height;
+    image_create_info.extent.depth  = 1;
+    image_create_info.mipLevels     = 1;
+    image_create_info.arrayLayers   = 1;
+    image_create_info.tiling        = VK_IMAGE_TILING_OPTIMAL;
+    image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    image_create_info.sharingMode   = VK_SHARING_MODE_EXCLUSIVE;
+    image_create_info.samples       = VK_SAMPLE_COUNT_1_BIT;
+    image_create_info.usage         = image_usage;
+    image_create_info.format        = texture->format;
+
+    VmaAllocationCreateInfo allocation_create_info = { 0 };
+    allocation_create_info.usage = VMA_MEMORY_USAGE_AUTO;
+
+    for(uint8_t i=0; i<DM_VULKAN_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        dm_vulkan_buffer* staging_buffer = &vulkan_renderer->buffers[texture->staging_buffer[i]];
+        dm_vulkan_image* image = &vulkan_renderer->images[texture->image[i]];
+
+        if(!dm_vulkan_create_buffer(width * height * 4, buffer_usage, sharing_mode, staging_buffer, vulkan_renderer)) return false;
+
+        vr = vmaCreateImage(vulkan_renderer->allocator, &image_create_info, &allocation_create_info, &image->image, &image->memory, NULL);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vmaCreateImage failed");
+            return false;
+        }
+
+        // view(s)
+        VkImageViewCreateInfo view_info = { 0 };
+        view_info.sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+        view_info.image    = image->image;
+        view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
+        view_info.format   = texture->format;
+
+        view_info.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        view_info.subresourceRange.levelCount = 1;
+        view_info.subresourceRange.layerCount = 1;
+
+        vr = vkCreateImageView(vulkan_renderer->device.logical, &view_info, NULL, &image->view);
+        if(!dm_vulkan_decode_vr(vr))
+        {
+            DM_LOG_FATAL("vkCreateImageView failed");
+            return false;
+        }
+
+        // storage image descriptor
+        VkDescriptorImageInfo storage_info = { 0 };
+        storage_info.imageView   = image->view;
+        storage_info.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+        VkWriteDescriptorSet storage_descriptor = { 0 };
+        storage_descriptor.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        storage_descriptor.descriptorCount = 1;
+        storage_descriptor.descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+        storage_descriptor.dstSet          = vulkan_renderer->resource_bindless_set[i];
+        storage_descriptor.dstArrayElement = handle.descriptor_index;
+        storage_descriptor.dstBinding      = 0;
+        storage_descriptor.pImageInfo      = &storage_info;
+
+        vkUpdateDescriptorSets(vulkan_renderer->device.logical, 1, &storage_descriptor, 0, NULL);
+
+        // sampled image descriptor
+        VkDescriptorImageInfo sampled_info = { 0 };
+        sampled_info.imageView   = image->view;
+        sampled_info.sampler     = vulkan_renderer->samplers[texture->sampler.index].sampler;
+        sampled_info.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+
+        VkWriteDescriptorSet sampled_descriptor = { 0 };
+        sampled_descriptor.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        sampled_descriptor.descriptorCount = 1;
+        sampled_descriptor.descriptorType  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+        sampled_descriptor.dstSet          = vulkan_renderer->resource_bindless_set[i];
+        sampled_descriptor.dstArrayElement = handle.descriptor_index + 1;
+        sampled_descriptor.dstBinding      = 0;
+        sampled_descriptor.pImageInfo      = &sampled_info;
+
+        vkUpdateDescriptorSets(vulkan_renderer->device.logical, 1, &sampled_descriptor, 0, NULL);
+    }
+
     return true;
 }
 
@@ -2421,81 +2412,6 @@ bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_
     barrier.srcAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
     barrier.dstAccessMask = VK_ACCESS_ACCELERATION_STRUCTURE_WRITE_BIT_KHR | VK_ACCESS_ACCELERATION_STRUCTURE_READ_BIT_KHR;
     vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, VK_PIPELINE_STAGE_ACCELERATION_STRUCTURE_BUILD_BIT_KHR, 0,1, &barrier, 0,NULL,0,NULL);
-
-    return true;
-}
-
-bool dm_render_command_backend_copy_image_to_screen(dm_resource_handle image, dm_renderer* renderer)
-{
-    DM_VULKAN_GET_RENDERER;
-    VkResult vr;
-
-    dm_vulkan_texture* texture = &vulkan_renderer->textures[image.index];
-
-    const uint8_t current_frame = vulkan_renderer->current_frame;
-    VkCommandBuffer cmd_buffer  = vulkan_renderer->device.graphics_queue.buffer[current_frame];
-
-    VkImage source_image  = vulkan_renderer->images[texture->image[current_frame]].image;
-    VkImage render_target = vulkan_renderer->swapchain.render_targets[current_frame];
-
-    // transition source image before copy
-    VkImageSubresourceRange range = { 0 };
-    range.aspectMask     = VK_IMAGE_ASPECT_COLOR_BIT;
-    range.baseMipLevel   = 0;
-    range.levelCount     = 1;
-    range.baseArrayLayer = 0;
-    range.layerCount     = 1;
-
-    // must transition source image and render target
-    VkImageMemoryBarrier source_barrier = { 0 };
-    source_barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    source_barrier.image               = source_image;
-    source_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    source_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    source_barrier.srcAccessMask       = 0;
-    source_barrier.dstAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    source_barrier.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
-    source_barrier.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    source_barrier.subresourceRange    = range;
-
-    VkImageMemoryBarrier render_target_barrier = { 0 };
-    render_target_barrier.sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    render_target_barrier.image               = render_target;
-    render_target_barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    render_target_barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    render_target_barrier.srcAccessMask       = 0;
-    render_target_barrier.dstAccessMask       = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    render_target_barrier.oldLayout           = VK_IMAGE_LAYOUT_UNDEFINED;
-    render_target_barrier.newLayout           = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    render_target_barrier.subresourceRange    = range;
-
-    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,  0,0,NULL,0,NULL, 1, &render_target_barrier);
-    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,  0,0,NULL,0,NULL, 1, &source_barrier);
-
-    // copy
-    VkImageCopy image_copy = { 0 };
-    image_copy.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    image_copy.srcSubresource.layerCount = 1;
-    image_copy.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    image_copy.dstSubresource.layerCount = 1;
-    image_copy.extent.width              = renderer->width;
-    image_copy.extent.height             = renderer->height;
-    image_copy.extent.depth              = 1;
-    vkCmdCopyImage(cmd_buffer, source_image, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, render_target, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
-
-    // transistion everyone back
-    source_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-    source_barrier.dstAccessMask = 0;
-    source_barrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    source_barrier.newLayout     = VK_IMAGE_LAYOUT_UNDEFINED;
-
-    render_target_barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
-    render_target_barrier.dstAccessMask = 0;
-    render_target_barrier.oldLayout     = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    render_target_barrier.newLayout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-
-    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,  0,0,NULL,0,NULL, 1, &source_barrier);
-    vkCmdPipelineBarrier(cmd_buffer, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,  0,0,NULL,0,NULL, 1, &render_target_barrier);
 
     return true;
 }

@@ -775,7 +775,6 @@ extern bool dm_render_command_backend_update_storage_buffer(void* data, size_t s
 extern bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_renderer* renderer);
-extern bool dm_render_command_backend_copy_image_to_screen(dm_resource_handle image, dm_renderer* renderer);
 
 void _dm_render_command_submit(dm_command command, dm_command_manager* manager)
 {
@@ -968,17 +967,6 @@ void dm_render_command_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle 
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_copy_image_to_screen(dm_resource_handle image, dm_context* context)
-{
-    dm_command command = { 0 };
-
-    command.r_type = DM_RENDER_COMMAND_TYPE_COPY_IMAGE_TO_SCREEN;
-
-    command.params[0].handle_val = image;
-
-    DM_RENDER_COMMAND_SUBMIT;
-}
-
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context)
 {
     dm_command command = { 0 };
@@ -1098,12 +1086,6 @@ bool dm_renderer_submit_commands(dm_context* context)
             if(params[2].handle_val.type != DM_RESOURCE_TYPE_RAYTRACING_PIPELINE) { DM_LOG_FATAL("Resource is not a raytracing pipeline"); return false; }
             if(dm_render_command_backend_dispatch_rays(params[0].u16_val, params[1].u16_val, params[2].handle_val, renderer)) continue;
             DM_LOG_FATAL("Dispatch rays failed");
-            return false;
-
-            case DM_RENDER_COMMAND_TYPE_COPY_IMAGE_TO_SCREEN:
-            //if(params[0].handle_val.type != DM_RESOURCE_TYPE_TEXTURE) { DM_LOG_FATAL("Resource is not a texture"); return false; }
-            if(dm_render_command_backend_copy_image_to_screen(params[0].handle_val, renderer)) continue;
-            DM_LOG_FATAL("Copy image to screen failed");
             return false;
 
             case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED:
