@@ -772,7 +772,7 @@ extern bool dm_render_command_backend_draw_instanced(uint32_t instance_count, ui
 extern bool dm_render_command_backend_draw_instanced_indexed(uint32_t instance_count, uint32_t instance_offset, uint32_t index_count, uint32_t index_offset, uint32_t vertex_offset, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, dm_resource_handle handle, dm_renderer* renderer);
+extern bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, void* data, size_t data_size, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_renderer* renderer);
 extern bool dm_render_command_backend_dispatch_rays(uint16_t x, uint16_t y, dm_resource_handle pipeline, dm_renderer* renderer);
 
@@ -929,7 +929,7 @@ void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resourc
     DM_RENDER_COMMAND_SUBMIT;
 }
 
-void dm_render_command_resize_texture(uint32_t width, uint32_t height, dm_resource_handle handle, dm_context *context)
+void dm_render_command_resize_texture(uint32_t width, uint32_t height, void* data, size_t data_size, dm_resource_handle handle, dm_context *context)
 {
     dm_command command = { 0 };
 
@@ -937,7 +937,9 @@ void dm_render_command_resize_texture(uint32_t width, uint32_t height, dm_resour
 
     command.params[0].u32_val    = width;
     command.params[1].u32_val    = height;
-    command.params[2].handle_val = handle;
+    command.params[2].void_val   = data;
+    command.params[3].size_t_val = data_size;
+    command.params[4].handle_val = handle;
 
     DM_RENDER_COMMAND_SUBMIT;
 }
@@ -1071,8 +1073,8 @@ bool dm_renderer_submit_commands(dm_context* context)
             return false;
 
             case DM_RENDER_COMMAND_TYPE_RESIZE_TEXTURE:
-            if(params[2].handle_val.type != DM_RESOURCE_TYPE_TEXTURE) { DM_LOG_FATAL("Resource is not a texture"); return false; }
-            if(dm_render_command_backend_resize_texture(params[0].u32_val, params[1].u32_val, params[2].handle_val, renderer)) continue;
+            if(params[4].handle_val.type != DM_RESOURCE_TYPE_TEXTURE) { DM_LOG_FATAL("Resource is not a texture"); return false; }
+            if(dm_render_command_backend_resize_texture(params[0].u32_val, params[1].u32_val, params[2].void_val, params[3].size_t_val, params[4].handle_val, renderer)) continue;
             DM_LOG_FATAL("Resize texture failed");
             return false;
 

@@ -966,7 +966,7 @@ void dm_render_command_update_vertex_buffer(void* data, size_t size, dm_resource
 void dm_render_command_update_index_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_constant_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_storage_buffer(void* data, size_t size, dm_resource_handle handle, dm_context* context);
-void dm_render_command_resize_texture(uint32_t width, uint32_t height, dm_resource_handle handle, dm_context* context);
+void dm_render_command_resize_texture(uint32_t width, uint32_t height, void* data, size_t data_size, dm_resource_handle handle, dm_context* context);
 void dm_render_command_update_tlas(uint32_t instance_count, dm_resource_handle handle, dm_context* context);
 
 void dm_render_command_draw_instanced(uint32_t instance_count, uint32_t instance_offset, uint32_t vertex_count, uint32_t vertex_offset, dm_context* context);

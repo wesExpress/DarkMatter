@@ -2651,7 +2651,7 @@ bool dm_render_command_backend_update_storage_buffer(void* data, size_t size, dm
     return true;
 }
 
-bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, dm_resource_handle handle, dm_renderer* renderer)
+bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, void* data, size_t data_size, dm_resource_handle handle, dm_renderer* renderer)
 {
     DM_DX12_GET_RENDERER;
     HRESULT hr;
@@ -2676,7 +2676,32 @@ bool dm_render_command_backend_resize_texture(uint32_t width, uint32_t height, d
         ID3D12Resource** device_resource = &dx12_renderer->resources[texture->device_textures[i]];
 
         if(!dm_dx12_create_buffer(size, D3D12_HEAP_TYPE_UPLOAD, D3D12_RESOURCE_STATE_GENERIC_READ, D3D12_RESOURCE_FLAG_NONE, host_resource, dx12_renderer)) return false;
+        if(data)
+        {
+            if(!dm_dx12_copy_memory(*host_resource, data, data_size)) return false;
+        }
+
         if(!dm_dx12_create_texture_resource(width, height, texture->format, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST, flags, device_resource, dx12_renderer->device)) return false;
+
+        D3D12_BOX texture_as_box = { 0 };
+        texture_as_box.right  = width;
+        texture_as_box.bottom = height;
+        texture_as_box.back   = 1;
+
+        D3D12_TEXTURE_COPY_LOCATION src = { 0 };
+        src.pResource                          = *host_resource;
+        src.Type                               = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+        src.PlacedFootprint.Footprint.Width    = width;
+        src.PlacedFootprint.Footprint.Height   = height;
+        src.PlacedFootprint.Footprint.Depth    = 1;
+        src.PlacedFootprint.Footprint.RowPitch = width * texture->bytes_per_channel * texture->n_channels;
+        src.PlacedFootprint.Footprint.Format   = texture->format;
+
+        D3D12_TEXTURE_COPY_LOCATION dest = { 0 };
+        dest.pResource = *device_resource;
+        dest.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+
+        ID3D12GraphicsCommandList7_CopyTextureRegion(command_list, &dest, 0,0,0, &src, &texture_as_box);
 
         // view
         D3D12_UNORDERED_ACCESS_VIEW_DESC view_desc = { 0 };
