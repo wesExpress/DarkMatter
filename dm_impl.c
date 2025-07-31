@@ -1253,57 +1253,22 @@ bool dm_renderer_gltf_load_material(const char* directory, dm_material_type type
     cgltf_texture* texture;
     switch(type)
     {
-        case DM_MATERIAL_TYPE_DIFFUSE:
+        case DM_MATERIAL_TYPE_ALBEDO:
         texture = material.pbr_metallic_roughness.base_color_texture.texture;
         break;
 
         case DM_MATERIAL_TYPE_METALLIC_ROUGHNESS:
-        if(!material.pbr_metallic_roughness.metallic_roughness_texture.texture) 
-        {
-            scene->materials[scene->material_count].textures[type] = scene->white_texture;
-            scene->materials[scene->material_count].samplers[type] = scene->default_sampler;
-            return true; 
-        }
+        if(!material.pbr_metallic_roughness.metallic_roughness_texture.texture) return true;
         texture = material.pbr_metallic_roughness.metallic_roughness_texture.texture;
         break;
 
         case DM_MATERIAL_TYPE_NORMAL_MAP:
-        if(!material.normal_texture.texture) 
-        {
-            scene->materials[scene->material_count].textures[type] = scene->white_texture;
-            scene->materials[scene->material_count].samplers[type] = scene->default_sampler;
-            return true; 
-        }
+        if(!material.normal_texture.texture) return true;
         texture = material.normal_texture.texture;
         break;
 
-        case DM_MATERIAL_TYPE_SPECULAR_MAP:
-        if(!material.specular.specular_texture.texture) 
-        {
-            scene->materials[scene->material_count].textures[type] = scene->black_texture;
-            scene->materials[scene->material_count].samplers[type] = scene->default_sampler;
-            return true; 
-        }
-        texture = material.specular.specular_texture.texture;
-        break;
-
-        case DM_MATERIAL_TYPE_OCCLUSION:
-        if(!material.occlusion_texture.texture) 
-        {
-            scene->materials[scene->material_count].textures[type] = scene->white_texture;
-            scene->materials[scene->material_count].samplers[type] = scene->default_sampler;
-            return true; 
-        }
-        texture = material.occlusion_texture.texture;
-        break;
-
         case DM_MATERIAL_TYPE_EMISSION:
-        if(!material.emissive_texture.texture) 
-        {
-            scene->materials[scene->material_count].textures[type] = scene->black_texture;
-            scene->materials[scene->material_count].samplers[type] = scene->default_sampler;
-            return true; 
-        }
+        if(!material.emissive_texture.texture) return true;
         texture = material.emissive_texture.texture;
         break;
 
@@ -1670,9 +1635,6 @@ bool dm_renderer_load_gltf_file(const char* file, dm_mesh_vertex_attribute* mesh
         return false;
     }
 
-    char* directory = dm_alloc(strlen(file));
-    strcpy(directory, file);
-    *(strrchr(directory, '/')) = '\0';
 
     // begin
     cgltf_options options = { 0 };
@@ -1704,6 +1666,10 @@ bool dm_renderer_load_gltf_file(const char* file, dm_mesh_vertex_attribute* mesh
 
     // materials
     // TODO: this *NEEDS* to be optimized, very slow to create all the textures
+    char directory[512];
+    strcpy(directory, file);
+    *(strrchr(directory, '/')) = '\0';
+
     for(uint16_t i=0; i<data->materials_count; i++)
     {
         DM_LOG_INFO("Loading material: %u", i);
@@ -1715,8 +1681,6 @@ bool dm_renderer_load_gltf_file(const char* file, dm_mesh_vertex_attribute* mesh
     }
 
     // nodes 
-    scene->nodes = dm_alloc(sizeof(dm_scene_node) * data->scene->nodes_count);
-
     for(uint16_t i=0; i<data->scene->nodes_count; i++)
     {
         DM_LOG_INFO("Loading node: %u", i);

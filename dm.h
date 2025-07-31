@@ -766,11 +766,9 @@ typedef enum dm_mesh_vertex_attribute_t
 
 typedef enum dm_material_type_t
 {
-    DM_MATERIAL_TYPE_DIFFUSE,
+    DM_MATERIAL_TYPE_ALBEDO,
     DM_MATERIAL_TYPE_METALLIC_ROUGHNESS,
     DM_MATERIAL_TYPE_NORMAL_MAP,
-    DM_MATERIAL_TYPE_SPECULAR_MAP,
-    DM_MATERIAL_TYPE_OCCLUSION,
     DM_MATERIAL_TYPE_EMISSION,
     DM_MATERIAL_TYPE_UNKNOWN
 } dm_material_type;
@@ -790,8 +788,6 @@ typedef struct dm_mesh_t
     size_t vertex_stride;
 
     dm_index_buffer_index_type index_type;
-
-    uint32_t material_index;
 } dm_mesh;
 
 typedef struct dm_scene_node_t
@@ -804,15 +800,14 @@ typedef struct dm_scene_node_t
 
 #define DM_SCENE_MAX_MESHES    100
 #define DM_SCENE_MAX_MATERIALS 100
+#define DM_SCENE_MAX_NODES     500
 typedef struct dm_scene_t
 {
-    dm_mesh        meshes[DM_SCENE_MAX_MESHES];
-    dm_material    materials[DM_SCENE_MAX_MATERIALS];
-    dm_scene_node* nodes;
+    dm_mesh       meshes[DM_SCENE_MAX_MESHES];
+    dm_material   materials[DM_SCENE_MAX_MATERIALS];
+    dm_scene_node nodes[DM_SCENE_MAX_NODES];
 
     uint32_t mesh_count, material_count, node_count;
-
-    dm_resource_handle white_texture, black_texture, default_sampler;
 } dm_scene;
 
 /******************
