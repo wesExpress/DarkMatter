@@ -25,17 +25,37 @@ typedef enum dm_window_create_flag_t
     DM_WINDOW_CREATE_FLAG_NO_RESIZE = 2
 } dm_window_create_flag;
 
-typedef enum dm_window_flag_t
-{
-    DM_WINDOW_FLAG_NONE   = 0,
-    DM_WINDOW_FLAG_CLOSE  = 1,
-    DM_WINDOW_FLAG_RESIZE = 2,
-} dm_window_flag;
-
 typedef struct dm_window_t dm_window; 
 bool dm_window_create(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const char* title, dm_window_create_flag flags, dm_window* window);
-bool dm_window_should_close(dm_window* window);
+void dm_window_shutdown(dm_window* window);
+bool dm_window_should_close(dm_window window);
+bool dm_window_resized(dm_window window);
 bool dm_window_poll_events(dm_window* window);
+
+typedef struct dm_timer_t
+{
+    double start, end;
+} dm_timer;
+
+double dm_get_time();
+void   dm_timer_start(dm_timer* timer);
+double dm_timer_elapsed(dm_timer* timer);
+double dm_timer_elapsed_ms(dm_timer* timer);
+
+/***********
+ * LOGGING *
+ ***********/
+typedef enum dm_log_level_t
+{
+    DM_LOG_TRACE,
+    DM_LOG_DEBUG,
+    DM_LOG_INFO,
+    DM_LOG_WARN,
+    DM_LOG_ERROR,
+    DM_LOG_FATAL
+} dm_log_level;
+
+void dm_log(dm_log_level log_level, const char* message, ...);
 
 /********
 * INPUT *
@@ -206,6 +226,296 @@ int      dm_input_get_mouse_delta_x(dm_window window);
 int      dm_input_get_mouse_delta_y(dm_window window);
 void     dm_input_get_mouse_delta(int* x, int* y, dm_window window);
 
+/*************
+ * RENDERING *
+ *************/
+#ifndef DM_MAX_FRAMES_IN_FLIGHT
+#define DM_MAX_FRAMES_IN_FLIGHT 3
+#endif
+
+typedef struct dm_renderer_t dm_renderer;
+bool dm_renderer_init(dm_window window, dm_renderer* renderer);
+void dm_renderer_shutdown(dm_renderer* renderer);
+bool dm_renderer_resize(dm_window window, dm_renderer* renderer);
+bool dm_renderer_begin_frame(dm_renderer* renderer);
+bool dm_renderer_end_frame(bool vsync, dm_renderer* renderer);
+bool dm_renderer_submit_render_commands(dm_renderer* renderer);
+
+// === handles ===
+typedef uint16_t dm_renderpass_handle;
+typedef uint16_t dm_pipeline_handle;
+
+#ifdef DM_MORE_DESCRIPTORS
+typedef uint32_t dm_resource_index;
+#else
+typedef uint16_t dm_resource_index;
+#endif
+typedef struct dm_resource_handle_t
+{
+    uint32_t descriptor_index; // APIs can support up to a million descriptors? I think?
+    dm_resource_index index;
+} dm_resource_handle;
+
+// === resources ===
+typedef enum dm_renderpass_type_t
+{
+    DM_RENDERPASS_TYPE_INVALID,
+    DM_RENDERPASS_TYPE_DEFAULT,
+    DM_RENDERPASS_TYPE_CUSTOM
+} dm_renderpass_type;
+
+typedef enum dm_renderpass_flag_t
+{
+    DM_RENDERPASS_FLAG_NONE  = 0,
+    DM_RENDERPASS_FLAG_COLOR = 1,
+    DM_RENDERPASS_FLAG_DEPTH = 2
+} dm_renderpass_flag;
+
+typedef enum dm_pipeline_type_t
+{
+    DM_PIPELINE_TYPE_INVALID,
+    DM_PIPELINE_TYPE_RASTER,
+    DM_PIPELINE_TYPE_COMPUTE,
+#ifdef DM_HARDWARE_RAYTRACING
+    DM_PIPELINE_TYPE_RT
+#endif
+} dm_pipeline_type;
+
+typedef enum dm_resource_type_t
+{
+    DM_RESOURCE_TYPE_INALID,
+    DM_RESOURCE_TYPE_VERTEX_BUFFER,
+    DM_RESOURCE_TYPE_INDEX_BUFFER,
+    DM_RESOURCE_TYPE_CONSTANT_BUFFER,
+    DM_RESOURCE_TYPE_STORAGE_BUFFER,
+    DM_RESOURCE_TYPE_TEXTURE,
+    DM_RESOURCE_TYPE_SAMPLER,
+#ifdef DM_HARDWARE_RAYTRACING
+    DM_RESOURCE_TYPE_BLAS,
+    DM_RESOURCE_TYPE_TLAS,
+#endif
+} dm_resource_type;
+
+typedef struct dm_renderpass_desc_t
+{
+    dm_renderpass_flag flags;
+    dm_renderpass_type type;
+} dm_renderpass_desc;
+
+typedef enum dm_input_element_format_t
+{
+    DM_INPUT_ELEMENT_FORMAT_UNKNOWN,
+    DM_INPUT_ELEMENT_FORMAT_FLOAT_2,
+    DM_INPUT_ELEMENT_FORMAT_FLOAT_3,
+    DM_INPUT_ELEMENT_FORMAT_FLOAT_4,
+    DM_INPUT_ELEMENT_FORMAT_MATRIX_4x4
+} dm_input_element_format;
+
+typedef enum dm_input_element_class_t
+{
+    DM_INPUT_ELEMENT_CLASS_UNKNOWN,
+    DM_INPUT_ELEMENT_CLASS_PER_VERTEX,
+    DM_INPUT_ELEMENT_CLASS_PER_INSTANCE,
+} dm_input_element_class;
+
+#define DM_RENDER_INPUT_ELEMENT_DESC_NAME_SIZE 512
+typedef struct dm_input_element_desc_t
+{
+    char                    name[DM_RENDER_INPUT_ELEMENT_DESC_NAME_SIZE];
+    uint8_t                 index;
+    dm_input_element_format format; 
+    uint8_t                 slot;
+    uint32_t                offset;
+    size_t                  stride;
+    dm_input_element_class  class;
+} dm_input_element_desc;
+
+typedef enum dm_input_topology_t
+{
+    DM_INPUT_TOPOLOGY_UNKNOWN,
+    DM_INPUT_TOPOLOGY_LINE_LIST,
+    DM_INPUT_TOPOLOGY_TRIANGLE_LIST,
+} dm_input_topology;
+
+typedef enum dm_rasterizer_polygon_fill_t
+{
+    DM_RASTERIZER_POLYGON_FILL_UNKNOWN,
+    DM_RASTERIZER_POLYGON_FILL_FILL,
+    DM_RASTERIZER_POLYGON_FILL_WIREFRAME,
+} dm_rasterizer_polygon_fill;
+
+typedef enum dm_rasterizer_cull_mode_t
+{
+    DM_RASTERIZER_CULL_MODE_UNKNOWN,
+    DM_RASTERIZER_CULL_MODE_BACK,
+    DM_RASTERIZER_CULL_MODE_FRONT,
+    DM_RASTERIZER_CULL_MODE_NONE,
+} dm_rasterizer_cull_mode;
+
+typedef enum dm_rasterizer_front_face_t
+{
+    DM_RASTERIZER_FRONT_FACE_UNKNOWN,
+    DM_RASTERIZER_FRONT_FACE_CLOCKWISE,
+    DM_RASTERIZER_FRONT_FACE_COUNTER_CLOCKWISE,
+} dm_rasterizer_front_face;
+
+#define DM_RENDER_MAX_INPUT_ELEMENTS 20
+typedef struct dm_raster_input_assembler_desc_t
+{
+    dm_input_element_desc input_elements[DM_RENDER_MAX_INPUT_ELEMENTS];
+    uint8_t               input_element_count;
+
+    dm_input_topology topology;
+} dm_raster_input_assembler_desc;
+
+typedef struct dm_shader_desc_t
+{
+    char path[512];
+} dm_shader_desc;
+
+typedef struct dm_rasterizer_desc_t
+{
+    dm_shader_desc vertex_shader_desc;
+    dm_shader_desc pixel_shader_desc;
+
+    dm_rasterizer_cull_mode    cull_mode;
+    dm_rasterizer_polygon_fill polygon_fill;
+    dm_rasterizer_front_face   front_face;
+} dm_rasterizer_desc;
+
+typedef enum dm_viewport_type_t
+{
+    DM_VIEWPORT_TYPE_UNKNOWN,
+    DM_VIEWPORT_TYPE_DEFAULT,
+    DM_VIEWPORT_TYPE_CUSTOM
+} dm_viewport_type;
+
+typedef struct dm_viewport_t
+{
+    dm_viewport_type type;
+    uint32_t left, right, top, bottom;
+} dm_viewport;
+
+typedef enum dm_scissor_type_t
+{
+    DM_SCISSOR_TYPE_UNKNOWN,
+    DM_SCISSOR_TYPE_DEFAULT,
+    DM_SCISSOR_TYPE_CUSTOM
+} dm_scissor_type;
+
+typedef struct dm_scissor_t
+{
+    dm_scissor_type type;
+    uint32_t offset, extents;
+} dm_scissor;
+
+typedef struct dm_depth_stencil_desc_t
+{
+    bool depth, stencil;
+} dm_depth_stencil_desc;
+
+typedef struct dm_raster_pipeline_desc_t
+{
+    dm_raster_input_assembler_desc input_assembler;
+    dm_rasterizer_desc             rasterizer;
+    dm_depth_stencil_desc          depth_stencil;
+
+    dm_viewport viewport;
+    dm_scissor  scissor;
+} dm_raster_pipeline_desc;
+
+typedef struct dm_vertex_buffer_desc_t
+{
+    size_t size, stride;
+    void*  data;
+} dm_vertex_buffer_desc;
+
+typedef enum dm_index_buffer_index_type_t
+{
+    DM_INDEX_BUFFER_INDEX_TYPE_UNKNOWN,
+    DM_INDEX_BUFFER_INDEX_TYPE_UINT16,
+    DM_INDEX_BUFFER_INDEX_TYPE_UINT32
+} dm_index_buffer_index_type;
+
+typedef struct dm_index_buffer_desc_t
+{
+    size_t size;
+    dm_index_buffer_index_type index_type;
+    void* data;
+} dm_index_buffer_desc;
+
+typedef struct dm_constant_buffer_desc_t
+{
+    size_t size;
+    void*  data;
+} dm_constant_buffer_desc;
+
+typedef struct dm_storage_buffer_desc_t
+{
+    size_t size, stride;
+    void*  data;
+} dm_storage_buffer_desc;
+
+typedef enum dm_texture_format_t
+{
+    DM_TEXTURE_FORMAT_UNKNOWN,
+    DM_TEXTURE_FORMAT_BYTE_4_UINT,
+    DM_TEXTURE_FORMAT_BYTE_4_UNORM,
+    DM_TEXTURE_FORMAT_FLOAT_3,
+    DM_TEXTURE_FORMAT_FLOAT_4,
+} dm_texture_format;
+
+typedef struct dm_texture_desc_t
+{
+    uint32_t           width, height, n_channels;
+    dm_texture_format  format;
+    const void*        data;
+    dm_resource_handle sampler;
+} dm_texture_desc;
+
+typedef enum dm_sampler_address_mode_t
+{
+    DM_SAMPLER_ADDRESS_MODE_BORDER,
+    DM_SAMPLER_ADDRESS_MODE_WRAP,
+    DM_SAMPLER_ADDRESS_MODE_UNKNOWN
+} dm_sampler_address_mode;
+
+typedef struct dm_sampler_desc_t
+{
+    dm_sampler_address_mode address_u, address_v, address_w;
+} dm_sampler_desc;
+
+bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_renderpass_handle* handle, dm_renderer* renderer);
+bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle* handle, dm_renderer* renderer);
+bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+bool dm_renderer_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_renderer* renderer);
+
+// === render commands ===
+void dm_render_command_begin_render_pass(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_renderer* renderer);
+void dm_render_command_end_render_pass(dm_renderpass_handle handle, dm_renderer* renderer);
+void dm_render_command_bind_raster_pipeline(dm_pipeline_handle handle, dm_renderer* renderer);
+void dm_render_command_set_constants(uint32_t count, size_t offset, void* data, dm_renderer* renderer);
+void dm_render_command_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, size_t offset, dm_renderer* renderer);
+void dm_render_command_bind_index_buffer(dm_resource_handle handle, size_t offset, dm_renderer* renderer);
+void dm_render_command_update_vertex_buffer(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer);
+void dm_render_command_update_index_buffer(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer);
+void dm_render_command_update_constant_buffer(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer);
+void dm_render_command_update_storage_buffer(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer);
+void dm_render_command_update_texture(dm_resource_handle handle, uint16_t width, uint16_t height, void* data, size_t size, size_t offset, dm_renderer* renderer);
+void dm_render_command_draw_instanced(uint32_t instance_count, size_t instance_offset, uint32_t vertex_count, size_t vertex_offset, dm_renderer* renderer);
+void dm_render_command_draw_instanced_indexed(uint32_t instance_count, size_t instance_offset, uint32_t index_count, size_t index_offset, size_t vertex_offset, dm_renderer* renderer);
+
+// === compute commands ===
+void dm_compute_command_begin_recording(dm_renderer* renderer);
+void dm_compute_command_end_recording(dm_renderer* renderer);
+void dm_compute_command_bind_compute_pipeline(dm_pipeline_handle handle, dm_renderer* renderer);
+void dm_compute_command_set_constants(uint32_t count, size_t offset, void* data, dm_renderer* renderer);
+void dm_compute_command_dispatch(uint16_t x, uint16_t y, uint16_t z, dm_renderer* renderer);
+
 /*****************
 * IMPLEMENTATION *
 ******************/
@@ -267,6 +577,13 @@ typedef struct dm_input_state_t
 } dm_input_state;
 
 // === window ===
+typedef enum dm_window_flag_t
+{
+    DM_WINDOW_FLAG_NONE   = 0,
+    DM_WINDOW_FLAG_CLOSE  = 1,
+    DM_WINDOW_FLAG_RESIZE = 2,
+} dm_window_flag;
+
 struct dm_window_t 
 {
     RGFW_window* window;
@@ -288,9 +605,60 @@ bool dm_window_create(uint16_t x, uint16_t y, uint16_t width, uint16_t height, c
     return true;
 }
 
-bool dm_window_should_close(dm_window* window)
+void dm_window_shutdown(dm_window* window)
 {
-    return window->flags & DM_WINDOW_FLAG_CLOSE;
+    RGFW_window_close(window->window);
+}
+
+bool dm_window_should_close(dm_window window)
+{
+    return window.flags & DM_WINDOW_FLAG_CLOSE;
+}
+
+bool dm_window_resized(dm_window window)
+{
+    return window.flags & DM_WINDOW_FLAG_RESIZE;
+}
+
+double dm_get_time()
+{
+#ifdef DM_PLATFORM_WINDOWS
+    LARGE_INTEGER frequency;
+	QueryPerformanceFrequency(&frequency);
+
+    LARGE_INTEGER time;
+	QueryPerformanceCounter(&time);
+
+    return time.QuadPart / frequency.QuadPart;
+#elif defined(DM_PLATFORM_LINUX)
+    struct timespec now;
+    clock_gettime(CLOCK_MONOTONIC, &now);
+    return now.tv_sec + now.tv_nsec*0.000000001;
+#elif defined(DM_PLATFORM_APPLE)
+    mach_timebase_info_data_t clock_timebase;
+    mach_timebase_info(&clock_timebase);
+    
+    uint64_t mach_absolute = mach_absolute_time();
+    
+    uint64_t nanos = (double)(mach_absolute * (uint64_t)clock_timebase.numer) / (double)clock_timebase.denom;
+    
+    return nanos / 1.0e9;
+#endif
+}
+
+void dm_timer_start(dm_timer* timer)
+{
+    timer->start = dm_get_time();
+}
+
+double dm_timer_elapsed(dm_timer* timer)
+{
+    return dm_get_time() - timer->start;
+}
+
+double dm_timer_elapsed_ms(dm_timer* timer)
+{
+    return dm_timer_elapsed(timer) * 1000;
 }
 
 #ifndef DM_DEBUG
@@ -413,6 +781,8 @@ bool dm_window_poll_events(dm_window* window)
     RGFW_event event;
     while (RGFW_window_checkEvent(window->window, &event)) 
     {
+        dm_key_code key;
+        dm_mousebutton_code button;
         switch(event.type)
         {
             case RGFW_quit:
@@ -421,25 +791,27 @@ bool dm_window_poll_events(dm_window* window)
 
             case RGFW_keyPressed:
             case RGFW_keyReleased:
-            {
-                dm_key_code key = dm_convert_key_code(event.key.value);
-                if(key==DM_KEY_NONE) continue;
+            key = dm_convert_key_code(event.key.value);
+            if(key==DM_KEY_NONE) continue;
 
-                window->current_input.keyboard.keys[key] = event.type==RGFW_keyPressed ? 1 : 0;
-            } break;
+            window->current_input.keyboard.keys[key] = event.type==RGFW_keyPressed ? 1 : 0;
+            break;
 
             case RGFW_mouseButtonPressed:
             case RGFW_mouseButtonReleased:
-            {
-                dm_mousebutton_code button = dm_convert_mousebutton(event.button.value);
-                if(button==DM_MOUSEBUTTON_UNKNOWN) continue;
+            button = dm_convert_mousebutton(event.button.value);
+            if(button==DM_MOUSEBUTTON_UNKNOWN) continue;
 
-                window->current_input.mouse.buttons[button] = event.type==RGFW_mouseButtonPressed ? 1 : 0;
-            } break;
+            window->current_input.mouse.buttons[button] = event.type==RGFW_mouseButtonPressed ? 1 : 0;
+            break;
 
             case RGFW_mousePosChanged:
             window->current_input.mouse.x = event.mouse.x;
             window->current_input.mouse.y = event.mouse.y;
+            break;
+
+            case RGFW_windowResized:
+            window->flags |= DM_WINDOW_FLAG_RESIZE;
             break;
 
             default:
@@ -449,6 +821,65 @@ bool dm_window_poll_events(dm_window* window)
 
     return true;
 } 
+
+void dm_platform_write(const char* message, uint8_t color)
+{
+    #ifdef DM_PLATFORM_WINDOWS
+    #elif defined(DM_PLATFORM_LINUX) || defined(DM_PLATFORM_APPLE)
+    static char* levels[6] = {
+        "1;30",   // white
+        "1;34",   // blue
+        "1;32",   // green
+        "1;33",   // yellow
+        "1;31",   // red
+        "0;41"    // highlighted red
+    };
+
+    char out[5000];
+    sprintf(
+        out,
+        "\033[%sm%s \033[0m",
+        levels[color], message
+    );
+
+    printf("%s", out);
+    #endif
+}
+
+
+void dm_log(dm_log_level level, const char* message, ...)
+{
+	static const char* log_tag[6] = { "DM_TRCE", "DM_DEBG", "DM_INFO", "DM_WARN", "DM_ERRR", "DM_FATL" };
+    
+#define DM_MSG_LEN 4980
+    char msg_fmt[DM_MSG_LEN];
+	memset(msg_fmt, 0, sizeof(msg_fmt));
+    
+	// ar_ptr lets us move through any variable number of arguments. 
+	// start it one argument to the left of the va_args, here that is message.
+	// then simply shove each of those arguments into message, which should be 
+	// formatted appropriately beforehand
+	va_list ar_ptr;
+	va_start(ar_ptr, message);
+	vsnprintf(msg_fmt, DM_MSG_LEN, message, ar_ptr);
+	va_end(ar_ptr);
+    
+	// add log tag and time code of message
+	char out[5000];
+    
+	time_t now;
+	time(&now);
+	struct tm* local = localtime(&now);
+    
+    sprintf(out, 
+            "[%s] (%02d:%02d:%02d): %s\n",
+            log_tag[level],
+            local->tm_hour, local->tm_min, local->tm_sec,
+            
+            msg_fmt);
+    
+	dm_platform_write(out, level);
+}
 
 // === input ===
 bool dm_input_mouse_moved(dm_window window)
@@ -519,6 +950,1101 @@ void dm_input_get_mouse_delta(int* x, int* y, dm_window window)
 {
     *x = dm_input_get_mouse_delta_x(window);
     *y = dm_input_get_mouse_delta_y(window);
+}
+
+/*****************
+* RENDERING IMPL *
+******************/
+typedef struct dm_command_param_t
+{
+    union
+    {
+        uint8_t              u8;
+        uint16_t             u16;
+        uint32_t             u32;
+        uint64_t             u64;
+        size_t               s;
+        int                  i;
+        float                f;
+        double               d;
+        void*                v;
+        dm_resource_handle   rh;
+        dm_renderpass_handle rph;
+        dm_pipeline_handle   ph;
+    };
+} dm_command_param;
+
+typedef enum dm_render_command_type_t
+{
+    DM_RENDER_COMMAND_TYPE_INVALID,
+    DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS,
+    DM_RENDER_COMMAND_TYPE_END_RENDER_PASS,
+    DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE,
+    DM_RENDER_COMMAND_TYPE_SET_CONSTANTS,
+    DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_INDEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_TEXTURE,
+    DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
+    DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED
+} dm_render_command_type;
+
+typedef enum dm_compute_command_type_t
+{
+    DM_COMPUTE_COMMAND_TYPE_INVALID,
+    DM_COMPUTE_COMMAND_TYPE_BEGIN_RECORDING,
+    DM_COMPUTE_COMMAND_TYPE_END_RECORDING,
+    DM_COMPUTE_COMMAND_BIND_COMPUTE_PIPELINE,
+    DM_COMPUTE_COMMAND_DISPATCH
+} dm_compute_command_type;
+
+typedef enum dm_command_buffer_type_t
+{
+    DM_COMMAND_BUFFER_TYPE_INVALID,
+    DM_COMMAND_BUFFER_TYPE_RENDER,
+    DM_COMMAND_BUFFER_TYPE_COMPUTE
+} dm_command_buffer_type;
+
+#define DM_COMMAND_MAX_PARAMS 10
+typedef struct dm_command_t
+{
+    union
+    {
+        dm_render_command_type  r_type;
+        dm_compute_command_type c_type;
+    };
+    dm_command_param       params[DM_COMMAND_MAX_PARAMS];
+} dm_command;
+
+#define DM_COMMAND_BUFFER_MAX_COMMANDS 100
+typedef struct dm_command_buffer_t
+{
+    dm_command_buffer_type type;
+    dm_command commands[DM_COMMAND_BUFFER_MAX_COMMANDS];
+    uint16_t   command_count;
+} dm_command_buffer;
+
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#import <Metal/Metal.h>
+#import <QuartzCore/CAMetalLayer.h>
+#import <MetalKit/MetalKit.h>
+
+#define DM_METAL_MAX_RENDERPASS 10
+#define DM_METAL_MAX_RASTER_PIPES 10
+#define DM_METAL_MAX_VBS 10
+#define DM_METAL_MAX_IBS 10
+#define DM_METAL_MAX_CBS 10
+#define DM_METAL_MAX_SBS 10
+#define DM_METAL_MAX_BUFFERS (DM_METAL_MAX_VBS + DM_METAL_MAX_IBS + DM_METAL_MAX_CBS + DM_METAL_MAX_SBS) * DM_MAX_FRAMES_IN_FLIGHT
+#define DM_METAL_MAX_TEXTURES (DM_METAL_MAX_RENDERPASS * 2 + 10) * DM_MAX_FRAMES_IN_FLIGHT
+
+typedef struct dm_metal_renderpass_t
+{
+    uint8_t render_target[DM_MAX_FRAMES_IN_FLIGHT];
+    uint8_t depth_target[DM_MAX_FRAMES_IN_FLIGHT];
+} dm_metal_renderpass;
+
+typedef struct dm_metal_buffer_t
+{
+    uint8_t buffer[DM_MAX_FRAMES_IN_FLIGHT];
+} dm_metal_buffer;
+
+typedef struct dm_metal_index_buffer_t
+{
+    uint8_t buffer[DM_MAX_FRAMES_IN_FLIGHT];
+    MTLIndexType index_type;
+} dm_metal_index_buffer;
+
+typedef struct dm_metal_raster_pipeline_t
+{
+    id<MTLRenderPipelineState> pipeline_state;
+    id<MTLDepthStencilState>   depth_stencil_state;
+    id<MTLSamplerState>        sampler_state;
+
+    id<MTLLibrary>  vertex_library;
+    id<MTLLibrary>  fragment_library;
+    id<MTLFunction> vertex_func;
+    id<MTLFunction> fragment_func;
+
+    uint32_t uniform_offset;
+    
+    MTLCullMode cull_mode;
+    MTLWinding  winding;
+
+    MTLPrimitiveType primitive_type;
+    bool             wireframe;
+
+    MTLViewport    viewport;
+    MTLScissorRect scissor;
+} dm_metal_raster_pipeline;
+#endif
+
+struct dm_renderer_t
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    id<MTLDevice> device;
+
+    id<MTLCommandQueue>          command_queue;
+    
+    id<MTLCommandBuffer>         render_command_buffer[DM_MAX_FRAMES_IN_FLIGHT];
+    id<MTLRenderCommandEncoder>  render_command_encoder[DM_MAX_FRAMES_IN_FLIGHT];
+    id<MTLCommandBuffer>         compute_command_buffer[DM_MAX_FRAMES_IN_FLIGHT];
+    id<MTLComputeCommandEncoder> compute_command_encoder[DM_MAX_FRAMES_IN_FLIGHT];
+
+    id<CAMetalDrawable> render_target;
+    uint32_t depth_target;
+    CAMetalLayer* swapchain;
+    
+    dispatch_semaphore_t semaphore;
+
+    id<MTLBuffer> buffers[DM_METAL_MAX_BUFFERS]; 
+    uint32_t      buffer_count;
+
+    id<MTLTexture> textures[DM_METAL_MAX_TEXTURES];
+    uint32_t       texture_count;
+
+    dm_metal_renderpass renderpasses[DM_METAL_MAX_RENDERPASS];
+    dm_metal_raster_pipeline raster_pipes[DM_METAL_MAX_RASTER_PIPES];
+    dm_metal_buffer vertex_buffers[DM_METAL_MAX_VBS];
+    dm_metal_index_buffer index_buffers[DM_METAL_MAX_IBS];
+    dm_metal_buffer constant_buffers[DM_METAL_MAX_CBS];
+    dm_metal_buffer storage_buffers[DM_METAL_MAX_SBS];
+
+    uint32_t renderpass_count, raster_pipe_count, vb_count, ib_count, cb_count, sb_count;
+
+    dm_pipeline_handle active_pipeline;
+    dm_resource_handle active_index_buffer;
+#endif
+
+    uint8_t current_frame;
+
+    dm_command_buffer render_commands;
+};
+
+// === render commands ===
+void dm_render_command_submit(dm_command command, dm_command_buffer* command_buffer)
+{
+    if(command_buffer->command_count >= DM_COMMAND_BUFFER_MAX_COMMANDS)
+    {
+        dm_log(DM_LOG_ERROR, "Too many commands");
+        return;
+    }
+
+    command_buffer->commands[command_buffer->command_count++] = command;
+}
+
+void dm_render_command_begin_render_pass(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_renderer* renderer)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS;
+
+    command.params[0].rph = handle;
+    command.params[1].f = r;
+    command.params[2].f = g;
+    command.params[3].f = b;
+    command.params[4].f = a;
+    command.params[5].f = depth;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_end_render_pass(dm_renderpass_handle handle, dm_renderer* renderer)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_END_RENDER_PASS;
+
+    command.params[0].rph = handle;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_bind_raster_pipeline(dm_pipeline_handle handle, dm_renderer* renderer)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE;
+
+    command.params[0].ph = handle;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_set_constants(uint32_t count, size_t offset, void* data, dm_renderer* renderer)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_SET_CONSTANTS;
+
+    command.params[0].u32 = count;
+    command.params[1].s   = offset;
+    command.params[2].v   = data;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, size_t offset, dm_renderer* renderer)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER;
+
+    command.params[0].rh = handle;
+    command.params[1].u8 = slot;
+    command.params[2].s  = offset;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_bind_index_buffer(dm_resource_handle handle, size_t offset, dm_renderer* renderer)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER;
+
+    command.params[0].rh = handle;
+    command.params[1].s  = offset;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_update_vertex_buffer(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer)
+{
+    dm_command command  = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER;
+
+    command.params[0].rh = handle;
+    command.params[1].v  = data;
+    command.params[2].s  = size;
+    command.params[3].s  = offset;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_update_index_buffer(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer)
+{
+    dm_command command  = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_INDEX_BUFFER;
+
+    command.params[0].rh = handle;
+    command.params[1].v  = data;
+    command.params[2].s  = size;
+    command.params[3].s  = offset;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_update_constant_buffer(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer)
+{
+    dm_command command  = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER;
+
+    command.params[0].rh = handle;
+    command.params[1].v  = data;
+    command.params[2].s  = size;
+    command.params[3].s  = offset;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_update_storage_buffer(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer)
+{
+    dm_command command  = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER;
+
+    command.params[0].rh = handle;
+    command.params[1].v  = data;
+    command.params[2].s  = size;
+    command.params[3].s  = offset;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_update_texture(dm_resource_handle handle, uint16_t width, uint16_t height, void* data, size_t size, size_t offset, dm_renderer* renderer)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_UPDATE_TEXTURE;
+
+    command.params[0].rh  = handle;
+    command.params[1].u16 = width;
+    command.params[2].u16 = height;
+    command.params[3].v   = data;
+    command.params[4].s   = size;
+    command.params[5].s   = offset;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_draw_instanced(uint32_t instance_count, size_t instance_offset, uint32_t vertex_count, size_t vertex_offset, dm_renderer* renderer)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED;
+
+    command.params[0].u32 = instance_count;
+    command.params[1].s   = instance_offset;
+    command.params[2].u32 = vertex_count;
+    command.params[3].s   = vertex_offset;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+void dm_render_command_draw_instanced_indexed(uint32_t instance_count, size_t instance_offset, uint32_t index_count, size_t index_offset, size_t vertex_offset, dm_renderer* renderer)
+{
+    dm_command command = { 0 };
+
+    command.r_type = DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED;
+
+    command.params[0].u32 = instance_count;
+    command.params[1].s   = instance_offset;
+    command.params[2].u32 = index_count;
+    command.params[3].s   = index_offset;
+    command.params[4].s   = vertex_offset;
+
+    dm_render_command_submit(command, &renderer->render_commands);
+}
+
+// === backend ===
+bool dm_renderer_init(dm_window window, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    dm_log(DM_LOG_DEBUG, "Initializing Metal backend...");
+
+    renderer->device = MTLCreateSystemDefaultDevice();
+    if(!renderer->device)
+    {
+        dm_log(DM_LOG_FATAL, "Could not create Metal device");
+        return false;
+    }
+
+    // check feature support
+    if(renderer->device.argumentBuffersSupport!=MTLArgumentBuffersTier2)
+    {
+        dm_log(DM_LOG_FATAL, "ArgumentBuffersTier2 not supported");
+        return false;
+    }
+#ifdef DM_RAYTRACING
+    if(!renderer->device.supportsRaytracing)
+    {
+        DM_LOG_FATAL("Device does not support ray tracing");
+        return false;
+    }
+#endif // DM_RAYTRACING
+
+    // swapchain
+    renderer->swapchain        = [CAMetalLayer layer];
+    renderer->swapchain.device = renderer->device;
+    renderer->swapchain.opaque = YES;
+
+    renderer->command_queue = [renderer->device newCommandQueue];
+    if(!renderer->command_queue)
+    {
+        dm_log(DM_LOG_FATAL, "newCommandQueue failed");
+        return false;
+    }
+
+    // must set the content view's layer to our metal layer
+    NSView* view = (NSView*)RGFW_window_getView_OSX(window.window);
+    [view setWantsLayer: YES];
+    [view setLayer:renderer->swapchain];
+    
+    NSSize layer_size = view.layer.frame.size;
+    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
+    NSSize drawable_size = NSMakeSize(layer_size.width * scale, layer_size.height * scale);
+    renderer->swapchain.contentsScale = scale;
+    renderer->swapchain.drawableSize = drawable_size;
+    
+    // depth texture 
+    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:window.window->w height:window.window->h mipmapped:NO];
+    descriptor.storageMode = MTLStorageModePrivate;
+    descriptor.usage       = MTLTextureUsageRenderTarget;
+
+    renderer->textures[renderer->texture_count] = [renderer->device newTextureWithDescriptor:descriptor];
+    
+    renderer->depth_target = renderer->texture_count++;
+    [descriptor release];
+
+    // command queue 
+    renderer->command_queue = [renderer->device newCommandQueue];
+
+    // semaphore
+    renderer->semaphore = dispatch_semaphore_create(DM_MAX_FRAMES_IN_FLIGHT);
+#endif
+
+    return true;
+}
+
+bool dm_renderer_begin_frame(dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    dispatch_semaphore_wait(renderer->semaphore, DISPATCH_TIME_FOREVER);
+
+    renderer->current_frame = (renderer->current_frame + 1) % DM_MAX_FRAMES_IN_FLIGHT;
+
+    // new render target
+    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
+    CGSize size = renderer->swapchain.bounds.size;
+    renderer->swapchain.contentsScale = scale;
+    renderer->swapchain.drawableSize = size;
+    
+    renderer->render_target = [renderer->swapchain nextDrawable];
+    if(!renderer->render_target) { dm_log(DM_LOG_FATAL, "nextDrawable failed"); return false; }
+
+    // command buffer
+	MTLCommandBufferDescriptor* desc = [MTLCommandBufferDescriptor new];
+	desc.errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
+	renderer->render_command_buffer[renderer->current_frame] = [renderer->command_queue commandBufferWithDescriptor:desc];
+    
+	[desc release];
+#endif
+
+    return true;
+}
+
+bool dm_renderer_end_frame(bool vsync, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    // present
+    renderer->swapchain.displaySyncEnabled = vsync;
+    [renderer->render_command_buffer[renderer->current_frame] presentDrawable:renderer->render_target];
+
+    // sync
+    __block dispatch_semaphore_t block_semaphore = renderer->semaphore;
+    [renderer->render_command_buffer[renderer->current_frame] addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
+        dispatch_semaphore_signal(block_semaphore);
+    }];
+
+    // final commit
+    [renderer->render_command_buffer[renderer->current_frame] commit];
+    [renderer->render_command_buffer[renderer->current_frame] waitUntilCompleted];
+#endif
+
+    return true;
+}
+
+void dm_renderer_shutdown(dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    for(uint32_t i=0; i<renderer->buffer_count; i++)
+    {
+        [renderer->buffers[i] release];
+    }
+
+    for(uint32_t i=0; i<renderer->texture_count; i++)
+    {
+        [renderer->textures[i] release];
+    }
+
+    for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        [renderer->compute_command_encoder[i] release];
+    }
+
+    [renderer->swapchain release];
+    [renderer->command_queue release];
+    [renderer->device release];
+#endif
+}
+
+bool dm_renderer_resize(dm_window window, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
+    renderer->swapchain.contentsScale = scale;
+    CGSize drawable_size;
+    drawable_size.width  = window.window->w;
+    drawable_size.height = window.window->h;
+    renderer->swapchain.drawableSize = drawable_size;
+    
+    // depth texture
+    [renderer->textures[renderer->depth_target] release];
+    
+    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:drawable_size.width height:drawable_size.height mipmapped:NO];
+    descriptor.storageMode = MTLStorageModePrivate;
+    descriptor.usage       = MTLTextureUsageRenderTarget;
+    
+    renderer->textures[renderer->depth_target] = [renderer->device newTextureWithDescriptor:descriptor];
+#endif
+
+    return true;
+}
+
+/*************
+ * RESOURCES *
+ *************/
+bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_renderpass_handle* handle, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    dm_metal_renderpass renderpass = { 0 };
+
+    switch(desc.type)
+    {
+        case DM_RENDERPASS_TYPE_DEFAULT:
+        break;
+
+        case DM_RENDERPASS_TYPE_CUSTOM:
+        dm_log(DM_LOG_FATAL, "Custom renderpasses not supported yet");
+        default:
+        return false;
+    }
+
+    dm_memcpy(renderer->renderpasses + renderer->renderpass_count, &renderpass, sizeof(renderpass));
+
+    *handle = renderer->renderpass_count++;
+#endif
+
+    return true;
+}
+#ifdef DM_METAL
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_metal_create_shader(const char* path, id<MTLLibrary>* library, id<MTLDevice> device)
+{
+    NSString* file = [NSString stringWithUTF8String:path];
+
+    NSURL* library_url = [NSURL URLWithString:file];
+    NSError* library_error = NULL;
+
+    *library = [device newLibraryWithURL:library_url error:&library_error];
+    if(!*library)
+    {
+        dm_log(DM_LOG_FATAL, "Creating Metal shader library failed");
+        dm_log(DM_LOG_ERROR, "%s", [library_error.localizedDescription UTF8String]);
+        [file release];
+        [library_url release];
+
+        return false;
+    }
+
+    return true;
+}
+
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+bool dm_metal_create_shader_function(const char* shader_function, id<MTLFunction>* function, id<MTLLibrary> library, id<MTLDevice> device)
+{
+    NSString* func_name = [[NSString alloc] initWithUTF8String:shader_function];
+
+    *function = [library newFunctionWithName:func_name];
+
+    if(!*function) { dm_log(DM_LOG_FATAL, "Failed to create Metal function"); return false; }
+
+    [func_name release];
+    return true;
+}
+#endif // DM_METAL
+
+bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle* handle, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    dm_metal_raster_pipeline pipeline = { 0 };
+
+    // shaders 
+    if(!dm_metal_create_shader(desc.rasterizer.vertex_shader_desc.path, &pipeline.vertex_library, renderer->device)) return false;
+    if(!dm_metal_create_shader_function("vertex_main", &pipeline.vertex_func, pipeline.vertex_library, renderer->device)) return false;
+
+    if(!dm_metal_create_shader(desc.rasterizer.pixel_shader_desc.path, &pipeline.fragment_library, renderer->device)) return false;
+    if(!dm_metal_create_shader_function("fragment_main", &pipeline.fragment_func, pipeline.fragment_library, renderer->device)) return false;
+
+    // pipeline state
+    MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
+    pipe_desc.rasterSampleCount = 1;
+
+    pipe_desc.vertexFunction   = pipeline.vertex_func;
+    pipe_desc.fragmentFunction = pipeline.fragment_func;
+
+    pipe_desc.colorAttachments[0].pixelFormat                 = MTLPixelFormatBGRA8Unorm;
+    pipe_desc.colorAttachments[0].blendingEnabled             = YES;
+    pipe_desc.colorAttachments[0].rgbBlendOperation           = MTLBlendOperationAdd;
+    pipe_desc.colorAttachments[0].sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
+    pipe_desc.colorAttachments[0].destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
+    pipe_desc.colorAttachments[0].alphaBlendOperation         = MTLBlendOperationAdd;
+    pipe_desc.colorAttachments[0].sourceAlphaBlendFactor      = MTLBlendFactorSourceAlpha;
+    pipe_desc.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
+
+    pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
+
+    NSError* error = NULL;
+    pipeline.pipeline_state = [renderer->device newRenderPipelineStateWithDescriptor:pipe_desc error:&error];
+    if(!pipeline.pipeline_state)
+    {
+        dm_log(DM_LOG_FATAL, "Creating Metal pipeline state failed");
+        dm_log(DM_LOG_ERROR, "%s", [error.localizedDescription UTF8String]);
+        [pipeline.vertex_library release];
+        [pipeline.fragment_library release];
+        [pipeline.vertex_func release];
+        [pipeline.fragment_func release];
+
+        return false;
+    }
+
+    // misc
+    switch(desc.rasterizer.cull_mode)
+    {
+        case DM_RASTERIZER_CULL_MODE_BACK:
+        pipeline.cull_mode = MTLCullModeBack;
+        break;
+
+        case DM_RASTERIZER_CULL_MODE_FRONT:
+        pipeline.cull_mode = MTLCullModeFront;
+        break;
+
+        case DM_RASTERIZER_CULL_MODE_NONE:
+        pipeline.cull_mode = MTLCullModeNone;
+        break;
+
+        default:
+        dm_log(DM_LOG_FATAL, "Unknown/unsupported cull mode");
+        return false;
+    }
+
+    switch(desc.rasterizer.front_face)
+    {
+        case DM_RASTERIZER_FRONT_FACE_COUNTER_CLOCKWISE:
+        pipeline.winding = MTLWindingCounterClockwise;
+        break;
+
+        case DM_RASTERIZER_FRONT_FACE_CLOCKWISE:
+        pipeline.winding = MTLWindingClockwise;
+        break;
+
+        default:
+        dm_log(DM_LOG_FATAL, "Unknown/unsupported winding");
+        return false;
+    }
+
+    switch(desc.input_assembler.topology)
+    {
+        case DM_INPUT_TOPOLOGY_TRIANGLE_LIST:
+        pipeline.primitive_type = MTLPrimitiveTypeTriangle;
+        break;
+
+        case DM_INPUT_TOPOLOGY_LINE_LIST:
+        pipeline.primitive_type = MTLPrimitiveTypeLine;
+        break;
+
+        default:
+        dm_log(DM_LOG_FATAL, "Unknown/unsupported topology");
+        return false;
+    }
+
+    pipeline.wireframe = desc.rasterizer.polygon_fill==DM_RASTERIZER_POLYGON_FILL_WIREFRAME ? true : false;
+
+    //
+    renderer->raster_pipes[renderer->raster_pipe_count] = pipeline;
+    *handle = renderer->raster_pipe_count++;
+#endif
+
+    return true;
+}
+#ifdef DM_METAL
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+id<MTLBuffer> dm_metal_create_buffer(void* data, size_t size, id<MTLDevice> device)
+{
+    if(data) return [device newBufferWithBytes:data length:size options:MTLResourceCPUCacheModeDefaultCache]; 
+    else     return [device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
+}
+#endif  
+
+bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    dm_metal_buffer buffer = { 0 };
+    
+    for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        renderer->buffers[renderer->buffer_count] = dm_metal_create_buffer(desc.data, desc.size, renderer->device);
+        if(!renderer->buffers[renderer->buffer_count])
+        {
+            if(desc.data) dm_log(DM_LOG_FATAL, "newBufferWithBytes failed");
+            else          dm_log(DM_LOG_FATAL, "newBufferWithLength failed");
+
+            return false;
+        }
+        buffer.buffer[i] = renderer->buffer_count++;
+    }
+
+    renderer->vertex_buffers[renderer->vb_count] = buffer;
+    handle->index = renderer->vb_count++;
+#endif
+
+    return true;
+}
+
+bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    dm_metal_index_buffer buffer = { 0 };
+    
+    switch(desc.index_type)
+    {
+        case DM_INDEX_BUFFER_INDEX_TYPE_UINT16:
+        buffer.index_type = MTLIndexTypeUInt16;
+        break;
+
+        case DM_INDEX_BUFFER_INDEX_TYPE_UINT32:
+        buffer.index_type = MTLIndexTypeUInt32;
+        break;
+
+        default:
+        dm_log(DM_LOG_FATAL, "Unknown or unsupported index type");
+        return false;
+    }
+    
+    for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        renderer->buffers[renderer->buffer_count] = dm_metal_create_buffer(desc.data, desc.size, renderer->device);
+        if(!renderer->buffers[renderer->buffer_count])
+        {
+            if(desc.data) dm_log(DM_LOG_FATAL, "newBufferWithBytes failed");
+            else          dm_log(DM_LOG_FATAL, "newBufferWithLength failed");
+
+            return false;
+        }
+        buffer.buffer[i] = renderer->buffer_count++;
+    }
+    
+    //
+    renderer->index_buffers[renderer->ib_count] = buffer;
+    handle->index = renderer->ib_count++;
+#endif
+
+    return true;
+}
+
+bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+bool dm_renderer_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+/******************
+* RENDER COMMANDS *
+*******************/
+bool dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    MTLRenderPassDescriptor* pass_desc = [MTLRenderPassDescriptor renderPassDescriptor];
+
+    pass_desc.colorAttachments[0].texture     = [renderer->render_target texture]; 
+    pass_desc.colorAttachments[0].storeAction = MTLStoreActionStore;
+    pass_desc.colorAttachments[0].loadAction  = MTLLoadActionClear;
+    pass_desc.colorAttachments[0].clearColor  = MTLClearColorMake(r,g,b,a);
+
+    pass_desc.depthAttachment.texture     = renderer->textures[renderer->depth_target]; 
+    pass_desc.depthAttachment.clearDepth  = depth;
+    pass_desc.depthAttachment.storeAction = MTLStoreActionDontCare;
+    pass_desc.depthAttachment.loadAction  = MTLLoadActionClear;
+
+    dm_metal_renderpass* pass = &renderer->renderpasses[handle];
+
+    renderer->render_command_encoder[renderer->current_frame] = [renderer->render_command_buffer[renderer->current_frame] renderCommandEncoderWithDescriptor:pass_desc];
+    if(!renderer->render_command_encoder[renderer->current_frame]) { dm_log(DM_LOG_FATAL, "renderCommandEncoderWithDescriptor failed"); return false; }
+
+    [pass_desc release];
+#endif
+
+    return true;
+}
+
+bool dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    [renderer->render_command_encoder[renderer->current_frame] endEncoding];
+#endif
+
+    return true;
+}
+
+bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    dm_metal_raster_pipeline pipeline = renderer->raster_pipes[handle];
+
+    MTLViewport viewport = { 0 };
+    viewport.width  = renderer->swapchain.drawableSize.width;
+    viewport.height = renderer->swapchain.drawableSize.height;
+    viewport.zfar   = 1.f;
+
+    MTLScissorRect rect;
+    rect.x = 0;
+    rect.y = 0;
+    rect.width = renderer->swapchain.drawableSize.width;
+    rect.height = renderer->swapchain.drawableSize.height;
+
+    [renderer->render_command_encoder[renderer->current_frame] setRenderPipelineState:pipeline.pipeline_state];
+    [renderer->render_command_encoder[renderer->current_frame] setFrontFacingWinding:pipeline.winding];
+    if(pipeline.wireframe) [renderer->render_command_encoder[renderer->current_frame] setTriangleFillMode:MTLTriangleFillModeLines];
+    else                   [renderer->render_command_encoder[renderer->current_frame] setTriangleFillMode:MTLTriangleFillModeFill];
+    [renderer->render_command_encoder[renderer->current_frame] setCullMode:pipeline.cull_mode];
+    [renderer->render_command_encoder[renderer->current_frame] setViewport:viewport];
+    [renderer->render_command_encoder[renderer->current_frame] setScissorRect:rect];
+
+    renderer->active_pipeline = handle;
+#endif
+
+    return true;
+}
+
+bool dm_render_command_set_constants_backend(uint32_t count, size_t offset, void* data, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+bool dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uint8_t slot, size_t offset, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    dm_metal_buffer buffer = renderer->vertex_buffers[handle.index];
+    const uint8_t current_frame = renderer->current_frame;
+
+    [renderer->render_command_encoder[current_frame] setVertexBuffer:renderer->buffers[buffer.buffer[current_frame]] offset:offset atIndex:slot];
+#endif
+
+    return true;
+}
+
+bool dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size_t offset, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+bool dm_render_command_update_vertex_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+bool dm_render_command_update_index_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+bool dm_render_command_update_constant_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+bool dm_render_command_update_storage_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+bool dm_render_command_update_texture_backend(dm_resource_handle handle, uint16_t width, uint16_t height, void* data, size_t size, size_t offset, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+bool dm_render_command_draw_instanced_backend(uint32_t instance_count, size_t instance_offset, uint32_t vertex_count, size_t vertex_offset, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+    dm_metal_raster_pipeline pipeline  = renderer->raster_pipes[renderer->active_pipeline];
+
+    [renderer->render_command_encoder[renderer->current_frame] drawPrimitives:pipeline.primitive_type vertexStart:vertex_offset vertexCount:vertex_count instanceCount:instance_count baseInstance:instance_offset];
+#endif
+
+    return true;
+}
+
+bool dm_render_command_draw_instanced_indexed_backend(uint32_t instance_count, size_t instance_offset, uint32_t index_count, size_t index_offset, size_t vertex_offset, dm_renderer* renderer)
+{
+#ifdef DM_DIRECTX12
+#elif defined(DM_VULKAN)
+#elif defined(DM_METAL)
+#endif
+
+    return true;
+}
+
+bool dm_renderer_submit_render_commands(dm_renderer* renderer)
+{
+    dm_command_buffer buffer = renderer->render_commands;
+
+    for(uint32_t i=0; i<buffer.command_count; i++)
+    {
+        dm_command command = buffer.commands[i];
+        dm_command_param* params = command.params;
+
+        switch(command.r_type)
+        {
+            case DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS:
+            if(dm_render_command_begin_render_pass_backend(params[0].rph, params[1].f,params[2].f,params[3].f,params[4].f,params[5].f, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Begin render pass failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_END_RENDER_PASS:
+            if(dm_render_command_end_render_pass_backend(params[0].rph, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "End render pass failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE:
+            if(dm_render_command_bind_raster_pipeline_backend(params[0].rph, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Bind raster pipeline failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_SET_CONSTANTS:
+            if(dm_render_command_set_constants_backend(params[0].u32, params[1].s, params[2].v, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Set constants failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER:
+            if(dm_render_command_bind_vertex_buffer_backend(params[0].rh, params[1].u32, params[2].s, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Bind vertex buffer failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER:
+            if(dm_render_command_bind_index_buffer_backend(params[0].rh, params[1].s, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Bind index buffer failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER:
+            if(dm_render_command_update_vertex_buffer_backend(params[0].rh, params[1].v,params[2].s,params[3].s, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Update vertex buffer failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_UPDATE_INDEX_BUFFER:
+            if(dm_render_command_update_index_buffer_backend(params[0].rh, params[1].v,params[2].s,params[3].s, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Update index buffer failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER:
+            if(dm_render_command_update_constant_buffer_backend(params[0].rh, params[1].v,params[2].s,params[3].s, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Update constant buffer failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER:
+            if(dm_render_command_update_storage_buffer_backend(params[0].rh, params[1].v,params[2].s,params[3].s, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Update storage buffer failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_UPDATE_TEXTURE:
+            if(dm_render_command_update_texture_backend(params[0].rh, params[1].u16,params[2].u16,params[3].v,params[4].s,params[5].s, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Update texture failed");
+            return false;
+
+            case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED:
+            if(dm_render_command_draw_instanced_backend(params[0].u32,params[1].s,params[2].u32,params[3].s, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Draw instanced failed");
+            return false;
+            case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED:
+            if(dm_render_command_draw_instanced_indexed_backend(params[0].u32,params[1].s,params[2].u32,params[3].s,params[4].s, renderer)) continue;
+            dm_log(DM_LOG_FATAL, "Draw instanced indexed failed");
+            return false;
+
+            default:
+            dm_log(DM_LOG_ERROR, "Unknown render command, shouldn't be here...");
+            break;
+        }
+    }
+
+    renderer->render_commands.command_count = 0;
+    return true;
 }
 
 #endif // DM_IMPLEMENTATION
