@@ -35,6 +35,7 @@ vertex fragment_out vertex_main(const device resource_buffer& resources[[buffer(
     };
 
     frag.position = resources.camera->projection * float4(vertices[v_id].position.xyz, 1.f);
+    //frag.position = float4(vertices[v_id].position.xyz, 1.f);
     frag.color    = vertices[v_id].color;
 
     return frag;

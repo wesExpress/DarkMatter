@@ -22,6 +22,7 @@ typedef struct vertex_t
 typedef struct simple_camera_t
 {
     mat4 ortho;
+    mat4 view, perspective, vp;
     vec3 position;
 } simple_camera;
 
@@ -101,6 +102,11 @@ bool create_resources(application* app)
         0,1,2
     };
 
+    vec4 test1, test2, test3;
+    glm_mat4_mulv3(app->camera.vp, vertices[0].position, 1, test1);
+    glm_mat4_mulv3(app->camera.vp, vertices[1].position, 1, test2);
+    glm_mat4_mulv3(app->camera.vp, vertices[2].position, 1, test3);
+
     dm_resource_handle vb, ib;
 
     dm_vertex_buffer_desc vb_desc = {
@@ -154,15 +160,25 @@ exit_code app_run(application* app)
             if(!dm_renderer_resize(app->window, &app->renderer)) { dm_log(DM_LOG_FATAL, "Window resize failed"); code=EXIT_CODE_RESIZE_FAIL; break; }
         }
 
+        if(dm_input_is_key_pressed(DM_KEY_LEFT, app->window))       app->camera.position[0] -= 0.001f;
+        else if(dm_input_is_key_pressed(DM_KEY_RIGHT, app->window)) app->camera.position[0] += 0.001f;
+
+        if(dm_input_is_key_pressed(DM_KEY_UP, app->window))        app->camera.position[2] += 0.001f;
+        else if(dm_input_is_key_pressed(DM_KEY_DOWN, app->window)) app->camera.position[2] -= 0.001f;
+
+        vec3 target = { 0,0,1 };
+        vec3 up = { 0,1,0 };
+
+        glm_lookat(app->camera.position, target, up, app->camera.view);
+        glm_mul(app->camera.perspective, app->camera.view, app->camera.vp);
+
         // rendering
         if(!dm_renderer_begin_frame(&app->renderer)) { dm_log(DM_LOG_FATAL, "begin frame failed"); code=EXIT_CODE_RENDER_FAIL; break; }
 
         app->resources.constant_buffer = app->cb.gpu_address;
 
-        //glm_mat4_identity(app->camera.ortho);
-
         dm_render_command_begin_update(&app->renderer);
-            dm_render_command_update_constant_buffer(app->cb, &app->camera.ortho, sizeof(mat4), 0, &app->renderer);
+            dm_render_command_update_constant_buffer(app->cb, &app->camera.vp, sizeof(mat4), 0, &app->renderer);
         dm_render_command_end_update(&app->renderer);
 
         dm_render_command_begin_render_pass(app->pass, 0.5f,0.7f,0.9f,1,1, &app->renderer);
@@ -203,15 +219,16 @@ int main()
     if(!app_init(&app)) return EXIT_CODE_INIT_FAIL;
 
     // camera
-    mat4 perspective, view, vp;
-    vec3 target, up;
-    target[2] = 1;
-    up[1] = 1;
+    vec3 target = { 0,0,1 };
+    vec3 up = { 0,1,0 };
+
+    float fov = 75.f * 3.14f / 180.f;
+    float aspect = (float)dm_window_get_width(app.window) / (float)dm_window_get_height(app.window);
 
     glm_ortho(0, dm_window_get_width(app.window), dm_window_get_height(app.window), 0, 0.1f, 100.f, app.camera.ortho);
-    glm_perspective(75.f * 3.14f / 180.f, (float)dm_window_get_width(app.window) / (float)dm_window_get_height(app.window), 0.1f, 100.f, perspective);
-    glm_lookat(app.camera.position, target, up, view);
-    glm_mat4_mul(view, perspective, app.camera.ortho);
+    glm_lookat(app.camera.position, target, up, app.camera.view);
+    glm_perspective(fov, aspect, 0.1f, 100.f, app.camera.perspective);
+    glm_mat4_mul(app.camera.perspective, app.camera.view, app.camera.vp);
 
     if(!create_resources(&app))
     {

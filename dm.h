@@ -1810,7 +1810,7 @@ bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipelin
     pipe_desc.vertexFunction   = pipeline.vertex_func;
     pipe_desc.fragmentFunction = pipeline.fragment_func;
 
-    pipe_desc.colorAttachments[0].pixelFormat                 = MTLPixelFormatBGRA8Unorm;
+    pipe_desc.colorAttachments[0].pixelFormat                 = MTLPixelFormatRGBA8Unorm;
     pipe_desc.colorAttachments[0].blendingEnabled             = YES;
     pipe_desc.colorAttachments[0].rgbBlendOperation           = MTLBlendOperationAdd;
     pipe_desc.colorAttachments[0].sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
