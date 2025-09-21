@@ -92,9 +92,9 @@ bool create_resources(application* app)
     if(!dm_renderer_create_raster_pipeline(pipe_desc, &app->pipeline, &app->renderer)) return false;
 
     vertex vertices[] = {
-        { { -0.5f,-0.5f,0.f }, {1,0,0,1} },
-        { {  0.5f,-0.5f,0.f }, {0,1,0,1} },
-        { {  0.f,  0.5f,0.f }, {0,0,1,1} },
+        { { -0.5f,-0.5f,0.5f }, {1,0,0,1} },
+        { {  0.5f,-0.5f,0.5f }, {0,1,0,1} },
+        { {  0.f,  0.5f,0.5f }, {0,0,1,1} },
     };
 
     uint32_t indices[] = {
@@ -159,7 +159,7 @@ exit_code app_run(application* app)
 
         app->resources.constant_buffer = app->cb.gpu_address;
 
-        glm_mat4_identity(app->camera.ortho);
+        //glm_mat4_identity(app->camera.ortho);
 
         dm_render_command_begin_update(&app->renderer);
             dm_render_command_update_constant_buffer(app->cb, &app->camera.ortho, sizeof(mat4), 0, &app->renderer);
@@ -203,8 +203,6 @@ int main()
     if(!app_init(&app)) return EXIT_CODE_INIT_FAIL;
 
     // camera
-    app.camera.position[2] = 1;
-
     glm_ortho(0, dm_window_get_width(app.window), dm_window_get_height(app.window), 0, 0.1f, 100.f, app.camera.ortho);
 
     if(!create_resources(&app))

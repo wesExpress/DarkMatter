@@ -3,6 +3,7 @@
 
 #include "dm_defines.h"
 
+#define CGLM_FORCE_DEPTH_ZERO_TO_ONE
 #include "lib/cglm/include/cglm/cglm.h"
 
 /**********
