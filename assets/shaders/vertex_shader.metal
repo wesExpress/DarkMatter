@@ -27,6 +27,13 @@ vertex fragment_out vertex_main(const device resource_buffer& resources[[buffer(
 {
     fragment_out frag;
 
+    float4x4 identity = {
+        1,0,0,0,
+        0,1,0,0,
+        0,0,1,0,
+        0,0,0,1
+    };
+
     frag.position = resources.camera->projection * float4(vertices[v_id].position.xyz, 1.f);
     frag.color    = vertices[v_id].color;
 

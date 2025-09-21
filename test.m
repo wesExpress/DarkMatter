@@ -203,7 +203,15 @@ int main()
     if(!app_init(&app)) return EXIT_CODE_INIT_FAIL;
 
     // camera
+    mat4 perspective, view, vp;
+    vec3 target, up;
+    target[2] = 1;
+    up[1] = 1;
+
     glm_ortho(0, dm_window_get_width(app.window), dm_window_get_height(app.window), 0, 0.1f, 100.f, app.camera.ortho);
+    glm_perspective(75.f * 3.14f / 180.f, (float)dm_window_get_width(app.window) / (float)dm_window_get_height(app.window), 0.1f, 100.f, perspective);
+    glm_lookat(app.camera.position, target, up, view);
+    glm_mat4_mul(view, perspective, app.camera.ortho);
 
     if(!create_resources(&app))
     {
