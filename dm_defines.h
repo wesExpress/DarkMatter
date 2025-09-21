@@ -6,6 +6,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#ifndef NDEBUG
+#define DM_DEBUG
+#endif
+
 /********************************************
 DETERMINE PLATFORM AND RENDERING BACKEND
 **********************************************/
