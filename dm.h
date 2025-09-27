@@ -321,11 +321,6 @@ typedef enum dm_resource_type_t
 typedef struct dm_resource_handle_t
 {
     dm_resource_type type;
-#ifdef DM_METAL
-    uint64_t gpu_address;
-#else
-    uint32_t descriptor_index;
-#endif
     dm_resource_index index;
 } dm_resource_handle;
 
