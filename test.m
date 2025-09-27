@@ -17,6 +17,7 @@ typedef struct vertex_t
 {
     float position[4];
     float color[4];
+    float uv[4];
 } vertex;
 
 typedef struct simple_camera_t
@@ -25,6 +26,7 @@ typedef struct simple_camera_t
     vec3 position;
 } simple_camera;
 
+#define ENTITY_COUNT 10
 typedef struct application_t
 {
     dm_renderer renderer;
@@ -34,9 +36,11 @@ typedef struct application_t
     dm_pipeline_handle pipeline;
     dm_resource_handle vb, ib, cb;
     dm_resource_handle instance_buffer;
+    dm_resource_handle texture;
+    dm_resource_handle sampler;
 
     simple_camera camera;
-    mat4 model;
+    mat4 models[ENTITY_COUNT];
 } application;
 
 bool app_init(application* app)
@@ -81,10 +85,10 @@ bool create_resources(application* app)
     if(!dm_renderer_create_raster_pipeline(pipe_desc, &app->pipeline, &app->renderer)) return false;
 
     vertex vertices[] = {
-        { { -0.5f,-0.5f,0.f }, {1,0,0,1} },
-        { {  0.5f,-0.5f,0.f }, {0,1,0,1} },
-        { {  0.5f, 0.5f,0.f }, {0,0,1,1} },
-        { { -0.5f, 0.5f,0.f }, {1,0,1,1} },
+        { { -0.5f,-0.5f,0.f }, {1,0,0,1}, { 0,0 } },
+        { {  0.5f,-0.5f,0.f }, {0,1,0,1}, { 1,0 } },
+        { {  0.5f, 0.5f,0.f }, {0,0,1,1}, { 1,1 } },
+        { { -0.5f, 0.5f,0.f }, {1,0,1,1}, { 0,1 } },
     };
 
     uint32_t indices[] = {
@@ -128,14 +132,24 @@ bool create_resources(application* app)
     if(!dm_renderer_create_constant_buffer(cb_desc, &app->cb, &app->renderer)) return false;
 
     // instance buffer
-    glm_mat4_identity(app->model);
-
     dm_storage_buffer_desc sb_desc = {
-        .size=sizeof(mat4), .stride=sizeof(mat4),
-        .data=&app->model
+        .size=sizeof(app->models), .stride=sizeof(mat4),
+        .data=app->models
     };
 
     if(!dm_renderer_create_storage_buffer(sb_desc, &app->instance_buffer, &app->renderer)) return false;
+
+    // sampler
+    dm_sampler_desc sampler_desc = {
+        .address_u=DM_SAMPLER_ADDRESS_MODE_WRAP,
+        .address_v=DM_SAMPLER_ADDRESS_MODE_WRAP,
+        .address_w=DM_SAMPLER_ADDRESS_MODE_WRAP
+    };
+
+    if(!dm_renderer_create_sampler(sampler_desc, &app->sampler, &app->renderer)) return false;
+
+    // texture
+    if(!dm_renderer_create_texture_from_file("assets/textures/container.jpg", &app->texture, &app->renderer)) return false;
 
     //
     if(!dm_renderer_finish_init(&app->renderer)) return false;
@@ -182,25 +196,29 @@ exit_code app_run(application* app)
         glm_lookat(app->camera.position, target, up, app->camera.view);
         glm_mul(app->camera.perspective, app->camera.view, app->camera.vp);
 
-        glm_mat4_identity(app->model);
-        glm_translate(app->model, (vec3){ 1,1,1 });
+        for(uint8_t i=0; i<ENTITY_COUNT; i++)
+        {
+            float x = (float)i / (float)ENTITY_COUNT * 10.f - 5.f;
+            glm_mat4_identity(app->models[i]);
+            glm_translate(app->models[i], (vec3){ x,x,x });
+        }
 
         // rendering
         if(!dm_renderer_begin_frame(&app->renderer)) { dm_log(DM_LOG_FATAL, "begin frame failed"); return EXIT_CODE_RENDER_FAIL; }
 
-        dm_resource_handle resources[] = { app->cb,app->instance_buffer };
+        dm_resource_handle resources[] = { app->cb,app->instance_buffer,app->texture,app->sampler };
 
         dm_render_command_begin_update(&app->renderer);
             dm_render_command_update_constant_buffer(app->cb, &app->camera.vp, sizeof(mat4), 0, &app->renderer);
-            dm_render_command_update_storage_buffer(app->instance_buffer, &app->model, sizeof(mat4), 0, &app->renderer);
+            dm_render_command_update_storage_buffer(app->instance_buffer, app->models, sizeof(app->models), 0, &app->renderer);
         dm_render_command_end_update(&app->renderer);
 
         dm_render_command_begin_render_pass(app->pass, 0.5f,0.7f,0.9f,1,1, &app->renderer);
             dm_render_command_bind_raster_pipeline(app->pipeline, &app->renderer);
-            dm_render_command_submit_resources(resources, 2, &app->renderer);
+            dm_render_command_submit_resources(resources, 4, &app->renderer);
             dm_render_command_bind_vertex_buffer(app->vb, 0, 0, &app->renderer);
             dm_render_command_bind_index_buffer(app->ib, 0, &app->renderer);
-            dm_render_command_draw_instanced_indexed(1,0,6,0,0, &app->renderer);
+            dm_render_command_draw_instanced_indexed(ENTITY_COUNT,0,6,0,0, &app->renderer);
         dm_render_command_end_render_pass(app->pass, &app->renderer);
 
         if(!dm_renderer_submit_render_commands(&app->renderer)) { dm_log(DM_LOG_FATAL, "submit commands failed"); return EXIT_CODE_RENDER_FAIL; }
