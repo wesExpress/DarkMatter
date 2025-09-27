@@ -1164,9 +1164,11 @@ typedef struct dm_metal_raster_pipeline_t
 
     uint32_t vertex_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
     uint32_t fragment_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
+    uint32_t texture_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
 
     id<MTLArgumentEncoder> vertex_encoder;
     id<MTLArgumentEncoder> fragment_encoder;
+    id<MTLArgumentEncoder> texture_encoder;
 } dm_metal_raster_pipeline;
 
 typedef struct dm_metal_heap_t
@@ -1203,8 +1205,8 @@ struct dm_renderer_t
 
     dm_metal_heap resource_heap[DM_MAX_FRAMES_IN_FLIGHT];
 
-    // regular buffers, 2 argument for raster pipes,  times frames in flight
-    id<MTLBuffer> buffers[(DM_MAX_BUFFERS + DM_MAX_RASTER_PIPES * 2)* DM_MAX_FRAMES_IN_FLIGHT];     
+    // regular buffers, 3 argument for raster pipes, times frames in flight
+    id<MTLBuffer> buffers[(DM_MAX_BUFFERS + DM_MAX_RASTER_PIPES * 3 + 1) * DM_MAX_FRAMES_IN_FLIGHT];     
     uint32_t      buffer_count;
 
     id<MTLTexture> textures[DM_MAX_TEXTURES * DM_MAX_FRAMES_IN_FLIGHT];
@@ -1216,7 +1218,7 @@ struct dm_renderer_t
     dm_metal_index_buffer index_buffers[DM_MAX_IBS];
     dm_metal_buffer constant_buffers[DM_MAX_CBS];
     dm_metal_buffer storage_buffers[DM_MAX_SBS];
-    dm_metal_texture metal_textures[DM_MAX_TEXTURES];
+    dm_metal_texture metal_textures[10];
     dm_metal_sampler samplers[DM_MAX_SAMPLERS];
 
     uint32_t renderpass_count, raster_pipe_count, vb_count, ib_count, cb_count, sb_count, metal_texture_count, sampler_count;
@@ -1940,7 +1942,9 @@ bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipelin
 
     pipeline.vertex_encoder   = [pipeline.vertex_func newArgumentEncoderWithBufferIndex:0];
     if(!pipeline.vertex_encoder) { dm_log(DM_LOG_FATAL, "newArgumentEncoderWithBufferIndex failed"); return false; }
-    pipeline.fragment_encoder = [pipeline.fragment_func newArgumentEncoderWithBufferIndex:0];
+    pipeline.texture_encoder  = [pipeline.fragment_func newArgumentEncoderWithBufferIndex:0];
+    if(!pipeline.texture_encoder) { dm_log(DM_LOG_FATAL, "newArgumentEncoderWithBufferIndex failed"); return false; }
+    pipeline.fragment_encoder = [pipeline.fragment_func newArgumentEncoderWithBufferIndex:1];
     if(!pipeline.fragment_encoder) { dm_log(DM_LOG_FATAL, "newArgumentEncoderWithBufferIndex failed"); return false; }
 
     // argument buffer
@@ -1952,6 +1956,13 @@ bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipelin
 
         renderer->buffers[renderer->buffer_count] = buffer;
         pipeline.vertex_argument_buffer[i] = renderer->buffer_count++;
+
+        size = pipeline.texture_encoder.encodedLength;
+        buffer = [renderer->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
+        if(!buffer) { dm_log(DM_LOG_FATAL, "newBufferWithLength failed"); return false; }
+
+        renderer->buffers[renderer->buffer_count] = buffer;
+        pipeline.texture_argument_buffer[i] = renderer->buffer_count++;
 
         size = pipeline.fragment_encoder.encodedLength;
         buffer = [renderer->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
@@ -2356,13 +2367,16 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
             dm_metal_raster_pipeline pipeline = renderer->raster_pipes[renderer->active_pipeline.index];
 
             id<MTLBuffer> vertex_argument_buffer   = renderer->buffers[pipeline.vertex_argument_buffer[current_frame]];
+            id<MTLBuffer> texture_argument_buffer  = renderer->buffers[pipeline.texture_argument_buffer[current_frame]];
             id<MTLBuffer> fragment_argument_buffer = renderer->buffers[pipeline.fragment_argument_buffer[current_frame]];
 
             [pipeline.vertex_encoder setArgumentBuffer:vertex_argument_buffer offset:0];
+            [pipeline.texture_encoder setArgumentBuffer:texture_argument_buffer offset:0];
             [pipeline.fragment_encoder setArgumentBuffer:fragment_argument_buffer offset:0];
 
             uint8_t index = 0;
 
+            // set up user argument buffers
             for(uint16_t i=0; i<count; i++)
             {
                 switch(handles[i].type)
@@ -2390,7 +2404,6 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
 
                         [pipeline.fragment_encoder setTexture:texture atIndex:index++];
                     } break;
-
                     case DM_RESOURCE_TYPE_SAMPLER:
                     {
                         id<MTLSamplerState> sampler = renderer->samplers[handles[i].index].state[current_frame];
@@ -2404,8 +2417,22 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
                 }
             }
 
+            // set up texture argument buffer
+            for(uint32_t i=0; i<renderer->metal_texture_count; i++)
+            {
+                dm_metal_texture texture = renderer->metal_textures[i];
+
+                [pipeline.texture_encoder setTexture:renderer->textures[texture.device[current_frame]] atIndex:i];
+            }
+
+            for(uint32_t i=0; i<renderer->sampler_count; i++)
+            {
+                [pipeline.texture_encoder setSamplerState:renderer->samplers[i].state[current_frame] atIndex:(i + 10)];
+            }
+
             [encoder setVertexBuffer:vertex_argument_buffer offset:0 atIndex:0];
-            [encoder setFragmentBuffer:fragment_argument_buffer offset:0 atIndex:0];
+            [encoder setFragmentBuffer:texture_argument_buffer offset:0 atIndex:0];
+            [encoder setFragmentBuffer:fragment_argument_buffer offset:0 atIndex:1];
         } break;
 
         default:

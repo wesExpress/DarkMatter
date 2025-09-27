@@ -20,6 +20,12 @@ typedef struct vertex_t
     float uv[4];
 } vertex;
 
+typedef struct instance_t
+{
+    mat4 model;
+    uint32_t texture;
+} instance;
+
 typedef struct simple_camera_t
 {
     mat4 view, perspective, vp;
@@ -36,11 +42,11 @@ typedef struct application_t
     dm_pipeline_handle pipeline;
     dm_resource_handle vb, ib, cb;
     dm_resource_handle instance_buffer;
-    dm_resource_handle texture;
+    dm_resource_handle texture, texture2;
     dm_resource_handle sampler;
 
     simple_camera camera;
-    mat4 models[ENTITY_COUNT];
+    instance instances[ENTITY_COUNT];
 } application;
 
 bool app_init(application* app)
@@ -133,8 +139,8 @@ bool create_resources(application* app)
 
     // instance buffer
     dm_storage_buffer_desc sb_desc = {
-        .size=sizeof(app->models), .stride=sizeof(mat4),
-        .data=app->models
+        .size=sizeof(app->instances), .stride=sizeof(instance),
+        .data=app->instances
     };
 
     if(!dm_renderer_create_storage_buffer(sb_desc, &app->instance_buffer, &app->renderer)) return false;
@@ -150,6 +156,7 @@ bool create_resources(application* app)
 
     // texture
     if(!dm_renderer_create_texture_from_file("assets/textures/container.jpg", &app->texture, &app->renderer)) return false;
+    if(!dm_renderer_create_texture_from_file("assets/textures/awesomeFace.png", &app->texture2, &app->renderer)) return false;
 
     //
     if(!dm_renderer_finish_init(&app->renderer)) return false;
@@ -201,18 +208,20 @@ exit_code app_run(application* app)
         for(uint8_t i=0; i<ENTITY_COUNT; i++)
         {
             float x = (float)i / (float)ENTITY_COUNT * 10.f - 5.f;
-            glm_mat4_identity(app->models[i]);
-            glm_translate(app->models[i], (vec3){ x,x,x });
+            glm_mat4_identity(app->instances[i].model);
+            glm_translate(app->instances[i].model, (vec3){ x,x,x });
+
+            app->instances[i].texture = i % 2;
         }
 
         // rendering
         if(!dm_renderer_begin_frame(&app->renderer)) { dm_log(DM_LOG_FATAL, "begin frame failed"); return EXIT_CODE_RENDER_FAIL; }
 
-        dm_resource_handle resources[] = { app->cb,app->instance_buffer,app->texture,app->sampler };
+        dm_resource_handle resources[] = { app->cb,app->instance_buffer };
 
         dm_render_command_begin_update(&app->renderer);
             dm_render_command_update_constant_buffer(app->cb, &app->camera.vp, sizeof(mat4), 0, &app->renderer);
-            dm_render_command_update_storage_buffer(app->instance_buffer, app->models, sizeof(app->models), 0, &app->renderer);
+            dm_render_command_update_storage_buffer(app->instance_buffer, app->instances, sizeof(app->instances), 0, &app->renderer);
         dm_render_command_end_update(&app->renderer);
 
         dm_render_command_begin_render_pass(app->pass, 0.5f,0.7f,0.9f,1,1, &app->renderer);
