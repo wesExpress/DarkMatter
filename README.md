@@ -24,6 +24,7 @@ We use the VK_EXT_mutable_descriptor type to let us alias the first binding in s
 For Metal, we use argument buffers. To encode the argument buffers, the following render commands should be called in this order:
  - dm_render_command_bind_raster_pipeline(...)
  - dm_render_command_submit_resources(...)
+
 Note that this is different from the other render backends; submit_resources can be called before or after bind_pipeline there.
 
 ### Rasterization Pipeline
