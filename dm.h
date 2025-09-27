@@ -3,8 +3,21 @@
 
 #include "dm_defines.h"
 
+/********
+ * MATH *
+ ********/
+#ifndef DM_DIRECTX12
 #define CGLM_FORCE_DEPTH_ZERO_TO_ONE
+#endif
 #include "lib/cglm/include/cglm/cglm.h"
+
+#define DM_PI      3.1415926535
+#define DM_2PI    (2.f * DM_PI)
+#define DM_INV_PI  0.31830989f
+#define DM_INV_2PI 0.15915494f
+#define DM_INV_180 0.0055555f
+#define DM_DEG_TO_RAD(X) (X * DM_PI * DM_INV_180)
+#define DM_RAD_TO_DEG(X) (X * 180.f * DM_INV_PI)
 
 /**********
  * MEMORY * 
@@ -1461,9 +1474,10 @@ bool dm_renderer_init(dm_window window, dm_renderer* renderer)
     }
 
     // must set the content view's layer to our metal layer
-    NSView* view = (NSView*)RGFW_window_getView_OSX(window.window);
+    MTKView* view = (MTKView*)RGFW_window_getView_OSX(window.window);
     [view setWantsLayer: YES];
     [view setLayer:renderer->swapchain];
+    //[view setColorPixelFormat:MTLPixelFormatRGBA8Unorm];
     
     NSSize layer_size = view.layer.frame.size;
     CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
@@ -1565,31 +1579,9 @@ bool dm_renderer_finish_init(dm_renderer* renderer)
     {
         if(!dm_metal_copy_buffer_to_heap(&renderer->constant_buffers[i], renderer, blit_encoder)) return false;
     }
-
-    // update gpu resource id
-    for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
+    for(uint32_t i=0; i<renderer->sb_count; i++)
     {
-        for(uint32_t j=0; j<renderer->resource_heap[i].resource_count; j++)
-        {
-            dm_resource_handle* handle = renderer->resource_heap[i].resources[j];
-
-            switch(handle->type)
-            {
-                case DM_RESOURCE_TYPE_VERTEX_BUFFER:
-                handle->gpu_address = renderer->buffers[renderer->vertex_buffers[handle->index].device[i]].gpuAddress;
-                break;
-                case DM_RESOURCE_TYPE_INDEX_BUFFER:
-                handle->gpu_address = renderer->buffers[renderer->index_buffers[handle->index].buffer.device[i]].gpuAddress;
-                break;
-                case DM_RESOURCE_TYPE_CONSTANT_BUFFER:
-                handle->gpu_address = renderer->buffers[renderer->constant_buffers[handle->index].device[i]].gpuAddress;
-                break;
-
-                default:
-                dm_log(DM_LOG_FATAL, "Unknown/unsupported resource. Should not be here.");
-                return false;
-            }
-        }
+        if(!dm_metal_copy_buffer_to_heap(&renderer->storage_buffers[i], renderer, blit_encoder)) return false;
     }
 
     [blit_encoder endEncoding];
@@ -1810,7 +1802,8 @@ bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipelin
     pipe_desc.vertexFunction   = pipeline.vertex_func;
     pipe_desc.fragmentFunction = pipeline.fragment_func;
 
-    pipe_desc.colorAttachments[0].pixelFormat                 = MTLPixelFormatRGBA8Unorm;
+    //pipe_desc.colorAttachments[0].pixelFormat                 = MTLPixelFormatRGBA8Unorm;
+    pipe_desc.colorAttachments[0].pixelFormat                 = MTLPixelFormatBGRA8Unorm;
     pipe_desc.colorAttachments[0].blendingEnabled             = YES;
     pipe_desc.colorAttachments[0].rgbBlendOperation           = MTLBlendOperationAdd;
     pipe_desc.colorAttachments[0].sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
@@ -2046,6 +2039,17 @@ bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_
 #ifdef DM_DIRECTX12
 #elif defined(DM_VULKAN)
 #elif defined(DM_METAL)
+    dm_metal_buffer buffer = { 0 };
+    
+    if(!dm_metal_create_buffer(desc.data, desc.size, &buffer, renderer)) return false;
+
+    renderer->storage_buffers[renderer->sb_count] = buffer;
+    handle->index = renderer->sb_count++;
+
+    for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        renderer->resource_heap[i].resources[renderer->resource_heap[i].resource_count++] = handle;
+    }
 #endif
 
     handle->type = DM_RESOURCE_TYPE_STORAGE_BUFFER;
@@ -2221,6 +2225,9 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
             [pipeline.vertex_encoder setArgumentBuffer:vertex_argument_buffer offset:0];
             [pipeline.fragment_encoder setArgumentBuffer:fragment_argument_buffer offset:0];
 
+            uint8_t buffer_index = 0;
+            uint8_t texture_index = 0;
+
             for(uint16_t i=0; i<count; i++)
             {
                 switch(handles[i].type)
@@ -2230,7 +2237,16 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
                         id<MTLBuffer> buffer = renderer->buffers[renderer->constant_buffers[handles[i].index].device[current_frame]];
 
                         // TODO: FIX!
-                        [pipeline.vertex_encoder setBuffer:buffer offset:0 atIndex:0];
+                        [pipeline.vertex_encoder setBuffer:buffer offset:0 atIndex:buffer_index];
+                        [pipeline.fragment_encoder setBuffer:buffer offset:0 atIndex:buffer_index++];
+                    } break;
+                    case DM_RESOURCE_TYPE_STORAGE_BUFFER:
+                    {
+                        id<MTLBuffer> buffer = renderer->buffers[renderer->storage_buffers[handles[i].index].device[current_frame]];
+
+                        // TODO: FIX!
+                        [pipeline.vertex_encoder setBuffer:buffer offset:0 atIndex:buffer_index];
+                        [pipeline.fragment_encoder setBuffer:buffer offset:0 atIndex:buffer_index++];
                     } break;
 
                     default:
@@ -2289,11 +2305,31 @@ bool dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size
     return true;
 }
 
+#ifdef DM_METAL
+#ifndef DM_DEBUG
+DM_INLINE
+#endif
+void dm_metal_update_buffer(void* data, size_t size, size_t offset, dm_metal_buffer buffer, dm_renderer* renderer)
+{
+    const uint8_t current_frame = renderer->current_frame;
+
+    id<MTLBlitCommandEncoder> blit_encoder = renderer->render_blit_encoder[current_frame];
+
+    dm_memcpy(renderer->buffers[buffer.host[current_frame]].contents + offset, data, size);
+
+    id<MTLBuffer> host_buffer   = renderer->buffers[buffer.host[current_frame]];
+    id<MTLBuffer> device_buffer = renderer->buffers[buffer.device[current_frame]];
+
+    [blit_encoder copyFromBuffer:host_buffer sourceOffset:offset toBuffer:device_buffer destinationOffset:offset size:size];
+}
+#endif // DM_METAL
+
 bool dm_render_command_update_vertex_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer)
 {
 #ifdef DM_DIRECTX12
 #elif defined(DM_VULKAN)
 #elif defined(DM_METAL)
+    dm_metal_update_buffer(data, size, offset, renderer->vertex_buffers[handle.index], renderer);
 #endif
 
     return true;
@@ -2304,6 +2340,7 @@ bool dm_render_command_update_index_buffer_backend(dm_resource_handle handle, vo
 #ifdef DM_DIRECTX12
 #elif defined(DM_VULKAN)
 #elif defined(DM_METAL)
+    dm_metal_update_buffer(data, size, offset, renderer->index_buffers[handle.index].buffer, renderer);
 #endif
 
     return true;
@@ -2316,16 +2353,7 @@ bool dm_render_command_update_constant_buffer_backend(dm_resource_handle handle,
 #ifdef DM_DIRECTX12
 #elif defined(DM_VULKAN)
 #elif defined(DM_METAL)
-    id<MTLBlitCommandEncoder> blit_encoder = renderer->render_blit_encoder[current_frame];
-
-    dm_metal_buffer buffer = renderer->constant_buffers[handle.index];
-
-    dm_memcpy(renderer->buffers[buffer.host[current_frame]].contents, data, size);
-
-    id<MTLBuffer> host_buffer   = renderer->buffers[buffer.host[current_frame]];
-    id<MTLBuffer> device_buffer = renderer->buffers[buffer.device[current_frame]];
-
-    [blit_encoder copyFromBuffer:host_buffer sourceOffset:0 toBuffer:device_buffer destinationOffset:0 size:size];
+    dm_metal_update_buffer(data, size, offset, renderer->constant_buffers[handle.index], renderer);
 #endif
 
     return true;
@@ -2336,6 +2364,7 @@ bool dm_render_command_update_storage_buffer_backend(dm_resource_handle handle, 
 #ifdef DM_DIRECTX12
 #elif defined(DM_VULKAN)
 #elif defined(DM_METAL)
+    dm_metal_update_buffer(data, size, offset, renderer->storage_buffers[handle.index], renderer);
 #endif
 
     return true;
