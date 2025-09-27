@@ -64,8 +64,10 @@ double dm_timer_elapsed_ms(dm_timer* timer);
  ***********/
 typedef enum dm_log_level_t
 {
+#ifdef DM_DEBUG
     DM_LOG_TRACE,
     DM_LOG_DEBUG,
+#endif
     DM_LOG_INFO,
     DM_LOG_WARN,
     DM_LOG_ERROR,
@@ -574,6 +576,7 @@ void dm_compute_command_dispatch(uint16_t x, uint16_t y, uint16_t z, dm_renderer
  ******************/
 #define DM_MAX(A, B) (A > B ? A : B)
 #define DM_MIN(A, B) (A < B ? A : B)
+#define DM_COUNTOF(X) sizeof(X) / sizeof(X[0])
 
 /*****************
 * IMPLEMENTATION *
@@ -1159,8 +1162,9 @@ typedef struct dm_metal_raster_pipeline_t
     MTLViewport    viewport;
     MTLScissorRect scissor;
 
-    dm_metal_buffer vertex_argument_buffer;
-    dm_metal_buffer fragment_argument_buffer;
+    uint32_t vertex_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
+    uint32_t fragment_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
+
     id<MTLArgumentEncoder> vertex_encoder;
     id<MTLArgumentEncoder> fragment_encoder;
 } dm_metal_raster_pipeline;
@@ -1199,7 +1203,8 @@ struct dm_renderer_t
 
     dm_metal_heap resource_heap[DM_MAX_FRAMES_IN_FLIGHT];
 
-    id<MTLBuffer> buffers[(DM_MAX_BUFFERS + DM_MAX_RASTER_PIPES * 2 * 2)* DM_MAX_FRAMES_IN_FLIGHT];
+    // regular buffers, 2 argument for raster pipes,  times frames in flight
+    id<MTLBuffer> buffers[(DM_MAX_BUFFERS + DM_MAX_RASTER_PIPES * 2)* DM_MAX_FRAMES_IN_FLIGHT];     
     uint32_t      buffer_count;
 
     id<MTLTexture> textures[DM_MAX_TEXTURES * DM_MAX_FRAMES_IN_FLIGHT];
@@ -1450,7 +1455,9 @@ bool dm_renderer_init(dm_window window, dm_renderer* renderer)
 #ifdef DM_DIRECTX12
 #elif defined(DM_VULKAN)
 #elif defined(DM_METAL)
+#ifdef DM_DEBUG
     dm_log(DM_LOG_DEBUG, "Initializing Metal backend...");
+#endif
 
     renderer->device = MTLCreateSystemDefaultDevice();
     if(!renderer->device)
@@ -1580,12 +1587,6 @@ bool dm_renderer_finish_init(dm_renderer* renderer)
     }
 
     // move resources to the heap
-    for(uint32_t i=0; i<renderer->raster_pipe_count; i++)
-    {
-        if(!dm_metal_copy_buffer_to_heap(&renderer->raster_pipes[i].vertex_argument_buffer, renderer, blit_encoder)) return false;
-        if(!dm_metal_copy_buffer_to_heap(&renderer->raster_pipes[i].fragment_argument_buffer, renderer, blit_encoder)) return false;
-    }
-
     for(uint32_t i=0; i<renderer->vb_count; i++)
     {
         if(!dm_metal_copy_buffer_to_heap(&renderer->vertex_buffers[i], renderer, blit_encoder)) return false;
@@ -1950,14 +1951,14 @@ bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipelin
         if(!buffer) { dm_log(DM_LOG_FATAL, "newBufferWithLength failed"); return false; }
 
         renderer->buffers[renderer->buffer_count] = buffer;
-        pipeline.vertex_argument_buffer.host[i] = renderer->buffer_count++;
+        pipeline.vertex_argument_buffer[i] = renderer->buffer_count++;
 
         size = pipeline.fragment_encoder.encodedLength;
         buffer = [renderer->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
         if(!buffer) { dm_log(DM_LOG_FATAL, "newBufferWithLength failed"); return false; }
 
         renderer->buffers[renderer->buffer_count] = buffer;
-        pipeline.fragment_argument_buffer.host[i] = renderer->buffer_count++;
+        pipeline.fragment_argument_buffer[i] = renderer->buffer_count++;
     }
 
     //
@@ -2354,8 +2355,8 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
         {
             dm_metal_raster_pipeline pipeline = renderer->raster_pipes[renderer->active_pipeline.index];
 
-            id<MTLBuffer> vertex_argument_buffer   = renderer->buffers[pipeline.vertex_argument_buffer.host[current_frame]];
-            id<MTLBuffer> fragment_argument_buffer = renderer->buffers[pipeline.fragment_argument_buffer.host[current_frame]];
+            id<MTLBuffer> vertex_argument_buffer   = renderer->buffers[pipeline.vertex_argument_buffer[current_frame]];
+            id<MTLBuffer> fragment_argument_buffer = renderer->buffers[pipeline.fragment_argument_buffer[current_frame]];
 
             [pipeline.vertex_encoder setArgumentBuffer:vertex_argument_buffer offset:0];
             [pipeline.fragment_encoder setArgumentBuffer:fragment_argument_buffer offset:0];

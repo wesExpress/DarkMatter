@@ -179,10 +179,12 @@ exit_code app_run(application* app)
         if(dm_window_resized(app->window))
         {
             if(!dm_renderer_resize(app->window, &app->renderer)) { dm_log(DM_LOG_FATAL, "Window resize failed"); return EXIT_CODE_RESIZE_FAIL; }
+
+            glm_perspective(DM_DEG_TO_RAD(85.f), (float)dm_window_get_width(app->window) / (float)dm_window_get_height(app->window), 0.1f, 100.f, app->camera.perspective);
         }
 
-        if(dm_input_is_key_pressed(DM_KEY_LEFT, app->window))       app->camera.position[0] -= 0.001f;
-        else if(dm_input_is_key_pressed(DM_KEY_RIGHT, app->window)) app->camera.position[0] += 0.001f;
+        if(dm_input_is_key_pressed(DM_KEY_LEFT, app->window))       app->camera.position[0] += 0.001f;
+        else if(dm_input_is_key_pressed(DM_KEY_RIGHT, app->window)) app->camera.position[0] -= 0.001f;
 
         if(dm_input_is_key_pressed(DM_KEY_UP, app->window))        app->camera.position[2] += 0.001f;
         else if(dm_input_is_key_pressed(DM_KEY_DOWN, app->window)) app->camera.position[2] -= 0.001f;
@@ -215,7 +217,7 @@ exit_code app_run(application* app)
 
         dm_render_command_begin_render_pass(app->pass, 0.5f,0.7f,0.9f,1,1, &app->renderer);
             dm_render_command_bind_raster_pipeline(app->pipeline, &app->renderer);
-            dm_render_command_submit_resources(resources, 4, &app->renderer);
+            dm_render_command_submit_resources(resources, DM_COUNTOF(resources), &app->renderer);
             dm_render_command_bind_vertex_buffer(app->vb, 0, 0, &app->renderer);
             dm_render_command_bind_index_buffer(app->ib, 0, &app->renderer);
             dm_render_command_draw_instanced_indexed(ENTITY_COUNT,0,6,0,0, &app->renderer);
@@ -227,7 +229,9 @@ exit_code app_run(application* app)
         // frame timing and fps
         if(dm_timer_elapsed(&timer) >= 1)
         {
+#ifdef DM_DEBUG
             dm_log(DM_LOG_TRACE, "FPS: %d", frame_count);
+#endif
             dm_timer_start(&timer);
             frame_count = 0;
         }
