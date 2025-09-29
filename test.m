@@ -233,7 +233,7 @@ exit_code app_run(application* app)
         dm_render_command_end_render_pass(app->pass, &app->renderer);
 
         if(!dm_renderer_submit_render_commands(&app->renderer)) { dm_log(DM_LOG_FATAL, "submit commands failed"); return EXIT_CODE_RENDER_FAIL; }
-        if(!dm_renderer_end_frame(false, &app->renderer))   { dm_log(DM_LOG_FATAL, "end frame failed"); return EXIT_CODE_RENDER_FAIL; }
+        if(!dm_renderer_end_frame(&app->renderer))   { dm_log(DM_LOG_FATAL, "end frame failed"); return EXIT_CODE_RENDER_FAIL; }
 
         // frame timing and fps
         if(dm_timer_elapsed(&timer) >= 1)
