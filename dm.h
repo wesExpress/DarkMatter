@@ -537,15 +537,15 @@ typedef struct dm_sampler_desc_t
 } dm_sampler_desc;
 
 // resource creation
-bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_renderpass_handle* handle, dm_context* context);
-bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle* handle, dm_context* context);
-bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
-bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
-bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
-bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
-bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
-bool dm_renderer_create_texture_from_file(const char* path, dm_resource_handle* handle, dm_context* context);
-bool dm_renderer_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_create_renderpass(dm_renderpass_desc desc, dm_renderpass_handle* handle, dm_context* context);
+bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle* handle, dm_context* context);
+bool dm_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
+bool dm_create_texture_from_file(const char* path, dm_resource_handle* handle, dm_context* context);
+bool dm_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_context* context);
 
 // === render commands ===
 void dm_render_command_begin_update(dm_context* context);
@@ -1860,7 +1860,7 @@ bool dm_end_frame(dm_context* context)
 /*************
  * RESOURCES *
  *************/
-bool dm_renderer_create_renderpass(dm_renderpass_desc desc, dm_renderpass_handle* handle, dm_context* context)
+bool dm_create_renderpass(dm_renderpass_desc desc, dm_renderpass_handle* handle, dm_context* context)
 {
     dm_renderer* renderer =  context->renderer;
 
@@ -1942,7 +1942,7 @@ bool dm_metal_create_argument_buffer(uint32_t* index, id<MTLArgumentEncoder> enc
 }
 #endif // DM_METAL
 
-bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle* handle, dm_context* context)
+bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle* handle, dm_context* context)
 {
     dm_renderer* renderer = context->renderer;
 
@@ -2099,7 +2099,7 @@ bool dm_metal_create_buffer(void* data, size_t size, dm_metal_buffer* buffer, dm
 }
 #endif  
 
-bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
+bool dm_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
     dm_renderer* renderer = context->renderer;
 
@@ -2119,7 +2119,7 @@ bool dm_renderer_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_ha
     return true;
 }
 
-bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
+bool dm_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
     dm_renderer* renderer = context->renderer;
 
@@ -2155,7 +2155,7 @@ bool dm_renderer_create_index_buffer(dm_index_buffer_desc desc, dm_resource_hand
     return true;
 }
 
-bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
+bool dm_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
     dm_renderer* renderer = context->renderer;
 
@@ -2175,7 +2175,7 @@ bool dm_renderer_create_constant_buffer(dm_constant_buffer_desc desc, dm_resourc
     return true;
 }
 
-bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
+bool dm_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
     dm_renderer* renderer = context->renderer;
 
@@ -2195,7 +2195,7 @@ bool dm_renderer_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_
     return true;
 }
 
-bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context)
+bool dm_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context)
 {
     dm_renderer* renderer = context->renderer;
     
@@ -2246,7 +2246,7 @@ bool dm_renderer_create_texture(dm_texture_desc desc, dm_resource_handle* handle
     return true;
 }
 
-bool dm_renderer_create_texture_from_file(const char* path, dm_resource_handle* handle, dm_context* context)
+bool dm_create_texture_from_file(const char* path, dm_resource_handle* handle, dm_context* context)
 {
     int x,y,n;
     void* data = stbi_load(path, &x,&y,&n,4);
@@ -2262,7 +2262,7 @@ bool dm_renderer_create_texture_from_file(const char* path, dm_resource_handle* 
         .format=DM_TEXTURE_FORMAT_BYTE_4_UNORM
     };
 
-    bool result = dm_renderer_create_texture(desc, handle, context);
+    bool result = dm_create_texture(desc, handle, context);
 
     stbi_image_free(data);
     return result;
@@ -2283,7 +2283,7 @@ MTLSamplerAddressMode dm_convert_sampler_address(dm_sampler_address_mode mode)
 }
 #endif // DM_METAL
 
-bool dm_renderer_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_context* context)
+bool dm_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_context* context)
 {
     dm_renderer* renderer = context->renderer;
 

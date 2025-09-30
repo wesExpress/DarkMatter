@@ -63,7 +63,7 @@ void app_shutdown(application* app)
 bool create_resources(application* app)
 {
     dm_renderpass_desc pass_desc = { .type=DM_RENDERPASS_TYPE_DEFAULT };
-    if(!dm_renderer_create_renderpass(pass_desc, &app->pass, app->context)) return false;
+    if(!dm_create_renderpass(pass_desc, &app->pass, app->context)) return false;
 
     dm_rasterizer_desc rasterizer = {
         .vertex_shader_desc.path="assets/shaders/vertex_shader.metallib",
@@ -81,7 +81,7 @@ bool create_resources(application* app)
         .viewport={ .type=DM_VIEWPORT_TYPE_DEFAULT }, .scissor={ .type=DM_SCISSOR_TYPE_DEFAULT }
     };
 
-    if(!dm_renderer_create_raster_pipeline(pipe_desc, &app->pipeline, app->context)) return false;
+    if(!dm_create_raster_pipeline(pipe_desc, &app->pipeline, app->context)) return false;
 
     vertex vertices[] = {
         { { -0.5f,-0.5f,0.f }, {1,0,0,1}, { 0,0 } },
@@ -112,8 +112,8 @@ bool create_resources(application* app)
         .data=app->camera.vp
     };
 
-    if(!dm_renderer_create_vertex_buffer(vb_desc, &app->vb, app->context)) return false;
-    if(!dm_renderer_create_index_buffer(ib_desc, &app->ib, app->context)) return false;
+    if(!dm_create_vertex_buffer(vb_desc, &app->vb, app->context)) return false;
+    if(!dm_create_index_buffer(ib_desc, &app->ib, app->context)) return false;
 
     // camera
     vec3 forward = { 0,0,1 };
@@ -128,7 +128,7 @@ bool create_resources(application* app)
     glm_perspective(fov, aspect, 0.1f, 100.f, app->camera.perspective);
     glm_mat4_mul(app->camera.perspective, app->camera.view, app->camera.vp);
 
-    if(!dm_renderer_create_constant_buffer(cb_desc, &app->cb, app->context)) return false;
+    if(!dm_create_constant_buffer(cb_desc, &app->cb, app->context)) return false;
 
     // instance buffer
     dm_storage_buffer_desc sb_desc = {
@@ -136,7 +136,7 @@ bool create_resources(application* app)
         .data=app->instances
     };
 
-    if(!dm_renderer_create_storage_buffer(sb_desc, &app->instance_buffer, app->context)) return false;
+    if(!dm_create_storage_buffer(sb_desc, &app->instance_buffer, app->context)) return false;
 
     // sampler
     dm_sampler_desc sampler_desc = {
@@ -145,11 +145,11 @@ bool create_resources(application* app)
         .address_w=DM_SAMPLER_ADDRESS_MODE_WRAP
     };
 
-    if(!dm_renderer_create_sampler(sampler_desc, &app->sampler, app->context)) return false;
+    if(!dm_create_sampler(sampler_desc, &app->sampler, app->context)) return false;
 
     // texture
-    if(!dm_renderer_create_texture_from_file("assets/textures/container.jpg", &app->texture, app->context)) return false;
-    if(!dm_renderer_create_texture_from_file("assets/textures/awesomeFace.png", &app->texture2, app->context)) return false;
+    if(!dm_create_texture_from_file("assets/textures/container.jpg", &app->texture, app->context)) return false;
+    if(!dm_create_texture_from_file("assets/textures/awesomeFace.png", &app->texture2, app->context)) return false;
 
     //
     if(!dm_finish_init(app->context)) return false;
