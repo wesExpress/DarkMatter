@@ -318,7 +318,7 @@ typedef struct dm_resource_handle_t
 #define DM_MAX_RENDERPASS 10
 #define DM_MAX_RASTER_PIPES 10
 #define DM_MAX_COMPUTE_PIPES 10
-#define DM_MAX_TEXTURES (DM_MAX_RENDERPASS * 2 + 10 * 2) 
+#define DM_MAX_TEXTURES 10 
 #define DM_MAX_VBS 10
 #define DM_MAX_IBS 10
 #define DM_MAX_CBS 10
@@ -1095,7 +1095,7 @@ typedef struct dm_metal_index_buffer_t
 
 typedef struct dm_metal_sampler_t
 {
-    id<MTLSamplerState> state[DM_MAX_FRAMES_IN_FLIGHT];
+    id<MTLSamplerState> state;
 } dm_metal_sampler;
 
 typedef struct dm_metal_raster_pipeline_t
@@ -1120,11 +1120,9 @@ typedef struct dm_metal_raster_pipeline_t
 
     uint32_t vertex_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
     uint32_t fragment_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
-    uint32_t texture_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
 
     id<MTLArgumentEncoder> vertex_encoder;
     id<MTLArgumentEncoder> fragment_encoder;
-    id<MTLArgumentEncoder> texture_encoder;
 } dm_metal_raster_pipeline;
 
 typedef struct dm_metal_heap_t
@@ -1243,15 +1241,15 @@ typedef struct dm_renderer_t
     id<MTLDepthStencilState> depth_stencil_state;
     
     dispatch_semaphore_t frame_semaphore;
-    dispatch_semaphore_t argument_buffer_semaphore;
 
     dm_metal_heap resource_heap[DM_MAX_FRAMES_IN_FLIGHT];
 
     // regular buffers, 3 argument for raster pipes, times frames in flight
-    id<MTLBuffer> buffers[(DM_MAX_BUFFERS + DM_MAX_RASTER_PIPES * 3 + 1) * DM_MAX_FRAMES_IN_FLIGHT];     
+    id<MTLBuffer> buffers[(DM_MAX_BUFFERS + DM_MAX_RASTER_PIPES * 2 + 1) * DM_MAX_FRAMES_IN_FLIGHT];     
     uint32_t      buffer_count;
 
-    id<MTLTexture> textures[DM_MAX_TEXTURES * DM_MAX_FRAMES_IN_FLIGHT];
+    // regular textures, 2 for renderpasses, depth target, time frames in flight
+    id<MTLTexture> textures[(DM_MAX_TEXTURES + DM_MAX_RENDERPASS + 1) * DM_MAX_FRAMES_IN_FLIGHT];
     uint32_t       texture_count;
 
     dm_metal_renderpass renderpasses[DM_MAX_RENDERPASS];
@@ -1267,6 +1265,8 @@ typedef struct dm_renderer_t
 
     dm_pipeline_handle active_pipeline;
     dm_resource_handle active_index_buffer;
+    uint32_t texture_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
+    id<MTLArgumentEncoder> texture_encoder;
 #endif
 
     uint8_t current_frame;
@@ -1556,7 +1556,8 @@ bool dm_renderer_init(dm_context* context)
 
     // synchronization 
     renderer->frame_semaphore = dispatch_semaphore_create(DM_MAX_FRAMES_IN_FLIGHT);
-    renderer->argument_buffer_semaphore = dispatch_semaphore_create(1);
+
+    
 #elif defined(DM_VULKAN)
 #ifdef DM_DEBUG
     dm_log(DM_LOG_DEBUG, "Initializing Vulkan renderer...");
@@ -1664,6 +1665,54 @@ bool dm_finish_init(dm_context* context)
         }
     }
 
+    // argument encoder
+    MTLArgumentDescriptor* descriptors[DM_MAX_TEXTURES + DM_MAX_SAMPLERS];
+
+    uint32_t index = 0;
+    for(uint32_t i=0; i<DM_MAX_TEXTURES; i++)
+    {
+        descriptors[index] = [MTLArgumentDescriptor new];
+        descriptors[index].dataType    = MTLDataTypeTexture;
+        descriptors[index].textureType = MTLTextureType2D;
+        descriptors[index].index       = index;
+        index++;
+    }
+    for(uint32_t i=0; i<DM_MAX_SAMPLERS; i++)
+    {
+        descriptors[index] = [MTLArgumentDescriptor new];
+        descriptors[index].dataType = MTLDataTypeSampler;
+        descriptors[index].index    = index;
+        index++;
+    }
+
+    NSArray* argument_array = [NSArray arrayWithObjects:descriptors count:(DM_MAX_TEXTURES + DM_MAX_SAMPLERS)];
+    renderer->texture_encoder = [renderer->device newArgumentEncoderWithArguments:argument_array];
+
+    size_t size = renderer->texture_encoder.encodedLength;
+    for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
+    {
+        id<MTLBuffer> buffer = [renderer->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
+        renderer->buffers[renderer->buffer_count] = buffer;
+        renderer->texture_argument_buffer[i] = renderer->buffer_count++;
+
+        [renderer->texture_encoder setArgumentBuffer:buffer offset:0];
+
+        uint32_t index = 0;
+        for(uint32_t j=0; j<renderer->metal_texture_count; j++)
+        {
+            [renderer->texture_encoder setTexture:renderer->textures[renderer->metal_textures[j].device[i]] atIndex:index++];
+        }
+        for(uint32_t j=0; j<renderer->sampler_count; j++)
+        {
+            [renderer->texture_encoder setSamplerState:renderer->samplers[j].state atIndex:index++];
+        }
+    }
+
+    for(uint32_t i=0; i<DM_MAX_SAMPLERS+DM_MAX_TEXTURES; i++)
+    {
+        [descriptors[i] release];
+    }
+
     [blit_encoder endEncoding];
     [command_buffer commit];
 #elif defined(DM_VULKAN)
@@ -1680,7 +1729,6 @@ void dm_renderer_shutdown(dm_renderer* renderer)
     {
         [renderer->raster_pipes[i].fragment_encoder release];
         [renderer->raster_pipes[i].vertex_encoder release];
-        [renderer->raster_pipes[i].texture_encoder release];
 
         [renderer->raster_pipes[i].fragment_func release];
         [renderer->raster_pipes[i].vertex_func release];
@@ -1690,10 +1738,7 @@ void dm_renderer_shutdown(dm_renderer* renderer)
 
     for(uint32_t i=0; i<renderer->sampler_count; i++)
     {
-        for(uint8_t j=0; j<DM_MAX_FRAMES_IN_FLIGHT; j++)
-        {
-            [renderer->samplers[i].state[j] release];
-        }
+        [renderer->samplers[i].state release];
     }
 
     for(uint32_t i=0; i<renderer->buffer_count; i++)
@@ -1711,6 +1756,7 @@ void dm_renderer_shutdown(dm_renderer* renderer)
         [renderer->resource_heap[i].heap release];
     }
 
+    [renderer->texture_encoder release];
     [renderer->depth_stencil_state release];
     [renderer->swapchain release];
     [renderer->command_queue release];
@@ -1774,6 +1820,7 @@ bool dm_begin_frame(dm_context* context)
 
     // pipeline
     renderer->active_pipeline.type = DM_PIPELINE_TYPE_INVALID;
+
 #elif defined(DM_VULKAN)
 #endif
 
@@ -1997,8 +2044,6 @@ bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipelin
 
     pipeline.vertex_encoder   = [pipeline.vertex_func newArgumentEncoderWithBufferIndex:0];
     if(!pipeline.vertex_encoder) { dm_log(DM_LOG_FATAL, "newArgumentEncoderWithBufferIndex failed"); return false; }
-    pipeline.texture_encoder  = [pipeline.fragment_func newArgumentEncoderWithBufferIndex:0];
-    if(!pipeline.texture_encoder) { dm_log(DM_LOG_FATAL, "newArgumentEncoderWithBufferIndex failed"); return false; }
     pipeline.fragment_encoder = [pipeline.fragment_func newArgumentEncoderWithBufferIndex:1];
     if(!pipeline.fragment_encoder) { dm_log(DM_LOG_FATAL, "newArgumentEncoderWithBufferIndex failed"); return false; }
 
@@ -2007,7 +2052,6 @@ bool dm_renderer_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipelin
     {
         if(!dm_metal_create_argument_buffer(&pipeline.vertex_argument_buffer[i], pipeline.vertex_encoder, renderer)) return false;
         if(!dm_metal_create_argument_buffer(&pipeline.fragment_argument_buffer[i], pipeline.fragment_encoder, renderer)) return false;
-        if(!dm_metal_create_argument_buffer(&pipeline.texture_argument_buffer[i], pipeline.texture_encoder, renderer)) return false;
     }
 
     //
@@ -2247,23 +2291,20 @@ bool dm_renderer_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle
 #elif defined(DM_METAL)
     dm_metal_sampler sampler = { 0 };
 
-    for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
-    {
-        MTLSamplerDescriptor* sampler_desc = [MTLSamplerDescriptor new];
+    MTLSamplerDescriptor* sampler_desc = [MTLSamplerDescriptor new];
 
-        sampler_desc.rAddressMode = dm_convert_sampler_address(desc.address_u);
-        sampler_desc.sAddressMode = dm_convert_sampler_address(desc.address_v);
-        sampler_desc.tAddressMode = dm_convert_sampler_address(desc.address_w);
+    sampler_desc.rAddressMode = dm_convert_sampler_address(desc.address_u);
+    sampler_desc.sAddressMode = dm_convert_sampler_address(desc.address_v);
+    sampler_desc.tAddressMode = dm_convert_sampler_address(desc.address_w);
 
-        sampler_desc.minFilter = MTLSamplerMinMagFilterNearest;
-        sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+    sampler_desc.minFilter = MTLSamplerMinMagFilterNearest;
+    sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
 
-        sampler_desc.supportArgumentBuffers = YES;
+    sampler_desc.supportArgumentBuffers = YES;
 
-        sampler.state[i] = [renderer->device newSamplerStateWithDescriptor:sampler_desc];
+    sampler.state = [renderer->device newSamplerStateWithDescriptor:sampler_desc];
 
-        [sampler_desc release];
-    }
+    [sampler_desc release];
     
     //
     renderer->samplers[renderer->sampler_count] = sampler;
@@ -2337,6 +2378,20 @@ bool dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, fl
 
     // depth state
     [encoder setDepthStencilState:renderer->depth_stencil_state];
+
+    // argument buffer
+    [renderer->texture_encoder setArgumentBuffer:renderer->buffers[renderer->texture_argument_buffer[current_frame]] offset:0];
+
+    for(uint32_t i=0; i<renderer->metal_texture_count; i++)
+    {
+        [renderer->texture_encoder setTexture:renderer->textures[renderer->metal_textures[i].device[current_frame]] atIndex:i];
+    }
+    for(uint32_t i=0; i<renderer->sampler_count; i++)
+    {
+        [renderer->texture_encoder setSamplerState:renderer->samplers[i].state atIndex:(DM_MAX_TEXTURES + i)];
+    }
+
+    [encoder setFragmentBuffer:renderer->buffers[renderer->texture_argument_buffer[current_frame]] offset:0 atIndex:0];
 #elif defined(DM_VULKAN)
 #endif
 
@@ -2403,11 +2458,9 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
             dm_metal_raster_pipeline pipeline = renderer->raster_pipes[renderer->active_pipeline.index];
 
             id<MTLBuffer> vertex_argument_buffer   = renderer->buffers[pipeline.vertex_argument_buffer[current_frame]];
-            id<MTLBuffer> texture_argument_buffer  = renderer->buffers[pipeline.texture_argument_buffer[current_frame]];
             id<MTLBuffer> fragment_argument_buffer = renderer->buffers[pipeline.fragment_argument_buffer[current_frame]];
 
             [pipeline.vertex_encoder setArgumentBuffer:vertex_argument_buffer offset:0];
-            [pipeline.texture_encoder setArgumentBuffer:texture_argument_buffer offset:0];
             [pipeline.fragment_encoder setArgumentBuffer:fragment_argument_buffer offset:0];
 
             uint8_t index = 0;
@@ -2442,7 +2495,7 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
                     } break;
                     case DM_RESOURCE_TYPE_SAMPLER:
                     {
-                        id<MTLSamplerState> sampler = renderer->samplers[handles[i].index].state[current_frame];
+                        id<MTLSamplerState> sampler = renderer->samplers[handles[i].index].state;
 
                         [pipeline.fragment_encoder setSamplerState:sampler atIndex:index++];
                     } break;
@@ -2453,21 +2506,7 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
                 }
             }
 
-            // set up texture argument buffer
-            for(uint32_t i=0; i<renderer->metal_texture_count; i++)
-            {
-                dm_metal_texture texture = renderer->metal_textures[i];
-
-                [pipeline.texture_encoder setTexture:renderer->textures[texture.device[current_frame]] atIndex:i];
-            }
-
-            for(uint32_t i=0; i<renderer->sampler_count; i++)
-            {
-                [pipeline.texture_encoder setSamplerState:renderer->samplers[i].state[current_frame] atIndex:(i + 10)];
-            }
-
             [encoder setVertexBuffer:vertex_argument_buffer offset:0 atIndex:0];
-            [encoder setFragmentBuffer:texture_argument_buffer offset:0 atIndex:0];
             [encoder setFragmentBuffer:fragment_argument_buffer offset:0 atIndex:1];
         } break;
 

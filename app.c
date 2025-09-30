@@ -1,4 +1,3 @@
-//#define DM_IMPLEMENTATION
 #include "dm.h"
 
 #include <stdio.h>
