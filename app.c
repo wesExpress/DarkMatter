@@ -1,4 +1,4 @@
-#define DM_IMPLEMENTATION
+//#define DM_IMPLEMENTATION
 #include "dm.h"
 
 #include <stdio.h>
@@ -36,9 +36,6 @@ typedef struct simple_camera_t
 #define ENTITY_COUNT 10
 typedef struct application_t
 {
-    dm_renderer renderer;
-    dm_window window;
-
     dm_renderpass_handle pass;
     dm_pipeline_handle pipeline;
     dm_resource_handle vb, ib, cb;
@@ -222,7 +219,7 @@ exit_code app_run(application* app)
             dm_render_command_draw_instanced_indexed(ENTITY_COUNT,0,6,0,0, app->context);
         dm_render_command_end_render_pass(app->pass, app->context);
 
-        if(!dm_renderer_submit_render_commands(app->context)) { dm_log(DM_LOG_FATAL, "submit commands failed"); return EXIT_CODE_RENDER_FAIL; }
+        if(!dm_submit_render_commands(app->context)) { dm_log(DM_LOG_FATAL, "submit commands failed"); return EXIT_CODE_RENDER_FAIL; }
         
         if(!dm_end_frame(app->context))   { dm_log(DM_LOG_FATAL, "end frame failed"); return EXIT_CODE_RENDER_FAIL; }
 
@@ -246,7 +243,7 @@ exit_code app_run(application* app)
 /********
  * MAIN *
  ********/
-int main()
+int run()
 {
     application app = { 0 };
 

@@ -581,7 +581,7 @@ void dm_compute_command_dispatch(uint16_t x, uint16_t y, uint16_t z, dm_context*
 /*****************
 * IMPLEMENTATION *
 ******************/
-#define DM_IMPLEMENTATION
+//#define DM_IMPLEMENTATION
 #ifdef DM_IMPLEMENTATION
 
 #ifndef STB_IMAGE_IMPLEMENTATION
@@ -1680,6 +1680,7 @@ void dm_renderer_shutdown(dm_renderer* renderer)
     {
         [renderer->raster_pipes[i].fragment_encoder release];
         [renderer->raster_pipes[i].vertex_encoder release];
+        [renderer->raster_pipes[i].texture_encoder release];
 
         [renderer->raster_pipes[i].fragment_func release];
         [renderer->raster_pipes[i].vertex_func release];
@@ -1751,8 +1752,6 @@ bool dm_renderer_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
 bool dm_begin_frame(dm_context* context)
 {
     dm_renderer* renderer = context->renderer;
-    dm_window* window = context->window;
-
 
 #ifdef DM_DIRECTX12
 #elif defined(DM_METAL)
@@ -2228,7 +2227,7 @@ bool dm_renderer_create_texture_from_file(const char* path, dm_resource_handle* 
 #ifdef DM_METAL
 #ifndef DM_DEBUG
 DM_INLINE
-#endif
+#endif // DM_DEBUG
 MTLSamplerAddressMode dm_convert_sampler_address(dm_sampler_address_mode mode)
 {
     switch(mode)
@@ -2626,7 +2625,7 @@ bool dm_render_command_draw_instanced_indexed_backend(uint32_t instance_count, s
     return true;
 }
 
-bool dm_renderer_submit_render_commands(dm_context* context)
+bool dm_submit_render_commands(dm_context* context)
 {
     dm_renderer* renderer = context->renderer;
     dm_command_buffer buffer = renderer->render_commands;
