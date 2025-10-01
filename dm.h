@@ -1490,8 +1490,11 @@ bool dm_renderer_init(dm_context* context)
 
     dm_window* window = context->window;
 
-    renderer->width  = dm_get_window_height(context);
-    renderer->height = dm_get_window_height(context);
+    int w,h;
+    RGFW_window_getSize(window->window, &w,&h);
+
+    renderer->width = w;
+    renderer->height = h;
 
 #ifdef DM_DIRECTX12
 #ifdef DM_DEBUG
@@ -1524,14 +1527,11 @@ bool dm_renderer_init(dm_context* context)
     [view setWantsLayer: YES];
     [view setLayer:renderer->swapchain];
     
-    NSSize layer_size = view.layer.frame.size;
-    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
-    NSSize drawable_size = NSMakeSize(layer_size.width * scale, layer_size.height * scale);
-    renderer->swapchain.contentsScale = scale;
+    CGSize drawable_size = CGSizeMake(w,h);
     renderer->swapchain.drawableSize = drawable_size;
     
     // depth texture 
-    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:renderer->width height:renderer->height mipmapped:NO];
+    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:drawable_size.width height:drawable_size.height mipmapped:NO];
     descriptor.storageMode = MTLStorageModePrivate;
     descriptor.usage       = MTLTextureUsageRenderTarget;
 
@@ -1694,18 +1694,6 @@ bool dm_finish_init(dm_context* context)
         id<MTLBuffer> buffer = [renderer->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
         renderer->buffers[renderer->buffer_count] = buffer;
         renderer->texture_argument_buffer[i] = renderer->buffer_count++;
-
-        [renderer->texture_encoder setArgumentBuffer:buffer offset:0];
-
-        uint32_t index = 0;
-        for(uint32_t j=0; j<renderer->metal_texture_count; j++)
-        {
-            [renderer->texture_encoder setTexture:renderer->textures[renderer->metal_textures[j].device[i]] atIndex:index++];
-        }
-        for(uint32_t j=0; j<renderer->sampler_count; j++)
-        {
-            [renderer->texture_encoder setSamplerState:renderer->samplers[j].state atIndex:index++];
-        }
     }
 
     for(uint32_t i=0; i<DM_MAX_SAMPLERS+DM_MAX_TEXTURES; i++)
@@ -1772,15 +1760,15 @@ bool dm_renderer_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
 
 #ifdef DM_DIRECTX12
 #elif defined(DM_METAL)
-    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
-    renderer->swapchain.contentsScale = scale;
-    CGSize drawable_size;
-    drawable_size.width  = renderer->width;
-    drawable_size.height = renderer->height;
-    renderer->swapchain.drawableSize = drawable_size;
+    //CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
+    //renderer->swapchain.contentsScale = scale;
+    //CGSize drawable_size;
+    //drawable_size.width  = renderer->width;
+    //drawable_size.height = renderer->height;
+    renderer->swapchain.drawableSize = CGSizeMake(width, height);
     
     // depth texture
-    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:drawable_size.width height:drawable_size.height mipmapped:NO];
+    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:width height:height mipmapped:NO];
     descriptor.storageMode = MTLStorageModePrivate;
     descriptor.usage       = MTLTextureUsageRenderTarget;
     
@@ -2784,9 +2772,12 @@ bool dm_update(dm_context* context)
 
     if(!dm_window_poll_events(window)) return false;
 
-    if(renderer->width != window->window->w || renderer->height != window->window->h)
+    int w,h;
+    RGFW_window_getSize(window->window, &w, &h);
+
+    if(renderer->width != w|| renderer->height != h)
     {
-        if(!dm_renderer_resize(window->window->w, window->window->h, renderer)) return false;
+        if(!dm_renderer_resize(w, h, renderer)) return false;
     }
 
     return true;
