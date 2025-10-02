@@ -581,8 +581,10 @@ void dm_compute_command_dispatch(uint16_t x, uint16_t y, uint16_t z, dm_context*
 /*****************
 * IMPLEMENTATION *
 ******************/
-//#define DM_IMPLEMENTATION
+#define DM_IMPLEMENTATION
 #ifdef DM_IMPLEMENTATION
+
+#include <time.h>
 
 #ifndef STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_IMPLEMENTATION
@@ -705,14 +707,14 @@ uint32_t dm_get_window_height(dm_context* context)
 
 double dm_get_time()
 {
-#ifdef DM_PLATFORM_WINDOWS
+#ifdef DM_PLATFORM_WIN32
     LARGE_INTEGER frequency;
 	QueryPerformanceFrequency(&frequency);
 
     LARGE_INTEGER time;
 	QueryPerformanceCounter(&time);
 
-    return time.QuadPart / frequency.QuadPart;
+    return (double)time.QuadPart / (double)frequency.QuadPart;
 #elif defined(DM_PLATFORM_LINUX)
     struct timespec now;
     clock_gettime(CLOCK_MONOTONIC, &now);
