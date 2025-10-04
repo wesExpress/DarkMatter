@@ -548,6 +548,8 @@ bool dm_create_texture_from_file(const char* path, dm_resource_handle* handle, d
 bool dm_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_context* context);
 
 // === render commands ===
+void dm_render_command_begin_frame(dm_context* context);
+void dm_render_command_end_frame(dm_context* context);
 void dm_render_command_begin_update(dm_context* context);
 void dm_render_command_end_update(dm_context* context);
 void dm_render_command_begin_render_pass(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_context* context);

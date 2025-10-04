@@ -1,4 +1,4 @@
-DarkMatter is a single header-file framework that abstracts the three main modern graphics APIs: DirectX12, Vulkan, and Metal. It acomplishes this through a simple abstraction layer where you create three main types of rendering resources:
+DarkMatter is a framework that abstracts the three main modern graphics APIs: DirectX12, Vulkan, and Metal. It acomplishes this through a simple abstraction layer where you create three main types of rendering resources:
 
 1. Render Passes
 2. Pipelines
