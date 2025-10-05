@@ -51,7 +51,7 @@ bool dm_update(dm_context* context);
 void* dm_alloc(size_t size);
 void  dm_free(void** ptr);
 void* dm_realloc(void* ptr, size_t size);
-void  dm_memcpy(void* dst, void* src, size_t size);
+void  dm_memcpy(void* dst, const void* src, size_t size);
 void* dm_memset(void* dst, int value, size_t size);
 void* dm_memzero(void* dst, size_t size);
 
@@ -307,6 +307,8 @@ typedef enum dm_resource_type_t
 } dm_resource_type;
 
 typedef uint32_t dm_resource_index;
+typedef uint32_t dm_viewport_index;
+typedef uint32_t dm_scissor_index;
 
 typedef struct dm_resource_handle_t
 {
@@ -324,6 +326,8 @@ typedef struct dm_resource_handle_t
 #define DM_MAX_CBS 10
 #define DM_MAX_SBS 10
 #define DM_MAX_SAMPLERS 10
+#define DM_MAX_VIEWPORTS 10
+#define DM_MAX_SCISSORS 10
 #ifdef DM_HARDWARE_RAYTRACING
 #define DM_MAX_RT_PIPES 10
 #define DM_MAX_RT_BLAS  DM_MAX_VBS
@@ -434,30 +438,14 @@ typedef struct dm_rasterizer_desc_t
     dm_rasterizer_front_face   front_face;
 } dm_rasterizer_desc;
 
-typedef enum dm_viewport_type_t
-{
-    DM_VIEWPORT_TYPE_UNKNOWN,
-    DM_VIEWPORT_TYPE_DEFAULT,
-    DM_VIEWPORT_TYPE_CUSTOM
-} dm_viewport_type;
-
 typedef struct dm_viewport_t
 {
-    dm_viewport_type type;
     uint32_t left, right, top, bottom;
 } dm_viewport;
 
-typedef enum dm_scissor_type_t
-{
-    DM_SCISSOR_TYPE_UNKNOWN,
-    DM_SCISSOR_TYPE_DEFAULT,
-    DM_SCISSOR_TYPE_CUSTOM
-} dm_scissor_type;
-
 typedef struct dm_scissor_t
 {
-    dm_scissor_type type;
-    uint32_t offset, extents;
+    uint32_t left, right, top, bottom;
 } dm_scissor;
 
 typedef struct dm_depth_stencil_desc_t
@@ -470,15 +458,12 @@ typedef struct dm_raster_pipeline_desc_t
     dm_raster_input_assembler_desc input_assembler;
     dm_rasterizer_desc             rasterizer;
     dm_depth_stencil_desc          depth_stencil;
-
-    dm_viewport viewport;
-    dm_scissor  scissor;
 } dm_raster_pipeline_desc;
 
 typedef struct dm_vertex_buffer_desc_t
 {
     size_t size, stride;
-    void*  data;
+    const void*  data;
 } dm_vertex_buffer_desc;
 
 typedef enum dm_index_buffer_index_type_t
@@ -492,19 +477,19 @@ typedef struct dm_index_buffer_desc_t
 {
     size_t size;
     dm_index_buffer_index_type index_type;
-    void* data;
+    const void* data;
 } dm_index_buffer_desc;
 
 typedef struct dm_constant_buffer_desc_t
 {
     size_t size;
-    void*  data;
+    const void*  data;
 } dm_constant_buffer_desc;
 
 typedef struct dm_storage_buffer_desc_t
 {
     size_t size, stride;
-    void*  data;
+    const void*  data;
 } dm_storage_buffer_desc;
 
 typedef enum dm_texture_format_t
@@ -546,6 +531,8 @@ bool dm_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* h
 bool dm_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_create_texture_from_file(const char* path, dm_resource_handle* handle, dm_context* context);
 bool dm_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_context* context);
+void dm_create_viewport(dm_viewport viewport, dm_viewport_index* index, dm_context* context);
+void dm_create_scissor(dm_scissor scissor, dm_scissor_index* index, dm_context* context);
 
 // === render commands ===
 void dm_render_command_begin_frame(dm_context* context);
@@ -555,6 +542,8 @@ void dm_render_command_end_update(dm_context* context);
 void dm_render_command_begin_render_pass(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_context* context);
 void dm_render_command_end_render_pass(dm_renderpass_handle handle, dm_context* context);
 void dm_render_command_bind_raster_pipeline(dm_pipeline_handle handle, dm_context* context);
+void dm_render_command_set_viewport(dm_viewport_index index, dm_context* context);
+void dm_render_command_set_scissor(dm_scissor_index index, dm_context* context);
 void dm_render_command_submit_resources(dm_resource_handle* handles, uint16_t count, dm_context* context);
 void dm_render_command_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, size_t offset, dm_context* context);
 void dm_render_command_bind_index_buffer(dm_resource_handle handle, size_t offset, dm_context* context);
