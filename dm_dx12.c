@@ -243,7 +243,7 @@ void dm_dx12_get_debug_message(dm_dx12_renderer* renderer)
     }
 }
 #else
-void dm_dx12_get_debug_message(dm_renderer* renderer) {}
+void dm_dx12_get_debug_message(dm_dx12_renderer* renderer) {}
 #endif
 
 #ifndef DM_DEBUG
@@ -786,6 +786,25 @@ bool dm_renderer_resize_backend(uint32_t width, uint32_t height, void* backend)
 
     renderer->current_frame = IDXGISwapChain4_GetCurrentBackBufferIndex(renderer->swap_chain);
     return true;
+}
+
+uint32_t dm_get_resource_index_backend(dm_resource_handle handle, void* backend)
+{
+    dm_dx12_renderer* renderer = backend;
+
+    const uint8_t current_frame = renderer->current_frame;
+
+    switch(handle.type)
+    {
+        case DM_RESOURCE_TYPE_VERTEX_BUFFER:   return renderer->vertex_buffers[handle.index].resource.descriptor_index[current_frame];
+        case DM_RESOURCE_TYPE_INDEX_BUFFER:    return renderer->index_buffers[handle.index].resource.descriptor_index[current_frame];
+        case DM_RESOURCE_TYPE_CONSTANT_BUFFER: return renderer->constant_buffers[handle.index].resource.descriptor_index[current_frame];
+        case DM_RESOURCE_TYPE_STORAGE_BUFFER:  return renderer->storage_buffers[handle.index].resource.descriptor_index[current_frame];
+        case DM_RESOURCE_TYPE_TEXTURE:         return renderer->textures[handle.index].resource.descriptor_index[current_frame];
+        case DM_RESOURCE_TYPE_SAMPLER:         return renderer->samplers[handle.index].descriptor_index[current_frame];
+        
+        default: return 0;
+    }
 }
 
 // === resources ===

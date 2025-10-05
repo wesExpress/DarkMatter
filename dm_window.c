@@ -201,7 +201,7 @@ bool dm_window_poll_events(void* w)
 
     window->previous_input = window->current_input;
 
-    RGFW_waitForEvent(RGFW_eventWaitNext);
+    //RGFW_waitForEvent(RGFW_eventWaitNext);
     RGFW_event event;
     while (RGFW_window_checkEvent(window->window, &event)) 
     {

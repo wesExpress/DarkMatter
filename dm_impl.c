@@ -507,6 +507,7 @@ extern void* dm_renderer_init_backend(dm_context* context);
 extern bool dm_renderer_finish_init_backend(void* backend);
 extern void dm_renderer_shutdown_backend(void* backend);
 extern bool dm_renderer_resize_backend(uint32_t width, uint32_t height, void* backend);
+extern uint32_t dm_get_resource_index_backend(dm_resource_handle handle, void* backend);
 
 bool dm_renderer_init(dm_context* context)
 {
@@ -539,6 +540,13 @@ bool dm_renderer_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
     renderer->height = height;
 
     return dm_renderer_resize_backend(width, height, renderer->backend);
+}
+
+uint32_t dm_get_resource_index(dm_resource_handle handle, dm_context* context)
+{
+    dm_renderer* renderer = context->renderer;
+
+    return dm_get_resource_index_backend(handle, renderer->backend);
 }
 
 /*************
