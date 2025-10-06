@@ -591,10 +591,6 @@ bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle*
     handle->type = DM_PIPELINE_TYPE_RASTER;
 
     return dm_create_raster_pipeline_backend(desc, handle, renderer->backend);
-#ifdef DM_DIRECTX12
-#elif defined(DM_METAL)
-#elif defined(DM_VULKAN)
-#endif
 }
 
 bool dm_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_context* context)

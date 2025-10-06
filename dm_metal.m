@@ -57,9 +57,6 @@ typedef struct dm_metal_raster_pipeline_t
     MTLPrimitiveType primitive_type;
     MTLTriangleFillMode fill_mode;
 
-    MTLViewport    viewport;
-    MTLScissorRect scissor;
-
     uint32_t vertex_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
     uint32_t fragment_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
 
@@ -113,7 +110,10 @@ typedef struct dm_metal_renderer_t
     dm_metal_texture metal_textures[10];
     dm_metal_sampler samplers[DM_MAX_SAMPLERS];
 
-    uint32_t renderpass_count, raster_pipe_count, vb_count, ib_count, cb_count, sb_count, metal_texture_count, sampler_count;
+    MTLViewport    viewport[DM_MAX_VIEWPORTS];
+    MTLScissorRect scissor[DM_MAX_SCISSORS];
+
+    uint32_t renderpass_count, raster_pipe_count, vb_count, ib_count, cb_count, sb_count, metal_texture_count, sampler_count, viewport_count, scissor_count;
 
     dm_pipeline_handle active_pipeline;
     dm_resource_handle active_index_buffer;
@@ -155,13 +155,14 @@ void* dm_renderer_init_backend(dm_context* context)
     [view setWantsLayer: YES];
     [view setLayer:backend.swapchain];
     
-    uint32_t w = dm_get_window_width(context);
-    uint32_t h = dm_get_window_height(context);
-    CGSize drawable_size = CGSizeMake(w,h);
-    backend.swapchain.drawableSize = drawable_size;
+    CGSize size = backend.swapchain.bounds.size;
+    backend.swapchain.drawableSize = size;
+    CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
+    backend.swapchain.contentsScale = scale;
+    backend.swapchain.drawableSize = size;
     
     // depth texture 
-    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:drawable_size.width height:drawable_size.height mipmapped:NO];
+    MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:size.width height:size.height mipmapped:NO];
     descriptor.storageMode = MTLStorageModePrivate;
     descriptor.usage       = MTLTextureUsageRenderTarget;
 
@@ -394,6 +395,13 @@ bool dm_renderer_resize_backend(uint32_t width, uint32_t height, void* b)
 /************
 * RESOURCES *
 *************/
+uint32_t dm_get_resource_index_backend(dm_resource_handle handle, void* backend)
+{
+    dm_metal_renderer* renderer = backend;
+
+    return handle.index;
+}
+
 bool dm_create_renderpass_backend(dm_renderpass_desc desc, dm_renderpass_handle* handle, void* b)
 {
     dm_metal_renderer* backend = b;
@@ -588,10 +596,47 @@ bool dm_create_raster_pipeline_backend(dm_raster_pipeline_desc desc, dm_pipeline
     return true;
 }
 
+void dm_create_viewport_backend(dm_viewport viewport, dm_viewport_index* index, void* backend)
+{
+    dm_metal_renderer* renderer = backend;
+
+    MTLViewport v = {
+        .width=viewport.right,
+        .height=viewport.bottom,
+        .originX=viewport.left,
+        .originY=viewport.right,
+        .zfar=1.f
+    };
+
+    v.width  = DM_MIN(v.width, renderer->swapchain.drawableSize.width);
+    v.height = DM_MIN(v.height, renderer->swapchain.drawableSize.height);
+
+    renderer->viewport[renderer->viewport_count] = v;
+    *index = renderer->viewport_count++;
+}
+
+void dm_create_scissor_backend(dm_scissor scissor, dm_scissor_index* index, void* backend)
+{
+    dm_metal_renderer* renderer = backend;
+
+    MTLScissorRect rect = {
+        .width=scissor.right,
+        .height=scissor.bottom,
+        .x=scissor.left,
+        .y=scissor.top
+    };
+
+    rect.width  = DM_MIN(rect.width, renderer->swapchain.drawableSize.width);
+    rect.height = DM_MIN(rect.height, renderer->swapchain.drawableSize.height);
+
+    renderer->scissor[renderer->scissor_count] = rect;
+    *index = renderer->scissor_count++;
+}
+
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_metal_create_buffer(void* data, size_t size, dm_metal_buffer* buffer, dm_metal_renderer* backend) 
+bool dm_metal_create_buffer(const void* data, size_t size, dm_metal_buffer* buffer, dm_metal_renderer* backend) 
 {
     id<MTLBuffer> host_buffer;
 
@@ -922,25 +967,40 @@ bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, v
     id<MTLRenderCommandEncoder> encoder = backend->render_command_encoder[current_frame];
     dm_metal_raster_pipeline* pipeline = &backend->raster_pipes[handle.index];
 
-    pipeline->viewport.width  = backend->swapchain.drawableSize.width;
-    pipeline->viewport.height = backend->swapchain.drawableSize.height;
-    pipeline->viewport.zfar   = 1.f;
-
-    pipeline->scissor.x = 0;
-    pipeline->scissor.y = 0;
-    pipeline->scissor.width  = backend->swapchain.drawableSize.width;
-    pipeline->scissor.height = backend->swapchain.drawableSize.height;
-
     [encoder setRenderPipelineState:pipeline->pipeline_state];
     [encoder setFrontFacingWinding:pipeline->winding];
     [encoder setCullMode:pipeline->cull_mode];
-    [encoder setViewport:pipeline->viewport];
-    [encoder setScissorRect:pipeline->scissor];
     [encoder setTriangleFillMode:pipeline->fill_mode];
 
     backend->active_pipeline = handle;
 
     return true; 
+}
+
+bool dm_render_command_set_viewport_backend(dm_viewport_index index, void* backend)
+{
+    dm_metal_renderer* renderer = backend;
+
+    const uint8_t current_frame = renderer->current_frame;
+
+    id<MTLRenderCommandEncoder> encoder = renderer->render_command_encoder[current_frame];
+
+    [encoder setViewport:renderer->viewport[index]];
+
+    return true;
+}
+
+bool dm_render_command_set_scissor_backend(dm_scissor_index index, void* backend)
+{
+    dm_metal_renderer* renderer = backend;
+
+    const uint8_t current_frame = renderer->current_frame;
+
+    id<MTLRenderCommandEncoder> encoder = renderer->render_command_encoder[current_frame];
+
+    [encoder setScissorRect:renderer->scissor[index]];
+
+    return true;
 }
 
 bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uint16_t count, void* b) 
@@ -977,7 +1037,7 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
                         id<MTLBuffer> buffer = backend->buffers[backend->constant_buffers[handles[i].index].device[current_frame]];
 
                         // TODO: FIX!
-                        [pipeline.vertex_encoder setBuffer:buffer offset:0 atIndex:index];
+                        [pipeline.vertex_encoder   setBuffer:buffer offset:0 atIndex:index];
                         [pipeline.fragment_encoder setBuffer:buffer offset:0 atIndex:index++];
                     } break;
                     case DM_RESOURCE_TYPE_STORAGE_BUFFER:
@@ -985,7 +1045,7 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
                         id<MTLBuffer> buffer = backend->buffers[backend->storage_buffers[handles[i].index].device[current_frame]];
 
                         // TODO: FIX!
-                        [pipeline.vertex_encoder setBuffer:buffer offset:0 atIndex:index];
+                        [pipeline.vertex_encoder   setBuffer:buffer offset:0 atIndex:index];
                         [pipeline.fragment_encoder setBuffer:buffer offset:0 atIndex:index++];
                     } break;
 
@@ -993,12 +1053,14 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
                     {
                         id<MTLTexture> texture = backend->textures[backend->metal_textures[handles[i].index].device[current_frame]];
 
+                        [pipeline.vertex_encoder   setTexture:texture atIndex:index];
                         [pipeline.fragment_encoder setTexture:texture atIndex:index++];
                     } break;
                     case DM_RESOURCE_TYPE_SAMPLER:
                     {
                         id<MTLSamplerState> sampler = backend->samplers[handles[i].index].state;
 
+                        [pipeline.vertex_encoder   setSamplerState:sampler atIndex:index];
                         [pipeline.fragment_encoder setSamplerState:sampler atIndex:index++];
                     } break;
 
