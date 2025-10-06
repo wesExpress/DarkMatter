@@ -605,7 +605,7 @@ void dm_create_viewport_backend(dm_viewport viewport, dm_viewport_index* index, 
         .height=viewport.bottom,
         .originX=viewport.left,
         .originY=viewport.right,
-        .zfar=1.f
+        .zfar=1.f, .znear=0.f
     };
 
     v.width  = DM_MIN(v.width, renderer->swapchain.drawableSize.width);
@@ -1176,6 +1176,7 @@ bool dm_render_command_draw_instanced_backend(uint32_t instance_count, size_t in
     dm_metal_raster_pipeline pipeline = backend->raster_pipes[backend->active_pipeline.index];
 
     [encoder drawPrimitives:pipeline.primitive_type vertexStart:vertex_offset vertexCount:vertex_count instanceCount:instance_count baseInstance:instance_offset];
+
     return true; 
 }
 
@@ -1193,6 +1194,7 @@ bool dm_render_command_draw_instanced_indexed_backend(uint32_t instance_count, s
     id<MTLBuffer> index_buffer = backend->buffers[buffer.buffer.device[current_frame]];
 
     [encoder drawIndexedPrimitives:pipeline.primitive_type indexCount:index_count indexType:buffer.index_type indexBuffer:index_buffer indexBufferOffset:index_offset instanceCount:instance_count baseVertex:vertex_offset baseInstance:instance_offset];
+
     return true; 
 }
 
