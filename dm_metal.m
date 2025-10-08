@@ -601,7 +601,7 @@ void dm_create_viewport(dm_viewport viewport, dm_viewport_index* index, dm_conte
         .width=viewport.right,
         .height=viewport.bottom,
         .originX=viewport.left,
-        .originY=viewport.right,
+        .originY=viewport.top,
         .zfar=1.f, .znear=0.f
     };
 
