@@ -88,7 +88,12 @@ void dm_platform_write(const char* message, uint8_t color)
 {
 #ifdef DM_PLATFORM_WIN32
     HANDLE console_handle = GetStdHandle(STD_OUTPUT_HANDLE);
-	static uint8_t levels[6] = { 8, 1, 2, 6, 4, 64 };
+	static uint8_t levels[] = { 
+#ifdef DM_DEBUG
+        8, 
+        1, 
+#endif
+        2, 6, 4, 64 };
 
 	SetConsoleTextAttribute(console_handle, levels[color]);
 	size_t len = strlen(message);
@@ -99,9 +104,11 @@ void dm_platform_write(const char* message, uint8_t color)
 	// resets to white
 	SetConsoleTextAttribute(console_handle, 7);
 #elif defined(DM_PLATFORM_LINUX) || defined(DM_PLATFORM_APPLE)
-    static char* levels[6] = {
+    static char* levels[] = {
+#ifdef DM_DEBUG
         "1;30",   // white
         "1;34",   // blue
+#endif
         "1;32",   // green
         "1;33",   // yellow
         "1;31",   // red

@@ -1796,6 +1796,10 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
             indices[i] = renderer->textures[handles[i].index].resource.descriptor_index[current_frame];
             break;
 
+            case DM_RESOURCE_TYPE_SAMPLER:
+            indices[i] = renderer->samplers[handles[i].index].descriptor_index[current_frame];
+            break;
+
             default:
             dm_log(DM_LOG_FATAL, "Unknown/unsupported resource type. Should NOT be here...");
             return false;
