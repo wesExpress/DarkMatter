@@ -3,6 +3,137 @@
 
 #include "dm_defines.h"
 
+typedef uint16_t dm_renderpass_handle;
+
+typedef enum dm_pipeline_type_t
+{
+    DM_PIPELINE_TYPE_INVALID,
+    DM_PIPELINE_TYPE_RASTER,
+    DM_PIPELINE_TYPE_COMPUTE,
+#ifdef DM_HARDWARE_RAYTRACING
+    DM_PIPELINE_TYPE_RT
+#endif
+} dm_pipeline_type;
+
+typedef struct dm_pipeline_handle_t
+{
+    dm_pipeline_type type;
+    uint16_t index;
+} dm_pipeline_handle;
+
+typedef enum dm_resource_type_t
+{
+    DM_RESOURCE_TYPE_INALID,
+    DM_RESOURCE_TYPE_VERTEX_BUFFER,
+    DM_RESOURCE_TYPE_INDEX_BUFFER,
+    DM_RESOURCE_TYPE_CONSTANT_BUFFER,
+    DM_RESOURCE_TYPE_STORAGE_BUFFER,
+    DM_RESOURCE_TYPE_TEXTURE,
+    DM_RESOURCE_TYPE_SAMPLER,
+#ifdef DM_HARDWARE_RAYTRACING
+    DM_RESOURCE_TYPE_BLAS,
+    DM_RESOURCE_TYPE_TLAS,
+#endif
+} dm_resource_type;
+
+typedef uint32_t dm_resource_index;
+typedef uint32_t dm_viewport_index;
+typedef uint32_t dm_scissor_index;
+
+typedef struct dm_resource_handle_t
+{
+    dm_resource_type type;
+    dm_resource_index index;
+} dm_resource_handle;
+typedef struct dm_command_param_t
+{
+    union
+    {
+        uint8_t              u8;
+        uint16_t             u16;
+        uint32_t             u32;
+        uint64_t             u64;
+        size_t               s;
+        bool                 b;
+        int                  i;
+        float                f;
+        double               d;
+        void*                v;
+        dm_resource_handle   rh;
+        dm_renderpass_handle rph;
+        dm_pipeline_handle   ph;
+    };
+} dm_command_param;
+
+typedef enum dm_render_command_type_t
+{
+    DM_RENDER_COMMAND_TYPE_INVALID,
+    DM_RENDER_COMMAND_TYPE_BEGIN_FRAME,
+    DM_RENDER_COMMAND_TYPE_END_FRAME,
+    DM_RENDER_COMMAND_TYPE_BEGIN_UPDATE,
+    DM_RENDER_COMMAND_TYPE_END_UPDATE,
+    DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS,
+    DM_RENDER_COMMAND_TYPE_END_RENDER_PASS,
+    DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE,
+    DM_RENDER_COMMAND_TYPE_SET_VIEWPORT,
+    DM_RENDER_COMMAND_TYPE_SET_SCISSOR,
+    DM_RENDER_COMMAND_TYPE_SUBMIT_RESOURCES,
+    DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_INDEX_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_CONSTANT_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_STORAGE_BUFFER,
+    DM_RENDER_COMMAND_TYPE_UPDATE_TEXTURE,
+    DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED,
+    DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED,
+#ifdef DM_HARDWARE_RAYTRACING
+    DM_RENDER_COMMAND_TYPE_BIND_RAYTRACING_PIPELINE,
+    DM_RENDER_COMMAND_TYPE_DISPATCH_RAYS,
+    DM_RENDER_COMMAND_TYPE_UPDATE_TLAS
+#endif
+} dm_render_command_type;
+
+typedef enum dm_compute_command_type_t
+{
+    DM_COMPUTE_COMMAND_TYPE_INVALID,
+    DM_COMPUTE_COMMAND_TYPE_BEGIN_RECORDING,
+    DM_COMPUTE_COMMAND_TYPE_END_RECORDING,
+    DM_COMPUTE_COMMAND_BIND_COMPUTE_PIPELINE,
+    DM_COMPUTE_COMMAND_SUBMIT_RESOURCES,
+    DM_COMPUTE_COMMAND_DISPATCH
+} dm_compute_command_type;
+
+typedef enum dm_command_buffer_type_t
+{
+    DM_COMMAND_BUFFER_TYPE_INVALID,
+    DM_COMMAND_BUFFER_TYPE_RENDER,
+    DM_COMMAND_BUFFER_TYPE_COMPUTE
+} dm_command_buffer_type;
+
+#define DM_COMMAND_MAX_PARAMS 10
+typedef struct dm_command_t
+{
+    union
+    {
+        dm_render_command_type  r_type;
+        dm_compute_command_type c_type;
+    };
+    dm_command_param params[DM_COMMAND_MAX_PARAMS];
+} dm_command;
+
+#define DM_COMMAND_BUFFER_MAX_COMMANDS 100
+typedef struct dm_command_buffer_t
+{
+    dm_command_buffer_type type;
+    dm_command commands[DM_COMMAND_BUFFER_MAX_COMMANDS];
+    uint16_t   command_count;
+} dm_command_buffer;
+
+// === context ===
+typedef struct dm_window_t   dm_window;
+typedef struct dm_renderer_t dm_renderer;
+
 typedef enum dm_context_flag_t
 {
     DM_CONTEXT_FLAG_NONE,
@@ -14,8 +145,11 @@ typedef struct dm_context_t
 {
     dm_context_flag flags;
 
-    void* renderer;
-    void* window;
+    dm_command_buffer render_command_buffer;
+    dm_command_buffer compute_command_buffer;
+
+    dm_window*   window;
+    dm_renderer* renderer;
 } dm_context;
 
 typedef enum dm_window_create_flag_t
@@ -268,53 +402,9 @@ uint32_t dm_get_window_height(dm_context* context);;
 #endif
 
 bool dm_finish_init(dm_context* context);
-bool dm_begin_frame(dm_context* context);
-bool dm_end_frame(dm_context* context);
 bool dm_submit_render_commands(dm_context* context);
 
 // === handles ===
-typedef uint16_t dm_renderpass_handle;
-
-typedef enum dm_pipeline_type_t
-{
-    DM_PIPELINE_TYPE_INVALID,
-    DM_PIPELINE_TYPE_RASTER,
-    DM_PIPELINE_TYPE_COMPUTE,
-#ifdef DM_HARDWARE_RAYTRACING
-    DM_PIPELINE_TYPE_RT
-#endif
-} dm_pipeline_type;
-
-typedef struct dm_pipeline_handle_t
-{
-    dm_pipeline_type type;
-    uint16_t index;
-} dm_pipeline_handle;
-
-typedef enum dm_resource_type_t
-{
-    DM_RESOURCE_TYPE_INALID,
-    DM_RESOURCE_TYPE_VERTEX_BUFFER,
-    DM_RESOURCE_TYPE_INDEX_BUFFER,
-    DM_RESOURCE_TYPE_CONSTANT_BUFFER,
-    DM_RESOURCE_TYPE_STORAGE_BUFFER,
-    DM_RESOURCE_TYPE_TEXTURE,
-    DM_RESOURCE_TYPE_SAMPLER,
-#ifdef DM_HARDWARE_RAYTRACING
-    DM_RESOURCE_TYPE_BLAS,
-    DM_RESOURCE_TYPE_TLAS,
-#endif
-} dm_resource_type;
-
-typedef uint32_t dm_resource_index;
-typedef uint32_t dm_viewport_index;
-typedef uint32_t dm_scissor_index;
-
-typedef struct dm_resource_handle_t
-{
-    dm_resource_type type;
-    dm_resource_index index;
-} dm_resource_handle;
 
 // === resources ===
 #define DM_MAX_RENDERPASS 10

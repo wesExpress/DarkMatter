@@ -29,7 +29,7 @@ typedef enum dm_window_flag_t
     DM_WINDOW_FLAG_RESIZE = 2,
 } dm_window_flag;
 
-typedef struct dm_window_t 
+struct dm_window_t 
 {
     dm_window_flag flags;
 
@@ -37,26 +37,26 @@ typedef struct dm_window_t
     dm_input_state previous_input;
 
     RGFW_window* window;
-} dm_window; 
+}; 
 
 bool dm_window_create(uint16_t x, uint16_t y, uint16_t width, uint16_t height, const char* title, dm_window_create_flag flags, dm_context* context)
 {
     context->window = dm_alloc(sizeof(dm_window));
-    dm_window* window = context->window;
 
     RGFW_windowFlags window_flags = 0;
     if(flags & DM_WINDOW_CREATE_FLAG_CENTER)    window_flags |= RGFW_windowCenter;
     if(flags & DM_WINDOW_CREATE_FLAG_NO_RESIZE) window_flags |= RGFW_windowNoResize;
 
-    window->window = RGFW_createWindow(title, x,y,width,height, window_flags);
-    if(!window->window) { return false; }
+    context->window->window = RGFW_createWindow(title, x,y,width,height, window_flags);
+    if(!context->window->window) { return false; }
 
     return true;
 }
 
-void dm_window_shutdown(dm_window* window)
+void dm_window_shutdown(dm_context* context)
 {
-    RGFW_window_close(window->window);
+    RGFW_window_close(context->window->window);
+    dm_free((void**)&context->window);
 }
 
 bool dm_window_should_close(dm_window window)
@@ -193,9 +193,11 @@ dm_mousebutton_code dm_convert_mousebutton(RGFW_mouseButton button)
     }   
 }
 
-bool dm_window_poll_events(void* w)
+extern bool dm_renderer_resize(dm_renderer* renderer);
+
+bool dm_window_poll_events(dm_context* context)
 {
-    dm_window* window = w;
+    dm_window* window = context->window;
 
     window->flags = DM_WINDOW_FLAG_NONE;
 
@@ -216,7 +218,7 @@ bool dm_window_poll_events(void* w)
             case RGFW_keyPressed:
             case RGFW_keyReleased:
             key = dm_convert_key_code(event.key.value);
-            if(key==DM_KEY_NONE) continue;
+            if(key==DM_KEY_NONE) break;
 
             window->current_input.keyboard.keys[key] = event.type==RGFW_keyPressed ? 1 : 0;
             break;
@@ -224,7 +226,7 @@ bool dm_window_poll_events(void* w)
             case RGFW_mouseButtonPressed:
             case RGFW_mouseButtonReleased:
             button = dm_convert_mousebutton(event.button.value);
-            if(button==DM_MOUSEBUTTON_UNKNOWN) continue;
+            if(button==DM_MOUSEBUTTON_UNKNOWN) break;
 
             window->current_input.mouse.buttons[button] = event.type==RGFW_mouseButtonPressed ? 1 : 0;
             break;
@@ -236,6 +238,7 @@ bool dm_window_poll_events(void* w)
 
             case RGFW_windowResized:
             window->flags |= DM_WINDOW_FLAG_RESIZE;
+            if(!dm_renderer_resize(context->renderer)) return false;
             break;
 
             default:

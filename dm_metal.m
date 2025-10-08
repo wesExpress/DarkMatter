@@ -70,7 +70,7 @@ typedef struct dm_metal_heap_t
     size_t size;
 } dm_metal_heap;
 
-typedef struct dm_metal_renderer_t
+struct dm_renderer_t
 {
     id<MTLDevice> device;
 
@@ -123,43 +123,43 @@ typedef struct dm_metal_renderer_t
     // TODO: not sure if I like this
     uint32_t texture_argument_buffer[DM_MAX_FRAMES_IN_FLIGHT];
     id<MTLArgumentEncoder> texture_encoder;
-} dm_metal_renderer;
+};
 
 // === backend ===
-void* dm_renderer_init_backend(dm_context* context)
+bool dm_renderer_init(dm_context* context)
 {
-    dm_metal_renderer backend = { 0 };
+    dm_renderer renderer = { 0 };
 
 #ifdef DM_DEBUG
     dm_log(DM_LOG_DEBUG, "Initializing Metal backend...");
 #endif
-    backend.device = MTLCreateSystemDefaultDevice();
-    if(!backend.device) { dm_log(DM_LOG_FATAL, "Could not create Metal device"); return NULL; }
+    renderer.device = MTLCreateSystemDefaultDevice();
+    if(!renderer.device) { dm_log(DM_LOG_FATAL, "Could not create Metal device"); return false; }
 
     // check feature support
-    if(backend.device.argumentBuffersSupport!=MTLArgumentBuffersTier2) { dm_log(DM_LOG_FATAL, "ArgumentBuffersTier2 not supported"); return NULL; }
+    if(renderer.device.argumentBuffersSupport!=MTLArgumentBuffersTier2) { dm_log(DM_LOG_FATAL, "ArgumentBuffersTier2 not supported"); return false; }
 #ifdef DM_HARDWARE_RAYTRACING
-    if(!backend->device.supportsRaytracing) { DM_LOG_FATAL("Device does not support ray tracing"); return false; }
+    if(!renderer->device.supportsRaytracing) { DM_LOG_FATAL("Device does not support ray tracing"); return false; }
 #endif // DM_HARDWARE_RAYTRACING
 
     // swapchain
-    backend.swapchain        = [CAMetalLayer layer];
-    backend.swapchain.device = backend.device;
-    backend.swapchain.opaque = YES;
+    renderer.swapchain        = [CAMetalLayer layer];
+    renderer.swapchain.device = renderer.device;
+    renderer.swapchain.opaque = YES;
 
-    backend.command_queue = [backend.device newCommandQueue];
-    if(!backend.command_queue) { dm_log(DM_LOG_FATAL, "newCommandQueue failed"); return false; }
+    renderer.command_queue = [renderer.device newCommandQueue];
+    if(!renderer.command_queue) { dm_log(DM_LOG_FATAL, "newCommandQueue failed"); return false; }
 
     // must set the content view's layer to our metal layer
     MTKView* view = dm_window_get_internal(context);
     [view setWantsLayer: YES];
-    [view setLayer:backend.swapchain];
+    [view setLayer:renderer.swapchain];
     
-    CGSize size = backend.swapchain.bounds.size;
-    backend.swapchain.drawableSize = size;
+    CGSize size = renderer.swapchain.bounds.size;
+    renderer.swapchain.drawableSize = size;
     CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
-    backend.swapchain.contentsScale = scale;
-    backend.swapchain.drawableSize = size;
+    renderer.swapchain.contentsScale = scale;
+    renderer.swapchain.drawableSize = size;
     
     // depth texture 
     MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:size.width height:size.height mipmapped:NO];
@@ -168,9 +168,9 @@ void* dm_renderer_init_backend(dm_context* context)
 
     for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        backend.textures[backend.texture_count] = [backend.device newTextureWithDescriptor:descriptor];
+        renderer.textures[renderer.texture_count] = [renderer.device newTextureWithDescriptor:descriptor];
 
-        backend.depth_target[i] = backend.texture_count++;
+        renderer.depth_target[i] = renderer.texture_count++;
     }
 
     [descriptor release];
@@ -178,26 +178,26 @@ void* dm_renderer_init_backend(dm_context* context)
     MTLDepthStencilDescriptor* depth_descriptor = [MTLDepthStencilDescriptor new];
     depth_descriptor.depthCompareFunction = MTLCompareFunctionLessEqual;
     depth_descriptor.depthWriteEnabled = YES;
-    backend.depth_stencil_state = [backend.device newDepthStencilStateWithDescriptor:depth_descriptor];
+    renderer.depth_stencil_state = [renderer.device newDepthStencilStateWithDescriptor:depth_descriptor];
 
     [depth_descriptor release];
 
     // command queue 
-    backend.command_queue = [backend.device newCommandQueue];
+    renderer.command_queue = [renderer.device newCommandQueue];
 
     // synchronization 
-    backend.frame_semaphore = dispatch_semaphore_create(DM_MAX_FRAMES_IN_FLIGHT);
+    renderer.frame_semaphore = dispatch_semaphore_create(DM_MAX_FRAMES_IN_FLIGHT);
 
-    dm_metal_renderer* b = dm_alloc(sizeof(dm_metal_renderer));
-    dm_memcpy(b, &backend, sizeof(backend));
+    context->renderer = dm_alloc(sizeof(dm_renderer));
+    dm_memcpy(context->renderer, &renderer, sizeof(renderer));
 
-    return b;
+    return true;
 }
 
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_metal_copy_buffer_to_heap(dm_metal_buffer* buffer, id<MTLBlitCommandEncoder> blit_encoder, dm_metal_renderer* backend)
+bool dm_metal_copy_buffer_to_heap(dm_metal_buffer* buffer, id<MTLBlitCommandEncoder> blit_encoder, dm_renderer* renderer)
 {
     id<MTLBuffer> host_buffer;
     id<MTLBuffer> device_buffer;
@@ -205,76 +205,74 @@ bool dm_metal_copy_buffer_to_heap(dm_metal_buffer* buffer, id<MTLBlitCommandEnco
 
     for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        host_buffer = backend->buffers[buffer->host[i]];
+        host_buffer = renderer->buffers[buffer->host[i]];
         size = host_buffer.length;
 
-        device_buffer = [backend->resource_heap[i].heap newBufferWithLength:size options:MTLResourceStorageModePrivate];
+        device_buffer = [renderer->resource_heap[i].heap newBufferWithLength:size options:MTLResourceStorageModePrivate];
         if(!device_buffer) { dm_log(DM_LOG_FATAL, "newBufferWithLength failed"); return false; }
         [blit_encoder copyFromBuffer:host_buffer sourceOffset:0 toBuffer:device_buffer destinationOffset:0 size:size];
 
-        backend->buffers[backend->buffer_count] = device_buffer;
+        renderer->buffers[renderer->buffer_count] = device_buffer;
         
-        buffer->device[i] = backend->buffer_count++;
+        buffer->device[i] = renderer->buffer_count++;
     }
 
     return true;
 }
 
-bool dm_renderer_finish_init_backend(void* b)
+bool dm_renderer_finish_init(dm_renderer* renderer)
 {
-    dm_metal_renderer* backend = b;
-
-    id<MTLCommandBuffer> command_buffer = [backend->command_queue commandBuffer];
+    id<MTLCommandBuffer> command_buffer = [renderer->command_queue commandBuffer];
     id<MTLBlitCommandEncoder> blit_encoder = command_buffer.blitCommandEncoder;
 
     for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
     {
         MTLHeapDescriptor* descriptor = [MTLHeapDescriptor new];
         descriptor.storageMode = MTLStorageModePrivate;
-        descriptor.size        = backend->resource_heap[i].size;
+        descriptor.size        = renderer->resource_heap[i].size;
 #ifdef DM_DEBUG 
         dm_log(DM_LOG_DEBUG, "Resource heap (frame %u) size: %u bytes", i, descriptor.size); 
 #endif  
 
-        backend->resource_heap[i].heap = [backend->device newHeapWithDescriptor:descriptor];
+        renderer->resource_heap[i].heap = [renderer->device newHeapWithDescriptor:descriptor];
 
         [descriptor release];
     }
 
     // move resources to the heap
-    for(uint32_t i=0; i<backend->vb_count; i++)
+    for(uint32_t i=0; i<renderer->vb_count; i++)
     {
-        if(!dm_metal_copy_buffer_to_heap(&backend->vertex_buffers[i], blit_encoder, backend)) return false;
+        if(!dm_metal_copy_buffer_to_heap(&renderer->vertex_buffers[i], blit_encoder, renderer)) return false;
     }
-    for(uint32_t i=0; i<backend->ib_count; i++)
+    for(uint32_t i=0; i<renderer->ib_count; i++)
     {
-        if(!dm_metal_copy_buffer_to_heap(&backend->index_buffers[i].buffer, blit_encoder, backend)) return false;
+        if(!dm_metal_copy_buffer_to_heap(&renderer->index_buffers[i].buffer, blit_encoder, renderer)) return false;
     }
-    for(uint32_t i=0; i<backend->cb_count; i++)
+    for(uint32_t i=0; i<renderer->cb_count; i++)
     {
-        if(!dm_metal_copy_buffer_to_heap(&backend->constant_buffers[i], blit_encoder, backend)) return false;
+        if(!dm_metal_copy_buffer_to_heap(&renderer->constant_buffers[i], blit_encoder, renderer)) return false;
     }
-    for(uint32_t i=0; i<backend->sb_count; i++)
+    for(uint32_t i=0; i<renderer->sb_count; i++)
     {
-        if(!dm_metal_copy_buffer_to_heap(&backend->storage_buffers[i], blit_encoder, backend)) return false;
+        if(!dm_metal_copy_buffer_to_heap(&renderer->storage_buffers[i], blit_encoder, renderer)) return false;
     }
 
-    for(uint32_t i=0; i<backend->metal_texture_count; i++)
+    for(uint32_t i=0; i<renderer->metal_texture_count; i++)
     {
-        dm_metal_texture t = backend->metal_textures[i];
+        dm_metal_texture t = renderer->metal_textures[i];
 
         for(uint8_t j=0; j<DM_MAX_FRAMES_IN_FLIGHT; j++)
         {
             MTLTextureDescriptor* desc = [MTLTextureDescriptor new];
 
-            id<MTLTexture> host_texture = backend->textures[t.host[j]];
+            id<MTLTexture> host_texture = renderer->textures[t.host[j]];
 
             desc.width  = host_texture.width;
             desc.height = host_texture.height;
             desc.pixelFormat = t.format;
-            desc.storageMode = backend->resource_heap[j].heap.storageMode;
+            desc.storageMode = renderer->resource_heap[j].heap.storageMode;
 
-            id<MTLTexture> heap_texture = [backend->resource_heap[j].heap newTextureWithDescriptor:desc];
+            id<MTLTexture> heap_texture = [renderer->resource_heap[j].heap newTextureWithDescriptor:desc];
             if(!heap_texture) { dm_log(DM_LOG_FATAL, "newTextureWithDescriptor failed"); return false; }
 
             MTLRegion region = MTLRegionMake2D(0,0, host_texture.width,host_texture.height);
@@ -283,8 +281,8 @@ bool dm_renderer_finish_init_backend(void* b)
 
             [desc release];
 
-            backend->textures[backend->texture_count] = heap_texture;
-            backend->metal_textures[i].device[j] = backend->texture_count++;
+            renderer->textures[renderer->texture_count] = heap_texture;
+            renderer->metal_textures[i].device[j] = renderer->texture_count++;
         }
     }
 
@@ -309,14 +307,14 @@ bool dm_renderer_finish_init_backend(void* b)
     }
 
     NSArray* argument_array = [NSArray arrayWithObjects:descriptors count:(DM_MAX_TEXTURES + DM_MAX_SAMPLERS)];
-    backend->texture_encoder = [backend->device newArgumentEncoderWithArguments:argument_array];
+    renderer->texture_encoder = [renderer->device newArgumentEncoderWithArguments:argument_array];
 
-    size_t size = backend->texture_encoder.encodedLength;
+    size_t size = renderer->texture_encoder.encodedLength;
     for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        id<MTLBuffer> buffer = [backend->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
-        backend->buffers[backend->buffer_count] = buffer;
-        backend->texture_argument_buffer[i] = backend->buffer_count++;
+        id<MTLBuffer> buffer = [renderer->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
+        renderer->buffers[renderer->buffer_count] = buffer;
+        renderer->texture_argument_buffer[i] = renderer->buffer_count++;
     }
 
     for(uint32_t i=0; i<DM_MAX_SAMPLERS+DM_MAX_TEXTURES; i++)
@@ -330,53 +328,53 @@ bool dm_renderer_finish_init_backend(void* b)
     return true;
 }
 
-void dm_renderer_shutdown_backend(void* b)
+void dm_renderer_shutdown(dm_context* context)
 {
-    dm_metal_renderer* backend = b;
+    dm_renderer* renderer = context->renderer;
 
-    for(uint32_t i=0; i<backend->raster_pipe_count; i++)
+    for(uint32_t i=0; i<renderer->raster_pipe_count; i++)
     {
-        [backend->raster_pipes[i].fragment_encoder release];
-        [backend->raster_pipes[i].vertex_encoder release];
+        [renderer->raster_pipes[i].fragment_encoder release];
+        [renderer->raster_pipes[i].vertex_encoder release];
 
-        [backend->raster_pipes[i].fragment_func release];
-        [backend->raster_pipes[i].vertex_func release];
+        [renderer->raster_pipes[i].fragment_func release];
+        [renderer->raster_pipes[i].vertex_func release];
 
-        [backend->raster_pipes[i].pipeline_state release];
+        [renderer->raster_pipes[i].pipeline_state release];
     }
 
-    for(uint32_t i=0; i<backend->sampler_count; i++)
+    for(uint32_t i=0; i<renderer->sampler_count; i++)
     {
-        [backend->samplers[i].state release];
+        [renderer->samplers[i].state release];
     }
 
-    for(uint32_t i=0; i<backend->buffer_count; i++)
+    for(uint32_t i=0; i<renderer->buffer_count; i++)
     {
-        [backend->buffers[i] release];
+        [renderer->buffers[i] release];
     }
-    for(uint32_t i=0; i<backend->texture_count; i++)
+    for(uint32_t i=0; i<renderer->texture_count; i++)
     {
-        [backend->textures[i] release];
+        [renderer->textures[i] release];
     }
 
     for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        [backend->compute_command_encoder[i] release];
-        [backend->resource_heap[i].heap release];
+        [renderer->compute_command_encoder[i] release];
+        [renderer->resource_heap[i].heap release];
     }
 
-    [backend->texture_encoder release];
-    [backend->depth_stencil_state release];
-    [backend->swapchain release];
-    [backend->command_queue release];
-    [backend->device release];
+    [renderer->texture_encoder release];
+    [renderer->depth_stencil_state release];
+    [renderer->swapchain release];
+    [renderer->command_queue release];
+    [renderer->device release];
+
+    dm_free((void**)&context->renderer);
 }
 
-bool dm_renderer_resize_backend(uint32_t width, uint32_t height, void* b)
+bool dm_renderer_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
 {
-    dm_metal_renderer* backend = b;
-
-    backend->swapchain.drawableSize = CGSizeMake(width, height);
+    renderer->swapchain.drawableSize = CGSizeMake(width, height);
     
     // depth texture
     MTLTextureDescriptor* descriptor = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:width height:height mipmapped:NO];
@@ -385,8 +383,8 @@ bool dm_renderer_resize_backend(uint32_t width, uint32_t height, void* b)
     
     for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        [backend->textures[backend->depth_target[i]] release];
-        backend->textures[backend->depth_target[i]] = [backend->device newTextureWithDescriptor:descriptor];
+        [renderer->textures[renderer->depth_target[i]] release];
+        renderer->textures[renderer->depth_target[i]] = [renderer->device newTextureWithDescriptor:descriptor];
     }
 
     return true;
@@ -395,16 +393,14 @@ bool dm_renderer_resize_backend(uint32_t width, uint32_t height, void* b)
 /************
 * RESOURCES *
 *************/
-uint32_t dm_get_resource_index_backend(dm_resource_handle handle, void* backend)
+uint32_t dm_get_resource_index(dm_resource_handle handle, dm_context* context)
 {
-    dm_metal_renderer* renderer = backend;
-
     return handle.index;
 }
 
-bool dm_create_renderpass_backend(dm_renderpass_desc desc, dm_renderpass_handle* handle, void* b)
+bool dm_create_renderpass(dm_renderpass_desc desc, dm_renderpass_handle* handle, dm_context* context)
 {
-    dm_metal_renderer* backend = b;
+    dm_renderer* renderer = context->renderer;
 
     dm_metal_renderpass renderpass = { 0 };
 
@@ -419,8 +415,8 @@ bool dm_create_renderpass_backend(dm_renderpass_desc desc, dm_renderpass_handle*
         return false;
     }
 
-    backend->renderpasses[backend->renderpass_count] = renderpass;
-    *handle = backend->renderpass_count++;
+    renderer->renderpasses[renderer->renderpass_count] = renderpass;
+    *handle = renderer->renderpass_count++;
 
     return true;
 }
@@ -467,30 +463,30 @@ bool dm_metal_create_shader_function(const char* shader_function, id<MTLFunction
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_metal_create_argument_buffer(uint32_t* index, id<MTLArgumentEncoder> encoder, dm_metal_renderer* backend)
+bool dm_metal_create_argument_buffer(uint32_t* index, id<MTLArgumentEncoder> encoder, dm_renderer* renderer)
 {
     size_t size = encoder.encodedLength;
-    id<MTLBuffer> buffer = [backend->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
+    id<MTLBuffer> buffer = [renderer->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
     if(!buffer) { dm_log(DM_LOG_FATAL, "newBufferWithLength failed"); return false; }
 
-    backend->buffers[backend->buffer_count] = buffer;
-    *index = backend->buffer_count++;
+    renderer->buffers[renderer->buffer_count] = buffer;
+    *index = renderer->buffer_count++;
 
     return true;
 }
 
-bool dm_create_raster_pipeline_backend(dm_raster_pipeline_desc desc, dm_pipeline_handle* handle, void* b)
+bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle* handle, dm_context* context)
 {
-    dm_metal_renderer* backend = b;
+    dm_renderer* renderer = context->renderer;
 
     dm_metal_raster_pipeline pipeline = { 0 };
 
     // shaders 
-    if(!dm_metal_create_shader(desc.rasterizer.vertex_shader_desc.path, &pipeline.vertex_library, backend->device))      return false;
-    if(!dm_metal_create_shader_function("vertex_main", &pipeline.vertex_func, pipeline.vertex_library, backend->device)) return false;
+    if(!dm_metal_create_shader(desc.rasterizer.vertex_shader_desc.path, &pipeline.vertex_library, renderer->device))      return false;
+    if(!dm_metal_create_shader_function("vertex_main", &pipeline.vertex_func, pipeline.vertex_library, renderer->device)) return false;
 
-    if(!dm_metal_create_shader(desc.rasterizer.pixel_shader_desc.path, &pipeline.fragment_library, backend->device))           return false;
-    if(!dm_metal_create_shader_function("fragment_main", &pipeline.fragment_func, pipeline.fragment_library, backend->device)) return false;
+    if(!dm_metal_create_shader(desc.rasterizer.pixel_shader_desc.path, &pipeline.fragment_library, renderer->device))           return false;
+    if(!dm_metal_create_shader_function("fragment_main", &pipeline.fragment_func, pipeline.fragment_library, renderer->device)) return false;
 
     // pipeline state
     MTLRenderPipelineDescriptor* pipe_desc = [MTLRenderPipelineDescriptor new];
@@ -512,7 +508,7 @@ bool dm_create_raster_pipeline_backend(dm_raster_pipeline_desc desc, dm_pipeline
     pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
 
     NSError* error = NULL;
-    pipeline.pipeline_state = [backend->device newRenderPipelineStateWithDescriptor:pipe_desc error:&error];
+    pipeline.pipeline_state = [renderer->device newRenderPipelineStateWithDescriptor:pipe_desc error:&error];
     if(!pipeline.pipeline_state)
     {
         dm_log(DM_LOG_FATAL, "Creating Metal pipeline state failed");
@@ -585,20 +581,21 @@ bool dm_create_raster_pipeline_backend(dm_raster_pipeline_desc desc, dm_pipeline
     // argument buffer
     for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        if(!dm_metal_create_argument_buffer(&pipeline.vertex_argument_buffer[i], pipeline.vertex_encoder, backend)) return false;
-        if(!dm_metal_create_argument_buffer(&pipeline.fragment_argument_buffer[i], pipeline.fragment_encoder, backend)) return false;
+        if(!dm_metal_create_argument_buffer(&pipeline.vertex_argument_buffer[i], pipeline.vertex_encoder, renderer)) return false;
+        if(!dm_metal_create_argument_buffer(&pipeline.fragment_argument_buffer[i], pipeline.fragment_encoder, renderer)) return false;
     }
 
     //
-    backend->raster_pipes[backend->raster_pipe_count] = pipeline;
-    handle->index = backend->raster_pipe_count++;
+    renderer->raster_pipes[renderer->raster_pipe_count] = pipeline;
+    handle->index = renderer->raster_pipe_count++;
+    handle->type = DM_PIPELINE_TYPE_RASTER;
 
     return true;
 }
 
-void dm_create_viewport_backend(dm_viewport viewport, dm_viewport_index* index, void* backend)
+void dm_create_viewport(dm_viewport viewport, dm_viewport_index* index, dm_context* context)
 {
-    dm_metal_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     MTLViewport v = {
         .width=viewport.right,
@@ -615,9 +612,9 @@ void dm_create_viewport_backend(dm_viewport viewport, dm_viewport_index* index, 
     *index = renderer->viewport_count++;
 }
 
-void dm_create_scissor_backend(dm_scissor scissor, dm_scissor_index* index, void* backend)
+void dm_create_scissor(dm_scissor scissor, dm_scissor_index* index, dm_context* context)
 {
-    dm_metal_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     MTLScissorRect rect = {
         .width=scissor.right,
@@ -636,7 +633,7 @@ void dm_create_scissor_backend(dm_scissor scissor, dm_scissor_index* index, void
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_metal_create_buffer(const void* data, size_t size, dm_metal_buffer* buffer, dm_metal_renderer* backend) 
+bool dm_metal_create_buffer(const void* data, size_t size, dm_metal_buffer* buffer, dm_renderer* renderer) 
 {
     id<MTLBuffer> host_buffer;
 
@@ -644,45 +641,46 @@ bool dm_metal_create_buffer(const void* data, size_t size, dm_metal_buffer* buff
     {
         if(data) 
         {
-            host_buffer = [backend->device newBufferWithBytes:data length:size options:MTLResourceCPUCacheModeDefaultCache]; 
+            host_buffer = [renderer->device newBufferWithBytes:data length:size options:MTLResourceCPUCacheModeDefaultCache]; 
             if(!buffer) { dm_log(DM_LOG_FATAL, "newBufferWithBytes failed"); return false; }
         }
         else
         {
-            host_buffer = [backend->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
+            host_buffer = [renderer->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
             if(!buffer) { dm_log(DM_LOG_FATAL, "newBufferWithLength failed"); return false; }
         }
 
-        backend->buffers[backend->buffer_count] = host_buffer;
-        buffer->host[i] = backend->buffer_count++;
+        renderer->buffers[renderer->buffer_count] = host_buffer;
+        buffer->host[i] = renderer->buffer_count++;
 
         // heap size
         size_t size = host_buffer.length; 
-        MTLSizeAndAlign size_and_align = [backend->device heapBufferSizeAndAlignWithLength:size options:MTLResourceStorageModePrivate];
+        MTLSizeAndAlign size_and_align = [renderer->device heapBufferSizeAndAlignWithLength:size options:MTLResourceStorageModePrivate];
         size_and_align.size += (size_and_align.size & (size_and_align.align - 1)) + size_and_align.align;
-        backend->resource_heap[i].size += size_and_align.size;
+        renderer->resource_heap[i].size += size_and_align.size;
     }
 
     return true;
 }
 
-bool dm_create_vertex_buffer_backend(dm_vertex_buffer_desc desc, dm_resource_handle* handle, void* b)
+bool dm_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_metal_renderer* backend = b;
+    dm_renderer* renderer = context->renderer;
 
     dm_metal_buffer buffer = { 0 };
     
-    if(!dm_metal_create_buffer(desc.data, desc.size, &buffer, backend)) return false;
+    if(!dm_metal_create_buffer(desc.data, desc.size, &buffer, renderer)) return false;
 
-    backend->vertex_buffers[backend->vb_count] = buffer;
-    handle->index = backend->vb_count++;
+    renderer->vertex_buffers[renderer->vb_count] = buffer;
+    handle->index = renderer->vb_count++;
+    handle->type = DM_RESOURCE_TYPE_VERTEX_BUFFER;
 
     return true;
 }
 
-bool dm_create_index_buffer_backend(dm_index_buffer_desc desc, dm_resource_handle* handle, void* b)
+bool dm_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_metal_renderer* backend = b;
+    dm_renderer* renderer = context->renderer;
 
     dm_metal_index_buffer buffer = { 0 };
     
@@ -701,46 +699,49 @@ bool dm_create_index_buffer_backend(dm_index_buffer_desc desc, dm_resource_handl
         return false;
     }
     
-    if(!dm_metal_create_buffer(desc.data, desc.size, &buffer.buffer, backend)) return false; 
+    if(!dm_metal_create_buffer(desc.data, desc.size, &buffer.buffer, renderer)) return false; 
     
     //
-    backend->index_buffers[backend->ib_count] = buffer;
-    handle->index = backend->ib_count++;
+    renderer->index_buffers[renderer->ib_count] = buffer;
+    handle->index = renderer->ib_count++;
+    handle->type = DM_RESOURCE_TYPE_INDEX_BUFFER;
 
     return true;
 }
 
-bool dm_create_constant_buffer_backend(dm_constant_buffer_desc desc, dm_resource_handle* handle, void* b)
+bool dm_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_metal_renderer* backend = b;
+    dm_renderer* renderer = context->renderer;
 
     dm_metal_buffer buffer = { 0 };
     
-    if(!dm_metal_create_buffer(desc.data, desc.size, &buffer, backend)) return false;
+    if(!dm_metal_create_buffer(desc.data, desc.size, &buffer, renderer)) return false;
 
-    backend->constant_buffers[backend->cb_count] = buffer;
-    handle->index = backend->cb_count++;
+    renderer->constant_buffers[renderer->cb_count] = buffer;
+    handle->index = renderer->cb_count++;
+    handle->type = DM_RESOURCE_TYPE_CONSTANT_BUFFER;
 
     return true;
 }
 
-bool dm_create_storage_buffer_backend(dm_storage_buffer_desc desc, dm_resource_handle* handle, void* b)
+bool dm_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_metal_renderer* backend = b;
+    dm_renderer* renderer = context->renderer;
 
     dm_metal_buffer buffer = { 0 };
     
-    if(!dm_metal_create_buffer(desc.data, desc.size, &buffer, backend)) return false;
+    if(!dm_metal_create_buffer(desc.data, desc.size, &buffer, renderer)) return false;
 
-    backend->storage_buffers[backend->sb_count] = buffer;
-    handle->index = backend->sb_count++;
+    renderer->storage_buffers[renderer->sb_count] = buffer;
+    handle->index = renderer->sb_count++;
+    handle->type = DM_RESOURCE_TYPE_STORAGE_BUFFER;
 
     return true;
 }
 
-bool dm_create_texture_backend(dm_texture_desc desc, dm_resource_handle* handle, void* b)
+bool dm_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_metal_renderer* backend = b;
+    dm_renderer* renderer = context->renderer;
 
     dm_metal_texture texture = { 0 };
 
@@ -761,24 +762,25 @@ bool dm_create_texture_backend(dm_texture_desc desc, dm_resource_handle* handle,
 
     for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
     {
-        id<MTLTexture> t = [backend->device newTextureWithDescriptor:texture_desc];
+        id<MTLTexture> t = [renderer->device newTextureWithDescriptor:texture_desc];
         
         MTLRegion region = MTLRegionMake2D(0,0, desc.width,desc.height);
         
         [t replaceRegion:region mipmapLevel:0 withBytes:desc.data bytesPerRow:(bytes_per_pixel * desc.width)];
 
-        backend->textures[backend->texture_count] = t;
-        texture.host[i] = backend->texture_count++;
+        renderer->textures[renderer->texture_count] = t;
+        texture.host[i] = renderer->texture_count++;
 
         //
-        MTLSizeAndAlign size_and_align = [backend->device heapTextureSizeAndAlignWithDescriptor:texture_desc];
+        MTLSizeAndAlign size_and_align = [renderer->device heapTextureSizeAndAlignWithDescriptor:texture_desc];
         size_and_align.size += (size_and_align.size & (size_and_align.align - 1)) + size_and_align.align;
-        backend->resource_heap[i].size += size_and_align.size;
+        renderer->resource_heap[i].size += size_and_align.size;
     }
 
     //
-    backend->metal_textures[backend->metal_texture_count] = texture;
-    handle->index = backend->metal_texture_count++;
+    renderer->metal_textures[renderer->metal_texture_count] = texture;
+    handle->index = renderer->metal_texture_count++;
+    handle->type = DM_RESOURCE_TYPE_TEXTURE;
 
     return true;
 }
@@ -796,9 +798,9 @@ MTLSamplerAddressMode dm_convert_sampler_address(dm_sampler_address_mode mode)
     }
 }
 
-bool dm_create_sampler_backend(dm_sampler_desc desc, dm_resource_handle* handle, void* b)
+bool dm_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_metal_renderer* backend = b;
+    dm_renderer* renderer = context->renderer;
 
     dm_metal_sampler sampler = { 0 };
 
@@ -813,174 +815,159 @@ bool dm_create_sampler_backend(dm_sampler_desc desc, dm_resource_handle* handle,
 
     sampler_desc.supportArgumentBuffers = YES;
 
-    sampler.state = [backend->device newSamplerStateWithDescriptor:sampler_desc];
+    sampler.state = [renderer->device newSamplerStateWithDescriptor:sampler_desc];
 
     [sampler_desc release];
     
     //
-    backend->samplers[backend->sampler_count] = sampler;
-    handle->index = backend->sampler_count++;
+    renderer->samplers[renderer->sampler_count] = sampler;
+    handle->index = renderer->sampler_count++;
+    handle->type = DM_RESOURCE_TYPE_SAMPLER;
 
     return true;
 }
 
 // === commands ===
-bool dm_render_command_begin_frame_backend(void* b) 
+bool dm_render_command_begin_frame_backend(dm_renderer* renderer) 
 { 
-    dm_metal_renderer* backend = b;
-
-    dispatch_semaphore_wait(backend->frame_semaphore, DISPATCH_TIME_FOREVER);
+    dispatch_semaphore_wait(renderer->frame_semaphore, DISPATCH_TIME_FOREVER);
 
     // new render target
     CGFloat scale = [NSScreen mainScreen].backingScaleFactor;
-    CGSize size = backend->swapchain.bounds.size;
-    backend->swapchain.contentsScale = scale;
-    backend->swapchain.drawableSize = size;
+    CGSize size = renderer->swapchain.bounds.size;
+    renderer->swapchain.contentsScale = scale;
+    renderer->swapchain.drawableSize = size;
     
-    backend->render_target = [backend->swapchain nextDrawable];
-    if(!backend->render_target) { dm_log(DM_LOG_FATAL, "nextDrawable failed"); return false; }
+    renderer->render_target = [renderer->swapchain nextDrawable];
+    if(!renderer->render_target) { dm_log(DM_LOG_FATAL, "nextDrawable failed"); return false; }
 
     // command buffer
     MTLCommandBufferDescriptor* desc = [MTLCommandBufferDescriptor new];
     desc.errorOptions = MTLCommandBufferErrorOptionEncoderExecutionStatus;
-    backend->render_command_buffer[backend->current_frame] = [backend->command_queue commandBufferWithDescriptor:desc];
+    renderer->render_command_buffer[renderer->current_frame] = [renderer->command_queue commandBufferWithDescriptor:desc];
     [desc release];
 
     // pipeline
-    backend->active_pipeline.type = DM_PIPELINE_TYPE_INVALID;
+    renderer->active_pipeline.type = DM_PIPELINE_TYPE_INVALID;
 
     return true; 
 }
 
-bool dm_render_command_end_frame_backend(bool vsync, void* b) 
+bool dm_render_command_end_frame_backend(bool vsync, dm_renderer* renderer) 
 { 
-    dm_metal_renderer* backend = b;
+    const uint8_t current_frame = renderer->current_frame;
 
-    const uint8_t current_frame = backend->current_frame;
-
-    backend->swapchain.displaySyncEnabled = vsync; 
-    [backend->render_command_buffer[current_frame] presentDrawable:backend->render_target];
+    renderer->swapchain.displaySyncEnabled = vsync; 
+    [renderer->render_command_buffer[current_frame] presentDrawable:renderer->render_target];
 
     // sync
-    __block dispatch_semaphore_t block_semaphore = backend->frame_semaphore;
-    [backend->render_command_buffer[current_frame] addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
+    __block dispatch_semaphore_t block_semaphore = renderer->frame_semaphore;
+    [renderer->render_command_buffer[current_frame] addCompletedHandler:^(id<MTLCommandBuffer> buffer) {
         dispatch_semaphore_signal(block_semaphore);
     }];
 
     // final commit
-    [backend->render_command_buffer[current_frame] commit];
-    [backend->render_command_buffer[current_frame] waitUntilCompleted];
+    [renderer->render_command_buffer[current_frame] commit];
+    [renderer->render_command_buffer[current_frame] waitUntilCompleted];
 
     // update frame
-    backend->current_frame = (backend->current_frame + 1) % DM_MAX_FRAMES_IN_FLIGHT;
+    renderer->current_frame = (renderer->current_frame + 1) % DM_MAX_FRAMES_IN_FLIGHT;
 
     return true; 
 }
 
-bool dm_render_command_begin_update_backend(void* b) 
+bool dm_render_command_begin_update_backend(dm_renderer* renderer) 
 { 
-    dm_metal_renderer* backend = b;
+    const uint8_t current_frame = renderer->current_frame;
 
-    const uint8_t current_frame = backend->current_frame;
-
-    backend->render_blit_encoder[current_frame] = [backend->render_command_buffer[current_frame] blitCommandEncoder];
+    renderer->render_blit_encoder[current_frame] = [renderer->render_command_buffer[current_frame] blitCommandEncoder];
 
     return true; 
 }
 
-bool dm_render_command_end_update_backend(void* b)
+bool dm_render_command_end_update_backend(dm_renderer* renderer)
 { 
-    dm_metal_renderer* backend = b;
+    const uint8_t current_frame = renderer->current_frame;
 
-    const uint8_t current_frame = backend->current_frame;
-
-    [backend->render_blit_encoder[current_frame] endEncoding];
+    [renderer->render_blit_encoder[current_frame] endEncoding];
 
     return true; 
 }
 
-bool dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, void* bknd)
+bool dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_renderer* renderer)
 { 
-    dm_metal_renderer* backend = bknd;
-
-    const uint8_t current_frame = backend->current_frame;
+    const uint8_t current_frame = renderer->current_frame;
 
     MTLRenderPassDescriptor* pass_desc = [MTLRenderPassDescriptor renderPassDescriptor];
 
-    pass_desc.colorAttachments[0].texture     = [backend->render_target texture]; 
+    pass_desc.colorAttachments[0].texture     = [renderer->render_target texture]; 
     pass_desc.colorAttachments[0].storeAction = MTLStoreActionStore;
     pass_desc.colorAttachments[0].loadAction  = MTLLoadActionClear;
     pass_desc.colorAttachments[0].clearColor  = MTLClearColorMake(r,g,b,a);
 
-    pass_desc.depthAttachment.texture     = backend->textures[backend->depth_target[current_frame]]; 
+    pass_desc.depthAttachment.texture     = renderer->textures[renderer->depth_target[current_frame]]; 
     pass_desc.depthAttachment.clearDepth  = depth;
     pass_desc.depthAttachment.storeAction = MTLStoreActionDontCare;
     pass_desc.depthAttachment.loadAction  = MTLLoadActionClear;
 
-    dm_metal_renderpass* pass = &backend->renderpasses[handle];
+    dm_metal_renderpass* pass = &renderer->renderpasses[handle];
 
-    id<MTLCommandBuffer> command_buffer = backend->render_command_buffer[current_frame];
+    id<MTLCommandBuffer> command_buffer = renderer->render_command_buffer[current_frame];
     id<MTLRenderCommandEncoder> encoder = [command_buffer renderCommandEncoderWithDescriptor:pass_desc];
     if(!encoder) { dm_log(DM_LOG_FATAL, "renderCommandEncoderWithDescriptor failed"); return false; }
 
-    backend->render_command_encoder[current_frame] = encoder;
+    renderer->render_command_encoder[current_frame] = encoder;
 
     // bind heap
-    [encoder useHeap:backend->resource_heap[current_frame].heap stages:MTLRenderStageVertex];
-    [encoder useHeap:backend->resource_heap[current_frame].heap stages:MTLRenderStageFragment];
+    [encoder useHeap:renderer->resource_heap[current_frame].heap stages:MTLRenderStageVertex];
+    [encoder useHeap:renderer->resource_heap[current_frame].heap stages:MTLRenderStageFragment];
 
     // depth state
-    [encoder setDepthStencilState:backend->depth_stencil_state];
+    [encoder setDepthStencilState:renderer->depth_stencil_state];
 
     // argument buffer
-    [backend->texture_encoder setArgumentBuffer:backend->buffers[backend->texture_argument_buffer[current_frame]] offset:0];
+    [renderer->texture_encoder setArgumentBuffer:renderer->buffers[renderer->texture_argument_buffer[current_frame]] offset:0];
 
-    for(uint32_t i=0; i<backend->metal_texture_count; i++)
+    for(uint32_t i=0; i<renderer->metal_texture_count; i++)
     {
-        [backend->texture_encoder setTexture:backend->textures[backend->metal_textures[i].device[current_frame]] atIndex:i];
+        [renderer->texture_encoder setTexture:renderer->textures[renderer->metal_textures[i].device[current_frame]] atIndex:i];
     }
-    for(uint32_t i=0; i<backend->sampler_count; i++)
+    for(uint32_t i=0; i<renderer->sampler_count; i++)
     {
-        [backend->texture_encoder setSamplerState:backend->samplers[i].state atIndex:(DM_MAX_TEXTURES + i)];
+        [renderer->texture_encoder setSamplerState:renderer->samplers[i].state atIndex:(DM_MAX_TEXTURES + i)];
     }
 
-    [encoder setFragmentBuffer:backend->buffers[backend->texture_argument_buffer[current_frame]] offset:0 atIndex:0];
+    [encoder setFragmentBuffer:renderer->buffers[renderer->texture_argument_buffer[current_frame]] offset:0 atIndex:0];
 
     return true; 
 }
 
-bool dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, void* b) 
+bool dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, dm_renderer* renderer) 
 { 
-    dm_metal_renderer* backend = b;
-
-    [backend->render_command_encoder[backend->current_frame] endEncoding];
+    [renderer->render_command_encoder[renderer->current_frame] endEncoding];
     
     return true; 
 }
 
-bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, void* b) 
+bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, dm_renderer* renderer) 
 {
-    dm_metal_renderer* backend = b;
+    const uint8_t current_frame = renderer->current_frame;
 
-    const uint8_t current_frame = backend->current_frame;
-
-    id<MTLRenderCommandEncoder> encoder = backend->render_command_encoder[current_frame];
-    dm_metal_raster_pipeline* pipeline = &backend->raster_pipes[handle.index];
+    id<MTLRenderCommandEncoder> encoder = renderer->render_command_encoder[current_frame];
+    dm_metal_raster_pipeline* pipeline = &renderer->raster_pipes[handle.index];
 
     [encoder setRenderPipelineState:pipeline->pipeline_state];
     [encoder setFrontFacingWinding:pipeline->winding];
     [encoder setCullMode:pipeline->cull_mode];
     [encoder setTriangleFillMode:pipeline->fill_mode];
 
-    backend->active_pipeline = handle;
+    renderer->active_pipeline = handle;
 
     return true; 
 }
 
-bool dm_render_command_set_viewport_backend(dm_viewport_index index, void* backend)
+bool dm_render_command_set_viewport_backend(dm_viewport_index index, dm_renderer* renderer)
 {
-    dm_metal_renderer* renderer = backend;
-
     const uint8_t current_frame = renderer->current_frame;
 
     id<MTLRenderCommandEncoder> encoder = renderer->render_command_encoder[current_frame];
@@ -990,10 +977,8 @@ bool dm_render_command_set_viewport_backend(dm_viewport_index index, void* backe
     return true;
 }
 
-bool dm_render_command_set_scissor_backend(dm_scissor_index index, void* backend)
+bool dm_render_command_set_scissor_backend(dm_scissor_index index, dm_renderer* renderer)
 {
-    dm_metal_renderer* renderer = backend;
-
     const uint8_t current_frame = renderer->current_frame;
 
     id<MTLRenderCommandEncoder> encoder = renderer->render_command_encoder[current_frame];
@@ -1003,24 +988,22 @@ bool dm_render_command_set_scissor_backend(dm_scissor_index index, void* backend
     return true;
 }
 
-bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uint16_t count, void* b) 
+bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uint16_t count, dm_renderer* renderer) 
 {
-    dm_metal_renderer* backend = b;
+    const uint8_t current_frame = renderer->current_frame;
 
-    const uint8_t current_frame = backend->current_frame;
+    if(renderer->active_pipeline.type==DM_PIPELINE_TYPE_INVALID) { dm_log(DM_LOG_FATAL, "No pipeline is set"); return false; }
 
-    if(backend->active_pipeline.type==DM_PIPELINE_TYPE_INVALID) { dm_log(DM_LOG_FATAL, "No pipeline is set"); return false; }
+    id<MTLRenderCommandEncoder> encoder = renderer->render_command_encoder[current_frame];
 
-    id<MTLRenderCommandEncoder> encoder = backend->render_command_encoder[current_frame];
-
-    switch(backend->active_pipeline.type)
+    switch(renderer->active_pipeline.type)
     { 
         case DM_PIPELINE_TYPE_RASTER:
         {
-            dm_metal_raster_pipeline pipeline = backend->raster_pipes[backend->active_pipeline.index];
+            dm_metal_raster_pipeline pipeline = renderer->raster_pipes[renderer->active_pipeline.index];
 
-            id<MTLBuffer> vertex_argument_buffer   = backend->buffers[pipeline.vertex_argument_buffer[current_frame]];
-            id<MTLBuffer> fragment_argument_buffer = backend->buffers[pipeline.fragment_argument_buffer[current_frame]];
+            id<MTLBuffer> vertex_argument_buffer   = renderer->buffers[pipeline.vertex_argument_buffer[current_frame]];
+            id<MTLBuffer> fragment_argument_buffer = renderer->buffers[pipeline.fragment_argument_buffer[current_frame]];
 
             [pipeline.vertex_encoder setArgumentBuffer:vertex_argument_buffer offset:0];
             [pipeline.fragment_encoder setArgumentBuffer:fragment_argument_buffer offset:0];
@@ -1034,7 +1017,7 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
                 {
                     case DM_RESOURCE_TYPE_CONSTANT_BUFFER:
                     {
-                        id<MTLBuffer> buffer = backend->buffers[backend->constant_buffers[handles[i].index].device[current_frame]];
+                        id<MTLBuffer> buffer = renderer->buffers[renderer->constant_buffers[handles[i].index].device[current_frame]];
 
                         // TODO: FIX!
                         [pipeline.vertex_encoder   setBuffer:buffer offset:0 atIndex:index];
@@ -1042,7 +1025,7 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
                     } break;
                     case DM_RESOURCE_TYPE_STORAGE_BUFFER:
                     {
-                        id<MTLBuffer> buffer = backend->buffers[backend->storage_buffers[handles[i].index].device[current_frame]];
+                        id<MTLBuffer> buffer = renderer->buffers[renderer->storage_buffers[handles[i].index].device[current_frame]];
 
                         // TODO: FIX!
                         [pipeline.vertex_encoder   setBuffer:buffer offset:0 atIndex:index];
@@ -1051,14 +1034,14 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
 
                     case DM_RESOURCE_TYPE_TEXTURE:
                     {
-                        id<MTLTexture> texture = backend->textures[backend->metal_textures[handles[i].index].device[current_frame]];
+                        id<MTLTexture> texture = renderer->textures[renderer->metal_textures[handles[i].index].device[current_frame]];
 
                         [pipeline.vertex_encoder   setTexture:texture atIndex:index];
                         [pipeline.fragment_encoder setTexture:texture atIndex:index++];
                     } break;
                     case DM_RESOURCE_TYPE_SAMPLER:
                     {
-                        id<MTLSamplerState> sampler = backend->samplers[handles[i].index].state;
+                        id<MTLSamplerState> sampler = renderer->samplers[handles[i].index].state;
 
                         [pipeline.vertex_encoder   setSamplerState:sampler atIndex:index];
                         [pipeline.fragment_encoder setSamplerState:sampler atIndex:index++];
@@ -1082,17 +1065,15 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
     return true; 
 }
 
-bool dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uint8_t slot, size_t offset, void* b)
+bool dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uint8_t slot, size_t offset, dm_renderer* renderer)
 { 
-    dm_metal_renderer* backend = b;
+    const uint8_t current_frame = renderer->current_frame;
 
-    const uint8_t current_frame = backend->current_frame;
+    id<MTLRenderCommandEncoder> encoder = renderer->render_command_encoder[current_frame];
 
-    id<MTLRenderCommandEncoder> encoder = backend->render_command_encoder[current_frame];
+    dm_metal_buffer buffer = renderer->vertex_buffers[handle.index];
 
-    dm_metal_buffer buffer = backend->vertex_buffers[handle.index];
-
-    id<MTLBuffer> vertex_buffer = backend->buffers[buffer.device[current_frame]];
+    id<MTLBuffer> vertex_buffer = renderer->buffers[buffer.device[current_frame]];
 
     // always have an argument buffer being bound
     // vertex buffer must be second buffer
@@ -1102,11 +1083,9 @@ bool dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uin
     return true; 
 }
 
-bool dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size_t offset, void* b) 
+bool dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size_t offset, dm_renderer* renderer) 
 { 
-    dm_metal_renderer* backend = b;
-
-    backend->active_index_buffer = handle;
+    renderer->active_index_buffer = handle;
 
     return true; 
 }
@@ -1114,84 +1093,72 @@ bool dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-void dm_metal_update_buffer(void* data, size_t size, size_t offset, dm_metal_buffer buffer, dm_metal_renderer* backend)
+void dm_metal_update_buffer(void* data, size_t size, size_t offset, dm_metal_buffer buffer, dm_renderer* renderer)
 {
-    const uint8_t current_frame = backend->current_frame;
+    const uint8_t current_frame = renderer->current_frame;
 
-    id<MTLBlitCommandEncoder> blit_encoder = backend->render_blit_encoder[current_frame];
+    id<MTLBlitCommandEncoder> blit_encoder = renderer->render_blit_encoder[current_frame];
 
-    dm_memcpy(backend->buffers[buffer.host[current_frame]].contents + offset, data, size);
+    dm_memcpy(renderer->buffers[buffer.host[current_frame]].contents + offset, data, size);
 
-    id<MTLBuffer> host_buffer   = backend->buffers[buffer.host[current_frame]];
-    id<MTLBuffer> device_buffer = backend->buffers[buffer.device[current_frame]];
+    id<MTLBuffer> host_buffer   = renderer->buffers[buffer.host[current_frame]];
+    id<MTLBuffer> device_buffer = renderer->buffers[buffer.device[current_frame]];
 
     [blit_encoder copyFromBuffer:host_buffer sourceOffset:offset toBuffer:device_buffer destinationOffset:offset size:size];
 }
 
-bool dm_render_command_update_vertex_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, void* b) 
+bool dm_render_command_update_vertex_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer) 
 { 
-    dm_metal_renderer* backend = b;
-
-    dm_metal_update_buffer(data, size, offset, backend->vertex_buffers[handle.index], backend);
+    dm_metal_update_buffer(data, size, offset, renderer->vertex_buffers[handle.index], renderer);
 
     return true; 
 }
 
-bool dm_render_command_update_index_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, void* b) 
+bool dm_render_command_update_index_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer) 
 { 
-    dm_metal_renderer* backend = b;
-
-    dm_metal_update_buffer(data, size, offset, backend->index_buffers[handle.index].buffer, backend);
+    dm_metal_update_buffer(data, size, offset, renderer->index_buffers[handle.index].buffer, renderer);
 
     return true; 
 }
 
-bool dm_render_command_update_constant_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, void* b) 
+bool dm_render_command_update_constant_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer) 
 { 
-    dm_metal_renderer* backend = b;
-
-    dm_metal_update_buffer(data, size, offset, backend->constant_buffers[handle.index], backend);
+    dm_metal_update_buffer(data, size, offset, renderer->constant_buffers[handle.index], renderer);
 
     return true; 
 }
 
-bool dm_render_command_update_storage_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, void* b)
+bool dm_render_command_update_storage_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer)
 { 
-    dm_metal_renderer* backend = b;
-
-    dm_metal_update_buffer(data, size, offset, backend->storage_buffers[handle.index], backend);
+    dm_metal_update_buffer(data, size, offset, renderer->storage_buffers[handle.index], renderer);
 
     return true; 
 }
 
-bool dm_render_command_update_texture_backend(dm_resource_handle handle, uint16_t width, uint16_t height, void* data, size_t size, size_t offset, void* b) { return true; }
+bool dm_render_command_update_texture_backend(dm_resource_handle handle, uint16_t width, uint16_t height, void* data, size_t size, size_t offset, dm_renderer* renderer) { return true; }
 
-bool dm_render_command_draw_instanced_backend(uint32_t instance_count, size_t instance_offset, uint32_t vertex_count, size_t vertex_offset, void* b) 
+bool dm_render_command_draw_instanced_backend(uint32_t instance_count, size_t instance_offset, uint32_t vertex_count, size_t vertex_offset, dm_renderer* renderer) 
 { 
-    dm_metal_renderer* backend = b;
+    const uint8_t current_frame = renderer->current_frame;
 
-    const uint8_t current_frame = backend->current_frame;
-
-    id<MTLRenderCommandEncoder> encoder = backend->render_command_encoder[current_frame];
-    dm_metal_raster_pipeline pipeline = backend->raster_pipes[backend->active_pipeline.index];
+    id<MTLRenderCommandEncoder> encoder = renderer->render_command_encoder[current_frame];
+    dm_metal_raster_pipeline pipeline = renderer->raster_pipes[renderer->active_pipeline.index];
 
     [encoder drawPrimitives:pipeline.primitive_type vertexStart:vertex_offset vertexCount:vertex_count instanceCount:instance_count baseInstance:instance_offset];
 
     return true; 
 }
 
-bool dm_render_command_draw_instanced_indexed_backend(uint32_t instance_count, size_t instance_offset, uint32_t index_count, size_t index_offset, size_t vertex_offset, void* b)
+bool dm_render_command_draw_instanced_indexed_backend(uint32_t instance_count, size_t instance_offset, uint32_t index_count, size_t index_offset, size_t vertex_offset, dm_renderer* renderer)
 { 
-    dm_metal_renderer* backend = b;
+    const uint8_t current_frame = renderer->current_frame;
 
-    const uint8_t current_frame = backend->current_frame;
+    id<MTLRenderCommandEncoder> encoder = renderer->render_command_encoder[current_frame];
 
-    id<MTLRenderCommandEncoder> encoder = backend->render_command_encoder[current_frame];
+    dm_metal_raster_pipeline pipeline = renderer->raster_pipes[renderer->active_pipeline.index];
+    dm_metal_index_buffer buffer = renderer->index_buffers[renderer->active_index_buffer.index];
 
-    dm_metal_raster_pipeline pipeline = backend->raster_pipes[backend->active_pipeline.index];
-    dm_metal_index_buffer buffer = backend->index_buffers[backend->active_index_buffer.index];
-
-    id<MTLBuffer> index_buffer = backend->buffers[buffer.buffer.device[current_frame]];
+    id<MTLBuffer> index_buffer = renderer->buffers[buffer.buffer.device[current_frame]];
 
     [encoder drawIndexedPrimitives:pipeline.primitive_type indexCount:index_count indexType:buffer.index_type indexBuffer:index_buffer indexBufferOffset:index_offset instanceCount:instance_count baseVertex:vertex_offset baseInstance:instance_offset];
 
