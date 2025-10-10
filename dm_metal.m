@@ -1102,11 +1102,10 @@ void dm_metal_update_buffer(void* data, size_t size, size_t offset, dm_metal_buf
     const uint8_t current_frame = renderer->current_frame;
 
     id<MTLBlitCommandEncoder> blit_encoder = renderer->render_blit_encoder[current_frame];
-
-    dm_memcpy(renderer->buffers[buffer.host[current_frame]].contents + offset, data, size);
-
     id<MTLBuffer> host_buffer   = renderer->buffers[buffer.host[current_frame]];
     id<MTLBuffer> device_buffer = renderer->buffers[buffer.device[current_frame]];
+
+    dm_memcpy(host_buffer.contents + offset, data, size);
 
     [blit_encoder copyFromBuffer:host_buffer sourceOffset:offset toBuffer:device_buffer destinationOffset:offset size:size];
 }
