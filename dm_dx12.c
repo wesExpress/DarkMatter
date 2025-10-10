@@ -925,12 +925,12 @@ bool dm_create_raster_pipeline_backend(dm_raster_pipeline_desc desc, dm_pipeline
     D3D12_RENDER_TARGET_BLEND_DESC blend_desc = { 0 };
     
     blend_desc.BlendEnable           = TRUE;
+    blend_desc.BlendOp               = D3D12_BLEND_OP_ADD;
     blend_desc.SrcBlend              = D3D12_BLEND_SRC_ALPHA;
     blend_desc.DestBlend             = D3D12_BLEND_INV_SRC_ALPHA;
-    blend_desc.BlendOp               = D3D12_BLEND_OP_ADD;
+    blend_desc.BlendOpAlpha          = D3D12_BLEND_OP_ADD;
     blend_desc.SrcBlendAlpha         = D3D12_BLEND_SRC_ALPHA;
     blend_desc.DestBlendAlpha        = D3D12_BLEND_INV_SRC_ALPHA;
-    blend_desc.BlendOpAlpha          = D3D12_BLEND_OP_ADD;
     blend_desc.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
     blend_desc.LogicOpEnable         = FALSE;
     blend_desc.LogicOp               = D3D12_LOGIC_OP_NOOP;

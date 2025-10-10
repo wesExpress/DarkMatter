@@ -4,6 +4,7 @@
 #ifdef DM_PLATFORM_APPLE
 #include <mach/mach_time.h>
 #elif defined(DM_PLATFORM_WIN32)
+#define WIN32_MEAN_AND_LEAN
 #include <windows.h>
 #endif
 
@@ -427,7 +428,10 @@ extern bool dm_renderer_resize(uint32_t width, uint32_t height, dm_context* cont
 bool dm_create_texture_from_file(const char* path, dm_resource_handle* handle, dm_context* context)
 {
     int x,y,n;
-    void* data = stbi_load(path, &x,&y,&n,4);
+#ifdef DM_METAL
+    stbi_set_flip_vertically_on_load(true);
+#endif // DM_METAL
+    void* data = stbi_load(path, &x,&y,&n,STBI_rgb_alpha);
     if(!data)
     {
         dm_log(DM_LOG_FATAL, "Could not load texture: %s", path);
@@ -435,7 +439,7 @@ bool dm_create_texture_from_file(const char* path, dm_resource_handle* handle, d
     }
 
     dm_texture_desc desc = { 
-        .width=x,.height=y,.n_channels=4,
+        .width=x,.height=y,.n_channels=STBI_rgb_alpha,
         .data=data,
         .format=DM_TEXTURE_FORMAT_BYTE_4_UNORM
     };

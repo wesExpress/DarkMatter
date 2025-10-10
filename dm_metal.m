@@ -497,10 +497,14 @@ bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle*
 
     //pipe_desc.colorAttachments[0].pixelFormat                 = MTLPixelFormatRGBA8Unorm;
     pipe_desc.colorAttachments[0].pixelFormat                 = MTLPixelFormatBGRA8Unorm;
+
     pipe_desc.colorAttachments[0].blendingEnabled             = YES;
+
     pipe_desc.colorAttachments[0].rgbBlendOperation           = MTLBlendOperationAdd;
+    //pipe_desc.colorAttachments[0].rgbBlendOperation           = MTLBlendOperationSubtract;
     pipe_desc.colorAttachments[0].sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
     pipe_desc.colorAttachments[0].destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
+
     pipe_desc.colorAttachments[0].alphaBlendOperation         = MTLBlendOperationAdd;
     pipe_desc.colorAttachments[0].sourceAlphaBlendFactor      = MTLBlendFactorSourceAlpha;
     pipe_desc.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
@@ -811,7 +815,7 @@ bool dm_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_cont
     sampler_desc.tAddressMode = dm_convert_sampler_address(desc.address_w);
 
     sampler_desc.minFilter = MTLSamplerMinMagFilterNearest;
-    sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+    sampler_desc.magFilter = MTLSamplerMinMagFilterNearest;
 
     sampler_desc.supportArgumentBuffers = YES;
 
