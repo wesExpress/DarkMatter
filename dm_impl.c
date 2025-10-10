@@ -428,9 +428,7 @@ extern bool dm_renderer_resize(uint32_t width, uint32_t height, dm_context* cont
 bool dm_create_texture_from_file(const char* path, dm_resource_handle* handle, dm_context* context)
 {
     int x,y,n;
-#ifdef DM_METAL
     stbi_set_flip_vertically_on_load(true);
-#endif // DM_METAL
     void* data = stbi_load(path, &x,&y,&n,STBI_rgb_alpha);
     if(!data)
     {

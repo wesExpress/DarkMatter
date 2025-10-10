@@ -143,7 +143,7 @@ typedef struct dm_dx12_tlas_t
 #define DM_DX12_MAX_RESOURCES ((2 + 3 + (DM_MAX_VBS + DM_MAX_IBS + DM_MAX_CBS + DM_MAX_SBS + DM_MAX_TEXTURES) * 2) * DM_MAX_FRAMES_IN_FLIGHT)
 #endif // DM_HARDWARE_RAYTRACING   
 
-typedef struct dm_dx12_renderer_t
+struct dm_renderer_t
 {
     ID3D12Device5* device;
     IDXGISwapChain4* swap_chain;
@@ -223,12 +223,12 @@ typedef struct dm_dx12_renderer_t
     IDXGIDebug1* dxgi_debug;
     IDXGIInfoQueue* info_queue;
 #endif
-} dm_dx12_renderer;
+};
 
 bool dm_win32_decode_hresult(HRESULT hr);
 
 #ifdef DM_DEBUG
-void dm_dx12_get_debug_message(dm_dx12_renderer* renderer)
+void dm_dx12_get_debug_message(dm_renderer* renderer)
 {
     const uint32_t num_messages = IDXGIInfoQueue_GetNumStoredMessages(renderer->info_queue, DXGI_DEBUG_ALL);
     for(uint32_t i=0; i<num_messages; i++)
@@ -243,13 +243,13 @@ void dm_dx12_get_debug_message(dm_dx12_renderer* renderer)
     }
 }
 #else
-void dm_dx12_get_debug_message(dm_dx12_renderer* renderer) {}
+void dm_dx12_get_debug_message(dm_renderer* renderer) {}
 #endif
 
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_dx12_wait_for_previous_frame(bool advance, dm_dx12_renderer* renderer)
+bool dm_dx12_wait_for_previous_frame(bool advance, dm_renderer* renderer)
 {
     HRESULT hr;
 
@@ -278,7 +278,7 @@ bool dm_dx12_wait_for_previous_frame(bool advance, dm_dx12_renderer* renderer)
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_dx12_create_descriptor_heap(uint32_t descriptor_count, D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_DESCRIPTOR_HEAP_FLAGS flags, dm_dx12_descriptor_heap* heap, dm_dx12_renderer* renderer)
+bool dm_dx12_create_descriptor_heap(uint32_t descriptor_count, D3D12_DESCRIPTOR_HEAP_TYPE type, D3D12_DESCRIPTOR_HEAP_FLAGS flags, dm_dx12_descriptor_heap* heap, dm_renderer* renderer)
 {
     HRESULT hr;
     void* temp = NULL;
@@ -307,9 +307,9 @@ bool dm_dx12_create_descriptor_heap(uint32_t descriptor_count, D3D12_DESCRIPTOR_
     return true;
 }
 
-void* dm_renderer_init_backend(dm_context* context)
+bool dm_renderer_init(dm_context* context)
 {
-    dm_dx12_renderer renderer = { 0 };
+    dm_renderer renderer = { 0 };
 
 #ifdef DM_DEBUG
     dm_log(DM_LOG_DEBUG, "Initializing DirectX12 backend...");
@@ -583,16 +583,14 @@ void* dm_renderer_init_backend(dm_context* context)
     if(!renderer.compute_fence_event) { dm_log(DM_LOG_FATAL, "CreateEvent failed"); return false; }
 
     //
-    dm_dx12_renderer* backend = dm_alloc(sizeof(renderer));
-    dm_memcpy(backend, &renderer, sizeof(renderer));
+    context->renderer = dm_alloc(sizeof(dm_renderer));
+    dm_memcpy(context->renderer, &renderer, sizeof(renderer));
 
-    return backend;
+    return true;
 }
 
-bool dm_renderer_finish_init_backend(void* backend)
+bool dm_renderer_finish_init(dm_renderer* renderer)
 {
-    dm_dx12_renderer* renderer = backend;
-
     HRESULT hr;
 
     ID3D12CommandQueue* command_queue = renderer->command_queue;
@@ -614,9 +612,9 @@ bool dm_renderer_finish_init_backend(void* backend)
     return true;
 }
 
-void dm_renderer_shutdown_backend(void* backend)
+void dm_renderer_shutdown(dm_context* context)
 {
-    dm_dx12_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     HRESULT hr;
 
@@ -697,12 +695,12 @@ void dm_renderer_shutdown_backend(void* backend)
         IDXGIDebug1_Release(dbg);
     }
 #endif // DM_DEBUG
+    
+    dm_free((void**)&context->renderer);
 }
 
-bool dm_renderer_resize_backend(uint32_t width, uint32_t height, void* backend)
+bool dm_renderer_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
 {
-    dm_dx12_renderer* renderer = backend;
-
     HRESULT hr;
 
     for(uint8_t i=0; i<DM_MAX_FRAMES_IN_FLIGHT; i++)
@@ -788,9 +786,9 @@ bool dm_renderer_resize_backend(uint32_t width, uint32_t height, void* backend)
     return true;
 }
 
-uint32_t dm_get_resource_index_backend(dm_resource_handle handle, void* backend)
+uint32_t dm_get_resource_index(dm_resource_handle handle, dm_context* context)
 {
-    dm_dx12_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     const uint8_t current_frame = renderer->current_frame;
 
@@ -808,14 +806,14 @@ uint32_t dm_get_resource_index_backend(dm_resource_handle handle, void* backend)
 }
 
 // === resources ===
-bool dm_create_renderpass_backend(dm_renderpass_desc desc, dm_renderpass_handle* handle, void* backend)
+bool dm_create_renderpass(dm_renderpass_desc desc, dm_renderpass_handle* handle, dm_context* context)
 {
     return true;
 }
 
-void dm_create_viewport_backend(dm_viewport viewport, dm_viewport_index* index, void* backend)
+void dm_create_viewport(dm_viewport viewport, dm_viewport_index* index, dm_context* context)
 {
-    dm_dx12_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     D3D12_VIEWPORT v = {
         .TopLeftX=viewport.left,
@@ -829,9 +827,9 @@ void dm_create_viewport_backend(dm_viewport viewport, dm_viewport_index* index, 
     *index = renderer->viewport_count++;
 }
 
-void dm_create_scissor_backend(dm_scissor scissor, dm_scissor_index* index, void* backend)
+void dm_create_scissor(dm_scissor scissor, dm_scissor_index* index, dm_context* context)
 {
-    dm_dx12_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     D3D12_RECT rect = {
         .top=scissor.top,
@@ -863,9 +861,9 @@ bool dm_dx12_load_shader_data(const char* path, ID3D10Blob** blob)
     return true;
 }
 
-bool dm_create_raster_pipeline_backend(dm_raster_pipeline_desc desc, dm_pipeline_handle* handle, void* backend)
+bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle* handle, dm_context* context)
 {
-    dm_dx12_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     HRESULT hr;
 
@@ -1058,6 +1056,7 @@ bool dm_create_raster_pipeline_backend(dm_raster_pipeline_desc desc, dm_pipeline
     // 
     renderer->rast_pipelines[renderer->rast_pipe_count] = pipeline;
     handle->index = renderer->rast_pipe_count++;
+    handle->type = DM_PIPELINE_TYPE_RASTER;
 
     return true;
 }
@@ -1099,7 +1098,7 @@ bool dm_dx12_copy_memory(ID3D12Resource* resource, const void* data, size_t size
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
-bool dm_dx12_create_buffer(const size_t size, D3D12_HEAP_TYPE heap_type, D3D12_RESOURCE_STATES state, D3D12_RESOURCE_FLAGS flags, ID3D12Resource** resource, dm_dx12_renderer* renderer)
+bool dm_dx12_create_buffer(const size_t size, D3D12_HEAP_TYPE heap_type, D3D12_RESOURCE_STATES state, D3D12_RESOURCE_FLAGS flags, ID3D12Resource** resource, dm_renderer* renderer)
 {
     D3D12_RESOURCE_DESC desc = { 0 };
     desc.Dimension        = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -1120,9 +1119,9 @@ bool dm_dx12_create_buffer(const size_t size, D3D12_HEAP_TYPE heap_type, D3D12_R
 
     return true;
 }
-bool dm_create_vertex_buffer_backend(dm_vertex_buffer_desc desc, dm_resource_handle* handle, void* backend)
+bool dm_create_vertex_buffer(dm_vertex_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_dx12_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     dm_dx12_vertex_buffer buffer = { 0 };
 
@@ -1185,13 +1184,14 @@ bool dm_create_vertex_buffer_backend(dm_vertex_buffer_desc desc, dm_resource_han
     //
     renderer->vertex_buffers[renderer->vb_count] = buffer;
     handle->index = renderer->vb_count++;
+    handle->type = DM_RESOURCE_TYPE_VERTEX_BUFFER;
 
     return true;
 }
 
-bool dm_create_index_buffer_backend(dm_index_buffer_desc desc, dm_resource_handle* handle, void* backend)
+bool dm_create_index_buffer(dm_index_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_dx12_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     dm_dx12_index_buffer buffer = { 0 };
     
@@ -1280,13 +1280,14 @@ bool dm_create_index_buffer_backend(dm_index_buffer_desc desc, dm_resource_handl
     //
     renderer->index_buffers[renderer->ib_count] = buffer;
     handle->index = renderer->ib_count++;
+    handle->type = DM_RESOURCE_TYPE_INDEX_BUFFER;
 
     return true;
 }
 
-bool dm_create_constant_buffer_backend(dm_constant_buffer_desc desc, dm_resource_handle* handle, void* backend)
+bool dm_create_constant_buffer(dm_constant_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_dx12_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     HRESULT hr;
 
@@ -1328,13 +1329,14 @@ bool dm_create_constant_buffer_backend(dm_constant_buffer_desc desc, dm_resource
     //
     dm_memcpy(renderer->constant_buffers + renderer->cb_count, &buffer, sizeof(buffer));
     handle->index = renderer->cb_count++;
+    handle->type = DM_RESOURCE_TYPE_CONSTANT_BUFFER;
 
     return true;
 }
 
-bool dm_create_storage_buffer_backend(dm_storage_buffer_desc desc, dm_resource_handle* handle, void* backend)
+bool dm_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_dx12_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     HRESULT hr;
 
@@ -1408,6 +1410,7 @@ bool dm_create_storage_buffer_backend(dm_storage_buffer_desc desc, dm_resource_h
     //
     dm_memcpy(renderer->storage_buffers + renderer->sb_count, &buffer, sizeof(buffer));
     handle->index = renderer->sb_count++;
+    handle->type = DM_RESOURCE_TYPE_STORAGE_BUFFER;
 
     return true;
 }
@@ -1437,9 +1440,9 @@ bool dm_dx12_create_texture_resource(uint32_t width, uint32_t height, DXGI_FORMA
     return true;
 }
 
-bool dm_create_texture_backend(dm_texture_desc desc, dm_resource_handle* handle, void* backend)
+bool dm_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_dx12_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     HRESULT hr;
 
@@ -1557,6 +1560,7 @@ bool dm_create_texture_backend(dm_texture_desc desc, dm_resource_handle* handle,
     //
     dm_memcpy(renderer->textures + renderer->texture_count, &texture, sizeof(texture));
     handle->index = renderer->texture_count++;
+    handle->type = DM_RESOURCE_TYPE_TEXTURE;
 
     return true;
 }
@@ -1579,9 +1583,9 @@ D3D12_TEXTURE_ADDRESS_MODE dm_dx12_convert_address_mode(dm_sampler_address_mode 
     }
 }
 
-bool dm_create_sampler_backend(dm_sampler_desc desc, dm_resource_handle* handle, void* backend)
+bool dm_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_context* context)
 {
-    dm_dx12_renderer* renderer = backend;
+    dm_renderer* renderer = context->renderer;
 
     HRESULT hr;
 
@@ -1605,15 +1609,14 @@ bool dm_create_sampler_backend(dm_sampler_desc desc, dm_resource_handle* handle,
     }
 
     handle->index = renderer->sampler_count++;
+    handle->type = DM_RESOURCE_TYPE_SAMPLER;
 
     return true;
 }
 
 // === commands ===
-bool dm_render_command_begin_frame_backend(void* backend) 
+bool dm_render_command_begin_frame_backend(dm_renderer* renderer) 
 {
-    dm_dx12_renderer* renderer = backend;
-
     HRESULT hr;
 
     const uint8_t current_frame = renderer->current_frame;
@@ -1638,10 +1641,8 @@ bool dm_render_command_begin_frame_backend(void* backend)
     return true; 
 }
 
-bool dm_render_command_end_frame_backend(bool vsync, void* backend) 
+bool dm_render_command_end_frame_backend(bool vsync, dm_renderer* renderer) 
 { 
-    dm_dx12_renderer* renderer = backend;
-
     HRESULT hr;
 
     const uint8_t current_frame = renderer->current_frame;
@@ -1668,13 +1669,11 @@ bool dm_render_command_end_frame_backend(bool vsync, void* backend)
     return true; 
 }
 
-bool dm_render_command_begin_update_backend(void* backend) { return true; }
-bool dm_render_command_end_update_backend(void* backend) { return true; }
+bool dm_render_command_begin_update_backend(dm_renderer* renderer) { return true; }
+bool dm_render_command_end_update_backend(dm_renderer* renderer) { return true; }
 
-bool dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, void* backend) 
+bool dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_renderer* renderer) 
 { 
-    dm_dx12_renderer* renderer = backend;
-
     const uint8_t current_frame = renderer->current_frame;
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
 
@@ -1698,15 +1697,13 @@ bool dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, fl
 
     ID3D12GraphicsCommandList7_OMSetRenderTargets(command_list, 1, &rtv_handle, FALSE, &dsv_handle);
     ID3D12GraphicsCommandList7_ClearRenderTargetView(command_list, rtv_handle, clear_color, 0, NULL);
-    ID3D12GraphicsCommandList7_ClearDepthStencilView(command_list, dsv_handle, D3D12_CLEAR_FLAG_DEPTH, 1.0f,0, 0, NULL);
+    ID3D12GraphicsCommandList7_ClearDepthStencilView(command_list, dsv_handle, D3D12_CLEAR_FLAG_DEPTH, depth,0, 0, NULL);
 
     return true; 
 }
 
-bool dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, void* backend) 
+bool dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, dm_renderer* renderer) 
 {
-    dm_dx12_renderer* renderer = backend;
-
     const uint8_t current_frame = renderer->current_frame;
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
     
@@ -1721,10 +1718,8 @@ bool dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, void
     return true; 
 }
 
-bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, void* backend) 
+bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, dm_renderer* renderer) 
 { 
-    dm_dx12_renderer* renderer = backend;
-
     const uint8_t current_frame = renderer->current_frame;
 
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
@@ -1738,10 +1733,8 @@ bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, v
     return true; 
 }
 
-bool dm_render_command_set_viewport_backend(dm_viewport_index index, void* backend) 
+bool dm_render_command_set_viewport_backend(dm_viewport_index index, dm_renderer* renderer) 
 { 
-    dm_dx12_renderer* renderer = backend;
-    
     const uint8_t current_frame = renderer->current_frame;
 
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
@@ -1751,10 +1744,8 @@ bool dm_render_command_set_viewport_backend(dm_viewport_index index, void* backe
     return true; 
 }
 
-bool dm_render_command_set_scissor_backend(dm_scissor_index index, void* backend) 
+bool dm_render_command_set_scissor_backend(dm_scissor_index index, dm_renderer* renderer) 
 { 
-    dm_dx12_renderer* renderer = backend;
-    
     const uint8_t current_frame = renderer->current_frame;
 
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
@@ -1764,10 +1755,8 @@ bool dm_render_command_set_scissor_backend(dm_scissor_index index, void* backend
     return true; 
 }
 
-bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uint16_t count, void* backend) 
+bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uint16_t count, dm_renderer* renderer) 
 {
-    dm_dx12_renderer* renderer = backend;
-
     const uint8_t current_frame = renderer->current_frame;
 
     uint32_t indices[10] = { 0 };
@@ -1829,10 +1818,8 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
     return true; 
 }
 
-bool dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uint8_t slot, size_t offset, void* backend) 
+bool dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uint8_t slot, size_t offset, dm_renderer* renderer) 
 { 
-    dm_dx12_renderer* renderer = backend;
-
     const uint8_t current_frame = renderer->current_frame;
 
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
@@ -1843,10 +1830,8 @@ bool dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uin
     return true; 
 }
 
-bool dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size_t offset, void* backend) 
+bool dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size_t offset, dm_renderer* renderer) 
 {
-    dm_dx12_renderer* renderer = backend;
-
     const uint8_t current_frame = renderer->current_frame;
 
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
@@ -1879,10 +1864,8 @@ void dm_dx12_update_buffer(ID3D12Resource* source, ID3D12Resource* dest, size_t 
     ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barriers[1]);
 }
 
-bool dm_render_command_update_vertex_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, void* backend) 
+bool dm_render_command_update_vertex_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer) 
 {
-    dm_dx12_renderer* renderer = backend;
-
     dm_dx12_vertex_buffer buffer = renderer->vertex_buffers[handle.index];
 
     const uint8_t current_frame = renderer->current_frame;
@@ -1899,10 +1882,8 @@ bool dm_render_command_update_vertex_buffer_backend(dm_resource_handle handle, v
     return true; 
 }
 
-bool dm_render_command_update_index_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, void* backend) 
+bool dm_render_command_update_index_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer) 
 { 
-    dm_dx12_renderer* renderer = backend;
-
     dm_dx12_index_buffer buffer = renderer->index_buffers[handle.index];
 
     const uint8_t current_frame = renderer->current_frame;
@@ -1919,10 +1900,8 @@ bool dm_render_command_update_index_buffer_backend(dm_resource_handle handle, vo
     return true; 
 }
 
-bool dm_render_command_update_constant_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, void* backend) 
+bool dm_render_command_update_constant_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer) 
 {
-    dm_dx12_renderer* renderer = backend;
-
     dm_dx12_constant_buffer* buffer = &renderer->constant_buffers[handle.index];
 
     const uint8_t current_frame = renderer->current_frame;
@@ -1932,10 +1911,8 @@ bool dm_render_command_update_constant_buffer_backend(dm_resource_handle handle,
     return true; 
 }
 
-bool dm_render_command_update_storage_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, void* backend) 
+bool dm_render_command_update_storage_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer) 
 { 
-    dm_dx12_renderer* renderer = backend;
-
     dm_dx12_storage_buffer buffer = renderer->storage_buffers[handle.index];
 
     const uint8_t current_frame = renderer->current_frame;
@@ -1952,12 +1929,10 @@ bool dm_render_command_update_storage_buffer_backend(dm_resource_handle handle, 
     return true; 
 }
 
-bool dm_render_command_update_texture_backend(dm_resource_handle handle, uint16_t width, uint16_t height, void* data, size_t size, size_t offset, void* backend) { return true; }
+bool dm_render_command_update_texture_backend(dm_resource_handle handle, uint16_t width, uint16_t height, void* data, size_t size, size_t offset, dm_renderer* renderer) { return true; }
 
-bool dm_render_command_draw_instanced_backend(uint32_t instance_count, size_t instance_offset, uint32_t vertex_count, size_t vertex_offset, void* backend) 
+bool dm_render_command_draw_instanced_backend(uint32_t instance_count, size_t instance_offset, uint32_t vertex_count, size_t vertex_offset, dm_renderer* renderer) 
 {
-    dm_dx12_renderer* renderer = backend;
-
     const uint8_t current_frame = renderer->current_frame;
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
 
@@ -1966,10 +1941,8 @@ bool dm_render_command_draw_instanced_backend(uint32_t instance_count, size_t in
     return true; 
 }
 
-bool dm_render_command_draw_instanced_indexed_backend(uint32_t instance_count, size_t instance_offset, uint32_t index_count, size_t index_offset, size_t vertex_offset, void* backend) 
+bool dm_render_command_draw_instanced_indexed_backend(uint32_t instance_count, size_t instance_offset, uint32_t index_count, size_t index_offset, size_t vertex_offset, dm_renderer* renderer) 
 { 
-    dm_dx12_renderer* renderer = backend;
-
     const uint8_t current_frame = renderer->current_frame;
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
 
