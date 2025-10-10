@@ -48,6 +48,7 @@ typedef struct dm_metal_raster_pipeline_t
     id<MTLLibrary>  fragment_library;
     id<MTLFunction> vertex_func;
     id<MTLFunction> fragment_func;
+    id<MTLDepthStencilState> depth_stencil_state;
 
     uint32_t uniform_offset;
     
@@ -87,8 +88,6 @@ struct dm_renderer_t
     id<CAMetalDrawable> render_target;
     uint32_t depth_target[DM_MAX_FRAMES_IN_FLIGHT];
 
-    id<MTLDepthStencilState> depth_stencil_state;
-    
     dispatch_semaphore_t frame_semaphore;
 
     dm_metal_heap resource_heap[DM_MAX_FRAMES_IN_FLIGHT];
@@ -175,12 +174,6 @@ bool dm_renderer_init(dm_context* context)
 
     [descriptor release];
     
-    MTLDepthStencilDescriptor* depth_descriptor = [MTLDepthStencilDescriptor new];
-    depth_descriptor.depthCompareFunction = MTLCompareFunctionLessEqual;
-    depth_descriptor.depthWriteEnabled = YES;
-    renderer.depth_stencil_state = [renderer.device newDepthStencilStateWithDescriptor:depth_descriptor];
-
-    [depth_descriptor release];
 
     // command queue 
     renderer.command_queue = [renderer.device newCommandQueue];
@@ -341,6 +334,7 @@ void dm_renderer_shutdown(dm_context* context)
         [renderer->raster_pipes[i].vertex_func release];
 
         [renderer->raster_pipes[i].pipeline_state release];
+        [renderer->raster_pipes[i].depth_stencil_state release];
     }
 
     for(uint32_t i=0; i<renderer->sampler_count; i++)
@@ -364,7 +358,6 @@ void dm_renderer_shutdown(dm_context* context)
     }
 
     [renderer->texture_encoder release];
-    [renderer->depth_stencil_state release];
     [renderer->swapchain release];
     [renderer->command_queue release];
     [renderer->device release];
@@ -501,7 +494,6 @@ bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle*
     pipe_desc.colorAttachments[0].blendingEnabled             = YES;
 
     pipe_desc.colorAttachments[0].rgbBlendOperation           = MTLBlendOperationAdd;
-    //pipe_desc.colorAttachments[0].rgbBlendOperation           = MTLBlendOperationSubtract;
     pipe_desc.colorAttachments[0].sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
     pipe_desc.colorAttachments[0].destinationRGBBlendFactor   = MTLBlendFactorOneMinusSourceAlpha;
 
@@ -510,6 +502,13 @@ bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle*
     pipe_desc.colorAttachments[0].destinationAlphaBlendFactor = MTLBlendFactorOneMinusSourceAlpha;
 
     pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
+
+    MTLDepthStencilDescriptor* depth_descriptor = [MTLDepthStencilDescriptor new];
+    depth_descriptor.depthCompareFunction = desc.depth_stencil.depth ? MTLCompareFunctionLessEqual : MTLCompareFunctionAlways;
+    depth_descriptor.depthWriteEnabled = desc.depth_stencil.depth ? YES : NO;
+    pipeline.depth_stencil_state = [renderer->device newDepthStencilStateWithDescriptor:depth_descriptor];
+
+    [depth_descriptor release];
 
     NSError* error = NULL;
     pipeline.pipeline_state = [renderer->device newRenderPipelineStateWithDescriptor:pipe_desc error:&error];
@@ -926,8 +925,6 @@ bool dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, fl
     [encoder useHeap:renderer->resource_heap[current_frame].heap stages:MTLRenderStageVertex];
     [encoder useHeap:renderer->resource_heap[current_frame].heap stages:MTLRenderStageFragment];
 
-    // depth state
-    [encoder setDepthStencilState:renderer->depth_stencil_state];
 
     // argument buffer
     [renderer->texture_encoder setArgumentBuffer:renderer->buffers[renderer->texture_argument_buffer[current_frame]] offset:0];
@@ -964,6 +961,7 @@ bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, d
     [encoder setFrontFacingWinding:pipeline->winding];
     [encoder setCullMode:pipeline->cull_mode];
     [encoder setTriangleFillMode:pipeline->fill_mode];
+    [encoder setDepthStencilState:pipeline->depth_stencil_state];
 
     renderer->active_pipeline = handle;
 
@@ -1102,11 +1100,10 @@ void dm_metal_update_buffer(void* data, size_t size, size_t offset, dm_metal_buf
     const uint8_t current_frame = renderer->current_frame;
 
     id<MTLBlitCommandEncoder> blit_encoder = renderer->render_blit_encoder[current_frame];
-
-    dm_memcpy(renderer->buffers[buffer.host[current_frame]].contents + offset, data, size);
-
     id<MTLBuffer> host_buffer   = renderer->buffers[buffer.host[current_frame]];
     id<MTLBuffer> device_buffer = renderer->buffers[buffer.device[current_frame]];
+
+    dm_memcpy(host_buffer.contents + offset, data, size);
 
     [blit_encoder copyFromBuffer:host_buffer sourceOffset:offset toBuffer:device_buffer destinationOffset:offset size:size];
 }
