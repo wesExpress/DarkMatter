@@ -452,21 +452,21 @@ extern bool dm_render_command_begin_frame_backend(dm_renderer* renderer);
 extern bool dm_render_command_end_frame_backend(bool vsync, dm_renderer* renderer);
 extern bool dm_render_command_begin_update_backend(dm_renderer* renderer);
 extern bool dm_render_command_end_update_backend(dm_renderer* renderer);
-extern bool dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_renderer* renderer);
-extern bool dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, dm_renderer* renderer);
-extern bool dm_render_command_set_viewport_backend(dm_viewport_index index, dm_renderer* renderer);
-extern bool dm_render_command_set_scissor_backend(dm_scissor_index index, dm_renderer* renderer);
+extern void dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_renderer* renderer);
+extern void dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, dm_renderer* renderer);
+extern void dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, dm_renderer* renderer);
+extern void dm_render_command_set_viewport_backend(dm_viewport_index index, dm_renderer* renderer);
+extern void dm_render_command_set_scissor_backend(dm_scissor_index index, dm_renderer* renderer);
 extern bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uint16_t count, dm_renderer* renderer);
-extern bool dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uint8_t slot, size_t offset, dm_renderer* renderer);
-extern bool dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size_t offset, dm_renderer* renderer);
+extern void dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uint8_t slot, size_t offset, dm_renderer* renderer);
+extern void dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size_t offset, dm_renderer* renderer);
 extern bool dm_render_command_update_vertex_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer);
 extern bool dm_render_command_update_index_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer);
 extern bool dm_render_command_update_constant_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer);
 extern bool dm_render_command_update_storage_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer);
 extern bool dm_render_command_update_texture_backend(dm_resource_handle handle, uint16_t width, uint16_t height, void* data, size_t size, size_t offset, dm_renderer* renderer);
-extern bool dm_render_command_draw_instanced_backend(uint32_t instance_count, size_t instance_offset, uint32_t vertex_count, size_t vertex_offset, dm_renderer* renderer);
-extern bool dm_render_command_draw_instanced_indexed_backend(uint32_t instance_count, size_t instance_offset, uint32_t index_count, size_t index_offset, size_t vertex_offset, dm_renderer* renderer);
+extern void dm_render_command_draw_instanced_backend(uint32_t instance_count, size_t instance_offset, uint32_t vertex_count, size_t vertex_offset, dm_renderer* renderer);
+extern void dm_render_command_draw_instanced_indexed_backend(uint32_t instance_count, size_t instance_offset, uint32_t index_count, size_t index_offset, size_t vertex_offset, dm_renderer* renderer);
 
 bool dm_submit_render_commands(dm_context* context)
 {
@@ -499,18 +499,15 @@ bool dm_submit_render_commands(dm_context* context)
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BEGIN_RENDER_PASS:
-            if(dm_render_command_begin_render_pass_backend(params[0].rph,params[1].f,params[2].f,params[3].f,params[4].f,params[5].f, renderer)) continue;
-            dm_log(DM_LOG_FATAL, "Begin render pass failed");
-            return false;
+            dm_render_command_begin_render_pass_backend(params[0].rph,params[1].f,params[2].f,params[3].f,params[4].f,params[5].f, renderer);
+            continue;
             case DM_RENDER_COMMAND_TYPE_END_RENDER_PASS:
-            if(dm_render_command_end_render_pass_backend(params[0].rph, renderer)) continue;
-            dm_log(DM_LOG_FATAL, "End render pass failed");
-            return false;
+            dm_render_command_end_render_pass_backend(params[0].rph, renderer);
+            continue;
 
             case DM_RENDER_COMMAND_TYPE_BIND_RASTER_PIPELINE:
-            if(dm_render_command_bind_raster_pipeline_backend(params[0].ph, renderer)) continue;
-            dm_log(DM_LOG_FATAL, "Bind raster pipeline failed");
-            return false;
+            dm_render_command_bind_raster_pipeline_backend(params[0].ph, renderer);
+            continue;
 
             case DM_RENDER_COMMAND_TYPE_SET_VIEWPORT:
             dm_render_command_set_viewport_backend(params[0].u16, renderer);
@@ -525,13 +522,11 @@ bool dm_submit_render_commands(dm_context* context)
             return false;
 
             case DM_RENDER_COMMAND_TYPE_BIND_VERTEX_BUFFER:
-            if(dm_render_command_bind_vertex_buffer_backend(params[0].rh, params[1].u32, params[2].s, renderer)) continue;
-            dm_log(DM_LOG_FATAL, "Bind vertex buffer failed");
-            return false;
+            dm_render_command_bind_vertex_buffer_backend(params[0].rh, params[1].u32, params[2].s, renderer);
+            continue;
             case DM_RENDER_COMMAND_TYPE_BIND_INDEX_BUFFER:
-            if(dm_render_command_bind_index_buffer_backend(params[0].rh, params[1].s, renderer)) continue;
-            dm_log(DM_LOG_FATAL, "Bind index buffer failed");
-            return false;
+            dm_render_command_bind_index_buffer_backend(params[0].rh, params[1].s, renderer);
+            continue;
 
             case DM_RENDER_COMMAND_TYPE_UPDATE_VERTEX_BUFFER:
             if(dm_render_command_update_vertex_buffer_backend(params[0].rh, params[1].v,params[2].s,params[3].s, renderer)) continue;
@@ -555,13 +550,11 @@ bool dm_submit_render_commands(dm_context* context)
             return false;
 
             case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED:
-            if(dm_render_command_draw_instanced_backend(params[0].u32,params[1].s,params[2].u32,params[3].s, renderer)) continue;
-            dm_log(DM_LOG_FATAL, "Draw instanced failed");
-            return false;
+            dm_render_command_draw_instanced_backend(params[0].u32,params[1].s,params[2].u32,params[3].s, renderer);
+            continue;
             case DM_RENDER_COMMAND_TYPE_DRAW_INSTANCED_INDEXED:
-            if(dm_render_command_draw_instanced_indexed_backend(params[0].u32,params[1].s,params[2].u32,params[3].s,params[4].s, renderer)) continue;
-            dm_log(DM_LOG_FATAL, "Draw instanced indexed failed");
-            return false;
+            dm_render_command_draw_instanced_indexed_backend(params[0].u32,params[1].s,params[2].u32,params[3].s,params[4].s, renderer);
+            continue;
 
             default:
             dm_log(DM_LOG_ERROR, "Unknown render command, shouldn't be here...");

@@ -1672,7 +1672,7 @@ bool dm_render_command_end_frame_backend(bool vsync, dm_renderer* renderer)
 bool dm_render_command_begin_update_backend(dm_renderer* renderer) { return true; }
 bool dm_render_command_end_update_backend(dm_renderer* renderer) { return true; }
 
-bool dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_renderer* renderer) 
+void dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_renderer* renderer) 
 { 
     const uint8_t current_frame = renderer->current_frame;
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
@@ -1698,11 +1698,9 @@ bool dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, fl
     ID3D12GraphicsCommandList7_OMSetRenderTargets(command_list, 1, &rtv_handle, FALSE, &dsv_handle);
     ID3D12GraphicsCommandList7_ClearRenderTargetView(command_list, rtv_handle, clear_color, 0, NULL);
     ID3D12GraphicsCommandList7_ClearDepthStencilView(command_list, dsv_handle, D3D12_CLEAR_FLAG_DEPTH, depth,0, 0, NULL);
-
-    return true; 
 }
 
-bool dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, dm_renderer* renderer) 
+void dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, dm_renderer* renderer) 
 {
     const uint8_t current_frame = renderer->current_frame;
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
@@ -1714,11 +1712,9 @@ bool dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, dm_r
     barrier.Transition.StateAfter  = D3D12_RESOURCE_STATE_PRESENT;
 
     ID3D12GraphicsCommandList7_ResourceBarrier(command_list, 1, &barrier);
-
-    return true; 
 }
 
-bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, dm_renderer* renderer) 
+void dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, dm_renderer* renderer) 
 { 
     const uint8_t current_frame = renderer->current_frame;
 
@@ -1729,30 +1725,24 @@ bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, d
     ID3D12GraphicsCommandList7_IASetPrimitiveTopology(command_list, pipeline.topology);
 
     renderer->active_pipeline_type = DM_PIPELINE_TYPE_RASTER;
-
-    return true; 
 }
 
-bool dm_render_command_set_viewport_backend(dm_viewport_index index, dm_renderer* renderer) 
+void dm_render_command_set_viewport_backend(dm_viewport_index index, dm_renderer* renderer) 
 { 
     const uint8_t current_frame = renderer->current_frame;
 
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
 
     ID3D12GraphicsCommandList7_RSSetViewports(command_list, 1, &renderer->viewports[index]);
-
-    return true; 
 }
 
-bool dm_render_command_set_scissor_backend(dm_scissor_index index, dm_renderer* renderer) 
+void dm_render_command_set_scissor_backend(dm_scissor_index index, dm_renderer* renderer) 
 { 
     const uint8_t current_frame = renderer->current_frame;
 
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
 
     ID3D12GraphicsCommandList7_RSSetScissorRects(command_list, 1, &renderer->scissors[index]);
-
-    return true; 
 }
 
 bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uint16_t count, dm_renderer* renderer) 
@@ -1818,7 +1808,7 @@ bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uin
     return true; 
 }
 
-bool dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uint8_t slot, size_t offset, dm_renderer* renderer) 
+void dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uint8_t slot, size_t offset, dm_renderer* renderer) 
 { 
     const uint8_t current_frame = renderer->current_frame;
 
@@ -1826,11 +1816,9 @@ bool dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uin
     dm_dx12_vertex_buffer vb = renderer->vertex_buffers[handle.index];
 
     ID3D12GraphicsCommandList7_IASetVertexBuffers(command_list, slot, 1, &vb.views[current_frame]);
-
-    return true; 
 }
 
-bool dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size_t offset, dm_renderer* renderer) 
+void dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size_t offset, dm_renderer* renderer) 
 {
     const uint8_t current_frame = renderer->current_frame;
 
@@ -1838,8 +1826,6 @@ bool dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size
     dm_dx12_index_buffer ib = renderer->index_buffers[handle.index];
 
     ID3D12GraphicsCommandList7_IASetIndexBuffer(command_list, &ib.views[current_frame]);
-
-    return true; 
 }
 
 #ifndef DM_DEBUG
@@ -1908,7 +1894,7 @@ bool dm_render_command_update_constant_buffer_backend(dm_resource_handle handle,
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
     dm_memcpy(buffer->mapped_addresses[current_frame], data, size);
 
-    return true; 
+    return true;
 }
 
 bool dm_render_command_update_storage_buffer_backend(dm_resource_handle handle, void* data, size_t size, size_t offset, dm_renderer* renderer) 
@@ -1931,24 +1917,20 @@ bool dm_render_command_update_storage_buffer_backend(dm_resource_handle handle, 
 
 bool dm_render_command_update_texture_backend(dm_resource_handle handle, uint16_t width, uint16_t height, void* data, size_t size, size_t offset, dm_renderer* renderer) { return true; }
 
-bool dm_render_command_draw_instanced_backend(uint32_t instance_count, size_t instance_offset, uint32_t vertex_count, size_t vertex_offset, dm_renderer* renderer) 
+void dm_render_command_draw_instanced_backend(uint32_t instance_count, size_t instance_offset, uint32_t vertex_count, size_t vertex_offset, dm_renderer* renderer) 
 {
     const uint8_t current_frame = renderer->current_frame;
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
 
     ID3D12GraphicsCommandList7_DrawInstanced(command_list, vertex_count, instance_count, vertex_offset, instance_offset);
-
-    return true; 
 }
 
-bool dm_render_command_draw_instanced_indexed_backend(uint32_t instance_count, size_t instance_offset, uint32_t index_count, size_t index_offset, size_t vertex_offset, dm_renderer* renderer) 
+void dm_render_command_draw_instanced_indexed_backend(uint32_t instance_count, size_t instance_offset, uint32_t index_count, size_t index_offset, size_t vertex_offset, dm_renderer* renderer) 
 { 
     const uint8_t current_frame = renderer->current_frame;
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
 
     ID3D12GraphicsCommandList7_DrawIndexedInstanced(command_list, index_count, instance_count, index_offset, vertex_offset, instance_offset);
-
-    return true; 
 }
 
 // === misc ===
