@@ -109,10 +109,7 @@ struct dm_renderer_t
     dm_metal_texture metal_textures[10];
     dm_metal_sampler samplers[DM_MAX_SAMPLERS];
 
-    MTLViewport    viewport[DM_MAX_VIEWPORTS];
-    MTLScissorRect scissor[DM_MAX_SCISSORS];
-
-    uint32_t renderpass_count, raster_pipe_count, vb_count, ib_count, cb_count, sb_count, metal_texture_count, sampler_count, viewport_count, scissor_count;
+    uint32_t renderpass_count, raster_pipe_count, vb_count, ib_count, cb_count, sb_count, metal_texture_count, sampler_count;
 
     dm_pipeline_handle active_pipeline;
     dm_resource_handle active_index_buffer;
@@ -596,43 +593,6 @@ bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle*
     return true;
 }
 
-void dm_create_viewport(dm_viewport viewport, dm_viewport_index* index, dm_context* context)
-{
-    dm_renderer* renderer = context->renderer;
-
-    MTLViewport v = {
-        .width=viewport.right,
-        .height=viewport.bottom,
-        .originX=viewport.left,
-        .originY=viewport.top,
-        .zfar=1.f, .znear=0.f
-    };
-
-    v.width  = DM_MIN(v.width, renderer->swapchain.drawableSize.width);
-    v.height = DM_MIN(v.height, renderer->swapchain.drawableSize.height);
-
-    renderer->viewport[renderer->viewport_count] = v;
-    *index = renderer->viewport_count++;
-}
-
-void dm_create_scissor(dm_scissor scissor, dm_scissor_index* index, dm_context* context)
-{
-    dm_renderer* renderer = context->renderer;
-
-    MTLScissorRect rect = {
-        .width=scissor.right,
-        .height=scissor.bottom,
-        .x=scissor.left,
-        .y=scissor.top
-    };
-
-    rect.width  = DM_MIN(rect.width, renderer->swapchain.drawableSize.width);
-    rect.height = DM_MIN(rect.height, renderer->swapchain.drawableSize.height);
-
-    renderer->scissor[renderer->scissor_count] = rect;
-    *index = renderer->scissor_count++;
-}
-
 #ifndef DM_DEBUG
 DM_INLINE
 #endif
@@ -968,26 +928,39 @@ bool dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, d
     return true; 
 }
 
-bool dm_render_command_set_viewport_backend(dm_viewport_index index, dm_renderer* renderer)
+void dm_render_command_set_viewport_backend(uint16_t x, uint16_t y, uint16_t w, uint16_t h, float n, float f, dm_renderer* renderer)
 {
     const uint8_t current_frame = renderer->current_frame;
 
     id<MTLRenderCommandEncoder> encoder = renderer->render_command_encoder[current_frame];
 
-    [encoder setViewport:renderer->viewport[index]];
+    w = DM_MIN(w, renderer->swapchain.drawableSize.width);
+    h = DM_MIN(h, renderer->swapchain.drawableSize.height);
 
-    return true;
+    MTLViewport viewport = {
+        .originX=x, .originY=y,
+        .width=w, .height=h,
+        .znear=n, .zfar=f
+    };
+
+    [encoder setViewport:viewport];
 }
 
-bool dm_render_command_set_scissor_backend(dm_scissor_index index, dm_renderer* renderer)
+void dm_render_command_set_scissor_backend(uint16_t x, uint16_t y, uint16_t w, uint16_t h, dm_renderer* renderer)
 {
     const uint8_t current_frame = renderer->current_frame;
 
     id<MTLRenderCommandEncoder> encoder = renderer->render_command_encoder[current_frame];
 
-    [encoder setScissorRect:renderer->scissor[index]];
+    w = DM_MIN(w, renderer->swapchain.drawableSize.width);
+    h = DM_MIN(h, renderer->swapchain.drawableSize.height);
 
-    return true;
+    MTLScissorRect scissor = {
+        .x=x, .y=y,
+        .width=w, .height=h
+    };
+
+    [encoder setScissorRect:scissor];
 }
 
 bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uint16_t count, dm_renderer* renderer) 
