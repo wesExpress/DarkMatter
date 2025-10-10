@@ -37,8 +37,6 @@ typedef enum dm_resource_type_t
 } dm_resource_type;
 
 typedef uint32_t dm_resource_index;
-typedef uint32_t dm_viewport_index;
-typedef uint32_t dm_scissor_index;
 
 typedef struct dm_resource_handle_t
 {
@@ -416,8 +414,6 @@ bool dm_submit_render_commands(dm_context* context);
 #define DM_MAX_CBS 10
 #define DM_MAX_SBS 10
 #define DM_MAX_SAMPLERS 10
-#define DM_MAX_VIEWPORTS 10
-#define DM_MAX_SCISSORS 10
 #ifdef DM_HARDWARE_RAYTRACING
 #define DM_MAX_RT_PIPES 10
 #define DM_MAX_RT_BLAS  DM_MAX_VBS
@@ -528,16 +524,6 @@ typedef struct dm_rasterizer_desc_t
     dm_rasterizer_front_face   front_face;
 } dm_rasterizer_desc;
 
-typedef struct dm_viewport_t
-{
-    uint32_t left, right, top, bottom;
-} dm_viewport;
-
-typedef struct dm_scissor_t
-{
-    uint32_t left, right, top, bottom;
-} dm_scissor;
-
 typedef struct dm_depth_stencil_desc_t
 {
     bool depth, stencil;
@@ -621,8 +607,6 @@ bool dm_create_storage_buffer(dm_storage_buffer_desc desc, dm_resource_handle* h
 bool dm_create_texture(dm_texture_desc desc, dm_resource_handle* handle, dm_context* context);
 bool dm_create_texture_from_file(const char* path, dm_resource_handle* handle, dm_context* context);
 bool dm_create_sampler(dm_sampler_desc desc, dm_resource_handle* handle, dm_context* context);
-void dm_create_viewport(dm_viewport viewport, dm_viewport_index* index, dm_context* context);
-void dm_create_scissor(dm_scissor scissor, dm_scissor_index* index, dm_context* context);
 
 uint32_t dm_get_resource_index(dm_resource_handle handle, dm_context* context);
 
@@ -634,8 +618,8 @@ void dm_render_command_end_update(dm_context* context);
 void dm_render_command_begin_render_pass(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_context* context);
 void dm_render_command_end_render_pass(dm_renderpass_handle handle, dm_context* context);
 void dm_render_command_bind_raster_pipeline(dm_pipeline_handle handle, dm_context* context);
-void dm_render_command_set_viewport(dm_viewport_index index, dm_context* context);
-void dm_render_command_set_scissor(dm_scissor_index index, dm_context* context);
+void dm_render_command_set_viewport(uint16_t x, uint16_t y, uint16_t w, uint16_t h, float n, float f, dm_context* context);
+void dm_render_command_set_scissor(uint16_t x, uint16_t y, uint16_t w, uint16_t h, dm_context* context);
 void dm_render_command_submit_resources(dm_resource_handle* handles, uint16_t count, dm_context* context);
 void dm_render_command_bind_vertex_buffer(dm_resource_handle handle, uint8_t slot, size_t offset, dm_context* context);
 void dm_render_command_bind_index_buffer(dm_resource_handle handle, size_t offset, dm_context* context);

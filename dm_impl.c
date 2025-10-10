@@ -248,24 +248,32 @@ void dm_render_command_end_render_pass(dm_renderpass_handle handle, dm_context* 
     dm_render_command_submit(command, context);
 }
 
-void dm_render_command_set_viewport(dm_viewport_index index, dm_context* context)
+void dm_render_command_set_viewport(uint16_t x, uint16_t y, uint16_t w, uint16_t h, float n, float f, dm_context* context)
 {
     dm_command command = { 0 };
 
     command.r_type = DM_RENDER_COMMAND_TYPE_SET_VIEWPORT;
 
-    command.params[0].u16 = index;
+    command.params[0].u16 = x;
+    command.params[1].u16 = y;
+    command.params[2].u16 = w;
+    command.params[3].u16 = h;
+    command.params[4].f   = n;
+    command.params[5].f   = f;
 
     dm_render_command_submit(command, context);
 }
 
-void dm_render_command_set_scissor(dm_scissor_index index, dm_context* context)
+void dm_render_command_set_scissor(uint16_t x, uint16_t y, uint16_t w, uint16_t h, dm_context* context)
 {
     dm_command command = { 0 };
 
     command.r_type = DM_RENDER_COMMAND_TYPE_SET_SCISSOR;
 
-    command.params[0].u16 = index;
+    command.params[0].u16 = x;
+    command.params[1].u16 = y;
+    command.params[2].u16 = w;
+    command.params[3].u16 = h;
 
     dm_render_command_submit(command, context);
 }
@@ -455,8 +463,8 @@ extern bool dm_render_command_end_update_backend(dm_renderer* renderer);
 extern void dm_render_command_begin_render_pass_backend(dm_renderpass_handle handle, float r, float g, float b, float a, float depth, dm_renderer* renderer);
 extern void dm_render_command_end_render_pass_backend(dm_renderpass_handle handle, dm_renderer* renderer);
 extern void dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, dm_renderer* renderer);
-extern void dm_render_command_set_viewport_backend(dm_viewport_index index, dm_renderer* renderer);
-extern void dm_render_command_set_scissor_backend(dm_scissor_index index, dm_renderer* renderer);
+extern void dm_render_command_set_viewport_backend(uint16_t x, uint16_t y, uint16_t w, uint16_t h, float n, float f, dm_renderer* renderer);
+extern void dm_render_command_set_scissor_backend(uint16_t x, uint16_t y, uint16_t w, uint16_t h, dm_renderer* renderer);
 extern bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uint16_t count, dm_renderer* renderer);
 extern void dm_render_command_bind_vertex_buffer_backend(dm_resource_handle handle, uint8_t slot, size_t offset, dm_renderer* renderer);
 extern void dm_render_command_bind_index_buffer_backend(dm_resource_handle handle, size_t offset, dm_renderer* renderer);
@@ -510,10 +518,10 @@ bool dm_submit_render_commands(dm_context* context)
             continue;
 
             case DM_RENDER_COMMAND_TYPE_SET_VIEWPORT:
-            dm_render_command_set_viewport_backend(params[0].u16, renderer);
+            dm_render_command_set_viewport_backend(params[0].u16, params[1].u16, params[2].u16, params[3].u16, params[4].f, params[5].f, renderer);
             continue;
             case DM_RENDER_COMMAND_TYPE_SET_SCISSOR:
-            dm_render_command_set_scissor_backend(params[0].u16, renderer);
+            dm_render_command_set_scissor_backend(params[0].u16, params[1].u16, params[2].u16, params[3].u16, renderer);
             continue;
 
             case DM_RENDER_COMMAND_TYPE_SUBMIT_RESOURCES:

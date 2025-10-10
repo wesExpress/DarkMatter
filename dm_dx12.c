@@ -209,12 +209,6 @@ struct dm_renderer_t
     ID3D12Resource* resources[DM_DX12_MAX_RESOURCES];
     uint32_t        resource_count;
 
-    D3D12_VIEWPORT viewports[DM_MAX_VIEWPORTS];
-    uint16_t viewport_count;
-
-    D3D12_RECT scissors[DM_MAX_SCISSORS];
-    uint16_t scissor_count;
-
     dm_pipeline_type active_pipeline_type;
     uint8_t current_frame;
 
@@ -809,37 +803,6 @@ uint32_t dm_get_resource_index(dm_resource_handle handle, dm_context* context)
 bool dm_create_renderpass(dm_renderpass_desc desc, dm_renderpass_handle* handle, dm_context* context)
 {
     return true;
-}
-
-void dm_create_viewport(dm_viewport viewport, dm_viewport_index* index, dm_context* context)
-{
-    dm_renderer* renderer = context->renderer;
-
-    D3D12_VIEWPORT v = {
-        .TopLeftX=viewport.left,
-        .TopLeftY=viewport.top,
-        .Width=viewport.right,
-        .Height=viewport.bottom,
-        .MaxDepth=1.f,.MinDepth=0.f
-    };
-
-    renderer->viewports[renderer->viewport_count] = v;
-    *index = renderer->viewport_count++;
-}
-
-void dm_create_scissor(dm_scissor scissor, dm_scissor_index* index, dm_context* context)
-{
-    dm_renderer* renderer = context->renderer;
-
-    D3D12_RECT rect = {
-        .top=scissor.top,
-        .bottom=scissor.bottom,
-        .left=scissor.left,
-        .right=scissor.right
-    };
-
-    renderer->scissors[renderer->scissor_count] = rect;
-    *index = renderer->scissor_count++;
 }
 
 #ifndef DM_DEBUG
@@ -1726,22 +1689,33 @@ void dm_render_command_bind_raster_pipeline_backend(dm_pipeline_handle handle, d
     renderer->active_pipeline_type = DM_PIPELINE_TYPE_RASTER;
 }
 
-void dm_render_command_set_viewport_backend(dm_viewport_index index, dm_renderer* renderer) 
+void dm_render_command_set_viewport_backend(uint16_t x, uint16_t y, uint16_t w, uint16_t h, float n, float f, dm_renderer* renderer) 
 { 
     const uint8_t current_frame = renderer->current_frame;
 
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
 
-    ID3D12GraphicsCommandList7_RSSetViewports(command_list, 1, &renderer->viewports[index]);
+    D3D12_VIEWPORT viewport = { 
+        .TopLeftX=x, .TopLeftY=y,
+        .Width=w, .Height=h,
+        .MinDepth=n, .MaxDepth=f
+    };
+
+    ID3D12GraphicsCommandList7_RSSetViewports(command_list, 1, &viewport);
 }
 
-void dm_render_command_set_scissor_backend(dm_scissor_index index, dm_renderer* renderer) 
+void dm_render_command_set_scissor_backend(uint16_t x, uint16_t y, uint16_t w, uint16_t h, dm_renderer* renderer) 
 { 
     const uint8_t current_frame = renderer->current_frame;
 
     ID3D12GraphicsCommandList7* command_list = renderer->command_list[current_frame];
 
-    ID3D12GraphicsCommandList7_RSSetScissorRects(command_list, 1, &renderer->scissors[index]);
+    D3D12_RECT scissor = {
+        .left=x, .top=y,
+        .right=w, .bottom=h
+    };
+
+    ID3D12GraphicsCommandList7_RSSetScissorRects(command_list, 1, &scissor);
 }
 
 bool dm_render_command_submit_resources_backend(dm_resource_handle* handles, uint16_t count, dm_renderer* renderer) 
