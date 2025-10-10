@@ -1658,8 +1658,7 @@ bool dm_render_command_end_frame_backend(bool vsync, dm_renderer* renderer)
 
     ID3D12CommandQueue_ExecuteCommandLists(command_queue, _countof(command_lists), command_lists);
 
-    UINT present_flag = 0;
-    present_flag = DXGI_PRESENT_ALLOW_TEARING;
+    UINT present_flag = vsync ? 0 : DXGI_PRESENT_ALLOW_TEARING;
 
     hr = IDXGISwapChain4_Present(renderer->swap_chain, vsync, present_flag);
     if(!dm_win32_decode_hresult(hr)) { dm_log(DM_LOG_FATAL, "IDXGISwapChain4_Present failed"); return false; }
