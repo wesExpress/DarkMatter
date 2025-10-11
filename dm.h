@@ -166,6 +166,7 @@ bool dm_update(dm_context* context);
  ********/
 #ifndef DM_DIRECTX12
 #define CGLM_FORCE_DEPTH_ZERO_TO_ONE
+#define CGLM_FORCE_LEFT_HANDED
 #endif
 #include "lib/cglm/include/cglm/cglm.h"
 

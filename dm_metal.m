@@ -489,6 +489,7 @@ bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle*
     pipe_desc.colorAttachments[0].pixelFormat                 = MTLPixelFormatBGRA8Unorm;
 
     pipe_desc.colorAttachments[0].blendingEnabled             = YES;
+    pipe_desc.colorAttachments[0].writeMask                   = MTLColorWriteMaskAll;
 
     pipe_desc.colorAttachments[0].rgbBlendOperation           = MTLBlendOperationAdd;
     pipe_desc.colorAttachments[0].sourceRGBBlendFactor        = MTLBlendFactorSourceAlpha;
@@ -509,6 +510,8 @@ bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle*
 
     NSError* error = NULL;
     pipeline.pipeline_state = [renderer->device newRenderPipelineStateWithDescriptor:pipe_desc error:&error];
+    [pipe_desc release];
+
     if(!pipeline.pipeline_state)
     {
         dm_log(DM_LOG_FATAL, "Creating Metal pipeline state failed");
