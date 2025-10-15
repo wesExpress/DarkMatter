@@ -403,6 +403,9 @@ uint32_t dm_get_window_height(dm_context* context);;
 bool dm_finish_init(dm_context* context);
 bool dm_submit_render_commands(dm_context* context);
 
+uint16_t dm_get_width(dm_context* context);
+uint16_t dm_get_height(dm_context* context);
+
 // === handles ===
 
 // === resources ===

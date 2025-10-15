@@ -380,6 +380,20 @@ bool dm_renderer_resize(uint32_t width, uint32_t height, dm_renderer* renderer)
     return true;
 }
 
+uint16_t dm_get_width(dm_context* context)
+{
+    dm_renderer* renderer = context->renderer;
+
+    return renderer->swapchain.drawableSize.width;
+}
+
+uint16_t dm_get_height(dm_context* context)
+{
+    dm_renderer* renderer = context->renderer;
+
+    return renderer->swapchain.drawableSize.height;
+}
+
 /************
 * RESOURCES *
 *************/
@@ -485,7 +499,6 @@ bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle*
     pipe_desc.vertexFunction   = pipeline.vertex_func;
     pipe_desc.fragmentFunction = pipeline.fragment_func;
 
-    //pipe_desc.colorAttachments[0].pixelFormat                 = MTLPixelFormatRGBA8Unorm;
     pipe_desc.colorAttachments[0].pixelFormat                 = MTLPixelFormatBGRA8Unorm;
 
     pipe_desc.colorAttachments[0].blendingEnabled             = YES;
@@ -520,6 +533,7 @@ bool dm_create_raster_pipeline(dm_raster_pipeline_desc desc, dm_pipeline_handle*
         [pipeline.fragment_library release];
         [pipeline.vertex_func release];
         [pipeline.fragment_func release];
+        [pipeline.depth_stencil_state release];
 
         return false;
     }
