@@ -27,7 +27,8 @@ typedef uint64_t u64;
 #define LOG_ERROR(...) ERR(__VA_ARGS__)
 #define LOG_FATAL(...) FTL(__VA_ARGS__)
 
-//#define DM_RAY_TRACE
+#define DM_RAY_TRACE
+#define DM_DESCRIPTOR_HEAP
 
 /********************
  * RENDERING HANDLES

@@ -267,16 +267,38 @@ VkInstance dm_vulkan_create_instance()
 
 bool dm_vulkan_check_physical_device(VkPhysicalDevice physical)
 {
+#ifdef DM_RAY_TRACE
+    VkPhysicalDeviceRayQueryFeaturesKHR rq_supported = {
+        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_QUERY_FEATURES_KHR
+    };
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR as_supported = {
+       .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
+       .pNext=&rq_supported
+    };
+    VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_pipe_supported = {
+       .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
+       .pNext=&as_supported
+    };
+#endif
+#ifdef DM_DESCRIPTOR_HEAP
     VkPhysicalDeviceShaderUntypedPointersFeaturesKHR untyped_supported = {
-        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR
+        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR,
+#ifdef DM_RAY_TRACE
+        .pNext=&rt_pipe_supported
+#endif // DM_RAY_TRACE
     };
     VkPhysicalDeviceDescriptorHeapFeaturesEXT heap_supported = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
         .pNext=&untyped_supported
     };
+#endif // DM_DESCRIPTOR_HEAP
     VkPhysicalDeviceVulkan14Features v14_supported = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
+#ifdef DM_DESCRIPTOR_HEAP
         .pNext=&heap_supported
+#elif defined(DM_RAY_TRACE)
+        .pNext=&rt_pipe_supported
+#endif // DM_DESCRIPTOR_HEAP
     };
     VkPhysicalDeviceVulkan13Features v13_supported = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
@@ -292,8 +314,15 @@ bool dm_vulkan_check_physical_device(VkPhysicalDevice physical)
     };
     vkGetPhysicalDeviceFeatures2(physical, &supported_features2);
 
+#ifdef DM_RAY_TRACE
+    if(!rt_pipe_supported.rayTracingPipeline) { LOG_ERROR("Raytracing pipeline not supported"); return false; }
+#endif
+
+#ifdef DM_DESCRIPTOR_HEAP
     if(!untyped_supported.shaderUntypedPointers) { LOG_ERROR("Untyped shader ptrs not supported"); return false; }
-    if(!heap_supported.descriptorHeap)   { LOG_ERROR("Descriptor heaps not supported");    return false; }
+    if(!heap_supported.descriptorHeap)           { LOG_ERROR("Descriptor heaps not supported"); return false; }
+#endif
+
     if(!v14_supported.pushDescriptor)    { LOG_ERROR("Push descriptor not supported");     return false; }
     if(!v13_supported.dynamicRendering)  { LOG_ERROR("Dynamic rendering not supported");   return false; }
     if(!v13_supported.synchronization2)  { LOG_ERROR("Synchronization2 not supported");    return false; }
@@ -418,14 +447,28 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
 
     // features
 #ifdef DM_RAY_TRACE
+    VkPhysicalDeviceAccelerationStructureFeaturesKHR as_features = {
+        .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR,
+        .accelerationStructure=1,
+        .descriptorBindingAccelerationStructureUpdateAfterBind=1,
+#ifdef DM_DEBUG
+        .accelerationStructureCaptureReplay=1,
+#endif // DM_DEBUG
+    };
     VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_pipe_features = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR,
-        .rayTracingPipeline=1
+        .rayTracingPipeline=1,
+        .pNext=&as_features
     };
+#endif // DM_RAY_TRACE
+       //
+#ifdef DM_DESCRIPTOR_HEAP
     VkPhysicalDeviceShaderUntypedPointersFeaturesKHR untyped_ptr = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR,
         .shaderUntypedPointers=1,
+#ifdef DM_RAY_TRACE
         .pNext=&rt_pipe_features
+#endif // DM_RAY_TRACE
     };
     VkPhysicalDeviceDescriptorHeapFeaturesEXT heap_features = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
@@ -433,14 +476,17 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
         .descriptorHeap=1,
 #ifdef DM_DEBUG
         .descriptorHeapCaptureReplay=1,
-#endif
+#endif // DM_DEBUG
     };
-#endif
+#endif // DM_DESCRIPTOR_HEAP
+       //
     VkPhysicalDeviceVulkan14Features v14_features = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
-#ifdef DM_RAY_TRACE
+#ifdef DM_DESCRIPTOR_HEAP
         .pNext=&heap_features,
-#endif
+#elif defined(DM_RAY_TRACE)
+        .pNext=&rt_pipe_features,
+#endif // DM_DESCRIPTOR_HEAP
         .pushDescriptor=1,
     };
 
@@ -468,17 +514,26 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
 
     const char* extensions[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-#ifdef DM_RAY_TRACE
+#ifdef DM_DESCRIPTOR_HEAP
         VK_KHR_SHADER_UNTYPED_POINTERS_EXTENSION_NAME,
-        VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
         VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
         VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME,
+        VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
+#endif // DM_DESCRIPTOR_HEAP
+#ifdef DM_RAY_TRACE
         VK_KHR_RAY_QUERY_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
-        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME
-#endif
+        VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME,
+        VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
+#endif // DM_RAY_TRACE
     };
     u32 ext_count = 1;
+#ifdef DM_RAY_TRACE
+    ext_count += 4;
+#endif // DM_RAY_TRACE
+#ifdef DM_DESCRIPTOR_HEAP
+    ext_count += 4;
+#endif // DM_DESCRIPTOR_HEAP
 
 #ifdef DM_DEBUG
     VkExtensionProperties ext_props[500] = { 0 };
@@ -1602,6 +1657,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 
     switch(desc.type)
     {
+        case DM_TEXTURE2D_TYPE_COMBINED_SAMPLER:
         case DM_TEXTURE2D_TYPE_SAMPLED:
             usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
             break;
@@ -1629,7 +1685,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
         .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED
     };
     VmaAllocationCreateInfo alloc_info = {
-        .usage=alloc_usage,
+        .usage=VMA_MEMORY_USAGE_AUTO,
     };
 
     if(!dm_vulkan_decode_vr(vmaCreateImage(renderer->allocator, &image_info, &alloc_info, &image.image, &image.allocation, NULL)))
