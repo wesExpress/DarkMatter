@@ -1,5 +1,7 @@
 #include "dm.h"
 
+#include <stdlib.h>
+
 #define VOLK_IMPLEMENTATION
 #define VK_NO_PROTOTYPES
 #include <volk.h>
@@ -34,7 +36,7 @@ typedef struct dm_vulkan_gpu_t
     VkPhysicalDeviceFeatures   features;
     VkPhysicalDeviceProperties properties;
     VkPhysicalDeviceProperties2 props2;
-    VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_properties;
+    VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props;
 } dm_vulkan_gpu;
 
 typedef struct dm_vulkan_surface_t
@@ -79,17 +81,29 @@ typedef struct dm_vulkan_frame_data_t
 
 typedef struct dm_vulkan_descriptor_heap_t
 {
+    VkBuffer buffer;
+    VmaAllocation allocation;
+
+    size_t buffer_size, image_size, sampler_size;
+    size_t buffer_offset, image_offset, sampler_offset;
+    size_t buffer_count, image_count, sampler_count;
+
+    size_t size;
+
+    void* mapped_ptr;
 } dm_vulkan_descriptor_heap;
 
 typedef struct dm_vulkan_image_t
 {
     VkImage       image;
-    VkImageView   view;
     VmaAllocation allocation;
 
-    u32 buffer_index;
+    VkFormat format;
 
+    u32 buffer_index;
     u32 width, height;
+
+    dm_texture2d_type type;
 } dm_vulkan_image;
 
 typedef struct dm_vulkan_buffer_t
@@ -98,6 +112,7 @@ typedef struct dm_vulkan_buffer_t
     VkBufferView  view;
     VmaAllocation allocation;
     size_t size;
+    dm_buffer_type type;
 } dm_vulkan_buffer;
 
 typedef struct dm_vulkan_render_target_t
@@ -116,7 +131,7 @@ typedef struct dm_vulkan_render_target_t
 typedef struct dm_vulkan_pipeline_t
 {
     VkPipeline pipeline;
-    VkPipelineLayout layout;
+    //VkPipelineLayout layout;
 } dm_vulkan_pipeline;
 
 typedef struct dm_vulkan_renderer_t
@@ -466,9 +481,6 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
         .pNext=&untyped_ptr,
         .descriptorHeap=1,
-#ifdef DM_DEBUG
-        .descriptorHeapCaptureReplay=1,
-#endif // DM_DEBUG
     };
        //
     VkPhysicalDeviceVulkan14Features v14_features = {
@@ -487,11 +499,9 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
         .pNext=&v13_features,
         .bufferDeviceAddress=1,
-#ifdef DM_DEBUG
-        .bufferDeviceAddressCaptureReplay=1,
-#endif
-        .scalarBlockLayout=1,
-        .timelineSemaphore=1
+        .timelineSemaphore=1,
+        .shaderStorageBufferArrayNonUniformIndexing=1,
+        .shaderSampledImageArrayNonUniformIndexing=1,
     };
     VkPhysicalDeviceFeatures2 features2 = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
@@ -605,12 +615,13 @@ dm_vulkan_gpu dm_vulkan_create_gpu(VkInstance instance, dm_vulkan_surface surfac
     gpu.gfx_index      = gfx_index;
     gpu.compute_index  = compute_index;
 
-    gpu.heap_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
-    gpu.props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
-    gpu.props2.pNext = &gpu.heap_properties;
-
     vkGetPhysicalDeviceFeatures(physical, &gpu.features);
     vkGetPhysicalDeviceProperties(physical, &gpu.properties);
+    vkGetPhysicalDeviceProperties2(physical, &gpu.props2);
+
+    gpu.heap_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
+    gpu.props2.sType     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    gpu.props2.pNext     = &gpu.heap_props;
     vkGetPhysicalDeviceProperties2(physical, &gpu.props2);
 
     return gpu;
@@ -1031,12 +1042,19 @@ void dm_renderer_shutdown(dm_context* context)
     // resources
     for(u32 i=0; i<renderer->pipe_count; i++)
     {
-        vkDestroyPipelineLayout(gpu.device, renderer->pipes[i].layout, NULL);
+        //vkDestroyPipelineLayout(gpu.device, renderer->pipes[i].layout, NULL);
         vkDestroyPipeline(gpu.device, renderer->pipes[i].pipeline, NULL);
     }
 
     for(u32 i=0; i<renderer->dh_count; i++)
     {
+        dm_vulkan_descriptor_heap heap = renderer->dhs[i];
+
+        vmaUnmapMemory(renderer->allocator, heap.allocation);
+        vmaDestroyBuffer(renderer->allocator, heap.buffer, heap.allocation);
+#ifdef DM_DEBUG
+        renderer->alloc_count--;
+#endif
     }
 
     for(u32 i=0; i<renderer->buffer_count; i++)
@@ -1056,7 +1074,6 @@ void dm_renderer_shutdown(dm_context* context)
 #ifdef DM_DEBUG
         renderer->alloc_count--;
 #endif
-        vkDestroyImageView(gpu.device, renderer->images[i].view, NULL);
     }
 
     vkDestroyCommandPool(gpu.device, renderer->single_use_pool, NULL);
@@ -1298,7 +1315,7 @@ bool dm_renderer_create_raster_pipeline(dm_context* context, dm_raster_pipe_desc
 
     VkPipelineInputAssemblyStateCreateInfo input_assembly_info = {
         .sType=VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,
-        .topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST
+        .topology=VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
     };
 
     VkPipelineDepthStencilStateCreateInfo depth_info = {
@@ -1352,31 +1369,18 @@ bool dm_renderer_create_raster_pipeline(dm_context* context, dm_raster_pipe_desc
         .pDynamicStates=dynamic_state
     };
 
+    VkPipelineCreateFlags2CreateInfo flags2 = {
+        .sType=VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+        .flags=VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT,
+    };
+
     VkPipelineRenderingCreateInfo render_info = {
         .sType=VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO,
         .colorAttachmentCount=1,
         .pColorAttachmentFormats=&renderer->swapchain.format,
-        .depthAttachmentFormat=renderer->swapchain.depth_format
+        .depthAttachmentFormat=renderer->swapchain.depth_format,
+        .pNext=&flags2
     };
-
-    size_t push_size = desc.push_constant_size > 0 ? desc.push_constant_size : renderer->gpu.properties.limits.maxPushConstantsSize;
-
-    VkPushConstantRange push_range = {
-        .stageFlags=VK_SHADER_STAGE_ALL_GRAPHICS,
-        .size=push_size
-    };
-
-    VkPipelineLayoutCreateInfo layout_info = {
-        .sType=VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,
-        .pushConstantRangeCount=1,
-        .pPushConstantRanges=&push_range,
-    };
-
-    if(!dm_vulkan_decode_vr(vkCreatePipelineLayout(renderer->gpu.device, &layout_info, NULL, &pipe.layout)))
-    {
-        LOG_ERROR("vkCreatePipelineLayout failed");
-        return false;
-    }
 
     VkGraphicsPipelineCreateInfo pipeline_info = {
         .sType=VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
@@ -1391,7 +1395,6 @@ bool dm_renderer_create_raster_pipeline(dm_context* context, dm_raster_pipe_desc
         .pDynamicState=&dynamic_state_info,
         .pViewportState=&viewport_info,
         .pNext=&render_info,
-        .layout=pipe.layout
     };
 
     if(!dm_vulkan_decode_vr(vkCreateGraphicsPipelines(renderer->gpu.device, NULL, 1, &pipeline_info, NULL, &pipe.pipeline)))
@@ -1467,7 +1470,64 @@ bool dm_renderer_create_descriptor_heap(dm_context *context, dm_descriptor_heap_
 {
     dm_vulkan_renderer* renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
 
-    dm_vulkan_descriptor_heap heap;
+    dm_vulkan_descriptor_heap heap = { 0 };
+
+    size_t size = 0;
+
+    switch(desc.type)
+    {
+        case DM_DESCRIPTOR_HEAP_TYPE_RESOURCE:
+            heap.buffer_size = DM_ALIGN(renderer->gpu.heap_props.bufferDescriptorSize, renderer->gpu.heap_props.bufferDescriptorAlignment);
+            heap.image_size = DM_ALIGN(renderer->gpu.heap_props.imageDescriptorSize, renderer->gpu.heap_props.imageDescriptorAlignment);
+
+            heap.buffer_offset = 0;
+            heap.image_offset  = heap.buffer_size * desc.buffer_count;
+            size += heap.buffer_size * desc.buffer_count + heap.image_size * desc.texture_count;
+            size += renderer->gpu.heap_props.minResourceHeapReservedRange;
+            size = DM_ALIGN(size, renderer->gpu.heap_props.resourceHeapAlignment);
+            break;
+        case DM_DESCRIPTOR_HEAP_TYPE_SAMPLER:
+            heap.sampler_size = DM_ALIGN(renderer->gpu.heap_props.samplerDescriptorSize, renderer->gpu.heap_props.samplerDescriptorAlignment);
+
+            heap.sampler_offset = 0;
+            size += heap.sampler_size * desc.sampler_count;
+            size += renderer->gpu.heap_props.minSamplerHeapReservedRange;
+            size = DM_ALIGN(size, renderer->gpu.heap_props.samplerHeapAlignment);
+            break;
+
+        default:
+            LOG_ERROR("Unknown/unsupported descriptor heap type");
+            return false;
+    }
+
+    VkBufferCreateInfo buffer_info = {
+        .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .usage=VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        .size=size
+    };
+
+    VmaAllocationCreateInfo alloc_info = {
+        .usage=VMA_MEMORY_USAGE_CPU_TO_GPU,
+        .flags=VMA_ALLOCATION_CREATE_MAPPED_BIT
+    };
+
+    if(!dm_vulkan_decode_vr(vmaCreateBuffer(renderer->allocator, &buffer_info, &alloc_info, &heap.buffer, &heap.allocation, NULL)))
+    {
+        LOG_ERROR("vmaCreateBuffer failed");
+        return false;
+    }
+
+    if(!dm_vulkan_decode_vr(vmaMapMemory(renderer->allocator, heap.allocation, &heap.mapped_ptr)))
+    {
+        LOG_ERROR("vmaMapMemory failed");
+        return false;
+    }
+
+    heap.size = size;
+
+#ifdef DM_DEBUG
+    renderer->alloc_count++;
+#endif
 
     //
     renderer->dhs[renderer->dh_count] = heap;
@@ -1537,7 +1597,7 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_hand
 {
     dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
 
-    dm_vulkan_buffer buffer = { 0 };
+    dm_vulkan_buffer buffer = { .type=desc.type };
 
     VkBufferUsageFlagBits usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
     VmaAllocationCreateFlags alloc_flags = 0;
@@ -1619,25 +1679,32 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_hand
     return true;
 }
 
+u64 dm_vulkan_get_buffer_address(VkDevice device, VkBuffer buffer)
+{
+    VkBufferDeviceAddressInfo info = {
+        .sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+        .buffer=buffer
+    };
+
+    return vkGetBufferDeviceAddress(device, &info);
+}
+
 u64 dm_renderer_get_buffer_address(dm_context *context, dm_handle handle)
 {
     dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
-    VkBufferDeviceAddressInfo info = {
-        .sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer=buffer.buffer
-    };
-
-    return vkGetBufferDeviceAddress(renderer->gpu.device, &info);
+    return dm_vulkan_get_buffer_address(renderer->gpu.device, buffer.buffer);
 }
 
 bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_handle *handle)
 {
     dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
 
-    dm_vulkan_image image = { 0 };
+    dm_vulkan_image image = { 
+        .type=desc.type
+    };
 
     VkImageUsageFlags usage       = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     VmaMemoryUsage    alloc_usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
@@ -1681,28 +1748,14 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
         return false;
     }
 
+    image.format = image_info.format;
+
 #ifdef DM_DEBUG
     char debug_name[512];
     sprintf(debug_name, "Image %u", renderer->image_count);
     vmaSetAllocationName(renderer->allocator, image.allocation, debug_name);
     renderer->alloc_count++;
 #endif
-
-    VkImageViewCreateInfo view_info = {
-        .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .image=image.image,
-        .viewType=VK_IMAGE_VIEW_TYPE_2D,
-        .format=VK_FORMAT_R8G8B8A8_SRGB,
-        .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-        .subresourceRange.layerCount=1,
-        .subresourceRange.levelCount=1
-    };
-
-    if(!dm_vulkan_decode_vr(vkCreateImageView(renderer->gpu.device, &view_info, NULL, &image.view)))
-    {
-        LOG_ERROR("vkCreateImageView failed");
-        return false;
-    }
 
     dm_vulkan_buffer staging_buffer = { 0 };
 
@@ -1817,6 +1870,107 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
     return true;
 }
 
+bool dm_vulkan_upload_buffer_to_heap(dm_vulkan_descriptor_heap *heap, dm_vulkan_gpu gpu, dm_vulkan_buffer buffer)
+{
+    u64 address = dm_vulkan_get_buffer_address(gpu.device, buffer.buffer);
+
+    VkDeviceAddressRangeEXT range = {
+        .address=address,
+        .size=buffer.size
+    };
+
+    VkResourceDescriptorInfoEXT info = {
+        .sType=VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+        .type=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .data.pAddressRange=&range
+    };
+
+    VkHostAddressRangeEXT host_range = {
+        .address=(uint8_t*)heap->mapped_ptr + heap->buffer_size * heap->buffer_count,
+        .size=heap->buffer_size
+    };
+
+    heap->buffer_count++;
+
+    return dm_vulkan_decode_vr(vkWriteResourceDescriptorsEXT(gpu.device, 1, &info, &host_range));
+}
+
+bool dm_vulkan_upload_image_to_heap(dm_vulkan_descriptor_heap *heap, dm_vulkan_gpu gpu, dm_vulkan_image image)
+{
+    VkImageViewCreateInfo view_info = {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .viewType=VK_IMAGE_VIEW_TYPE_2D,
+        .image=image.image,
+        .format=image.format,
+        .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+        .subresourceRange.layerCount=1,
+        .subresourceRange.levelCount=1
+    };
+
+    VkImageDescriptorInfoEXT info = {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+        .layout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .pView=&view_info
+    };
+
+    VkDescriptorType type;
+    switch(image.type)
+    {
+        case DM_TEXTURE2D_TYPE_STORAGE:
+            type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+            break;
+        case DM_TEXTURE2D_TYPE_SAMPLED:
+            type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+            break;
+
+        default:
+            LOG_ERROR("Unknown/unsupported image type");
+            return false;
+    }
+    VkResourceDescriptorInfoEXT descriptor = {
+        .sType=VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+        .type=type,
+        .data.pImage=&info
+    };
+
+    VkHostAddressRangeEXT host_range = {
+        .address=(uint8_t*)heap->mapped_ptr + heap->image_offset + heap->image_size * heap->image_count,
+        .size=heap->image_size
+    };
+
+    heap->image_count++;
+
+    return dm_vulkan_decode_vr(vkWriteResourceDescriptorsEXT(gpu.device, 1, &descriptor, &host_range));
+}
+
+bool dm_renderer_upload_resource_to_heap(dm_context *context, dm_handle heap, dm_handle resource)
+{
+    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+
+    if(heap.r_type != DM_RESOURCE_TYPE_DESCRIPTOR_HEAP)
+    {
+        LOG_ERROR("Invalid descriptor heap");
+        return false;
+    }
+
+    switch(resource.r_type)
+    {
+        case DM_RESOURCE_TYPE_BUFFER:
+            return dm_vulkan_upload_buffer_to_heap(&renderer->dhs[heap.index], renderer->gpu, renderer->buffers[resource.index]);
+        case DM_RESOURCE_TYPE_TEXTURE2D_SAMPLED:
+        case DM_RESOURCE_TYPE_TEXTURE2D_STORAGE:
+            return dm_vulkan_upload_image_to_heap(&renderer->dhs[heap.index], renderer->gpu, renderer->images[resource.index]);
+
+        default:
+            LOG_ERROR("Unknown/unsupported resource type");
+            LOG_ERROR("Upload resource to heap failed");
+            return false;
+    }
+
+    LOG_ERROR("Shouldn't be here...");
+    return true;
+}
+
 // commands
 void dm_render_command_begin_rendering(dm_context *context, dm_handle handle, float r, float g, float b, float a, float d)
 {
@@ -1924,6 +2078,24 @@ void dm_render_command_end_rendering(dm_context *context, dm_handle handle)
     vkCmdEndRendering(frame_data.gfx_cmd);
 }
 
+void dm_render_command_bind_descriptor_heap(dm_context *context, dm_handle handle)
+{
+    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+
+    dm_vulkan_descriptor_heap heap = renderer->dhs[handle.index];
+
+    VkBindHeapInfoEXT info = {
+        .sType=VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+        .heapRange.size=heap.size,
+        .heapRange.address=dm_vulkan_get_buffer_address(renderer->gpu.device, heap.buffer),
+        .reservedRangeOffset=heap.size - renderer->gpu.heap_props.minResourceHeapReservedRange,
+        .reservedRangeSize=renderer->gpu.heap_props.minResourceHeapReservedRange
+    };
+
+    vkCmdBindResourceHeapEXT(frame_data.gfx_cmd, &info);
+}
+
 void dm_render_command_bind_pipeline(dm_context *context, dm_handle handle)
 {
     dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
@@ -1965,34 +2137,21 @@ void dm_render_command_bind_index_buffer(dm_context *context, dm_handle handle, 
     vkCmdBindIndexBuffer(frame_data.gfx_cmd, buffer.buffer, offset, VK_INDEX_TYPE_UINT32);
 }
 
-void dm_render_command_push_constants(dm_context *context, dm_handle handle, void *data, size_t size)
+void dm_render_command_push_constants(dm_context *context, dm_handle handle)
 {
     dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
-    dm_vulkan_pipeline pipeline = renderer->pipes[handle.index];
+    dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
-    VkShaderStageFlags stage;
-    switch(handle.p_type)
-    {
-        case DM_PIPELINE_TYPE_RASTER:
-            stage = VK_SHADER_STAGE_ALL_GRAPHICS;
-            break;
-        case DM_PIPELINE_TYPE_COMPUTE:
-            stage = VK_SHADER_STAGE_COMPUTE_BIT;
-            break;
-#ifdef DM_RAY_TRACE
-        case DM_PIPELINE_TYPE_RAY_TRACE:
-            stage = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR | VK_SHADER_STAGE_MISS_BIT_KHR | VK_SHADER_STAGE_INTERSECTION_BIT_KHR;
-            break;
-#endif
+    u64 address = dm_vulkan_get_buffer_address(renderer->gpu.device, buffer.buffer);
+    VkPushDataInfoEXT info = {
+        .sType=VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
+        .data.address=&address,
+        .data.size=sizeof(address)
+    };
 
-        default:
-            LOG_ERROR("Unknown/unsupported pipeline bind point");
-            return;
-    }
-
-    vkCmdPushConstants(frame_data.gfx_cmd, pipeline.layout, stage, 0, size, data);
+    vkCmdPushDataEXT(frame_data.gfx_cmd, &info);
 }
 
 void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count)
