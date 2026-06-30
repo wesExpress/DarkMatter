@@ -1225,11 +1225,16 @@ bool dm_renderer_end_frame(dm_context* context)
 // resources
 VkShaderModule dm_vulkan_create_shader_module(dm_vulkan_gpu gpu, const char *path, const char *entry, shaderc_shader_kind kind)
 {
+    LOG_INFO("Creating shader module from file: %s", path);
     VkShaderModule module = VK_NULL_HANDLE;
 
     size_t file_size;
     void *file_data = dm_read_bytes(path, &file_size);
-    if(!file_data) return VK_NULL_HANDLE;
+    if(!file_data) 
+    {
+        LOG_ERROR("Could not read file: %s", path);
+        return VK_NULL_HANDLE;
+    }
 
     shaderc_compiler_t compiler       = shaderc_compiler_initialize();
     shaderc_compile_options_t options = shaderc_compile_options_initialize();
@@ -1253,6 +1258,8 @@ VkShaderModule dm_vulkan_create_shader_module(dm_vulkan_gpu gpu, const char *pat
         .codeSize=shaderc_result_get_length(result),
         .pCode=(u32*)shaderc_result_get_bytes(result)
     };
+
+    LOG_DEBUG("Shader size: %u bytes", info.codeSize);
 
     if(!dm_vulkan_decode_vr(vkCreateShaderModule(gpu.device, &info, NULL, &module)))
     {

@@ -20,7 +20,11 @@ typedef uint64_t u64;
 
 #include "clog/clog.h"
 
+#ifdef DM_DEBUG
 #define LOG_DEBUG(...) DBG(__VA_ARGS__)
+#else
+#define LOG_DEBUG(...)
+#endif
 #define LOG_TRACE(...) TRC(__VA_ARGS__)
 #define LOG_INFO(...)  INF(__VA_ARGS__)
 #define LOG_WARN(...)  WRN(__VA_ARGS__)
