@@ -617,7 +617,6 @@ dm_vulkan_gpu dm_vulkan_create_gpu(VkInstance instance, dm_vulkan_surface surfac
 
     vkGetPhysicalDeviceFeatures(physical, &gpu.features);
     vkGetPhysicalDeviceProperties(physical, &gpu.properties);
-    vkGetPhysicalDeviceProperties2(physical, &gpu.props2);
 
     gpu.heap_props.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
     gpu.props2.sType     = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
@@ -2144,11 +2143,11 @@ void dm_render_command_push_constants(dm_context *context, dm_handle handle)
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
-    u64 address = dm_vulkan_get_buffer_address(renderer->gpu.device, buffer.buffer);
+    VkDeviceAddress address = dm_vulkan_get_buffer_address(renderer->gpu.device, buffer.buffer);
     VkPushDataInfoEXT info = {
         .sType=VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
         .data.address=&address,
-        .data.size=sizeof(address)
+        .data.size=buffer.size
     };
 
     vkCmdPushDataEXT(frame_data.gfx_cmd, &info);
