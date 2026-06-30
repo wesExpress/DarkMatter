@@ -33,6 +33,8 @@ typedef struct dm_vulkan_gpu_t
 
     VkPhysicalDeviceFeatures   features;
     VkPhysicalDeviceProperties properties;
+    VkPhysicalDeviceProperties2 props2;
+    VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_properties;
 } dm_vulkan_gpu;
 
 typedef struct dm_vulkan_surface_t
@@ -280,7 +282,6 @@ bool dm_vulkan_check_physical_device(VkPhysicalDevice physical)
        .pNext=&as_supported
     };
 #endif
-#ifdef DM_DESCRIPTOR_HEAP
     VkPhysicalDeviceShaderUntypedPointersFeaturesKHR untyped_supported = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR,
 #ifdef DM_RAY_TRACE
@@ -291,14 +292,9 @@ bool dm_vulkan_check_physical_device(VkPhysicalDevice physical)
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
         .pNext=&untyped_supported
     };
-#endif // DM_DESCRIPTOR_HEAP
     VkPhysicalDeviceVulkan14Features v14_supported = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
-#ifdef DM_DESCRIPTOR_HEAP
         .pNext=&heap_supported
-#elif defined(DM_RAY_TRACE)
-        .pNext=&rt_pipe_supported
-#endif // DM_DESCRIPTOR_HEAP
     };
     VkPhysicalDeviceVulkan13Features v13_supported = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES,
@@ -318,11 +314,8 @@ bool dm_vulkan_check_physical_device(VkPhysicalDevice physical)
     if(!rt_pipe_supported.rayTracingPipeline) { LOG_ERROR("Raytracing pipeline not supported"); return false; }
 #endif
 
-#ifdef DM_DESCRIPTOR_HEAP
     if(!untyped_supported.shaderUntypedPointers) { LOG_ERROR("Untyped shader ptrs not supported"); return false; }
     if(!heap_supported.descriptorHeap)           { LOG_ERROR("Descriptor heaps not supported"); return false; }
-#endif
-
     if(!v14_supported.pushDescriptor)    { LOG_ERROR("Push descriptor not supported");     return false; }
     if(!v13_supported.dynamicRendering)  { LOG_ERROR("Dynamic rendering not supported");   return false; }
     if(!v13_supported.synchronization2)  { LOG_ERROR("Synchronization2 not supported");    return false; }
@@ -462,7 +455,6 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
     };
 #endif // DM_RAY_TRACE
        //
-#ifdef DM_DESCRIPTOR_HEAP
     VkPhysicalDeviceShaderUntypedPointersFeaturesKHR untyped_ptr = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_UNTYPED_POINTERS_FEATURES_KHR,
         .shaderUntypedPointers=1,
@@ -478,15 +470,10 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
         .descriptorHeapCaptureReplay=1,
 #endif // DM_DEBUG
     };
-#endif // DM_DESCRIPTOR_HEAP
        //
     VkPhysicalDeviceVulkan14Features v14_features = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
-#ifdef DM_DESCRIPTOR_HEAP
         .pNext=&heap_features,
-#elif defined(DM_RAY_TRACE)
-        .pNext=&rt_pipe_features,
-#endif // DM_DESCRIPTOR_HEAP
         .pushDescriptor=1,
     };
 
@@ -514,12 +501,10 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
 
     const char* extensions[] = {
         VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-#ifdef DM_DESCRIPTOR_HEAP
         VK_KHR_SHADER_UNTYPED_POINTERS_EXTENSION_NAME,
         VK_KHR_MAINTENANCE_5_EXTENSION_NAME,
         VK_EXT_DESCRIPTOR_HEAP_EXTENSION_NAME,
         VK_KHR_SHADER_NON_SEMANTIC_INFO_EXTENSION_NAME,
-#endif // DM_DESCRIPTOR_HEAP
 #ifdef DM_RAY_TRACE
         VK_KHR_RAY_QUERY_EXTENSION_NAME,
         VK_KHR_RAY_TRACING_PIPELINE_EXTENSION_NAME,
@@ -527,13 +512,10 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
         VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME
 #endif // DM_RAY_TRACE
     };
-    u32 ext_count = 1;
+    u32 ext_count = 5;
 #ifdef DM_RAY_TRACE
     ext_count += 4;
 #endif // DM_RAY_TRACE
-#ifdef DM_DESCRIPTOR_HEAP
-    ext_count += 4;
-#endif // DM_DESCRIPTOR_HEAP
 
 #ifdef DM_DEBUG
     VkExtensionProperties ext_props[500] = { 0 };
@@ -623,8 +605,13 @@ dm_vulkan_gpu dm_vulkan_create_gpu(VkInstance instance, dm_vulkan_surface surfac
     gpu.gfx_index      = gfx_index;
     gpu.compute_index  = compute_index;
 
+    gpu.heap_properties.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_PROPERTIES_EXT;
+    gpu.props2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2;
+    gpu.props2.pNext = &gpu.heap_properties;
+
     vkGetPhysicalDeviceFeatures(physical, &gpu.features);
     vkGetPhysicalDeviceProperties(physical, &gpu.properties);
+    vkGetPhysicalDeviceProperties2(physical, &gpu.props2);
 
     return gpu;
 }
