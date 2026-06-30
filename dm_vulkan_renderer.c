@@ -9,9 +9,7 @@
 
 #include <shaderc/shaderc.h>
 
-#ifdef DM_DEBUG
 #include <assert.h>
-#endif
 
 #define DM_SWAPCHAIN_MAX_IMAGES 5
 #define DM_SWAPCHAIN_FORMAT     VK_FORMAT_B8G8R8A8_SRGB
@@ -1476,17 +1474,13 @@ bool dm_renderer_create_descriptor_heap(dm_context *context, dm_descriptor_heap_
             heap.image_size = DM_ALIGN(renderer->gpu.heap_props.imageDescriptorSize, renderer->gpu.heap_props.imageDescriptorAlignment);
             heap.min_size = heap.buffer_size > heap.image_size ? heap.buffer_size : heap.image_size;
 
-            //heap.buffer_offset = 0;
-            //heap.image_offset  = heap.buffer_size * desc.buffer_count;
-            //size += heap.buffer_size * desc.buffer_count + heap.image_size * desc.texture_count;
-            size += (heap.buffer_count + heap.image_count) * heap.min_size;
+            size += (desc.buffer_count + desc.texture_count) * heap.min_size;
             size += renderer->gpu.heap_props.minResourceHeapReservedRange;
             size = DM_ALIGN(size, renderer->gpu.heap_props.resourceHeapAlignment);
             break;
         case DM_DESCRIPTOR_HEAP_TYPE_SAMPLER:
             heap.sampler_size = DM_ALIGN(renderer->gpu.heap_props.samplerDescriptorSize, renderer->gpu.heap_props.samplerDescriptorAlignment);
 
-            //heap.sampler_offset = 0;
             size += heap.sampler_size * desc.sampler_count;
             size += renderer->gpu.heap_props.minSamplerHeapReservedRange;
             size = DM_ALIGN(size, renderer->gpu.heap_props.samplerHeapAlignment);
@@ -1496,6 +1490,8 @@ bool dm_renderer_create_descriptor_heap(dm_context *context, dm_descriptor_heap_
             LOG_ERROR("Unknown/unsupported descriptor heap type");
             return false;
     }
+
+    assert(size);
 
     VkBufferCreateInfo buffer_info = {
         .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
