@@ -2235,6 +2235,43 @@ void dm_render_command_update_texture(dm_context *context, dm_handle handle, voi
     dm_vulkan_submit_one_time_cmd(renderer->gpu.device, renderer->gpu.gfx_queue, renderer->single_use_pool, cmd);
 }
 
+bool dm_renderer_create_compute_pipeline(dm_context *context, dm_handle *handle)
+{
+    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+
+    VkPipeline pipeline;
+
+    VkShaderModule module = dm_vulkan_create_shader_module(renderer->gpu, "../../assets/shaders/compute.glsl", "main", shaderc_compute_shader);
+
+    VkPipelineShaderStageCreateInfo shader_info = {
+        .sType=VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+        .stage=VK_SHADER_STAGE_COMPUTE_BIT,
+        .pName="main",
+        .module=module
+    };
+
+    VkPipelineCreateFlags2CreateInfo flags2 = {
+        .sType=VK_STRUCTURE_TYPE_PIPELINE_CREATE_FLAGS_2_CREATE_INFO,
+        .flags=VK_PIPELINE_CREATE_2_DESCRIPTOR_HEAP_BIT_EXT
+    };
+
+    VkComputePipelineCreateInfo info = {
+        .sType=VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+        .stage=shader_info,
+        .pNext=&flags2
+    };
+
+    if(!dm_vulkan_decode_vr(vkCreateComputePipelines(renderer->gpu.device, NULL, 1, &info, NULL, &pipeline)))
+    {
+        LOG_ERROR("vkCreateComputePipelines failed");
+        return false;
+    }
+
+    vkDestroyShaderModule(renderer->gpu.device, module, NULL);
+
+    return true;
+}
+
 /************
  * DECODE VR
  *************/

@@ -300,6 +300,8 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 bool dm_renderer_upload_resource_to_heap(dm_context *context, dm_handle heap, dm_handle *resource);
 u64 dm_renderer_get_buffer_address(dm_context *context, dm_handle handle);
 
+bool dm_renderer_create_compute_pipeline(dm_context *context, dm_handle *handle);
+
 // commands
 void dm_render_command_begin_rendering(dm_context *context, dm_handle handle, float r, float g, float b, float a, float d);
 void dm_render_command_end_rendering(dm_context *context, dm_handle handle);
