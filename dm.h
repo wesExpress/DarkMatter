@@ -309,6 +309,7 @@ void dm_render_command_bind_descriptor_heap(dm_context *context, dm_handle handl
 void dm_render_command_bind_pipeline(dm_context *context, dm_handle handle);
 void dm_render_command_bind_index_buffer(dm_context *context, dm_handle handle, size_t offset);
 void dm_render_command_push_constants(dm_context *context, dm_handle handle);
+void dm_render_command_push_data(dm_context* context, void* data, size_t size);
 void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count);
 
 void dm_render_command_update_buffer(dm_context *context, dm_handle handle, void *data, size_t size);

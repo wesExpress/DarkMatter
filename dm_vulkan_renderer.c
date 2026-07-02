@@ -2177,6 +2177,20 @@ void dm_render_command_push_constants(dm_context *context, dm_handle handle)
     vkCmdPushDataEXT(frame_data.gfx_cmd, &info);
 }
 
+void dm_render_command_push_data(dm_context* context, void* data, size_t size)
+{
+    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+
+    VkPushDataInfoEXT info = {
+        .sType=VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
+        .data.address=data,
+        .data.size=size
+    };
+
+    vkCmdPushDataEXT(frame_data.gfx_cmd, &info);
+}
+
 void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count)
 {
     dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
