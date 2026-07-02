@@ -500,6 +500,9 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
         .timelineSemaphore=1,
         .shaderStorageBufferArrayNonUniformIndexing=1,
         .shaderSampledImageArrayNonUniformIndexing=1,
+        .shaderStorageImageArrayNonUniformIndexing=1,
+        .shaderUniformBufferArrayNonUniformIndexing=1,
+        .runtimeDescriptorArray=1
     };
     VkPhysicalDeviceFeatures2 features2 = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
@@ -1252,6 +1255,8 @@ VkShaderModule dm_vulkan_create_shader_module(dm_vulkan_gpu gpu, const char *pat
         return VK_NULL_HANDLE;
     }
     free(file_data);
+
+    assert(shaderc_result_get_length(result) % 4 == 0);
 
     VkShaderModuleCreateInfo info = {
         .sType=VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
