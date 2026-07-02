@@ -1044,7 +1044,6 @@ void dm_renderer_shutdown(dm_context* context)
     // resources
     for(u32 i=0; i<renderer->pipe_count; i++)
     {
-        //vkDestroyPipelineLayout(gpu.device, renderer->pipes[i].layout, NULL);
         vkDestroyPipeline(gpu.device, renderer->pipes[i].pipeline, NULL);
     }
 
@@ -1072,7 +1071,10 @@ void dm_renderer_shutdown(dm_context* context)
 
     for(u32 i=0; i<renderer->image_count; i++)
     {
-        vmaDestroyImage(renderer->allocator, renderer->images[i].image, renderer->images[i].allocation);
+        dm_vulkan_image image = renderer->images[i];
+        dm_vulkan_buffer buffer = renderer->buffers[image.buffer_index];
+
+        vmaDestroyImage(renderer->allocator, image.image, image.allocation);
 #ifdef DM_DEBUG
         renderer->alloc_count--;
 #endif
@@ -1790,7 +1792,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
     renderer->alloc_count++;
 #endif
 
-    renderer->buffers[renderer->buffer_count].buffer = staging_buffer.buffer;
+    renderer->buffers[renderer->buffer_count]= staging_buffer;
     image.buffer_index = renderer->buffer_count++;
 
     if(!dm_vulkan_copy_to_buffer(renderer->allocator, staging_buffer, desc.data, desc.size)) return false;
