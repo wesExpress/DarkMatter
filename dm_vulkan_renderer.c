@@ -502,7 +502,8 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
         .shaderSampledImageArrayNonUniformIndexing=1,
         .shaderStorageImageArrayNonUniformIndexing=1,
         .shaderUniformBufferArrayNonUniformIndexing=1,
-        .runtimeDescriptorArray=1
+        .runtimeDescriptorArray=1,
+        .descriptorIndexing=1
     };
     VkPhysicalDeviceFeatures2 features2 = {
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
