@@ -333,6 +333,7 @@ bool dm_vulkan_check_physical_device(VkPhysicalDevice physical)
     if(!v13_supported.dynamicRendering)  { LOG_ERROR("Dynamic rendering not supported");   return false; }
     if(!v13_supported.synchronization2)  { LOG_ERROR("Synchronization2 not supported");    return false; }
     if(!v12_supported.timelineSemaphore) { LOG_ERROR("Timeline semaphores not supported"); return false; }
+    if(!v12_supported.descriptorIndexing) { LOG_ERROR("Descriptor indexing not supported"); return false; }
 
     return true;
 }
@@ -1508,7 +1509,7 @@ bool dm_renderer_create_descriptor_heap(dm_context *context, dm_descriptor_heap_
 
     VkBufferCreateInfo buffer_info = {
         .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .usage=VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT,
+        .usage=VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         .size=size
     };
 
