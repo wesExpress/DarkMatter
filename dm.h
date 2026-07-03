@@ -81,14 +81,18 @@ typedef struct dm_handle_t
 #define DM_MAX_PIPES 10
 #define DM_MAX_RASTER_PIPES    DM_MAX_PIPES
 #define DM_MAX_COMPUTE_PIPES   DM_MAX_PIPES
+#ifdef DM_RAY_TRACE
 #define DM_MAX_RAY_TRACE_PIPES DM_MAX_PIPES
+#endif
 
 #define DM_MAX_DESCRIPTOR_HEAPS (DM_MAX_PIPES * 3)
 
-#define DM_MAX_TEXTURES 10
-#define DM_MAX_BUFFERS  10
-#define DM_MAX_ACCELS   10
+#define DM_MAX_TEXTURES 100
+#define DM_MAX_BUFFERS  100
 #define DM_MAX_SAMPLERS 10
+#ifdef DM_RAY_TRACE
+#define DM_MAX_ACCELS   10
+#endif
 
 /**************
  * RASTER PIPE
@@ -275,12 +279,12 @@ typedef struct dm_context_t
 } dm_context;
 
 // functions
-void dm_arena_create(size_t size, dm_arena *arena);
+void dm_arena_create(dm_arena *arena, size_t size);
 void dm_arena_detroy(dm_arena *arena);
 void* dm_arena_alloc(dm_arena *arena, size_t size, size_t *offset);
 void* dm_arena_get_ptr(dm_arena arena, size_t offset);
 
-bool dm_init(dm_context *context, u16 width, u16 height, const char *title, dm_context_flag flags, size_t memory_size);
+bool dm_init(dm_context *context, u16 width, u16 height, const char *title, dm_context_flag flags);
 void dm_shutdown(dm_context *context);
 bool dm_is_running(dm_context context);
 void dm_update(dm_context *context);

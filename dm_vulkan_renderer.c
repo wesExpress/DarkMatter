@@ -1112,6 +1112,11 @@ void dm_renderer_shutdown(dm_context* context)
     volkFinalize();
 }
 
+size_t dm_renderer_get_internal_size()
+{
+    return sizeof(dm_vulkan_renderer);
+}
+
 bool dm_renderer_begin_frame(dm_context* context)
 {
     dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);

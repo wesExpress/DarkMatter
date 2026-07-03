@@ -83,3 +83,9 @@ void dm_window_poll_events(dm_context* context)
 {
     glfwPollEvents();
 }
+
+size_t dm_window_get_internal_size()
+{
+    return sizeof(dm_glfw_window);
+
+}
