@@ -11,6 +11,7 @@
 
 #include <assert.h>
 
+#define DM_VULKAN_MAX_DESCRIPTORS 100
 #define DM_SWAPCHAIN_MAX_IMAGES 5
 #define DM_SWAPCHAIN_FORMAT     VK_FORMAT_B8G8R8A8_SRGB
 #define DM_DEPTH_FORMAT         VK_FORMAT_D32_SFLOAT
@@ -87,6 +88,12 @@ typedef struct dm_vulkan_descriptor_heap_t
     size_t buffer_count, image_count, sampler_count;
 
     size_t size, count, min_size;
+
+    VkResourceDescriptorInfoEXT resource_info[DM_VULKAN_MAX_DESCRIPTORS];
+    VkHostAddressRangeEXT       host_info[DM_VULKAN_MAX_DESCRIPTORS];
+    VkDeviceAddressRangeKHR     addresses[DM_VULKAN_MAX_DESCRIPTORS];
+
+    dm_descriptor_heap_type type;
 
     void *start, *current;
 } dm_vulkan_descriptor_heap;
@@ -1479,7 +1486,9 @@ bool dm_renderer_create_descriptor_heap(dm_context *context, dm_descriptor_heap_
 {
     dm_vulkan_renderer* renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
 
-    dm_vulkan_descriptor_heap heap = { 0 };
+    dm_vulkan_descriptor_heap heap = { 
+        .type=desc.type
+    };
 
     size_t size = 0;
 
@@ -1489,10 +1498,15 @@ bool dm_renderer_create_descriptor_heap(dm_context *context, dm_descriptor_heap_
             heap.buffer_size = DM_ALIGN(renderer->gpu.heap_props.bufferDescriptorSize, renderer->gpu.heap_props.bufferDescriptorAlignment);
             heap.image_size = DM_ALIGN(renderer->gpu.heap_props.imageDescriptorSize, renderer->gpu.heap_props.imageDescriptorAlignment);
             heap.min_size = heap.buffer_size > heap.image_size ? heap.buffer_size : heap.image_size;
+            LOG_DEBUG("Buffer descriptor size: %u", heap.buffer_size);
+            LOG_DEBUG("Image descriptor size: %u", heap.image_size);
+            LOG_DEBUG("Buffer descriptor heap alignment: %u", renderer->gpu.heap_props.bufferDescriptorAlignment);
+            LOG_DEBUG("Image descriptor heap alignment: %u", renderer->gpu.heap_props.imageDescriptorAlignment);
 
             size += (desc.buffer_count + desc.texture_count) * heap.min_size;
             size += renderer->gpu.heap_props.minResourceHeapReservedRange;
             size = DM_ALIGN(size, renderer->gpu.heap_props.resourceHeapAlignment);
+
             break;
         case DM_DESCRIPTOR_HEAP_TYPE_SAMPLER:
             heap.sampler_size = DM_ALIGN(renderer->gpu.heap_props.samplerDescriptorSize, renderer->gpu.heap_props.samplerDescriptorAlignment);
@@ -1500,6 +1514,8 @@ bool dm_renderer_create_descriptor_heap(dm_context *context, dm_descriptor_heap_
             size += heap.sampler_size * desc.sampler_count;
             size += renderer->gpu.heap_props.minSamplerHeapReservedRange;
             size = DM_ALIGN(size, renderer->gpu.heap_props.samplerHeapAlignment);
+            LOG_DEBUG("Sampler descriptor size: %u", heap.sampler_size);
+            LOG_DEBUG("Sampler descriptor heap alignment: %u", renderer->gpu.heap_props.samplerHeapAlignment);
             break;
 
         default:
@@ -1880,88 +1896,10 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
     return true;
 }
 
-bool dm_vulkan_upload_buffer_to_heap(dm_vulkan_descriptor_heap *heap, dm_vulkan_gpu gpu, dm_vulkan_buffer buffer)
-{
-    u64 address = dm_vulkan_get_buffer_address(gpu.device, buffer.buffer);
-
-    VkDeviceAddressRangeEXT range = {
-        .address=address,
-        .size=buffer.size
-    };
-
-    VkResourceDescriptorInfoEXT info = {
-        .sType=VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-        .type=VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        .data.pAddressRange=&range
-    };
-
-    VkHostAddressRangeEXT host_range = {
-        .address=(uint8_t*)heap->current,
-        .size=heap->buffer_size
-    };
-
-    uint8_t* ptr = heap->current;
-    ptr += heap->min_size;
-    //heap->current += heap->min_size;
-    heap->current = ptr;
-
-    return dm_vulkan_decode_vr(vkWriteResourceDescriptorsEXT(gpu.device, 1, &info, &host_range));
-}
-
-bool dm_vulkan_upload_image_to_heap(dm_vulkan_descriptor_heap *heap, dm_vulkan_gpu gpu, dm_vulkan_image image)
-{
-    VkImageViewCreateInfo view_info = {
-        .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
-        .viewType=VK_IMAGE_VIEW_TYPE_2D,
-        .image=image.image,
-        .format=image.format,
-        .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
-        .subresourceRange.layerCount=1,
-        .subresourceRange.levelCount=1
-    };
-
-    VkImageDescriptorInfoEXT info = {
-        .sType=VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
-        .layout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .pView=&view_info
-    };
-
-    VkDescriptorType type;
-    switch(image.type)
-    {
-        case DM_TEXTURE2D_TYPE_STORAGE:
-            type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-            break;
-        case DM_TEXTURE2D_TYPE_SAMPLED:
-            type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-            break;
-
-        default:
-            LOG_ERROR("Unknown/unsupported image type");
-            return false;
-    }
-    VkResourceDescriptorInfoEXT descriptor = {
-        .sType=VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-        .type=type,
-        .data.pImage=&info
-    };
-
-    VkHostAddressRangeEXT host_range = {
-        .address=(uint8_t*)heap->current,
-        .size=heap->image_size
-    };
-
-    uint8_t* ptr = heap->current;
-    ptr += heap->min_size;
-    //heap->current += heap->min_size;
-    heap->current = ptr;
-
-    return dm_vulkan_decode_vr(vkWriteResourceDescriptorsEXT(gpu.device, 1, &descriptor, &host_range));
-}
-
-bool dm_renderer_upload_resource_to_heap(dm_context *context, dm_handle heap, dm_handle *resource)
+bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle heap, dm_handle *resources[], u32 count)
 {
     dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_gpu gpu = renderer->gpu;
 
     if(heap.r_type != DM_RESOURCE_TYPE_DESCRIPTOR_HEAP)
     {
@@ -1969,24 +1907,99 @@ bool dm_renderer_upload_resource_to_heap(dm_context *context, dm_handle heap, dm
         return false;
     }
 
-    switch(resource->r_type)
-    {
-        case DM_RESOURCE_TYPE_BUFFER:
-            if(!dm_vulkan_upload_buffer_to_heap(&renderer->dhs[heap.index], renderer->gpu, renderer->buffers[resource->index])) return false;
-            resource->heap_index = renderer->dhs[heap.index].count++;
-            renderer->dhs[heap.index].buffer_count++;
-            break;
+    VkResourceDescriptorInfoEXT resource_info[DM_VULKAN_MAX_DESCRIPTORS] = { 0 };
+    VkHostAddressRangeEXT       host_info[DM_VULKAN_MAX_DESCRIPTORS]     = { 0 };
+    VkDeviceAddressRangeKHR     addresses[DM_VULKAN_MAX_DESCRIPTORS]     = { 0 };
+    VkImageDescriptorInfoEXT    image_info[DM_VULKAN_MAX_DESCRIPTORS]    = { 0 };
+    VkImageViewCreateInfo       view_info[DM_VULKAN_MAX_DESCRIPTORS]     = { 0 };
 
-        case DM_RESOURCE_TYPE_TEXTURE2D_SAMPLED:
-        case DM_RESOURCE_TYPE_TEXTURE2D_STORAGE:
-            if(!dm_vulkan_upload_image_to_heap(&renderer->dhs[heap.index], renderer->gpu, renderer->images[resource->index])) return false;
-            resource->heap_index = renderer->dhs[heap.index].count++;
-            renderer->dhs[heap.index].image_count++;
+    dm_vulkan_descriptor_heap *resource_heap = &renderer->dhs[heap.index];
+
+    u32 buffer_count = 0;
+    u32 image_count  = 0;
+
+    for(u32 i=0; i<count; i++)
+    {
+        dm_handle *resource = resources[i];
+
+        size_t host_size;
+
+        dm_vulkan_buffer buffer;
+        dm_vulkan_image  image;
+
+        switch(resource->r_type)
+        {
+            case DM_RESOURCE_TYPE_BUFFER:
+                buffer_count = resource_heap->buffer_count++;
+                buffer = renderer->buffers[resource->index];
+
+                addresses[buffer_count].address = dm_vulkan_get_buffer_address(gpu.device, buffer.buffer);
+                addresses[buffer_count].size    = buffer.size;
+                
+                resource_info[i].sType              = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
+                resource_info[i].type               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                resource_info[i].data.pAddressRange = &addresses[buffer_count];
+
+                host_size = resource_heap->buffer_size;
+                break;
+
+            case DM_RESOURCE_TYPE_TEXTURE2D_SAMPLED:
+            case DM_RESOURCE_TYPE_TEXTURE2D_STORAGE:
+                image_count = resource_heap->image_count++;
+                image = renderer->images[resource->index];
+
+                view_info[image_count].sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                view_info[image_count].viewType = VK_IMAGE_VIEW_TYPE_2D;
+                view_info[image_count].image    = image.image;
+                view_info[image_count].format   = image.format;
+                view_info[image_count].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                view_info[image_count].subresourceRange.layerCount = 1;
+                view_info[image_count].subresourceRange.levelCount = 1;
+
+                image_info[image_count].sType  = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT;
+                image_info[image_count].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+                image_info[image_count].pView  = &view_info[image_count];
+                
+                resource_info[i].sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
+                resource_info[i].type  = resource->r_type == DM_RESOURCE_TYPE_TEXTURE2D_SAMPLED ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                resource_info[i].data.pImage = &image_info[image_count];
+
+                host_size = resource_heap->image_size;
+                break;
+
+            default:
+                LOG_ERROR("Unknown/unsupported resource type");
+                LOG_ERROR("Upload resource to heap failed");
+                return false;
+        }
+
+        host_info[i].address = (uint8_t*)resource_heap->current;
+        host_info[i].size    = host_size;
+        
+        //
+        uint8_t* ptr = resource_heap->current;
+        ptr += host_size;
+        resource_heap->current = ptr;
+        resources[i]->heap_index = resource_heap->count++;
+    }
+
+    return dm_vulkan_decode_vr(vkWriteResourceDescriptorsEXT(renderer->gpu.device, count, resource_info, host_info));
+}
+
+bool dm_renderer_write_descriptor_heap(dm_context * context, dm_handle handle)
+{
+    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+
+    dm_vulkan_descriptor_heap *heap = &renderer->dhs[handle.index];
+
+    switch(heap->type)
+    {
+        case DM_DESCRIPTOR_HEAP_TYPE_RESOURCE:
+            if(!dm_vulkan_decode_vr(vkWriteResourceDescriptorsEXT(renderer->gpu.device, heap->count, heap->resource_info, heap->host_info))) return false;
             break;
 
         default:
-            LOG_ERROR("Unknown/unsupported resource type");
-            LOG_ERROR("Upload resource to heap failed");
+            LOG_ERROR("Unknown/unsupported descriptor type");
             return false;
     }
 

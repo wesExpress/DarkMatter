@@ -297,7 +297,8 @@ bool dm_renderer_create_descriptor_heap(dm_context *context, dm_descriptor_heap_
 bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_handle *handle);
 bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_handle *handle);
 
-bool dm_renderer_upload_resource_to_heap(dm_context *context, dm_handle heap, dm_handle *resource);
+bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle heap, dm_handle *resources[], u32 count);
+bool dm_renderer_write_descriptor_heap(dm_context * context, dm_handle heap);
 u64 dm_renderer_get_buffer_address(dm_context *context, dm_handle handle);
 
 bool dm_renderer_create_compute_pipeline(dm_context *context, dm_handle *handle);
