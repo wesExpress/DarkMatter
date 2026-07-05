@@ -50,7 +50,8 @@ typedef enum dm_resource_type_t
 {
     DM_RESOURCE_TYPE_INVALID,
     DM_RESOURCE_TYPE_RENDER_TARGET,
-    DM_RESOURCE_TYPE_DESCRIPTOR_HEAP,
+    DM_RESOURCE_TYPE_RESOURCE_DESCRIPTOR_HEAP,
+    DM_RESOURCE_TYPE_SAMPLER_DESCRIPTOR_HEAP,
     DM_RESOURCE_TYPE_BUFFER,
     DM_RESOURCE_TYPE_TEXTURE2D_SAMPLED,
     DM_RESOURCE_TYPE_TEXTURE2D_STORAGE,
@@ -168,18 +169,15 @@ typedef struct dm_render_target_desc_t
 /******************
  * DESCRIPTOR HEAP
  *******************/
-typedef enum dm_descriptor_heap_type_
+typedef struct dm_resource_descriptor_heap_desc_t
 {
-    DM_DESCRIPTOR_HEAP_TYPE_INVALID,
-    DM_DESCRIPTOR_HEAP_TYPE_RESOURCE,
-    DM_DESCRIPTOR_HEAP_TYPE_SAMPLER
-} dm_descriptor_heap_type;
+    u32 buffer_count, texture_count; 
+} dm_resource_descriptor_heap_desc;
 
-typedef struct dm_descriptor_heap_desc_t
+typedef struct dm_sampler_descriptor_heap_desc_t
 {
-    dm_descriptor_heap_type type;
-    u32 buffer_count, texture_count, sampler_count; 
-} dm_descriptor_heap_desc;
+    u32 sampler_count;
+} dm_sampler_descriptor_heap_desc;
 
 /************
  * TEXTURE2D
@@ -233,6 +231,14 @@ typedef struct dm_buffer_desc_t
     dm_buffer_reside reside;
     void* data; // must be long-lasting so it does not decay before creating buffer
 } dm_buffer_desc;
+
+/**********
+ * SAMPLER
+ ***********/
+typedef struct dm_sampler_desc_t
+{
+    int d;
+} dm_sampler_desc;
 
 /**********
  * CONTEXT
@@ -297,12 +303,14 @@ void* dm_read_bytes(const char *path, size_t *size);
 bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc desc, dm_handle *handle);
 
 bool dm_renderer_create_render_target(dm_context *context, dm_render_target_desc desc, dm_handle *handle);
-bool dm_renderer_create_descriptor_heap(dm_context *context, dm_descriptor_heap_desc desc, dm_handle *handle);
+bool dm_renderer_create_resource_descriptor_heap(dm_context *context, dm_resource_descriptor_heap_desc desc, dm_handle *handle);
+bool dm_renderer_create_sampler_descriptor_heap(dm_context *context, dm_sampler_descriptor_heap_desc desc, dm_handle *handle);
 bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_handle *handle);
 bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_handle *handle);
+bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_handle *handle);
 
 bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle heap, dm_handle *resources[], u32 count);
-bool dm_renderer_write_descriptor_heap(dm_context * context, dm_handle heap);
+bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_handle heap, dm_handle *samplers[], u32 count);
 u64 dm_renderer_get_buffer_address(dm_context *context, dm_handle handle);
 
 bool dm_renderer_create_compute_pipeline(dm_context *context, dm_handle *handle);
@@ -310,7 +318,8 @@ bool dm_renderer_create_compute_pipeline(dm_context *context, dm_handle *handle)
 // commands
 void dm_render_command_begin_rendering(dm_context *context, dm_handle handle, float r, float g, float b, float a, float d);
 void dm_render_command_end_rendering(dm_context *context, dm_handle handle);
-void dm_render_command_bind_descriptor_heap(dm_context *context, dm_handle handle);
+void dm_render_command_bind_resource_descriptor_heap(dm_context *context, dm_handle handle);
+void dm_render_command_bind_sampler_descriptor_heap(dm_context *context, dm_handle handle);
 void dm_render_command_bind_pipeline(dm_context *context, dm_handle handle);
 void dm_render_command_bind_index_buffer(dm_context *context, dm_handle handle, size_t offset);
 void dm_render_command_push_constants(dm_context *context, dm_handle handle);
