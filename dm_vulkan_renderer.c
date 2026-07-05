@@ -180,10 +180,6 @@ typedef struct dm_vulkan_renderer_t
 
     dm_vulkan_sampler_descriptor_heap sdhs[DM_MAX_DESCRIPTOR_HEAPS * DM_FRAMES_IN_FLIGHT];
     u32 sdh_count;
-
-#ifdef DM_DEBUG
-    u32 alloc_count;
-#endif
 } dm_vulkan_renderer;
 
 #ifdef DM_DEBUG
@@ -1045,10 +1041,6 @@ bool dm_renderer_init(dm_context* context)
     renderer->timeline_semaphore = timeline_semaphore;
     renderer->timeline_value = timeline_value;
 
-#ifdef DM_DEBUG
-    renderer->alloc_count++;
-#endif
-
     return true;
 }
 
@@ -1073,9 +1065,6 @@ void dm_renderer_shutdown(dm_context* context)
 
         vmaUnmapMemory(renderer->allocator, heap.allocation);
         vmaDestroyBuffer(renderer->allocator, heap.buffer, heap.allocation);
-#ifdef DM_DEBUG
-        renderer->alloc_count--;
-#endif
     }
     for(u32 i=0; i<renderer->sdh_count; i++)
     {
@@ -1083,9 +1072,6 @@ void dm_renderer_shutdown(dm_context* context)
 
         vmaUnmapMemory(renderer->allocator, heap.allocation);
         vmaDestroyBuffer(renderer->allocator, heap.buffer, heap.allocation);
-#ifdef DM_DEBUG
-        renderer->alloc_count--;
-#endif
     }
 
     for(u32 i=0; i<renderer->buffer_count; i++)
@@ -1093,9 +1079,6 @@ void dm_renderer_shutdown(dm_context* context)
         dm_vulkan_buffer buffer = renderer->buffers[i];
 
         vmaDestroyBuffer(renderer->allocator, buffer.buffer, buffer.allocation);
-#ifdef DM_DEBUG
-        renderer->alloc_count--;
-#endif
         if(buffer.view) vkDestroyBufferView(gpu.device, buffer.view, NULL);
     }
 
@@ -1105,9 +1088,6 @@ void dm_renderer_shutdown(dm_context* context)
         dm_vulkan_buffer buffer = renderer->buffers[image.buffer_index];
 
         vmaDestroyImage(renderer->allocator, image.image, image.allocation);
-#ifdef DM_DEBUG
-        renderer->alloc_count--;
-#endif
     }
 
     vkDestroyCommandPool(gpu.device, renderer->single_use_pool, NULL);
@@ -1118,16 +1098,10 @@ void dm_renderer_shutdown(dm_context* context)
     }
 
     dm_vulkan_destroy_swapchain(&renderer->swapchain, gpu, renderer->allocator);
-#ifdef DM_DEBUG
-    renderer->alloc_count--;
-#endif
 
     vkDestroySemaphore(gpu.device, renderer->timeline_semaphore, NULL);
 
     vkDestroySurfaceKHR(renderer->instance, surface.surface, NULL);
-#ifdef DM_DEBUG
-    assert(renderer->alloc_count==0);
-#endif
     vmaDestroyAllocator(renderer->allocator);
     vkDestroyDevice(gpu.device, NULL);
     vkDestroyInstance(renderer->instance, NULL);
@@ -1314,6 +1288,42 @@ VkShaderModule dm_vulkan_create_shader_module(dm_vulkan_gpu gpu, const char *pat
     return module;
 }
 
+VkBlendOp dm_convert_blend_op(dm_blend_op op)
+{
+    switch(op)
+    {
+        default:
+            LOG_WARN("Unknown/unsupported blend op");
+            LOG_WARN("Returning VK_BLEND_OP_ADD");
+        case DM_BLEND_OP_ADD:
+            return VK_BLEND_OP_ADD;
+        case DM_BLEND_OP_SUBTRACT:
+            return VK_BLEND_OP_SUBTRACT;
+        case DM_BLEND_OP_MIN:
+            return VK_BLEND_OP_MIN;
+        case DM_BLEND_OP_MAX:
+            return VK_BLEND_OP_MAX;
+    }
+}
+
+VkBlendFactor dm_convert_blend_factor(dm_blend_factor factor)
+{
+    switch(factor)
+    {
+        default:
+            LOG_WARN("Unknown/unsupported blend factor");
+            LOG_WARN("Returning VK_BLEND_FACTOR_ZERO");
+        case DM_BLEND_FACTOR_ZERO:
+            return VK_BLEND_FACTOR_ZERO;
+        case DM_BLEND_FACTOR_ONE:
+            return VK_BLEND_FACTOR_ONE;
+        case DM_BLEND_FACTOR_SRC_ALPHA:
+            return VK_BLEND_FACTOR_SRC_ALPHA;
+        case DM_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
+            return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    }
+}
+
 bool dm_renderer_create_raster_pipeline(dm_context* context, dm_raster_pipe_desc desc, dm_handle* handle)
 {
     dm_vulkan_renderer* renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
@@ -1390,11 +1400,17 @@ bool dm_renderer_create_raster_pipeline(dm_context* context, dm_raster_pipe_desc
     };
 
     VkPipelineColorBlendAttachmentState color_attachment_info = {
-        .blendEnable=VK_FALSE,
         .colorWriteMask=VK_COLOR_COMPONENT_R_BIT | 
             VK_COLOR_COMPONENT_G_BIT | 
             VK_COLOR_COMPONENT_B_BIT |
-            VK_COLOR_COMPONENT_A_BIT
+            VK_COLOR_COMPONENT_A_BIT,
+        .blendEnable=VK_TRUE,
+        .colorBlendOp=dm_convert_blend_op(desc.color_blend_op),
+        .srcColorBlendFactor=dm_convert_blend_factor(desc.color_src_factor),
+        .dstColorBlendFactor=dm_convert_blend_factor(desc.color_dst_factor),
+        .alphaBlendOp=dm_convert_blend_op(desc.alpha_blend_op),
+        .srcAlphaBlendFactor=dm_convert_blend_factor(desc.alpha_src_factor),
+        .dstAlphaBlendFactor=dm_convert_blend_factor(desc.alpha_dst_factor)
     };
 
     VkPipelineColorBlendStateCreateInfo color_blend_info = {
@@ -1570,10 +1586,6 @@ bool dm_renderer_create_resource_descriptor_heap(dm_context *context, dm_resourc
 
     heap.size = size;
 
-#ifdef DM_DEBUG
-    renderer->alloc_count++;
-#endif
-
     //
     renderer->rdhs[renderer->rdh_count] = heap;
     handle->r_type = DM_RESOURCE_TYPE_RESOURCE_DESCRIPTOR_HEAP;
@@ -1606,10 +1618,6 @@ bool dm_renderer_create_sampler_descriptor_heap(dm_context *context, dm_sampler_
     heap.current = heap.start;
 
     heap.size = size;
-
-#ifdef DM_DEBUG
-    renderer->alloc_count++;
-#endif
 
     //
     renderer->sdhs[renderer->sdh_count] = heap;
@@ -1743,7 +1751,6 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_hand
     char debug_name[512];
     sprintf(debug_name, "Buffer %u", renderer->buffer_count);
     vmaSetAllocationName(renderer->allocator, buffer.allocation, debug_name);
-    renderer->alloc_count++;
 #endif
 
     if(desc.reside==DM_BUFFER_RESIDE_CPU)
@@ -1836,7 +1843,6 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
     char debug_name[512];
     sprintf(debug_name, "Image %u", renderer->image_count);
     vmaSetAllocationName(renderer->allocator, image.allocation, debug_name);
-    renderer->alloc_count++;
 #endif
 
     dm_vulkan_buffer staging_buffer = { 0 };
@@ -1861,7 +1867,6 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 #ifdef DM_DEBUG
     sprintf(debug_name, "Buffer %u", renderer->buffer_count);
     vmaSetAllocationName(renderer->allocator, staging_buffer.allocation, debug_name);
-    renderer->alloc_count++;
 #endif
 
     renderer->buffers[renderer->buffer_count]= staging_buffer;

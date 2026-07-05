@@ -111,11 +111,31 @@ typedef struct dm_raster_shader_t
     char entry[512];
 } dm_raster_shader;
 
+typedef enum dm_blend_op_t
+{
+    DM_BLEND_OP_INVALID,
+    DM_BLEND_OP_ADD,
+    DM_BLEND_OP_SUBTRACT,
+    DM_BLEND_OP_MIN,
+    DM_BLEND_OP_MAX
+} dm_blend_op;
+
+typedef enum dm_blend_factor_t
+{
+    DM_BLEND_FACTOR_INVALID,
+    DM_BLEND_FACTOR_ZERO,
+    DM_BLEND_FACTOR_ONE,
+    DM_BLEND_FACTOR_SRC_ALPHA,
+    DM_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
+} dm_blend_factor;
+
 typedef struct dm_raster_pipe_desc_t
 {
     dm_raster_shader shaders[DM_RASTER_SHADER_STAGE_MAX];
 
-    size_t push_constant_size;
+    dm_blend_op color_blend_op, alpha_blend_op;
+    dm_blend_factor color_src_factor, color_dst_factor;
+    dm_blend_factor alpha_src_factor, alpha_dst_factor;
 } dm_raster_pipe_desc;
 
 /****************
