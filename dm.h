@@ -331,14 +331,12 @@ void* dm_read_bytes(const char *path, size_t *size);
 bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc desc, dm_handle *handle);
 
 bool dm_renderer_create_render_target(dm_context *context, dm_render_target_desc desc, dm_handle *handle);
-bool dm_renderer_create_resource_descriptor_heap(dm_context *context, dm_resource_descriptor_heap_desc desc, dm_handle *handle);
-bool dm_renderer_create_sampler_descriptor_heap(dm_context *context, dm_sampler_descriptor_heap_desc desc, dm_handle *handle);
 bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_handle *handle);
 bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_handle *handle);
 bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_handle *handle);
 
-bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle heap, dm_handle *resources[], u32 count);
-bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_handle heap, dm_handle *samplers[], u32 count);
+bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resources[], u32 count);
+bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_handle *samplers[], u32 count);
 u64 dm_renderer_get_buffer_address(dm_context *context, dm_handle handle);
 
 bool dm_renderer_create_compute_pipeline(dm_context *context, dm_handle *handle);
@@ -346,8 +344,6 @@ bool dm_renderer_create_compute_pipeline(dm_context *context, dm_handle *handle)
 // commands
 void dm_render_command_begin_rendering(dm_context *context, dm_handle handle, float r, float g, float b, float a, float d);
 void dm_render_command_end_rendering(dm_context *context, dm_handle handle);
-void dm_render_command_bind_resource_descriptor_heap(dm_context *context, dm_handle handle);
-void dm_render_command_bind_sampler_descriptor_heap(dm_context *context, dm_handle handle);
 void dm_render_command_bind_pipeline(dm_context *context, dm_handle handle);
 void dm_render_command_bind_index_buffer(dm_context *context, dm_handle handle, size_t offset);
 void dm_render_command_push_constants(dm_context *context, dm_handle handle);

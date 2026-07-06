@@ -159,6 +159,9 @@ typedef struct dm_vulkan_renderer_t
     dm_vulkan_swapchain  swapchain;
     dm_vulkan_frame_data frame_data[DM_FRAMES_IN_FLIGHT];
 
+    dm_vulkan_resource_descriptor_heap resource_heap;
+    dm_vulkan_sampler_descriptor_heap  sampler_heap;
+
     VkCommandPool single_use_pool;
 
     VkSemaphore timeline_semaphore;
@@ -168,19 +171,13 @@ typedef struct dm_vulkan_renderer_t
 
     // resources
     dm_vulkan_image images[DM_MAX_TEXTURES * DM_FRAMES_IN_FLIGHT];
-    dm_vulkan_buffer buffers[DM_MAX_BUFFERS * DM_FRAMES_IN_FLIGHT]; // 3 = CPU,GPU,texture
+    dm_vulkan_buffer buffers[DM_MAX_BUFFERS * DM_FRAMES_IN_FLIGHT]; 
     dm_vulkan_sampler samplers[DM_MAX_SAMPLERS * DM_FRAMES_IN_FLIGHT];
     u32 image_count, buffer_count, sampler_count;
 
     dm_vulkan_pipeline      pipes[DM_MAX_PIPELINES];
     dm_vulkan_render_target rts[DM_MAX_TEXTURES];
     u32 pipe_count, rt_count;
-
-    dm_vulkan_resource_descriptor_heap rdhs[DM_MAX_DESCRIPTOR_HEAPS * DM_FRAMES_IN_FLIGHT];
-    u32 rdh_count;
-
-    dm_vulkan_sampler_descriptor_heap sdhs[DM_MAX_DESCRIPTOR_HEAPS * DM_FRAMES_IN_FLIGHT];
-    u32 sdh_count;
 } dm_vulkan_renderer;
 
 #ifdef DM_DEBUG
@@ -209,6 +206,36 @@ VKAPI_ATTR VkBool32 VKAPI_CALL dm_vk_debug_callback(
     }
 }
 #endif
+
+bool dm_vulkan_create_buffer(VmaAllocator allocator, VkBufferUsageFlags usage, VmaAllocationCreateFlagBits alloc_flags, VmaMemoryUsage alloc_usage, VkBuffer *buffer, VmaAllocation *allocation, size_t size)
+{
+    VkBufferCreateInfo buffer_info = {
+        .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+        .size=size,
+        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
+        .usage=usage
+    };
+
+    VmaAllocationCreateInfo alloc_info = {
+        .flags=alloc_flags,
+        .usage=alloc_usage
+    };
+
+    if(dm_vulkan_decode_vr(vmaCreateBuffer(allocator, &buffer_info, &alloc_info, buffer, allocation, NULL))) return true;
+
+    LOG_ERROR("vmaCreateBuffer failed");
+    return false;
+}
+
+u64 dm_vulkan_get_buffer_address(VkDevice device, VkBuffer buffer)
+{
+    VkBufferDeviceAddressInfo info = {
+        .sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
+        .buffer=buffer
+    };
+
+    return vkGetBufferDeviceAddress(device, &info);
+}
 
 VkInstance dm_vulkan_create_instance()
 {
@@ -968,6 +995,100 @@ VkSemaphore dm_vulkan_create_timeline_semaphore(dm_vulkan_gpu gpu, u64 value)
     return semaphore;
 }
 
+dm_vulkan_resource_descriptor_heap dm_vulkan_create_resource_heap(VkDevice device, VmaAllocator allocator, VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props)
+{
+    dm_vulkan_resource_descriptor_heap heap = { 0 };
+
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    void *start = NULL;
+
+    size_t size = 0;
+    size_t buffer_size, image_offset, image_size;
+
+    buffer_size = DM_ALIGN(heap_props.bufferDescriptorSize, heap_props.bufferDescriptorAlignment);
+    image_offset = DM_ALIGN((heap.buffer_size * DM_MAX_BUFFERS), heap_props.imageDescriptorSize);
+    image_size = DM_ALIGN(heap_props.imageDescriptorSize, heap_props.imageDescriptorAlignment);
+    LOG_DEBUG("Buffer descriptor size: %zu", buffer_size);
+    LOG_DEBUG("Buffer descriptor heap alignment: %zu", heap_props.bufferDescriptorAlignment);
+    LOG_DEBUG("Image descriptor size: %zu", image_size);
+    LOG_DEBUG("Image descriptor heap alignment: %zu", heap_props.imageDescriptorAlignment);
+    LOG_DEBUG("Image offset: %zu", image_offset);
+
+    size += image_offset;
+    size += DM_MAX_TEXTURES * image_size;
+    size += heap_props.minResourceHeapReservedRange;
+    size = DM_ALIGN(size, heap_props.resourceHeapAlignment);
+
+    VkBufferUsageFlags usage = VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT;
+    usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+    if(!dm_vulkan_create_buffer(allocator, usage, VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, &buffer, &allocation, size)) return heap;
+
+    if(!dm_vulkan_decode_vr(vmaMapMemory(allocator, allocation, &start)))
+    {
+        LOG_ERROR("vmaMapMemory failed");
+        return heap;
+    }
+
+    //
+    heap.buffer       = buffer;
+    heap.allocation   = allocation;
+    heap.start        = start;
+    heap.current      = heap.start;
+    heap.size         = size;
+    heap.buffer_size  = buffer_size;
+    heap.image_size   = image_size;
+    heap.image_offset = image_offset;
+
+    return heap;
+}
+
+dm_vulkan_sampler_descriptor_heap dm_vulkan_create_sampler_descriptor_heap(VkDevice device, VmaAllocator allocator, VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props)
+{
+    dm_vulkan_sampler_descriptor_heap heap = { 0 };
+
+    VkBuffer buffer = VK_NULL_HANDLE;
+    VmaAllocation allocation = VK_NULL_HANDLE;
+    void *start = NULL;
+
+    size_t size = 0;
+    size_t sampler_size;
+
+    sampler_size = DM_ALIGN(heap_props.samplerDescriptorSize, heap_props.samplerDescriptorAlignment);
+
+    size += sampler_size * DM_MAX_SAMPLERS;
+    size += heap_props.minSamplerHeapReservedRange;
+    size = DM_ALIGN(size, heap_props.samplerHeapAlignment);
+    LOG_DEBUG("Sampler descriptor size: %u", sampler_size);
+    LOG_DEBUG("Sampler descriptor heap alignment: %u", heap_props.samplerHeapAlignment);
+
+    assert(size);
+
+    VkBufferUsageFlags usage = VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT;
+    usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+
+    if(!dm_vulkan_create_buffer(allocator, usage, VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, &buffer, &allocation, size)) return heap;
+
+    if(!dm_vulkan_decode_vr(vmaMapMemory(allocator, allocation, &start)))
+    {
+        LOG_ERROR("vmaMapMemory failed");
+        return heap;
+    }
+
+    //
+    heap.buffer       = buffer;
+    heap.allocation   = allocation;
+    heap.start        = start;
+    heap.current      = heap.start;
+    heap.size         = size;
+    heap.sampler_size = sampler_size;
+
+    return heap;
+}
+
 //
 bool dm_renderer_init(dm_context* context)
 {
@@ -980,6 +1101,8 @@ bool dm_renderer_init(dm_context* context)
     dm_vulkan_surface surface = { 0 };
     dm_vulkan_swapchain swapchain = { 0 };
     dm_vulkan_frame_data frame_data[DM_FRAMES_IN_FLIGHT] = { 0 };
+    dm_vulkan_resource_descriptor_heap resource_heap = { 0 };
+    dm_vulkan_sampler_descriptor_heap  sampler_heap = { 0 };
 
     VkCommandPool single_use_pool    = VK_NULL_HANDLE;
     VkSemaphore   timeline_semaphore = VK_NULL_HANDLE;
@@ -1026,6 +1149,12 @@ bool dm_renderer_init(dm_context* context)
     timeline_semaphore = dm_vulkan_create_timeline_semaphore(gpu, timeline_value);
     if(timeline_semaphore == VK_NULL_HANDLE) { LOG_ERROR("Could not create timeline semaphore."); return false; }
 
+    // resource and smapler heaps
+    resource_heap = dm_vulkan_create_resource_heap(gpu.device, allocator, gpu.heap_props);
+    if(resource_heap.buffer == VK_NULL_HANDLE) { LOG_ERROR("Could not create resource descriptor heap"); return false; }
+    sampler_heap = dm_vulkan_create_sampler_descriptor_heap(gpu.device, allocator, gpu.heap_props);
+    if(sampler_heap.buffer == VK_NULL_HANDLE) { LOG_ERROR("Could not create sampler descriptor heap"); return false; }
+
     // assign
     dm_vulkan_renderer* renderer = dm_arena_alloc(&context->arena, sizeof(dm_vulkan_renderer), &context->renderer.offset);
 
@@ -1041,6 +1170,8 @@ bool dm_renderer_init(dm_context* context)
     renderer->single_use_pool = single_use_pool;
     renderer->timeline_semaphore = timeline_semaphore;
     renderer->timeline_value = timeline_value;
+    renderer->resource_heap = resource_heap;
+    renderer->sampler_heap = sampler_heap;
 
     return true;
 }
@@ -1060,21 +1191,6 @@ void dm_renderer_shutdown(dm_context* context)
         vkDestroyPipeline(gpu.device, renderer->pipes[i].pipeline, NULL);
     }
 
-    for(u32 i=0; i<renderer->rdh_count; i++)
-    {
-        dm_vulkan_resource_descriptor_heap heap = renderer->rdhs[i];
-
-        vmaUnmapMemory(renderer->allocator, heap.allocation);
-        vmaDestroyBuffer(renderer->allocator, heap.buffer, heap.allocation);
-    }
-    for(u32 i=0; i<renderer->sdh_count; i++)
-    {
-        dm_vulkan_sampler_descriptor_heap heap = renderer->sdhs[i];
-
-        vmaUnmapMemory(renderer->allocator, heap.allocation);
-        vmaDestroyBuffer(renderer->allocator, heap.buffer, heap.allocation);
-    }
-
     for(u32 i=0; i<renderer->buffer_count; i++)
     {
         dm_vulkan_buffer buffer = renderer->buffers[i];
@@ -1090,6 +1206,11 @@ void dm_renderer_shutdown(dm_context* context)
 
         vmaDestroyImage(renderer->allocator, image.image, image.allocation);
     }
+
+    vmaUnmapMemory(renderer->allocator, renderer->resource_heap.allocation);
+    vmaUnmapMemory(renderer->allocator, renderer->sampler_heap.allocation);
+    vmaDestroyBuffer(renderer->allocator, renderer->resource_heap.buffer, renderer->resource_heap.allocation);
+    vmaDestroyBuffer(renderer->allocator, renderer->sampler_heap.buffer, renderer->sampler_heap.allocation);
 
     vkDestroyCommandPool(gpu.device, renderer->single_use_pool, NULL);
     for(u32 i=0; i<DM_FRAMES_IN_FLIGHT; i++)
@@ -1148,6 +1269,29 @@ bool dm_renderer_begin_frame(dm_context* context)
         .flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
     };
     vkBeginCommandBuffer(frame_data.gfx_cmd, &cmd_begin);
+
+    // bind resource and sampler heaps
+    dm_vulkan_resource_descriptor_heap resource_heap = renderer->resource_heap;
+    dm_vulkan_sampler_descriptor_heap  sampler_heap  = renderer->sampler_heap;
+
+    VkBindHeapInfoEXT resource_info = {
+        .sType=VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+        .heapRange.size=resource_heap.size,
+        .heapRange.address=dm_vulkan_get_buffer_address(renderer->gpu.device, resource_heap.buffer),
+        .reservedRangeOffset=resource_heap.size - renderer->gpu.heap_props.minResourceHeapReservedRange,
+        .reservedRangeSize=renderer->gpu.heap_props.minResourceHeapReservedRange
+    };
+
+    VkBindHeapInfoEXT sampler_info = {
+        .sType=VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
+        .heapRange.size=sampler_heap.size,
+        .heapRange.address=dm_vulkan_get_buffer_address(renderer->gpu.device, sampler_heap.buffer),
+        .reservedRangeOffset=sampler_heap.size - renderer->gpu.heap_props.minSamplerHeapReservedRange,
+        .reservedRangeSize=renderer->gpu.heap_props.minSamplerHeapReservedRange
+    };
+
+    vkCmdBindResourceHeapEXT(frame_data.gfx_cmd, &resource_info);
+    vkCmdBindSamplerHeapEXT(frame_data.gfx_cmd, &sampler_info);
 
     //
     renderer->swapchain = swapchain;
@@ -1556,78 +1700,6 @@ bool dm_vulkan_create_descriptor_heap(VmaAllocator allocator, size_t size, VkBuf
     return true;
 }
 
-bool dm_renderer_create_resource_descriptor_heap(dm_context *context, dm_resource_descriptor_heap_desc desc, dm_handle *handle)
-{
-    dm_vulkan_renderer* renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
-
-    dm_vulkan_resource_descriptor_heap heap = { 0 };
-
-    VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props = renderer->gpu.heap_props;
-
-    size_t size = 0;
-
-    heap.buffer_size = DM_ALIGN(heap_props.bufferDescriptorSize, heap_props.bufferDescriptorAlignment);
-    //heap.image_offset = DM_ALIGN((heap.buffer_size * desc.buffer_count), heap_props.imageDescriptorAlignment);
-    heap.image_offset = DM_ALIGN((heap.buffer_size * desc.buffer_count), heap_props.imageDescriptorSize);
-    heap.image_size = DM_ALIGN(heap_props.imageDescriptorSize, heap_props.imageDescriptorAlignment);
-    LOG_DEBUG("Buffer descriptor size: %zu", heap.buffer_size);
-    LOG_DEBUG("Buffer descriptor heap alignment: %zu", heap_props.bufferDescriptorAlignment);
-    LOG_DEBUG("Image descriptor size: %zu", heap.image_size);
-    LOG_DEBUG("Image descriptor heap alignment: %zu", heap_props.imageDescriptorAlignment);
-    LOG_DEBUG("Image offset: %zu", heap.image_offset);
-
-    size += heap.image_offset;
-    size += desc.texture_count * heap.image_size;
-    size += heap_props.minResourceHeapReservedRange;
-    size = DM_ALIGN(size, heap_props.resourceHeapAlignment);
-
-    assert(size);
-
-    if(!dm_vulkan_create_descriptor_heap(renderer->allocator, size, &heap.buffer, &heap.allocation, &heap.start)) return false;
-    heap.current = heap.start;
-
-    heap.size = size;
-
-    //
-    renderer->rdhs[renderer->rdh_count] = heap;
-    handle->r_type = DM_RESOURCE_TYPE_RESOURCE_DESCRIPTOR_HEAP;
-    handle->index  = renderer->rdh_count++;
-
-    return true;
-}
-
-bool dm_renderer_create_sampler_descriptor_heap(dm_context *context, dm_sampler_descriptor_heap_desc desc, dm_handle *handle)
-{
-    dm_vulkan_renderer* renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
-
-    dm_vulkan_sampler_descriptor_heap heap = { 0 };
-
-    VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props = renderer->gpu.heap_props;
-
-    size_t size = 0;
-
-    heap.sampler_size = DM_ALIGN(heap_props.samplerDescriptorSize, heap_props.samplerDescriptorAlignment);
-
-    size += heap.sampler_size * desc.sampler_count;
-    size += heap_props.minSamplerHeapReservedRange;
-    size = DM_ALIGN(size, heap_props.samplerHeapAlignment);
-    LOG_DEBUG("Sampler descriptor size: %u", heap.sampler_size);
-    LOG_DEBUG("Sampler descriptor heap alignment: %u", heap_props.samplerHeapAlignment);
-
-    assert(size);
-
-    if(!dm_vulkan_create_descriptor_heap(renderer->allocator, size, &heap.buffer, &heap.allocation, &heap.start)) return false;
-    heap.current = heap.start;
-
-    heap.size = size;
-
-    //
-    renderer->sdhs[renderer->sdh_count] = heap;
-    handle->r_type = DM_RESOURCE_TYPE_SAMPLER_DESCRIPTOR_HEAP;
-    handle->index  = renderer->sdh_count++;
-
-    return true;
-}
 
 VkCommandBuffer dm_vulkan_one_time_cmd(VkDevice device, VkCommandPool pool)
 {
@@ -1685,25 +1757,6 @@ bool dm_vulkan_copy_to_buffer(VmaAllocator allocator, dm_vulkan_buffer buffer, v
     return true;
 }
 
-bool dm_vulkan_create_buffer(VmaAllocator allocator, VkBufferUsageFlags usage, VmaAllocatorCreateFlagBits alloc_flags, VmaMemoryUsage alloc_usage, VkBuffer *buffer, VmaAllocation *allocation, size_t size)
-{
-    VkBufferCreateInfo buffer_info = {
-        .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .size=size,
-        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
-        .usage=usage
-    };
-
-    VmaAllocationCreateInfo alloc_info = {
-        .flags=alloc_flags,
-        .usage=alloc_usage
-    };
-
-    if(dm_vulkan_decode_vr(vmaCreateBuffer(allocator, &buffer_info, &alloc_info, buffer, allocation, NULL))) return true;
-
-    LOG_ERROR("vmaCreateBuffer failed");
-    return false;
-}
 
 bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_handle *handle)
 {
@@ -1781,15 +1834,6 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_hand
     return true;
 }
 
-u64 dm_vulkan_get_buffer_address(VkDevice device, VkBuffer buffer)
-{
-    VkBufferDeviceAddressInfo info = {
-        .sType=VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer=buffer
-    };
-
-    return vkGetBufferDeviceAddress(device, &info);
-}
 
 u64 dm_renderer_get_buffer_address(dm_context *context, dm_handle handle)
 {
@@ -2007,24 +2051,17 @@ bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_ha
     return true;
 }
 
-bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle heap, dm_handle *resources[], u32 count)
+bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resources[], u32 count)
 {
     dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
     dm_vulkan_gpu gpu = renderer->gpu;
-
-    if(heap.r_type != DM_RESOURCE_TYPE_RESOURCE_DESCRIPTOR_HEAP)
-    {
-        LOG_ERROR("Invalid descriptor heap");
-        return false;
-    }
+    dm_vulkan_resource_descriptor_heap *resource_heap = &renderer->resource_heap;
 
     VkResourceDescriptorInfoEXT resource_info[DM_VULKAN_MAX_DESCRIPTORS] = { 0 };
     VkHostAddressRangeEXT       host_info[DM_VULKAN_MAX_DESCRIPTORS]     = { 0 };
     VkDeviceAddressRangeKHR     addresses[DM_VULKAN_MAX_DESCRIPTORS]     = { 0 };
     VkImageDescriptorInfoEXT    image_info[DM_VULKAN_MAX_DESCRIPTORS]    = { 0 };
     VkImageViewCreateInfo       view_info[DM_VULKAN_MAX_DESCRIPTORS]     = { 0 };
-
-    dm_vulkan_resource_descriptor_heap *resource_heap = &renderer->rdhs[heap.index];
 
     u32 buffer_count = 0;
     u32 image_count  = 0;
@@ -2105,16 +2142,14 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle heap, d
         }
     }
 
-
     return dm_vulkan_decode_vr(vkWriteResourceDescriptorsEXT(renderer->gpu.device, count, resource_info, host_info));
 }
 
-bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_handle heap, dm_handle **samplers, u32 count)
+bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_handle **samplers, u32 count)
 {
     dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
     dm_vulkan_gpu gpu = renderer->gpu;
-
-    dm_vulkan_sampler_descriptor_heap *sampler_heap = &renderer->sdhs[heap.index];
+    dm_vulkan_sampler_descriptor_heap *sampler_heap = &renderer->sampler_heap;
 
     VkSamplerCreateInfo   infos[DM_MAX_SAMPLERS]               = { 0 };
     VkHostAddressRangeEXT host_info[DM_VULKAN_MAX_DESCRIPTORS] = { 0 };
@@ -2250,42 +2285,6 @@ void dm_render_command_end_rendering(dm_context *context, dm_handle handle)
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     vkCmdEndRendering(frame_data.gfx_cmd);
-}
-
-void dm_render_command_bind_resource_descriptor_heap(dm_context *context, dm_handle handle)
-{
-    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
-    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
-
-    dm_vulkan_resource_descriptor_heap heap = renderer->rdhs[handle.index];
-
-    VkBindHeapInfoEXT info = {
-        .sType=VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-        .heapRange.size=heap.size,
-        .heapRange.address=dm_vulkan_get_buffer_address(renderer->gpu.device, heap.buffer),
-        .reservedRangeOffset=heap.size - renderer->gpu.heap_props.minResourceHeapReservedRange,
-        .reservedRangeSize=renderer->gpu.heap_props.minResourceHeapReservedRange
-    };
-
-    vkCmdBindResourceHeapEXT(frame_data.gfx_cmd, &info);
-}
-
-void dm_render_command_bind_sampler_descriptor_heap(dm_context *context, dm_handle handle)
-{
-    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
-    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
-
-    dm_vulkan_sampler_descriptor_heap heap = renderer->sdhs[handle.index];
-
-    VkBindHeapInfoEXT info = {
-        .sType=VK_STRUCTURE_TYPE_BIND_HEAP_INFO_EXT,
-        .heapRange.size=heap.size,
-        .heapRange.address=dm_vulkan_get_buffer_address(renderer->gpu.device, heap.buffer),
-        .reservedRangeOffset=heap.size - renderer->gpu.heap_props.minSamplerHeapReservedRange,
-        .reservedRangeSize=renderer->gpu.heap_props.minSamplerHeapReservedRange
-    };
-
-    vkCmdBindSamplerHeapEXT(frame_data.gfx_cmd, &info);
 }
 
 void dm_render_command_bind_pipeline(dm_context *context, dm_handle handle)
