@@ -91,11 +91,15 @@ typedef struct dm_handle_t
 
 #define DM_MAX_DESCRIPTOR_HEAPS (DM_MAX_PIPES * 3)
 
-#define DM_MAX_TEXTURES 100
-#define DM_MAX_BUFFERS  100
+// these are defined PER FRAME
+#define DM_MAX_TEXTURES 10
+#define DM_MAX_BUFFERS  (10 * 2 + DM_MAX_TEXTURES) // CPU,GPU and textures need buffers
 #define DM_MAX_SAMPLERS 10
 #ifdef DM_RAY_TRACE
 #define DM_MAX_ACCELS   10
+#define DM_MAX_RESOURCES (DM_MAX_TEXTURES + DM_MAX_BUFFERS + DM_MAX_SAMPLERS + DM_MAX_ACCELS)
+#else
+#define DM_MAX_RESOURCES (DM_MAX_TEXTURES + DM_MAX_BUFFERS + DM_MAX_SAMPLERS)
 #endif
 
 /**************
@@ -136,6 +140,7 @@ typedef struct dm_raster_pipe_desc_t
 {
     dm_raster_shader shaders[DM_RASTER_SHADER_STAGE_MAX];
 
+    bool blend; // following are ignored if false
     dm_blend_op color_blend_op, alpha_blend_op;
     dm_blend_factor color_src_factor, color_dst_factor;
     dm_blend_factor alpha_src_factor, alpha_dst_factor;

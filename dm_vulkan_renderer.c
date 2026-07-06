@@ -167,7 +167,7 @@ typedef struct dm_vulkan_renderer_t
 
     // resources
     dm_vulkan_image images[DM_MAX_TEXTURES * DM_FRAMES_IN_FLIGHT];
-    dm_vulkan_buffer buffers[DM_MAX_BUFFERS * 3 * DM_FRAMES_IN_FLIGHT]; // 3 = CPU,GPU,texture
+    dm_vulkan_buffer buffers[DM_MAX_BUFFERS * DM_FRAMES_IN_FLIGHT]; // 3 = CPU,GPU,texture
     dm_vulkan_sampler samplers[DM_MAX_SAMPLERS * DM_FRAMES_IN_FLIGHT];
     u32 image_count, buffer_count, sampler_count;
 
@@ -1404,13 +1404,13 @@ bool dm_renderer_create_raster_pipeline(dm_context* context, dm_raster_pipe_desc
             VK_COLOR_COMPONENT_G_BIT | 
             VK_COLOR_COMPONENT_B_BIT |
             VK_COLOR_COMPONENT_A_BIT,
-        .blendEnable=VK_TRUE,
-        .colorBlendOp=dm_convert_blend_op(desc.color_blend_op),
-        .srcColorBlendFactor=dm_convert_blend_factor(desc.color_src_factor),
-        .dstColorBlendFactor=dm_convert_blend_factor(desc.color_dst_factor),
-        .alphaBlendOp=dm_convert_blend_op(desc.alpha_blend_op),
-        .srcAlphaBlendFactor=dm_convert_blend_factor(desc.alpha_src_factor),
-        .dstAlphaBlendFactor=dm_convert_blend_factor(desc.alpha_dst_factor)
+        .blendEnable=desc.blend,
+        .colorBlendOp=desc.blend ? dm_convert_blend_op(desc.color_blend_op) : 0,
+        .srcColorBlendFactor=desc.blend ? dm_convert_blend_factor(desc.color_src_factor) : 0,
+        .dstColorBlendFactor=desc.blend ? dm_convert_blend_factor(desc.color_dst_factor) : 0,
+        .alphaBlendOp=desc.blend ? dm_convert_blend_op(desc.alpha_blend_op) : 0,
+        .srcAlphaBlendFactor=desc.blend ? dm_convert_blend_factor(desc.alpha_src_factor) : 0,
+        .dstAlphaBlendFactor=desc.blend ? dm_convert_blend_factor(desc.alpha_dst_factor) : 0
     };
 
     VkPipelineColorBlendStateCreateInfo color_blend_info = {
