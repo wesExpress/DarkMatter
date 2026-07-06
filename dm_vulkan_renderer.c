@@ -171,7 +171,7 @@ typedef struct dm_vulkan_renderer_t
     dm_vulkan_sampler samplers[DM_MAX_SAMPLERS * DM_FRAMES_IN_FLIGHT];
     u32 image_count, buffer_count, sampler_count;
 
-    dm_vulkan_pipeline      pipes[DM_MAX_RASTER_PIPES];
+    dm_vulkan_pipeline      pipes[DM_MAX_PIPELINES];
     dm_vulkan_render_target rts[DM_MAX_TEXTURES];
     u32 pipe_count, rt_count;
 
@@ -2390,11 +2390,14 @@ void dm_render_command_update_texture(dm_context *context, dm_handle handle, voi
     dm_vulkan_submit_one_time_cmd(renderer->gpu.device, renderer->gpu.gfx_queue, renderer->single_use_pool, cmd);
 }
 
+/**********
+ * COMPUTE
+ ***********/
 bool dm_renderer_create_compute_pipeline(dm_context *context, dm_handle *handle)
 {
     dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
 
-    VkPipeline pipeline;
+    dm_vulkan_pipeline pipeline = { 0 };
 
     VkShaderModule module = dm_vulkan_create_shader_module(renderer->gpu, "../../assets/shaders/compute.glsl", "main", shaderc_compute_shader);
 
@@ -2416,7 +2419,7 @@ bool dm_renderer_create_compute_pipeline(dm_context *context, dm_handle *handle)
         .pNext=&flags2
     };
 
-    if(!dm_vulkan_decode_vr(vkCreateComputePipelines(renderer->gpu.device, NULL, 1, &info, NULL, &pipeline)))
+    if(!dm_vulkan_decode_vr(vkCreateComputePipelines(renderer->gpu.device, NULL, 1, &info, NULL, &pipeline.pipeline)))
     {
         LOG_ERROR("vkCreateComputePipelines failed");
         return false;
@@ -2424,7 +2427,30 @@ bool dm_renderer_create_compute_pipeline(dm_context *context, dm_handle *handle)
 
     vkDestroyShaderModule(renderer->gpu.device, module, NULL);
 
+    //
+    renderer->pipes[renderer->pipe_count] = pipeline;
+    handle->p_type = DM_PIPELINE_TYPE_COMPUTE;
+    handle->index  = renderer->pipe_count++;
+
     return true;
+}
+
+void dm_compute_command_bind_pipeline(dm_context *context, dm_handle handle)
+{
+    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+
+    dm_vulkan_pipeline pipeline = renderer->pipes[handle.index];
+
+    vkCmdBindPipeline(frame_data.gfx_cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
+}
+
+void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
+{
+    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+
+    vkCmdDispatch(frame_data.gfx_cmd, x,y,z);
 }
 
 /************

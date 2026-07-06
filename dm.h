@@ -84,6 +84,9 @@ typedef struct dm_handle_t
 #define DM_MAX_COMPUTE_PIPES   DM_MAX_PIPES
 #ifdef DM_RAY_TRACE
 #define DM_MAX_RAY_TRACE_PIPES DM_MAX_PIPES
+#define DM_MAX_PIPELINES (DM_MAX_RASTER_PIPES + DM_MAX_COMPUTE_PIPES + DM_MAX_RAYTRACE_PIPES)
+#else
+#define DM_MAX_PIPELINES (DM_MAX_RASTER_PIPES + DM_MAX_COMPUTE_PIPES)
 #endif
 
 #define DM_MAX_DESCRIPTOR_HEAPS (DM_MAX_PIPES * 3)
@@ -343,13 +346,19 @@ void dm_render_command_bind_sampler_descriptor_heap(dm_context *context, dm_hand
 void dm_render_command_bind_pipeline(dm_context *context, dm_handle handle);
 void dm_render_command_bind_index_buffer(dm_context *context, dm_handle handle, size_t offset);
 void dm_render_command_push_constants(dm_context *context, dm_handle handle);
-void dm_render_command_push_data(dm_context* context, void* data, size_t size);
+void dm_render_command_push_data(dm_context *context, void *data, size_t size);
 void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count);
 
 void dm_render_command_update_buffer(dm_context *context, dm_handle handle, void *data, size_t size);
 void dm_render_command_copy_buffer(dm_context *context, dm_handle src, dm_handle dst);
 
 void dm_render_command_update_texture(dm_context *context, dm_handle handle, void* data, size_t size);
+void dm_render_command_copy_texture(dm_context *context, dm_handle src, dm_handle dst);
+
+// compute commands
+void dm_compute_command_push_data(dm_context *context, void *data, size_t size);
+void dm_compute_command_bind_pipeline(dm_context *context, dm_handle handle);
+void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z);
 
 // macros
 #define DM_ALIGN(VALUE, ALIGNMENT) ((VALUE + ALIGNMENT - 1) & ~(ALIGNMENT - 1))
