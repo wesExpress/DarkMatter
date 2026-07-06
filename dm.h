@@ -315,10 +315,10 @@ void* dm_arena_get_ptr(dm_arena arena, size_t offset);
 
 bool dm_init(dm_context *context, u16 width, u16 height, const char *title, dm_context_flag flags);
 void dm_shutdown(dm_context *context);
-bool dm_is_running(dm_context context);
+bool dm_is_running(dm_context *context);
 void dm_update(dm_context *context);
-bool dm_begin_render(dm_context *context);
-bool dm_end_render(dm_context *context);
+bool dm_render_begin(dm_context *context);
+bool dm_render_end(dm_context *context);
 
 void* dm_read_bytes(const char *path, size_t *size);
 

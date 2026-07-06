@@ -70,9 +70,9 @@ void dm_shutdown(dm_context* context)
     dm_arena_detroy(&context->arena);
 }
 
-bool dm_is_running(dm_context context)
+bool dm_is_running(dm_context *context)
 {
-    return context.flags & DM_CONTEXT_FLAG_IS_RUNNING;
+    return context->flags & DM_CONTEXT_FLAG_IS_RUNNING;
 }
 
 void dm_update(dm_context* context)
@@ -80,12 +80,12 @@ void dm_update(dm_context* context)
     dm_window_poll_events(context);
 }
 
-bool dm_begin_render(dm_context* context)
+bool dm_render_begin(dm_context* context)
 {
     return dm_renderer_begin_frame(context);
 }
 
-bool dm_end_render(dm_context* context)
+bool dm_render_end(dm_context* context)
 {
     return dm_renderer_end_frame(context);
 }
