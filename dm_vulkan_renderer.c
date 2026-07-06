@@ -108,12 +108,14 @@ typedef struct dm_vulkan_image_t
     VmaAllocation allocation;
 
     VkFormat format;
+    VkDescriptorType type;
     VkImageUsageFlags usage;
 
     u32 buffer_index;
     u32 width, height;
 
-    dm_texture2d_type type;
+    void *heap_address;
+
 } dm_vulkan_image;
 
 typedef struct dm_vulkan_buffer_t
@@ -1941,9 +1943,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
         return false;
     }
 
-    dm_vulkan_image image = { 
-        .type=desc.type
-    };
+    dm_vulkan_image image = { 0 };
 
     VkImageUsageFlags usage       = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     VmaMemoryUsage    alloc_usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
@@ -1951,10 +1951,13 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
     switch(desc.type)
     {
         case DM_TEXTURE2D_TYPE_COMBINED_SAMPLER:
+            image.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER; 
         case DM_TEXTURE2D_TYPE_SAMPLED:
+            image.type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
             usage |= VK_IMAGE_USAGE_SAMPLED_BIT;
             break;
         case DM_TEXTURE2D_TYPE_STORAGE:
+            image.type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
             usage |= VK_IMAGE_USAGE_STORAGE_BIT;
             break;
 
@@ -2075,8 +2078,8 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resour
     {
         dm_handle *resource = resources[i];
 
-        dm_vulkan_buffer buffer;
-        dm_vulkan_image  image;
+        dm_vulkan_buffer *buffer;
+        dm_vulkan_image  *image;
 
         buffer_count = resource_heap->buffer_count;
         image_count  = resource_heap->image_count;
@@ -2084,10 +2087,10 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resour
         switch(resource->r_type)
         {
             case DM_RESOURCE_TYPE_BUFFER:
-                buffer = renderer->buffers[resource->index]; 
+                buffer = &renderer->buffers[resource->index]; 
 
-                addresses[buffer_count].address = dm_vulkan_get_buffer_address(gpu.device, buffer.buffer);
-                addresses[buffer_count].size    = buffer.size;
+                addresses[buffer_count].address = dm_vulkan_get_buffer_address(gpu.device, buffer->buffer);
+                addresses[buffer_count].size    = buffer->size;
                 
                 resource_info[i].sType              = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
                 resource_info[i].type               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
@@ -2104,12 +2107,12 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resour
 
             case DM_RESOURCE_TYPE_TEXTURE2D_SAMPLED:
             case DM_RESOURCE_TYPE_TEXTURE2D_STORAGE:
-                image = renderer->images[resource->index];
+                image = &renderer->images[resource->index];
 
                 view_info[image_count].sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
                 view_info[image_count].viewType = VK_IMAGE_VIEW_TYPE_2D;
-                view_info[image_count].image    = image.image;
-                view_info[image_count].format   = image.format;
+                view_info[image_count].image    = image->image;
+                view_info[image_count].format   = image->format;
                 view_info[image_count].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
                 view_info[image_count].subresourceRange.layerCount = 1;
                 view_info[image_count].subresourceRange.levelCount = 1;
@@ -2119,14 +2122,15 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resour
                 image_info[image_count].pView  = &view_info[image_count];
                 
                 resource_info[i].sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
-                resource_info[i].type  = resource->r_type == DM_RESOURCE_TYPE_TEXTURE2D_SAMPLED ? VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE : VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+                resource_info[i].type  = image->type;
                 resource_info[i].data.pImage = &image_info[image_count];
 
-                host_info[i].address = heap_start + resource_heap->image_offset;
+                host_info[i].address = heap_start + image_offset;
                 host_info[i].size    = resource_heap->image_size;
 
                 resources[i]->heap_index = resource_heap->image_count++;
                 resources[i]->heap_index += texture_offset;
+                image->heap_address = host_info[i].address;
 
                 image_offset += resource_heap->image_size;
                 break;
@@ -2428,7 +2432,39 @@ bool dm_render_command_update_texture(dm_context *context, dm_handle handle, voi
         image.height = height;
         staging_buffer.size = size;
 
-        // TODO: need to rewrite the image view now that the image has changed
+        // update descriptor
+        VkImageViewCreateInfo view_info = {
+            .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .viewType=VK_IMAGE_VIEW_TYPE_2D,
+            .image=image.image,
+            .format=image.format,
+            .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+            .subresourceRange.layerCount=1,
+            .subresourceRange.levelCount=1
+        };
+
+        VkImageDescriptorInfoEXT image_info = {
+            .sType=VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+            .layout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .pView=&view_info
+        };
+
+        VkResourceDescriptorInfoEXT descriptor = {
+            .sType=VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+            .type=image.type,
+            .data.pImage=&image_info
+        };
+
+        VkHostAddressRangeEXT host_info = {
+            .address=image.heap_address,
+            .size=renderer->resource_heap.image_size
+        };
+
+        if(!dm_vulkan_decode_vr(vkWriteResourceDescriptorsEXT(renderer->gpu.device, 1, &descriptor, &host_info))) 
+        {
+            LOG_ERROR("vkWriteResourceDescriptorsEXT failed");
+            return false;
+        }
     }
 
     if(!dm_vulkan_copy_to_buffer(renderer->allocator, staging_buffer, data, size)) return false;
