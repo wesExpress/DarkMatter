@@ -357,7 +357,7 @@ void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_c
 void dm_render_command_update_buffer(dm_context *context, dm_handle handle, void *data, size_t size);
 void dm_render_command_copy_buffer(dm_context *context, dm_handle src, dm_handle dst);
 
-void dm_render_command_update_texture(dm_context *context, dm_handle handle, void* data, size_t size);
+bool dm_render_command_update_texture(dm_context *context, dm_handle handle, void* data, size_t size, u16 width, u16 height);
 void dm_render_command_copy_texture(dm_context *context, dm_handle src, dm_handle dst);
 
 // compute commands
