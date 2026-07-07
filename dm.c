@@ -59,6 +59,8 @@ bool dm_init(dm_context* context, u16 width, u16 height, const char* title, dm_c
         return false;
     }
 
+    context->window.width = width;
+    context->window.height = height;
     context->flags |= DM_CONTEXT_FLAG_IS_RUNNING;
 
     return true;
