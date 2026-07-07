@@ -2316,24 +2316,6 @@ void dm_render_command_bind_index_buffer(dm_context *context, dm_handle handle, 
     vkCmdBindIndexBuffer(frame_data.gfx_cmd, buffer.buffer, offset, VK_INDEX_TYPE_UINT32);
 }
 
-void dm_render_command_push_constants(dm_context *context, dm_handle handle)
-{
-    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
-    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
-
-    dm_vulkan_buffer buffer = renderer->buffers[handle.index];
-
-    VkDeviceAddress address = dm_vulkan_get_buffer_address(renderer->gpu.device, buffer.buffer);
-
-    VkPushDataInfoEXT info = {
-        .sType=VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
-        .data.address=&address,
-        .data.size=buffer.size
-    };
-
-    vkCmdPushDataEXT(frame_data.gfx_cmd, &info);
-}
-
 void dm_render_command_push_data(dm_context* context, void* data, size_t size)
 {
     dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
@@ -2362,6 +2344,8 @@ void dm_render_command_update_buffer(dm_context *context, dm_handle handle, void
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
+    // TODO: need to check if size is different
+    // if so, destroy and recreate and update descriptor
     dm_vulkan_copy_to_buffer(renderer->allocator, buffer, data, size);
 }
 

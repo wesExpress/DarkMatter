@@ -21,6 +21,7 @@ void* dm_arena_alloc(dm_arena *arena, size_t size, size_t* offset)
     arena->size += size;
     arena->current += size;
 
+
     return arena->current - size;;
 }
 
