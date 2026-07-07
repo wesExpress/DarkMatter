@@ -1008,7 +1008,7 @@ dm_vulkan_resource_descriptor_heap dm_vulkan_create_resource_heap(VkDevice devic
     size_t buffer_size, image_offset, image_size;
 
     buffer_size = DM_ALIGN(heap_props.bufferDescriptorSize, heap_props.bufferDescriptorAlignment);
-    image_offset = DM_ALIGN((heap.buffer_size * DM_MAX_BUFFERS), heap_props.imageDescriptorSize);
+    image_offset = DM_ALIGN((buffer_size * DM_MAX_BUFFERS), heap_props.imageDescriptorSize);
     image_size = DM_ALIGN(heap_props.imageDescriptorSize, heap_props.imageDescriptorAlignment);
     LOG_DEBUG("Buffer descriptor size: %zu", buffer_size);
     LOG_DEBUG("Buffer descriptor heap alignment: %zu", heap_props.bufferDescriptorAlignment);
