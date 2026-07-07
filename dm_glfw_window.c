@@ -52,6 +52,13 @@ const char** dm_window_get_vulkan_extensions(u32* glfw_ext_count)
     return glfwGetRequiredInstanceExtensions(glfw_ext_count);
 }
 
+bool dm_is_key_pressed(dm_context *context, int key)
+{
+    dm_glfw_window* window = dm_arena_get_ptr(context->arena, context->window.offset);
+
+    return glfwGetKey(window->window, key)==GLFW_PRESS;
+}
+
 bool dm_window_create(dm_context* context, u16 width, u16 height, const char* title)
 {
     dm_glfw_window* window = dm_arena_alloc(&context->arena, sizeof(dm_glfw_window), &context->window.offset);

@@ -252,7 +252,7 @@ typedef enum dm_buffer_reside_t
 
 typedef struct dm_buffer_desc_t
 {
-    size_t size, stride;
+    size_t size;
     dm_buffer_type type;
     dm_buffer_reside reside;
     void* data; // must be long-lasting so it does not decay before creating buffer
@@ -328,6 +328,8 @@ bool dm_is_running(dm_context *context);
 bool dm_window_resized(dm_context *context);
 
 void* dm_read_bytes(const char *path, size_t *size);
+
+bool dm_is_key_pressed(dm_context *context, int key);
 
 // resources
 bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc desc, dm_handle *handle);
