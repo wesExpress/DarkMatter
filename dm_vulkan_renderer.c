@@ -2004,22 +2004,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 
     // 
     renderer->images[renderer->image_count] = image;
-    switch(desc.type)
-    {
-        case DM_TEXTURE2D_TYPE_SAMPLED:
-            handle->r_type = DM_RESOURCE_TYPE_TEXTURE2D_SAMPLED;
-            break;
-        case DM_TEXTURE2D_TYPE_STORAGE:
-            handle->r_type = DM_RESOURCE_TYPE_TEXTURE2D_STORAGE;
-            break;
-        case DM_TEXTURE2D_TYPE_COMBINED_SAMPLER:
-            handle->r_type = DM_RESOURCE_TYPE_TEXTURE2D_COMBINED_SAMPLER;
-            break;
-
-        default:
-            LOG_ERROR("Shouldn't be here...");
-            return false;
-    }
+    handle->r_type = DM_RESOURCE_TYPE_TEXTURE;
     handle->index  = renderer->image_count++;
 
     return true;
@@ -2105,8 +2090,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resour
                 buffer_offset += resource_heap->buffer_size;
                 break;
 
-            case DM_RESOURCE_TYPE_TEXTURE2D_SAMPLED:
-            case DM_RESOURCE_TYPE_TEXTURE2D_STORAGE:
+            case DM_RESOURCE_TYPE_TEXTURE:
                 image = &renderer->images[resource->index];
 
                 view_info[image_count].sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
