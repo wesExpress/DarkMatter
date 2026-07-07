@@ -1194,18 +1194,12 @@ void dm_renderer_shutdown(dm_context* context)
 
     for(u32 i=0; i<renderer->buffer_count; i++)
     {
-        dm_vulkan_buffer buffer = renderer->buffers[i];
-
-        vmaDestroyBuffer(renderer->allocator, buffer.buffer, buffer.allocation);
-        if(buffer.view) vkDestroyBufferView(gpu.device, buffer.view, NULL);
+        vmaDestroyBuffer(renderer->allocator, renderer->buffers[i].buffer, renderer->buffers[i].allocation);
     }
 
     for(u32 i=0; i<renderer->image_count; i++)
     {
-        dm_vulkan_image image = renderer->images[i];
-        dm_vulkan_buffer buffer = renderer->buffers[image.buffer_index];
-
-        vmaDestroyImage(renderer->allocator, image.image, image.allocation);
+        vmaDestroyImage(renderer->allocator, renderer->images[i].image, renderer->images[i].allocation);
     }
 
     vmaUnmapMemory(renderer->allocator, renderer->resource_heap.allocation);
