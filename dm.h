@@ -295,9 +295,10 @@ typedef struct dm_renderer_t
 
 typedef enum dm_context_flag_t
 {
-    DM_CONTEXT_FLAG_IS_RUNNING     = 1,
-    DM_CONTEXT_FLAG_RENDERER_VSYNC = 2,
-    DM_CONTEXT_FLAG_WINDOW_RESIZED = 4,
+    DM_CONTEXT_FLAG_IS_RUNNING       = 1,
+    DM_CONTEXT_FLAG_RENDERER_VSYNC   = 2,
+    DM_CONTEXT_FLAG_RENDERER_RESIZED = 4,
+    DM_CONTEXT_FLAG_WINDOW_RESIZED   = 8,
 } dm_context_flag;
 
 typedef struct dm_context_t
@@ -318,10 +319,13 @@ void* dm_arena_get_ptr(dm_arena arena, size_t offset);
 
 bool dm_init(dm_context *context, u16 width, u16 height, const char *title, dm_context_flag flags);
 void dm_shutdown(dm_context *context);
-bool dm_is_running(dm_context *context);
-void dm_update(dm_context *context);
+bool dm_update_begin(dm_context *context);
+void dm_update_end(dm_context *context);
 bool dm_render_begin(dm_context *context);
 bool dm_render_end(dm_context *context);
+
+bool dm_is_running(dm_context *context);
+bool dm_window_resized(dm_context *context);
 
 void* dm_read_bytes(const char *path, size_t *size);
 

@@ -121,7 +121,6 @@ typedef struct dm_vulkan_image_t
 typedef struct dm_vulkan_buffer_t
 {
     VkBuffer      buffer;
-    VkBufferView  view;
     VmaAllocation allocation;
     size_t size;
     dm_buffer_type type;
@@ -1233,6 +1232,39 @@ void dm_renderer_shutdown(dm_context* context)
     volkFinalize();
 }
 
+bool dm_renderer_resize(dm_context *context, u16 width, u16 height)
+{
+#ifdef DM_DEBUG
+    LOG_WARN("Renderer resized: %u %u", width, height);
+#endif
+
+    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+
+    dm_vulkan_gpu gpu = renderer->gpu;
+    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+
+    vkDeviceWaitIdle(gpu.device);
+
+    dm_vulkan_destroy_swapchain(&renderer->swapchain, gpu, renderer->allocator);
+    dm_vulkan_swapchain new_swapchain = dm_vulkan_create_swapchain(gpu, renderer->surface, renderer->allocator);
+    if(new_swapchain.swapchain == VK_NULL_HANDLE)
+    {
+        LOG_ERROR("Failed to recreate swapchain");
+        return false;
+    }
+
+    //
+    context->flags |= DM_CONTEXT_FLAG_RENDERER_RESIZED;
+    context->renderer.width = width;
+    context->renderer.height = height;
+    
+    renderer->swapchain = new_swapchain;
+    renderer->swapchain.width = width;
+    renderer->swapchain.height = height;
+
+    return true;
+}
+
 size_t dm_renderer_get_internal_size()
 {
     return sizeof(dm_vulkan_renderer);
@@ -1259,11 +1291,22 @@ bool dm_renderer_begin_frame(dm_context* context)
     vkResetCommandPool(gpu.device, frame_data.gfx_pool, 0);
 
     VkResult vr = vkAcquireNextImageKHR(gpu.device, swapchain.swapchain, UINT64_MAX, frame_data.semaphore, VK_NULL_HANDLE, &swapchain.index);
-    if(0)
+
+    if(vr == VK_ERROR_OUT_OF_DATE_KHR)
     {
+        context->flags |= DM_CONTEXT_FLAG_RENDERER_RESIZED;
+    }
+    else if(vr == VK_SUBOPTIMAL_KHR)
+    {
+        context->flags |= DM_CONTEXT_FLAG_RENDERER_RESIZED;
+    }
+    else if(vr != VK_SUCCESS)
+    {
+        dm_vulkan_decode_vr(vr);
         LOG_ERROR("vkAcquireNextImageKHR failed");
         return false;
     }
+
     dm_vulkan_swapchain_image image = swapchain.images[swapchain.index];
 
     VkCommandBufferBeginInfo cmd_begin = {
@@ -1759,7 +1802,6 @@ bool dm_vulkan_copy_to_buffer(VmaAllocator allocator, dm_vulkan_buffer buffer, v
     return true;
 }
 
-
 bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_handle *handle)
 {
     dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
@@ -1835,7 +1877,6 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_hand
 
     return true;
 }
-
 
 u64 dm_renderer_get_buffer_address(dm_context *context, dm_handle handle)
 {
@@ -2380,32 +2421,31 @@ bool dm_render_command_update_texture(dm_context *context, dm_handle handle, voi
 {
     dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
 
-    dm_vulkan_image image = renderer->images[handle.index];
-    dm_vulkan_buffer staging_buffer = renderer->buffers[image.buffer_index];
+    dm_vulkan_image *image = &renderer->images[handle.index];
+    dm_vulkan_buffer *staging_buffer = &renderer->buffers[image->buffer_index];
 
-    if(image.width != width || image.height != height)
+    if(image->width != width || image->height != height)
     {
-        vmaDestroyImage(renderer->allocator, image.image, image.allocation);
-        vmaDestroyBuffer(renderer->allocator, staging_buffer.buffer, staging_buffer.allocation);
+        vmaDestroyImage(renderer->allocator, image->image, image->allocation);
+        vmaDestroyBuffer(renderer->allocator, staging_buffer->buffer, staging_buffer->allocation);
 
-        VmaMemoryUsage image_aloc_usage = VMA_MEMORY_USAGE_AUTO;
+        VkImage new_image = VK_NULL_HANDLE;
+        VmaAllocation new_image_allocation = VK_NULL_HANDLE;
+        VkBuffer new_buffer = VK_NULL_HANDLE;
+        VmaAllocation new_buffer_allocation = VK_NULL_HANDLE;
 
         VkBufferUsageFlags buffer_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         VmaMemoryUsage buffer_alloc_usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
-        if(!dm_vulkan_create_buffer(renderer->allocator, buffer_usage, 0, buffer_alloc_usage, &staging_buffer.buffer, &staging_buffer.allocation, size)) return false;
-        if(!dm_vulkan_create_image(renderer->allocator, image.usage, image.format, width, height, &image.image, &image.allocation)) return false;
-
-        image.width = width;
-        image.height = height;
-        staging_buffer.size = size;
+        if(!dm_vulkan_create_buffer(renderer->allocator, buffer_usage, 0, buffer_alloc_usage, &new_buffer, &new_buffer_allocation, size)) return false;
+        if(!dm_vulkan_create_image(renderer->allocator, image->usage, image->format, width, height, &new_image, &new_image_allocation)) return false;
 
         // update descriptor
         VkImageViewCreateInfo view_info = {
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .viewType=VK_IMAGE_VIEW_TYPE_2D,
-            .image=image.image,
-            .format=image.format,
+            .image=new_image,
+            .format=image->format,
             .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
             .subresourceRange.layerCount=1,
             .subresourceRange.levelCount=1
@@ -2419,12 +2459,12 @@ bool dm_render_command_update_texture(dm_context *context, dm_handle handle, voi
 
         VkResourceDescriptorInfoEXT descriptor = {
             .sType=VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
-            .type=image.type,
+            .type=image->type,
             .data.pImage=&image_info
         };
 
         VkHostAddressRangeEXT host_info = {
-            .address=image.heap_address,
+            .address=image->heap_address,
             .size=renderer->resource_heap.image_size
         };
 
@@ -2433,10 +2473,19 @@ bool dm_render_command_update_texture(dm_context *context, dm_handle handle, voi
             LOG_ERROR("vkWriteResourceDescriptorsEXT failed");
             return false;
         }
+
+        image->image = new_image;
+        image->allocation = new_image_allocation;
+        image->width = width;
+        image->height = height;
+
+        staging_buffer->buffer = new_buffer;
+        staging_buffer->allocation = new_buffer_allocation;
+        staging_buffer->size = size;
     }
 
-    if(!dm_vulkan_copy_to_buffer(renderer->allocator, staging_buffer, data, size)) return false;
-    dm_vulkan_copy_buffer_to_image(renderer->gpu, renderer->single_use_pool, image.image, staging_buffer.buffer, width, height);
+    if(!dm_vulkan_copy_to_buffer(renderer->allocator, *staging_buffer, data, size)) return false;
+    dm_vulkan_copy_buffer_to_image(renderer->gpu, renderer->single_use_pool, image->image, staging_buffer->buffer, width, height);
 
     return true;
 }

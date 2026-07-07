@@ -39,6 +39,7 @@ extern bool dm_renderer_init(dm_context* context);
 extern void dm_renderer_shutdown(dm_context* context);
 extern bool dm_renderer_begin_frame(dm_context* context);
 extern bool dm_renderer_end_frame(dm_context* context);
+extern bool dm_renderer_resize(dm_context *context, u16 width, u16 height);
 extern size_t dm_renderer_get_internal_size();
 
 // context
@@ -76,9 +77,25 @@ bool dm_is_running(dm_context *context)
     return context->flags & DM_CONTEXT_FLAG_IS_RUNNING;
 }
 
-void dm_update(dm_context* context)
+bool dm_window_resized(dm_context *context)
+{
+    return context->flags & DM_CONTEXT_FLAG_WINDOW_RESIZED;
+}
+
+bool dm_update_begin(dm_context* context)
 {
     dm_window_poll_events(context);
+
+    if(context->flags & DM_CONTEXT_FLAG_WINDOW_RESIZED) 
+        return dm_renderer_resize(context, context->window.width, context->window.height);
+
+    return true;
+}
+
+void dm_update_end(dm_context *context)
+{
+    context->flags &= ~DM_CONTEXT_FLAG_WINDOW_RESIZED;
+    context->flags &= ~DM_CONTEXT_FLAG_RENDERER_RESIZED;
 }
 
 bool dm_render_begin(dm_context* context)

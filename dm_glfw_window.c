@@ -25,6 +25,16 @@ static void glfw_key_callback(GLFWwindow* window, int key, int scancode, int act
     }
 }
 
+void dm_glfw_window_resize_callback(GLFWwindow* window, int width, int height)
+{
+    dm_context *context = glfwGetWindowUserPointer(window);
+
+    context->window.width  = width;
+    context->window.height = height;
+
+    context->flags |= DM_CONTEXT_FLAG_WINDOW_RESIZED;
+}
+
 VkSurfaceKHR dm_window_create_vulkan_surface(dm_context* context, VkInstance instance)
 {
     dm_glfw_window* window = dm_arena_get_ptr(context->arena, context->window.offset);
@@ -66,6 +76,7 @@ bool dm_window_create(dm_context* context, u16 width, u16 height, const char* ti
     if(!window->window) return false;
 
     glfwSetKeyCallback(window->window, glfw_key_callback);
+    glfwSetWindowSizeCallback(window->window, dm_glfw_window_resize_callback);
 
     glfwSetWindowUserPointer(window->window, context);
 
