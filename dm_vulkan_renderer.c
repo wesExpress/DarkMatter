@@ -11,7 +11,6 @@
 
 #include <assert.h>
 
-#define DM_VULKAN_MAX_DESCRIPTORS 100
 #define DM_SWAPCHAIN_MAX_IMAGES 5
 #define DM_SWAPCHAIN_FORMAT     VK_FORMAT_B8G8R8A8_SRGB
 #define DM_DEPTH_FORMAT         VK_FORMAT_D32_SFLOAT
@@ -1569,7 +1568,7 @@ bool dm_renderer_create_raster_pipeline(dm_context* context, dm_raster_pipe_desc
         .sType=VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO,
         .depthTestEnable=VK_TRUE,
         .depthWriteEnable=VK_TRUE,
-        .depthCompareOp=VK_COMPARE_OP_LESS,
+        .depthCompareOp=VK_COMPARE_OP_LESS_OR_EQUAL,
         .stencilTestEnable=VK_FALSE,
     };
 
@@ -2088,11 +2087,11 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resour
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_resource_descriptor_heap *resource_heap = &renderer->resource_heap;
 
-    VkResourceDescriptorInfoEXT resource_info[DM_VULKAN_MAX_DESCRIPTORS] = { 0 };
-    VkHostAddressRangeEXT       host_info[DM_VULKAN_MAX_DESCRIPTORS]     = { 0 };
-    VkDeviceAddressRangeKHR     addresses[DM_VULKAN_MAX_DESCRIPTORS]     = { 0 };
-    VkImageDescriptorInfoEXT    image_info[DM_VULKAN_MAX_DESCRIPTORS]    = { 0 };
-    VkImageViewCreateInfo       view_info[DM_VULKAN_MAX_DESCRIPTORS]     = { 0 };
+    VkResourceDescriptorInfoEXT resource_info[DM_MAX_RESOURCES * DM_FRAMES_IN_FLIGHT] = { 0 };
+    VkHostAddressRangeEXT       host_info[DM_MAX_RESOURCES * DM_FRAMES_IN_FLIGHT]     = { 0 };
+    VkDeviceAddressRangeKHR     addresses[DM_MAX_BUFFERS * DM_FRAMES_IN_FLIGHT]       = { 0 };
+    VkImageDescriptorInfoEXT    image_info[DM_MAX_TEXTURES * DM_FRAMES_IN_FLIGHT]     = { 0 };
+    VkImageViewCreateInfo       view_info[DM_MAX_TEXTURES * DM_FRAMES_IN_FLIGHT]      = { 0 };
 
     u32 buffer_count = 0;
     u32 image_count  = 0;
@@ -2182,8 +2181,8 @@ bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_handle **sample
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_sampler_descriptor_heap *sampler_heap = &renderer->sampler_heap;
 
-    VkSamplerCreateInfo   infos[DM_MAX_SAMPLERS]               = { 0 };
-    VkHostAddressRangeEXT host_info[DM_VULKAN_MAX_DESCRIPTORS] = { 0 };
+    VkSamplerCreateInfo   infos[DM_MAX_SAMPLERS]     = { 0 };
+    VkHostAddressRangeEXT host_info[DM_MAX_SAMPLERS] = { 0 };
 
     for(u32 i=0; i<count; i++)
     {

@@ -22,7 +22,11 @@ void dm_arena_detroy(dm_arena *arena)
 
 void* dm_arena_alloc(dm_arena *arena, size_t size, size_t* offset)
 {
-    if(arena->size + size >= arena->capacity) return NULL;
+    if(arena->size + size >= arena->capacity) 
+    {
+        LOG_ERROR("Trying to allocate beyond size of arena");
+        return NULL;
+    }
 
 #ifdef __AVX__
     size = DM_ALIGN(size, 32);
