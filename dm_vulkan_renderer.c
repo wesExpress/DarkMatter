@@ -1236,8 +1236,11 @@ bool dm_renderer_resize(dm_context *context, u16 width, u16 height)
 
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+    dm_vulkan_surface *surface = &renderer->surface;
 
     vkDeviceWaitIdle(gpu.device);
+
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(gpu.physical, surface->surface, &surface->capabilities);
 
     dm_vulkan_destroy_swapchain(&renderer->swapchain, gpu, renderer->allocator);
     dm_vulkan_swapchain new_swapchain = dm_vulkan_create_swapchain(gpu, renderer->surface, renderer->allocator);
