@@ -1418,6 +1418,7 @@ bool dm_renderer_end_frame(dm_context* context)
     //
     renderer->frame_index++;
     renderer->frame_index %= DM_FRAMES_IN_FLIGHT;
+    context->renderer.current_frame = renderer->frame_index;
 
     return true;
 }

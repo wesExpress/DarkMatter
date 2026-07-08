@@ -289,6 +289,7 @@ typedef struct dm_window_t
 typedef struct dm_renderer_t
 {
     u16 width, height;
+    u8 current_frame;
 
     size_t offset;
 } dm_renderer;
