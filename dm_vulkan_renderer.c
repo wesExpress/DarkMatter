@@ -1471,6 +1471,10 @@ VkShaderModule dm_vulkan_create_shader_module(dm_vulkan_gpu gpu, const char *pat
         return VK_NULL_HANDLE;
     }
 
+    shaderc_result_release(result);
+    shaderc_compile_options_release(options);
+    shaderc_compiler_release(compiler);
+
     return module;
 }
 

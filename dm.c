@@ -3,24 +3,36 @@
 // arena
 void dm_arena_create(dm_arena *arena, size_t size)
 {
+#ifdef __AVX__
+    size = DM_ALIGN(size, 32);
+#else
+    size = DM_ALIGN(size, 16);
+#endif
     arena->capacity = size;
-    arena->start = malloc(size);
+    arena->start = calloc(sizeof(u8), size);
     arena->current = arena->start;
 }
 
 void dm_arena_detroy(dm_arena *arena)
 {
-    if(arena->start) free(arena->start);
+    free(arena->start);
+    arena->start = NULL;
+    arena->current = NULL;
 }
 
 void* dm_arena_alloc(dm_arena *arena, size_t size, size_t* offset)
 {
     if(arena->size + size >= arena->capacity) return NULL;
 
+#ifdef __AVX__
+    size = DM_ALIGN(size, 32);
+#else
+    size = DM_ALIGN(size, 16);
+#endif
+
     *offset = arena->size;
     arena->size += size;
     arena->current += size;
-
 
     return arena->current - size;;
 }
