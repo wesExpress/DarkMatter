@@ -147,12 +147,6 @@ typedef struct dm_raster_pipe_desc_t
 /****************
  * RENDER TARGET
  *****************/
-typedef enum dm_render_target_flag_t
-{
-    DM_RENDER_TARGET_FLAG_COLOR = 1,
-    DM_RENDER_TARGET_FLAG_DEPTH = 2
-} dm_render_target_flag;
-
 typedef enum dm_renderattachment_load_op_t
 {
     DM_RENDER_ATTACHMENT_LOAD_OP_INVALID,
@@ -173,23 +167,15 @@ typedef struct dm_render_attachment_desc_t
     dm_render_attachment_load_op  load_op;
     dm_render_attachment_store_op store_op;
 
-    dm_handle handle; // ignored if swapchain
+    u16 width, height;
 } dm_render_attachment_desc;
-
-typedef enum dm_render_target_type_t
-{
-    DM_RENDER_TARGET_TYPE_INVALID,
-    DM_RENDER_TARGET_TYPE_SWAPCHAIN,
-    DM_RENDER_TARGET_TYPE_CUSTOM
-} dm_render_target_type;
 
 typedef struct dm_render_target_desc_t
 {
     dm_render_attachment_desc color_attachment;
     dm_render_attachment_desc depth_attachment;
 
-    dm_render_target_flag flags; // ignored if swapchain
-    dm_render_target_type type;
+    bool swapchain, depth;
 } dm_render_target_desc;
 
 /******************

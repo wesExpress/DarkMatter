@@ -30,7 +30,7 @@ add_subdirectory(lib/glfw)
 
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
 
-target_include_directories(${PROJECT_NAME} PUBLIC lib/ lib/glfw/include)
+target_include_directories(${PROJECT_NAME} PUBLIC lib lib/glfw/include)
 target_link_libraries(${PROJECT_NAME} PUBLIC glfw)
 
 if(APPLE)
