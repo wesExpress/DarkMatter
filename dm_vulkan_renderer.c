@@ -2297,7 +2297,8 @@ void dm_render_command_begin_rendering(dm_context *context, dm_handle handle, fl
 
     VkViewport viewport = {
         .width=renderer->swapchain.width,
-        .height=renderer->swapchain.height
+        .height=renderer->swapchain.height,
+        .maxDepth=1
     };
 
     VkRect2D scissor = {
