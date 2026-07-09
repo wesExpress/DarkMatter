@@ -327,6 +327,7 @@ bool dm_render_end(dm_context *context);
 
 bool dm_is_running(dm_context *context);
 bool dm_window_resized(dm_context *context);
+double dm_window_get_time(dm_context *context);
 
 void* dm_read_bytes(const char *path, size_t *size);
 

@@ -107,3 +107,8 @@ size_t dm_window_get_internal_size()
     return sizeof(dm_glfw_window);
 
 }
+
+double dm_window_get_time(dm_context *context)
+{
+    return glfwGetTime();
+}
