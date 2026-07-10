@@ -229,18 +229,10 @@ typedef enum dm_buffer_type_t
     DM_BUFFER_TYPE_STORAGE
 } dm_buffer_type;
 
-typedef enum dm_buffer_reside_t
-{
-    DM_BUFFER_RESIDE_INVALID,
-    DM_BUFFER_RESIDE_CPU,
-    DM_BUFFER_RESIDE_GPU
-} dm_buffer_reside;
-
 typedef struct dm_buffer_desc_t
 {
     size_t size;
     dm_buffer_type type;
-    dm_buffer_reside reside;
     void* data; // must be long-lasting so it does not decay before creating buffer
 } dm_buffer_desc;
 
@@ -343,7 +335,6 @@ void dm_render_command_push_data(dm_context *context, void *data, size_t size);
 void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count);
 
 void dm_render_command_update_buffer(dm_context *context, dm_handle handle, void *data, size_t size);
-void dm_render_command_copy_buffer(dm_context *context, dm_handle src, dm_handle dst);
 
 bool dm_render_command_update_texture(dm_context *context, dm_handle handle, void* data, size_t size, u16 width, u16 height);
 void dm_render_command_copy_texture(dm_context *context, dm_handle src, dm_handle dst);

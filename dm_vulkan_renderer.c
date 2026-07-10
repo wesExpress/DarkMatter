@@ -119,8 +119,9 @@ typedef struct dm_vulkan_image_t
 
 typedef struct dm_vulkan_buffer_t
 {
-    VkBuffer      buffer;
-    VmaAllocation allocation;
+    VkBuffer      host, device;
+    VmaAllocation host_alloc, device_alloc;
+
     size_t size;
     dm_buffer_type type;
 } dm_vulkan_buffer;
@@ -135,7 +136,7 @@ typedef struct dm_vulkan_render_target_t
     VkAttachmentLoadOp  depth_load_op;
     VkAttachmentStoreOp depth_store_op;
 
-    dm_render_target_type type;
+    bool swapchain, depth;
 } dm_vulkan_render_target;
 
 typedef struct dm_vulkan_sampler_t
@@ -1193,7 +1194,8 @@ void dm_renderer_shutdown(dm_context* context)
 
     for(u32 i=0; i<renderer->buffer_count; i++)
     {
-        vmaDestroyBuffer(renderer->allocator, renderer->buffers[i].buffer, renderer->buffers[i].allocation);
+        vmaDestroyBuffer(renderer->allocator, renderer->buffers[i].host, renderer->buffers[i].host_alloc);
+        vmaDestroyBuffer(renderer->allocator, renderer->buffers[i].device, renderer->buffers[i].device_alloc);
     }
 
     for(u32 i=0; i<renderer->image_count; i++)
@@ -1704,11 +1706,12 @@ bool dm_renderer_create_render_target(dm_context* context, dm_render_target_desc
     dm_vulkan_renderer* renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
 
     dm_vulkan_render_target target = { 
-        .type=desc.type,
         .color_load_op=dm_vulkan_load_op_convert(desc.color_attachment.load_op),
         .color_store_op=dm_vulkan_store_op_convert(desc.color_attachment.store_op),
         .depth_load_op=dm_vulkan_load_op_convert(desc.depth_attachment.load_op),
-        .depth_store_op=dm_vulkan_store_op_convert(desc.depth_attachment.store_op)
+        .depth_store_op=dm_vulkan_store_op_convert(desc.depth_attachment.store_op),
+        .swapchain=desc.swapchain,
+        .depth=desc.depth
     };
 
     renderer->rts[renderer->rt_count] = target;
@@ -1745,7 +1748,6 @@ bool dm_vulkan_create_descriptor_heap(VmaAllocator allocator, size_t size, VkBuf
 
     return true;
 }
-
 
 VkCommandBuffer dm_vulkan_one_time_cmd(VkDevice device, VkCommandPool pool)
 {
@@ -1789,14 +1791,14 @@ void dm_vulkan_submit_one_time_cmd(VkDevice device, VkQueue queue, VkCommandPool
 bool dm_vulkan_copy_to_buffer(VmaAllocator allocator, dm_vulkan_buffer buffer, void *data, size_t size)
 {
     void* buffer_ptr = NULL;
-    if(!dm_vulkan_decode_vr(vmaMapMemory(allocator, buffer.allocation, &buffer_ptr)))
+    if(!dm_vulkan_decode_vr(vmaMapMemory(allocator, buffer.host_alloc, &buffer_ptr)))
     {
         LOG_ERROR("vmaMapMemory failed");
         buffer_ptr = NULL;
         return false;
     }
     memcpy(buffer_ptr, data, size);
-    vmaUnmapMemory(allocator, buffer.allocation);
+    vmaUnmapMemory(allocator, buffer.host_alloc);
 
     buffer_ptr = NULL;
 
@@ -1816,17 +1818,27 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_hand
 
     dm_vulkan_buffer buffer = { .type=desc.type };
 
-    VkBufferUsageFlagBits usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-    VmaAllocationCreateFlags alloc_flags = 0;
-    VmaMemoryUsage           alloc_usage = 0;
+    VkBufferUsageFlags host_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VmaAllocationCreateFlags host_flags = 
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT |
+        VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT | 
+        VMA_ALLOCATION_CREATE_MAPPED_BIT;
+    VmaMemoryUsage host_mem_usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+
+    VkBufferUsageFlagBits device_usage = 
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | 
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+        VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
+    VmaAllocationCreateFlags device_flags = 0;
+    VmaMemoryUsage           device_mem_usage = VMA_MEMORY_USAGE_GPU_ONLY;
 
     switch(desc.type)
     {
         case DM_BUFFER_TYPE_VERTEX:
-            usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
+            device_usage |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
             break;
         case DM_BUFFER_TYPE_INDEX:
-            usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+            device_usage |= VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
         case DM_BUFFER_TYPE_STORAGE:
             break;
 
@@ -1835,38 +1847,32 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_hand
             return false;
     }
 
-    switch(desc.reside)
-    {
-        case DM_BUFFER_RESIDE_CPU:
-            usage       |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-            alloc_flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_SEQUENTIAL_WRITE_BIT;
-            alloc_flags |= VMA_ALLOCATION_CREATE_HOST_ACCESS_ALLOW_TRANSFER_INSTEAD_BIT;
-            alloc_flags |= VMA_ALLOCATION_CREATE_MAPPED_BIT;
-            alloc_usage |= VMA_MEMORY_USAGE_CPU_TO_GPU;
-            break;
-        case DM_BUFFER_RESIDE_GPU:
-            usage       |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-            alloc_usage |= VMA_MEMORY_USAGE_GPU_ONLY;
-            break;
+    if(!dm_vulkan_create_buffer(renderer->allocator, host_usage, host_flags, host_mem_usage, &buffer.host, &buffer.host_alloc, desc.size)) return false;
+    if(!dm_vulkan_create_buffer(renderer->allocator, device_usage, device_flags, device_mem_usage, &buffer.device, &buffer.device_alloc, desc.size)) return false;
 
-        default:
-            LOG_ERROR("Unknown/unsupported buffer reside");
-            return false;
-    }
-
-    usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
-
-    if(!dm_vulkan_create_buffer(renderer->allocator, usage, alloc_flags, alloc_usage, &buffer.buffer, &buffer.allocation, desc.size)) return false;
-
-#ifdef DM_DEBUG
-    char debug_name[512];
-    sprintf(debug_name, "Buffer %u", renderer->buffer_count);
-    vmaSetAllocationName(renderer->allocator, buffer.allocation, debug_name);
-#endif
-
-    if(desc.reside==DM_BUFFER_RESIDE_CPU)
+    // copy over data if needed
+    if(desc.data)
     {
         if(!dm_vulkan_copy_to_buffer(renderer->allocator, buffer, desc.data, desc.size)) return false;
+
+        VkCommandBuffer cmd = dm_vulkan_one_time_cmd(renderer->gpu.device, renderer->single_use_pool);
+
+        VkBufferCopy2 region_info = {
+            .sType=VK_STRUCTURE_TYPE_BUFFER_COPY_2,
+            .size=desc.size
+        };
+
+        VkCopyBufferInfo2 copy_info = {
+            .sType=VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2,
+            .srcBuffer=buffer.host,
+            .dstBuffer=buffer.device,
+            .regionCount=1,
+            .pRegions=&region_info
+        };
+
+        vkCmdCopyBuffer2(cmd, &copy_info);
+
+        dm_vulkan_submit_one_time_cmd(renderer->gpu.device, renderer->gpu.gfx_queue, renderer->single_use_pool, cmd);
     }
 
     buffer.size = desc.size;
@@ -1885,7 +1891,7 @@ u64 dm_renderer_get_buffer_address(dm_context *context, dm_handle handle)
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
-    return dm_vulkan_get_buffer_address(renderer->gpu.device, buffer.buffer);
+    return dm_vulkan_get_buffer_address(renderer->gpu.device, buffer.device);
 }
 
 bool dm_vulkan_create_image(VmaAllocator allocator, VkImageUsageFlags usage, VkFormat format, u16 width, u16 height, VkImage *image, VmaAllocation *allocation)
@@ -2024,12 +2030,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 
     VkBufferUsageFlags buffer_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
-    if(!dm_vulkan_create_buffer(renderer->allocator, buffer_usage, 0, VMA_MEMORY_USAGE_CPU_TO_GPU, &staging_buffer.buffer, &staging_buffer.allocation, desc.size)) return false;
-
-#ifdef DM_DEBUG
-    sprintf(debug_name, "Buffer %u", renderer->buffer_count);
-    vmaSetAllocationName(renderer->allocator, staging_buffer.allocation, debug_name);
-#endif
+    if(!dm_vulkan_create_buffer(renderer->allocator, buffer_usage, 0, VMA_MEMORY_USAGE_CPU_TO_GPU, &staging_buffer.host, &staging_buffer.host_alloc, desc.size)) return false;
 
     renderer->buffers[renderer->buffer_count]= staging_buffer;
     image.buffer_index = renderer->buffer_count++;
@@ -2038,7 +2039,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
     {
         if(!dm_vulkan_copy_to_buffer(renderer->allocator, staging_buffer, desc.data, desc.size)) return false;
 
-        dm_vulkan_copy_buffer_to_image(renderer->gpu, renderer->single_use_pool, image.image, staging_buffer.buffer, desc.width, desc.height);
+        dm_vulkan_copy_buffer_to_image(renderer->gpu, renderer->single_use_pool, image.image, staging_buffer.host, desc.width, desc.height);
     }
 
     image.width  = desc.width;
@@ -2116,7 +2117,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resour
             case DM_RESOURCE_TYPE_BUFFER:
                 buffer = &renderer->buffers[resource->index]; 
 
-                addresses[buffer_count].address = dm_vulkan_get_buffer_address(gpu.device, buffer->buffer);
+                addresses[buffer_count].address = dm_vulkan_get_buffer_address(gpu.device, buffer->device);
                 addresses[buffer_count].size    = buffer->size;
                 
                 resource_info[i].sType              = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
@@ -2356,7 +2357,7 @@ void dm_render_command_bind_index_buffer(dm_context *context, dm_handle handle, 
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
-    vkCmdBindIndexBuffer(frame_data.gfx_cmd, buffer.buffer, offset, VK_INDEX_TYPE_UINT32);
+    vkCmdBindIndexBuffer(frame_data.gfx_cmd, buffer.device, offset, VK_INDEX_TYPE_UINT32);
 }
 
 void dm_render_command_push_data(dm_context* context, void* data, size_t size)
@@ -2390,26 +2391,18 @@ void dm_render_command_update_buffer(dm_context *context, dm_handle handle, void
     // TODO: need to check if size is different
     // if so, destroy and recreate and update descriptor
     dm_vulkan_copy_to_buffer(renderer->allocator, buffer, data, size);
-}
-
-void dm_render_command_copy_buffer(dm_context *context, dm_handle src, dm_handle dst)
-{
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
-
-    dm_vulkan_buffer src_buffer = renderer->buffers[src.index];
-    dm_vulkan_buffer dst_buffer = renderer->buffers[dst.index];
 
     VkCommandBuffer cmd = dm_vulkan_one_time_cmd(renderer->gpu.device, renderer->single_use_pool);
 
     VkBufferCopy2 region_info = {
         .sType=VK_STRUCTURE_TYPE_BUFFER_COPY_2,
-        .size=src_buffer.size
+        .size=size
     };
 
     VkCopyBufferInfo2 copy_info = {
         .sType=VK_STRUCTURE_TYPE_COPY_BUFFER_INFO_2,
-        .srcBuffer=src_buffer.buffer,
-        .dstBuffer=dst_buffer.buffer,
+        .srcBuffer=buffer.host,
+        .dstBuffer=buffer.device,
         .regionCount=1,
         .pRegions=&region_info
     };
@@ -2429,7 +2422,7 @@ bool dm_render_command_update_texture(dm_context *context, dm_handle handle, voi
     if(image->width != width || image->height != height)
     {
         vmaDestroyImage(renderer->allocator, image->image, image->allocation);
-        vmaDestroyBuffer(renderer->allocator, staging_buffer->buffer, staging_buffer->allocation);
+        vmaDestroyBuffer(renderer->allocator, staging_buffer->host, staging_buffer->host_alloc);
 
         VkImage new_image = VK_NULL_HANDLE;
         VmaAllocation new_image_allocation = VK_NULL_HANDLE;
@@ -2481,13 +2474,13 @@ bool dm_render_command_update_texture(dm_context *context, dm_handle handle, voi
         image->width = width;
         image->height = height;
 
-        staging_buffer->buffer = new_buffer;
-        staging_buffer->allocation = new_buffer_allocation;
+        staging_buffer->host = new_buffer;
+        staging_buffer->host_alloc = new_buffer_allocation;
         staging_buffer->size = size;
     }
 
     if(!dm_vulkan_copy_to_buffer(renderer->allocator, *staging_buffer, data, size)) return false;
-    dm_vulkan_copy_buffer_to_image(renderer->gpu, renderer->single_use_pool, image->image, staging_buffer->buffer, width, height);
+    dm_vulkan_copy_buffer_to_image(renderer->gpu, renderer->single_use_pool, image->image, staging_buffer->host, width, height);
 
     return true;
 }
