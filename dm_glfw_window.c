@@ -110,6 +110,9 @@ bool dm_window_create(dm_context* context, u16 width, u16 height, const char* ti
 
     glfwSetWindowUserPointer(window->window, context);
 
+    context->window.width = width;
+    context->window.height = height;
+
     return true;
 }
 

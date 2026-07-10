@@ -17,7 +17,6 @@ typedef struct dm_metal_swapchain_t
 typedef struct dm_metal_render_target_t
 {
     id<MTLTexture> color_texture;
-    id<MTLTexture> depth_texture;
 
     MTLLoadAction color_load_op, depth_load_op;
     MTLStoreAction color_store_op, depth_store_op;
@@ -37,13 +36,15 @@ typedef struct dm_metal_raster_pipe_t
 
 typedef struct dm_metal_buffer_t
 {
-    id<MTLBuffer> buffer;
+    id<MTLBuffer> host;
+    id<MTLBuffer> device;
     size_t size;
 } dm_metal_buffer;
 
 typedef struct dm_metal_texture_t
 {
-    id<MTLTexture> texture;
+    id<MTLTexture> host;
+    id<MTLTexture> device;
     size_t size;
 } dm_metal_texture;
 
@@ -101,6 +102,14 @@ bool dm_renderer_init(dm_context* context)
     renderer->swapchain.width = context->window.width;
     renderer->swapchain.height = context->window.height;
 
+    MTLTextureDescriptor *depth_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:context->window.width height:context->window.height mipmapped:NO];
+    depth_desc.storageMode = MTLStorageModePrivate;
+    depth_desc.usage = MTLTextureUsageRenderTarget;
+
+    renderer->swapchain.depth_texture = [renderer->device newTextureWithDescriptor:depth_desc];
+
+    [depth_desc release];
+
     return true;
 }
 
@@ -110,11 +119,13 @@ void dm_renderer_shutdown(dm_context* context)
 
     for(u32 i=0; i<renderer->buffer_count; i++)
     {
-        [renderer->buffers[i].buffer release];
+        [renderer->buffers[i].host release];
+        [renderer->buffers[i].device release];
     }
     for(u32 i=0; i<renderer->texture_count; i++)
     {
-        [renderer->textures[i].texture release];
+        [renderer->textures[i].host release];
+        [renderer->textures[i].device release];
     }
     for(u32 i=0; i<renderer->rp_count; i++)
     {
@@ -125,16 +136,13 @@ void dm_renderer_shutdown(dm_context* context)
         if(renderer->rts[i].swapchain) continue;
 
         [renderer->rts[i].color_texture release];
-
-        if(!renderer->rts[i].depth) continue;
-
-        [renderer->rts[i].depth_texture release];
     }
 
     if(renderer->resource_heap) [renderer->resource_heap release];
     if(renderer->sampler_heap)  [renderer->sampler_heap  release];
 
     [renderer->queue release];
+    [renderer->swapchain.depth_texture release];
     [renderer->swapchain.layer release];
     [renderer->device release];
 }
@@ -221,9 +229,9 @@ MTLStoreAction dm_metal_convert_store(dm_render_attachment_store_op op)
     }
 }
 
-id<MTLTexture> dm_metal_create_texture(id<MTLDevice> device, u16 width, u16 height, void *data, size_t *size)
+id<MTLTexture> dm_metal_create_texture(id<MTLDevice> device, MTLPixelFormat format, u16 width, u16 height, void *data, size_t *size)
 {
-    MTLTextureDescriptor *texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatRGBA8Unorm width:width height:height mipmapped:NO];
+    MTLTextureDescriptor *texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:width height:height mipmapped:NO];
 
     id<MTLTexture> texture = [device newTextureWithDescriptor:texture_desc];
     if(data)
@@ -234,9 +242,10 @@ id<MTLTexture> dm_metal_create_texture(id<MTLDevice> device, u16 width, u16 heig
 
     size_t heap_size;
     MTLSizeAndAlign size_align = [device heapTextureSizeAndAlignWithDescriptor:texture_desc];
-    size_align.size = (size_align.size & (size_align.align - 1)) + size_align.align;
+    size_align.size += (size_align.size & (size_align.align - 1)) + size_align.align;
     heap_size = size_align.size;
 
+    LOG_INFO("%zu", heap_size);
     *size = heap_size;
 
     [texture_desc release];
@@ -261,16 +270,8 @@ bool dm_renderer_create_render_target(dm_context *context, dm_render_target_desc
     {
         size_t color_size = 4 * desc.color_attachment.width * desc.color_attachment.height;
 
-        render_target.color_texture = dm_metal_create_texture(renderer->device, desc.color_attachment.width, desc.color_attachment.height, NULL, &color_size);
+        render_target.color_texture = dm_metal_create_texture(renderer->device, MTLPixelFormatRGBA8Unorm, desc.color_attachment.width, desc.color_attachment.height, NULL, &color_size);
         if(!render_target.color_texture) return false;
-
-        if(desc.depth)
-        {
-            size_t depth_size = 4 * desc.depth_attachment.width * desc.depth_attachment.height;
-
-            render_target.depth_texture = dm_metal_create_texture(renderer->device, desc.depth_attachment.width, desc.depth_attachment.height, NULL, &depth_size);
-            if(!render_target.depth_texture) return false;
-        }
     }
 
     //
@@ -289,14 +290,14 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_hand
 
     size_t heap_size = desc.size;
     MTLSizeAndAlign size_align = [renderer->device heapBufferSizeAndAlignWithLength:heap_size options:MTLResourceStorageModePrivate];
-    size_align.size = (size_align.size & (size_align.align - 1)) + size_align.align;
+    size_align.size += (size_align.size & (size_align.align - 1)) + size_align.align;
     heap_size = size_align.size;
     buffer.size = heap_size;
 
     if(desc.data)
     {
-        buffer.buffer = [renderer->device newBufferWithBytes:desc.data length:heap_size options:MTLResourceCPUCacheModeDefaultCache];
-        if(!buffer.buffer)
+        buffer.host = [renderer->device newBufferWithBytes:desc.data length:heap_size options:MTLResourceCPUCacheModeDefaultCache];
+        if(!buffer.host)
         {
             LOG_ERROR("newBufferWithBytes failed");
             return false;
@@ -304,8 +305,8 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_hand
     }
     else
     {
-        buffer.buffer = [renderer->device newBufferWithLength:heap_size options:MTLResourceCPUCacheModeDefaultCache];
-        if(!buffer.buffer)
+        buffer.host = [renderer->device newBufferWithLength:heap_size options:MTLResourceCPUCacheModeDefaultCache];
+        if(!buffer.host)
         {
             LOG_ERROR("newBufferWithLength failed");
             return false;
@@ -326,9 +327,10 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 
     dm_metal_texture texture = { 0 };
 
+    MTLPixelFormat format = MTLPixelFormatRGBA8Unorm;
     texture.size = desc.size;
-    texture.texture = dm_metal_create_texture(renderer->device, desc.width, desc.height, desc.data, &texture.size);
-    if(!texture.texture) return false;
+    texture.host = dm_metal_create_texture(renderer->device, format, desc.width, desc.height, desc.data, &texture.size);
+    if(!texture.host) return false;
 
     //
     renderer->textures[renderer->texture_count] = texture;
@@ -352,7 +354,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resour
     id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
 
     MTLHeapDescriptor *heap_desc = [MTLHeapDescriptor new];
-    heap_desc.storageMode = MTLStorageModeShared;
+    heap_desc.storageMode = MTLStorageModePrivate;
     heap_desc.size = 0;
 
     // get heap size
@@ -374,21 +376,62 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resour
                 return false;
         }
     }
+    LOG_INFO("Heap size: %zu", heap_desc.size);
 
     renderer->resource_heap = [renderer->device newHeapWithDescriptor:heap_desc];
-
-    [heap_desc release];
+    if(!renderer->resource_heap)
+    {
+        LOG_ERROR("newHeapWithDescriptor failed");
+        return false;
+    }
 
     // actually upload to heap
     for(u32 i=0; i<count; i++)
     {
         dm_handle *resource = resources[i];
 
+        dm_metal_buffer *buffer;
+        dm_metal_texture *texture;
+        MTLTextureDescriptor *texture_desc = NULL;
+
         switch(resource->r_type)
         {
             case DM_RESOURCE_TYPE_BUFFER:
+                buffer = &renderer->buffers[resource->index];
+
+                buffer->device = [renderer->resource_heap newBufferWithLength:buffer->size options:MTLResourceStorageModePrivate];
+                if(!buffer->device) 
+                {
+                    LOG_ERROR("newBufferWithLength failed");
+                    return false;
+                }
+
+                [blit copyFromBuffer:buffer->host sourceOffset:0 toBuffer:buffer->device destinationOffset:0 size:buffer->size];
                 break;
             case DM_RESOURCE_TYPE_TEXTURE:
+                texture = &renderer->textures[resource->index];
+
+                texture_desc = [MTLTextureDescriptor new];
+                texture_desc.textureType = texture->host.textureType;
+                texture_desc.pixelFormat = texture->host.pixelFormat;
+                texture_desc.width = texture->host.width;
+                texture_desc.height = texture->host.height;
+                texture_desc.depth  = texture->host.depth;
+                texture_desc.mipmapLevelCount = texture->host.mipmapLevelCount;
+                texture_desc.arrayLength = texture->host.arrayLength;
+                texture_desc.sampleCount = texture->host.sampleCount;
+                texture_desc.storageMode = renderer->resource_heap.storageMode;
+
+                texture->device = [renderer->resource_heap newTextureWithDescriptor:texture_desc];
+                if(!texture->device)
+                {
+                    LOG_ERROR("newTextureWithDescriptor failed");
+                    return false;
+                }
+
+                [blit copyFromTexture:texture->host toTexture:texture->device];
+
+                [texture_desc release];
                 break;
 
             default:
@@ -396,6 +439,11 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resour
                 return false;
         }
     }
+
+    [blit endEncoding];
+    [cmd commit];
+
+    [heap_desc release];
 
     return true;
 }
@@ -424,19 +472,7 @@ void dm_render_command_begin_rendering(dm_context *context, dm_handle handle, fl
     dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
     dm_metal_render_target *target = &renderer->rts[handle.index];
 
-    id<MTLTexture> color_texture = NULL;
-    id<MTLTexture> depth_texture = NULL;
-
-    if(target->swapchain)
-    {
-        color_texture = [renderer->swapchain.drawable texture];
-        depth_texture = renderer->swapchain.depth_texture;
-    }
-    else
-    {
-        color_texture = target->color_texture;
-        depth_texture = target->depth_texture;
-    }
+    id<MTLTexture> color_texture = target->swapchain ? [renderer->swapchain.drawable texture] : target->color_texture;
 
     MTLClearColor clear = MTLClearColorMake(r, g, b, a);
 
@@ -451,13 +487,16 @@ void dm_render_command_begin_rendering(dm_context *context, dm_handle handle, fl
         desc.depthAttachment.clearDepth  = d;
         desc.depthAttachment.loadAction  = target->depth_load_op;
         desc.depthAttachment.storeAction = target->depth_store_op;
-        desc.depthAttachment.texture     = depth_texture;
+        desc.depthAttachment.texture     = renderer->swapchain.depth_texture;
     }
 
     renderer->render_encoder = [renderer->cmd renderCommandEncoderWithDescriptor:desc];
 
-    [renderer->render_encoder useHeap:renderer->resource_heap stages:(MTLRenderStageVertex | MTLRenderStageFragment)];
-    [renderer->render_encoder useHeap:renderer->sampler_heap  stages:MTLRenderStageFragment];
+    MTLRenderStages resource_stages = MTLRenderStageVertex | MTLRenderStageFragment;
+    MTLRenderStages sampler_stages  = MTLRenderStageFragment;
+
+    if(renderer->resource_heap) [renderer->render_encoder useHeap:renderer->resource_heap stages:resource_stages];
+    if(renderer->sampler_heap)  [renderer->render_encoder useHeap:renderer->sampler_heap  stages:sampler_stages];
 }
 
 void dm_render_command_end_rendering(dm_context *context, dm_handle handle)
@@ -474,10 +513,12 @@ void dm_render_command_bind_pipeline(dm_context *context, dm_handle handle)
 
     id<MTLRenderCommandEncoder> encoder = renderer->render_encoder;
 
+#if 0
     [encoder setRenderPipelineState:pipeline.pipeline];
     [encoder setCullMode:pipeline.cull_mode];
     [encoder setFrontFacingWinding:pipeline.winding];
     [encoder setTriangleFillMode:pipeline.fill_mode];
+#endif
 }
 
 void dm_render_command_bind_index_buffer(dm_context *context, dm_handle handle, size_t offset)
@@ -502,7 +543,7 @@ void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_c
     dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
     id<MTLRenderCommandEncoder> encoder = renderer->render_encoder;
 
-    [encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:index_count indexType:MTLIndexTypeUInt32 indexBuffer:renderer->buffers[renderer->active_index_buffer].buffer indexBufferOffset:0 instanceCount:instance_count];
+    //[encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:index_count indexType:MTLIndexTypeUInt32 indexBuffer:renderer->buffers[renderer->active_index_buffer].device indexBufferOffset:0 instanceCount:instance_count];
 }
 
 void dm_render_command_update_buffer(dm_context *context, dm_handle handle, void *data, size_t size)
