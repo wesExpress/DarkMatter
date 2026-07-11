@@ -754,6 +754,20 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
     MTLRenderStages sampler_stages  = MTLRenderStageFragment;
 
     if(renderer->resource_heap) [renderer->render_encoder useHeap:renderer->resource_heap stages:resource_stages];
+
+    MTLViewport viewport = {
+        .width=renderer->swapchain.width,
+        .height=renderer->swapchain.height,
+        .zfar=1.f
+    };
+
+    MTLScissorRect scissor = {
+        .width=renderer->swapchain.width,
+        .height=renderer->swapchain.height
+    };
+
+    [renderer->render_encoder setViewport:viewport];
+    [renderer->render_encoder setScissorRect:scissor];
 }
 
 void dm_render_command_end_rendering(dm_context *context, dm_resource handle)
