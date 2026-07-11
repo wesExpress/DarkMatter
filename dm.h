@@ -60,17 +60,18 @@ typedef enum dm_resource_type_t
 #endif
 } dm_resource_type;
 
-typedef struct dm_handle_t
+typedef struct dm_pipeline_t
 {
-    union
-    {
-        dm_pipeline_type p_type : 8;
-        dm_resource_type r_type : 8;
-    };
+    dm_pipeline_type type  : 8;
+    u32              index : 24;
+} dm_pipeline;
 
-    u32 index : 24;
-    u32 heap_index;
-} dm_handle;
+typedef struct dm_resource_t
+{
+    dm_resource_type type  : 8;
+    u32              index : 24;
+    u64              gpu_index;
+} dm_resource;
 
 /********************
  * RENDERING DEFINES
@@ -312,36 +313,36 @@ void* dm_read_bytes(const char *path, size_t *size);
 bool dm_is_key_pressed(dm_context *context, int key);
 
 // resources
-bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc desc, dm_handle *handle);
+bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc desc, dm_pipeline *handle);
 
-bool dm_renderer_create_render_target(dm_context *context, dm_render_target_desc desc, dm_handle *handle);
-bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_handle *handle);
-bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_handle *handle);
-bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_handle *handle);
+bool dm_renderer_create_render_target(dm_context *context, dm_render_target_desc desc, dm_resource *handle);
+bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_resource *handle);
+bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_resource *handle);
+bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_resource *handle);
 
-bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_handle *resources[], u32 count);
-bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_handle *samplers[], u32 count);
-u64 dm_renderer_get_buffer_address(dm_context *context, dm_handle handle);
+bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *resources[], u32 count);
+bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_resource *samplers[], u32 count);
+u64 dm_renderer_get_buffer_address(dm_context *context, dm_resource handle);
 
-bool dm_renderer_create_compute_pipeline(dm_context *context, dm_handle *handle);
+bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handle);
 
 // commands
-void dm_render_command_begin_rendering(dm_context *context, dm_handle handle, float r, float g, float b, float a, float d);
-void dm_render_command_end_rendering(dm_context *context, dm_handle handle);
-void dm_render_command_bind_pipeline(dm_context *context, dm_handle handle);
-void dm_render_command_bind_index_buffer(dm_context *context, dm_handle handle, size_t offset);
-void dm_render_command_push_constants(dm_context *context, dm_handle handle);
+void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d);
+void dm_render_command_end_rendering(dm_context *context, dm_resource handle);
+void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle);
+void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset);
+void dm_render_command_push_constants(dm_context *context, dm_resource handle);
 void dm_render_command_push_data(dm_context *context, void *data, size_t size);
 void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count);
 
-void dm_render_command_update_buffer(dm_context *context, dm_handle handle, void *data, size_t size);
+void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size);
 
-bool dm_render_command_update_texture(dm_context *context, dm_handle handle, void* data, size_t size, u16 width, u16 height);
-void dm_render_command_copy_texture(dm_context *context, dm_handle src, dm_handle dst);
+bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height);
+void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_resource dst);
 
 // compute commands
 void dm_compute_command_push_data(dm_context *context, void *data, size_t size);
-void dm_compute_command_bind_pipeline(dm_context *context, dm_handle handle);
+void dm_compute_command_bind_pipeline(dm_context *context, dm_pipeline handle);
 void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z);
 
 // macros

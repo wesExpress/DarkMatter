@@ -128,8 +128,8 @@ typedef struct dm_vulkan_buffer_t
 
 typedef struct dm_vulkan_render_target_t
 {
-    dm_handle color_target; // ignored if swapchain
-    dm_handle depth_target; // ignored if swapchain
+    dm_resource color_target; // ignored if swapchain
+    dm_resource depth_target; // ignored if swapchain
 
     VkAttachmentLoadOp  color_load_op;
     VkAttachmentStoreOp color_store_op;
@@ -1527,13 +1527,18 @@ bool dm_renderer_create_raster_pipeline(dm_context* context, dm_raster_pipe_desc
     dm_raster_shader vertex_shader = desc.shaders[DM_RASTER_SHADER_STAGE_VERTEX];
     dm_raster_shader fragment_shader = desc.shaders[DM_RASTER_SHADER_STAGE_FRAGMENT];
 
-    VkShaderModule vertex_module   = dm_vulkan_create_shader_module(renderer->gpu, vertex_shader.path, vertex_shader.entry, shaderc_vertex_shader);
+    char vertex_path[512];
+    sprintf(vertex_path, "%s.glsl", vertex_shader.path);
+    char fragment_path[512];
+    sprintf(fragment_path, "%s.glsl", fragment_shader.path);
+
+    VkShaderModule vertex_module = dm_vulkan_create_shader_module(renderer->gpu, vertex_path, vertex_shader.entry, shaderc_vertex_shader);
     if(vertex_module == VK_NULL_HANDLE)
     {
         LOG_ERROR("Could not create vertex shader module");
         return false;
     }
-    VkShaderModule fragment_module = dm_vulkan_create_shader_module(renderer->gpu, fragment_shader.path, fragment_shader.entry, shaderc_fragment_shader);
+    VkShaderModule fragment_module = dm_vulkan_create_shader_module(renderer->gpu, fragment_path, fragment_shader.entry, shaderc_fragment_shader);
     if(fragment_module == VK_NULL_HANDLE)
     {
         LOG_ERROR("Could not create fragment shader module");
