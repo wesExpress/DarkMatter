@@ -469,7 +469,6 @@ id<MTLTexture> dm_metal_create_texture(id<MTLDevice> device, MTLPixelFormat form
     size_align.size += (size_align.size & (size_align.align - 1)) + size_align.align;
     heap_size = size_align.size;
 
-    LOG_INFO("%zu", heap_size);
     *size = heap_size;
 
     [texture_desc release];
@@ -623,6 +622,9 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
                 heap_desc.size += renderer->textures[resource->index].size;
                 break;
 
+            case DM_RESOURCE_TYPE_SAMPLER:
+                break;
+
             default:
                 LOG_ERROR("Unknown/unsupported resource type");
                 return false;
@@ -658,8 +660,6 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
                     return false;
                 }
 
-                resource->gpu_index = buffer->device.gpuAddress;
-
                 [blit copyFromBuffer:buffer->host sourceOffset:0 toBuffer:buffer->device destinationOffset:0 size:buffer->size];
                 break;
             case DM_RESOURCE_TYPE_TEXTURE:
@@ -683,15 +683,12 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
                     return false;
                 }
 
-                // TODO: YIKES
-                {
-                    MTLResourceID id = texture->device.gpuResourceID;
-                    resource->gpu_index = *(u64*)&id;
-                }
-
                 [blit copyFromTexture:texture->host toTexture:texture->device];
 
                 [texture_desc release];
+                break;
+
+            case DM_RESOURCE_TYPE_SAMPLER:
                 break;
 
             default:
@@ -711,11 +708,6 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
 bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_resource *samplers[], u32 count)
 {
     return true;
-}
-
-u64 dm_renderer_get_buffer_address(dm_context *context, dm_resource handle)
-{
-    return handle.gpu_index;
 }
 
 bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handle)

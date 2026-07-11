@@ -70,7 +70,6 @@ typedef struct dm_resource_t
 {
     dm_resource_type type  : 8;
     u32              index : 24;
-    u64              gpu_index;
 } dm_resource;
 
 /********************
@@ -321,8 +320,6 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_resource *handle);
 
 bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *resources[], u32 count);
-bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_resource *samplers[], u32 count);
-u64 dm_renderer_get_buffer_address(dm_context *context, dm_resource handle);
 
 bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handle);
 
