@@ -87,7 +87,7 @@ typedef struct dm_vulkan_resource_descriptor_heap_t
     size_t buffer_count, image_count;
     size_t size, count;
 
-    void *start, *current;
+    void *start;
 } dm_vulkan_resource_descriptor_heap;
 
 typedef struct dm_vulkan_sampler_descriptor_heap_t
@@ -98,7 +98,7 @@ typedef struct dm_vulkan_sampler_descriptor_heap_t
     size_t sampler_size, sampler_count;
     size_t size, count, min_size;
 
-    void *start, *current;
+    void *start;
 } dm_vulkan_sampler_descriptor_heap;
 
 typedef struct dm_vulkan_image_t
@@ -1023,6 +1023,7 @@ dm_vulkan_resource_descriptor_heap dm_vulkan_create_resource_heap(VkDevice devic
     LOG_DEBUG("Image descriptor size: %zu", image_size);
     LOG_DEBUG("Image descriptor heap alignment: %zu", heap_props.imageDescriptorAlignment);
     LOG_DEBUG("Image offset: %zu", image_offset);
+    LOG_DEBUG("Heap max push data size: %zu", heap_props.maxPushDataSize);
 
     size += image_offset;
     size += DM_MAX_TEXTURES * image_size;
@@ -1045,7 +1046,6 @@ dm_vulkan_resource_descriptor_heap dm_vulkan_create_resource_heap(VkDevice devic
     heap.buffer       = buffer;
     heap.allocation   = allocation;
     heap.start        = start;
-    heap.current      = heap.start;
     heap.size         = size;
     heap.buffer_size  = buffer_size;
     heap.image_size   = image_size;
@@ -1091,7 +1091,6 @@ dm_vulkan_sampler_descriptor_heap dm_vulkan_create_sampler_descriptor_heap(VkDev
     heap.buffer       = buffer;
     heap.allocation   = allocation;
     heap.start        = start;
-    heap.current      = heap.start;
     heap.size         = size;
     heap.sampler_size = sampler_size;
 
@@ -2096,6 +2095,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
     dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_resource_descriptor_heap *resource_heap = &renderer->resource_heap;
+    dm_vulkan_sampler_descriptor_heap  *sampler_heap  = &renderer->sampler_heap;
 
     VkResourceDescriptorInfoEXT resource_info[DM_MAX_RESOURCES * DM_FRAMES_IN_FLIGHT] = { 0 };
     VkHostAddressRangeEXT       host_info[DM_MAX_RESOURCES * DM_FRAMES_IN_FLIGHT]     = { 0 };
@@ -2103,13 +2103,15 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
     VkImageDescriptorInfoEXT    image_info[DM_MAX_TEXTURES * DM_FRAMES_IN_FLIGHT]     = { 0 };
     VkImageViewCreateInfo       view_info[DM_MAX_TEXTURES * DM_FRAMES_IN_FLIGHT]      = { 0 };
 
+    VkSamplerCreateInfo   sampler_infos[DM_MAX_SAMPLERS]      = { 0 };
+    VkHostAddressRangeEXT sampler_host_infos[DM_MAX_SAMPLERS] = { 0 };
+
     u32 buffer_count = 0;
     u32 image_count  = 0;
-    size_t texture_offset = resource_heap->image_offset / gpu.heap_props.imageDescriptorSize;
+    size_t image_index_offset = resource_heap->image_offset / gpu.heap_props.imageDescriptorSize;
     size_t buffer_offset  = 0;
     size_t image_offset   = resource_heap->image_offset;
-
-    uint8_t* heap_start = (uint8_t*)resource_heap->start;
+    size_t sampler_offset = 0;
 
     for(u32 i=0; i<count; i++)
     {
@@ -2117,9 +2119,12 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
 
         dm_vulkan_buffer *buffer;
         dm_vulkan_image  *image;
-
+        
         buffer_count = resource_heap->buffer_count;
         image_count  = resource_heap->image_count;
+
+        u32 resource_count = resource_heap->count;
+        u32 sampler_count  = sampler_heap->count;
 
         switch(resource->type)
         {
@@ -2129,18 +2134,16 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
                 addresses[buffer_count].address = dm_vulkan_get_buffer_address(gpu.device, buffer->device);
                 addresses[buffer_count].size    = buffer->size;
                 
-                resource_info[i].sType              = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
-                resource_info[i].type               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-                resource_info[i].data.pAddressRange = &addresses[buffer_count];
+                resource_info[resource_count].sType              = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
+                resource_info[resource_count].type               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+                resource_info[resource_count].data.pAddressRange = &addresses[buffer_count];
 
-                buffer->heap_index = resource_heap->count++;
-                //resources[i]->gpu_index = resource_heap->count++;
+                host_info[resource_count].address = (u8*)resource_heap->start + buffer_offset;
+                host_info[resource_count].size    = resource_heap->buffer_size;
 
-                host_info[i].address = heap_start + buffer_offset;
-                host_info[i].size    = resource_heap->buffer_size;
-
-                resource_heap->buffer_count++;
+                buffer->heap_index = resource_heap->buffer_count++;
                 buffer_offset += resource_heap->buffer_size;
+                resource_heap->count++;
                 break;
 
             case DM_RESOURCE_TYPE_TEXTURE:
@@ -2158,20 +2161,30 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
                 image_info[image_count].layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
                 image_info[image_count].pView  = &view_info[image_count];
                 
-                resource_info[i].sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
-                resource_info[i].type  = image->type;
-                resource_info[i].data.pImage = &image_info[image_count];
+                resource_info[resource_count].sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
+                resource_info[resource_count].type  = image->type;
+                resource_info[resource_count].data.pImage = &image_info[image_count];
 
-                host_info[i].address = heap_start + image_offset;
-                host_info[i].size    = resource_heap->image_size;
-
-                //resources[i]->gpu_index = resource_heap->image_count++;
-                //resources[i]->gpu_index += texture_offset;
-                image->heap_index  = resource_heap->image_count++;
-                image->heap_index += texture_offset;
-                image->heap_address = host_info[i].address;
+                host_info[resource_count].address = (u8*)resource_heap->start + image_offset;
+                host_info[resource_count].size    = resource_heap->image_size;
 
                 image_offset += resource_heap->image_size;
+
+                image->heap_index  = resource_heap->image_count++;
+                image->heap_index += image_index_offset;
+                image->heap_address = host_info[resource_count].address;
+                resource_heap->count++;
+                break;
+
+            case DM_RESOURCE_TYPE_SAMPLER:
+                sampler_infos[sampler_count] = renderer->samplers[resource->index].info;
+
+                sampler_host_infos[sampler_count].address = (u8*)sampler_heap->start + sampler_offset;
+                sampler_host_infos[sampler_count].size    = sampler_heap->sampler_size;
+
+                renderer->samplers[resource->index].heap_index = sampler_heap->count++;
+
+                sampler_offset += sampler_heap->sampler_size;
                 break;
 
             case DM_RESOURCE_TYPE_INVALID:
@@ -2185,43 +2198,8 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
         }
     }
 
-    return dm_vulkan_decode_vr(vkWriteResourceDescriptorsEXT(renderer->gpu.device, count, resource_info, host_info));
-}
-
-bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_resource **samplers, u32 count)
-{
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
-    dm_vulkan_gpu gpu = renderer->gpu;
-    dm_vulkan_sampler_descriptor_heap *sampler_heap = &renderer->sampler_heap;
-
-    VkSamplerCreateInfo   infos[DM_MAX_SAMPLERS]     = { 0 };
-    VkHostAddressRangeEXT host_info[DM_MAX_SAMPLERS] = { 0 };
-
-    for(u32 i=0; i<count; i++)
-    {
-        dm_resource *sampler = samplers[i];
-
-        if(sampler->type == DM_RESOURCE_TYPE_INVALID)
-        {
-            LOG_ERROR("Invalid sampler");
-            return false;
-        }
-
-        infos[i] = renderer->samplers[sampler->index].info;
-
-        //sampler->gpu_index = sampler_heap->count++;
-        renderer->samplers[sampler->index].heap_index = sampler_heap->count++;
-
-        host_info[i].address = (uint8_t*)sampler_heap->current;
-        host_info[i].size    = sampler_heap->sampler_size;
-        
-        //
-        uint8_t* ptr = sampler_heap->current;
-        ptr += sampler_heap->sampler_size;
-        sampler_heap->current = ptr;
-    }
-
-    return dm_vulkan_decode_vr(vkWriteSamplerDescriptorsEXT(renderer->gpu.device, count, infos, host_info));
+    if(!dm_vulkan_decode_vr(vkWriteResourceDescriptorsEXT(renderer->gpu.device, resource_heap->count, resource_info, host_info))) return false;
+    return dm_vulkan_decode_vr(vkWriteSamplerDescriptorsEXT(renderer->gpu.device, sampler_heap->count, sampler_infos, sampler_host_infos));
 }
 
 // commands
@@ -2394,6 +2372,12 @@ void dm_render_command_push_resources(dm_context *context, dm_resource *resource
     dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
+    if(sizeof(u32) * count >= renderer->gpu.heap_props.maxPushDataSize)
+    {
+        LOG_ERROR("Trying to push data of size %u when max is size is", sizeof(u32) * count, renderer->gpu.heap_props.maxPushDataSize);
+        return;
+    }
+
     if(renderer->active_pipeline.type==DM_PIPELINE_TYPE_INVALID)
     {
         LOG_ERROR("No valid pipeline bound");
@@ -2425,7 +2409,7 @@ void dm_render_command_push_resources(dm_context *context, dm_resource *resource
 
     VkPushDataInfoEXT info = {
         .sType=VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
-        .data.address=pipeline->push_indices[renderer->frame_index],
+        .data.address=&pipeline->push_indices[renderer->frame_index],
         .data.size=sizeof(u32) * count
     };
 
