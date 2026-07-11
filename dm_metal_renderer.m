@@ -211,6 +211,15 @@ bool dm_renderer_resize(dm_context *context, u16 width, u16 height)
 
     renderer->swapchain.layer.drawableSize = CGSizeMake(width, height);
 
+    [renderer->swapchain.depth_texture release];
+
+    MTLTextureDescriptor *depth_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:width height:height mipmapped:NO];
+    depth_desc.usage = MTLTextureUsageRenderTarget;
+    depth_desc.storageMode = MTLStorageModePrivate;
+    renderer->swapchain.depth_texture = [renderer->device newTextureWithDescriptor:depth_desc];
+
+    [depth_desc release];
+
     return true;
 }
 
