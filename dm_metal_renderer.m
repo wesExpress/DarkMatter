@@ -14,16 +14,6 @@ typedef struct dm_metal_swapchain_t
     u16 width, height;
 } dm_metal_swapchain;
 
-typedef struct dm_metal_render_target_t
-{
-    id<MTLTexture> color_texture;
-
-    MTLLoadAction color_load_op, depth_load_op;
-    MTLStoreAction color_store_op, depth_store_op;
-
-    bool swapchain, depth;
-} dm_metal_render_target;
-
 typedef struct dm_metal_raster_pipe_t
 {
     id<MTLRenderPipelineState> pipeline;
@@ -52,6 +42,20 @@ typedef struct dm_metal_texture_t
     id<MTLTexture> device;
     size_t size;
 } dm_metal_texture;
+
+typedef struct dm_metal_render_target_t
+{
+    id<MTLTexture> render_texture;
+    id<MTLTexture> sample_texture;
+    size_t size;
+
+    u16 width, height;
+
+    MTLLoadAction color_load_op, depth_load_op;
+    MTLStoreAction color_store_op, depth_store_op;
+
+    bool swapchain, depth;
+} dm_metal_render_target;
 
 typedef struct dm_metal_sampler_t
 {
@@ -161,7 +165,8 @@ void dm_renderer_shutdown(dm_context* context)
     {
         if(renderer->rts[i].swapchain) continue;
 
-        [renderer->rts[i].color_texture release];
+        [renderer->rts[i].render_texture release];
+        [renderer->rts[i].sample_texture release];
     }
 
     if(renderer->resource_heap) [renderer->resource_heap release];
@@ -480,21 +485,32 @@ bool dm_renderer_create_render_target(dm_context *context, dm_render_target_desc
 {
     dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
 
+    u16 width = desc.color_attachment.width;
+    u16 height = desc.color_attachment.height;
+
     dm_metal_render_target render_target = { 
         .color_load_op=dm_metal_convert_load(desc.color_attachment.load_op),
         .color_store_op=dm_metal_convert_store(desc.color_attachment.store_op),
         .depth_load_op=dm_metal_convert_load(desc.depth_attachment.load_op),
         .depth_store_op=dm_metal_convert_store(desc.depth_attachment.store_op),
         .depth=desc.depth,
-        .swapchain=desc.swapchain
+        .swapchain=desc.swapchain,
+        .width=width,
+        .height=height
     };
 
     if(!desc.swapchain)
     {
-        size_t color_size = 4 * desc.color_attachment.width * desc.color_attachment.height;
+        size_t heap_size = 4 * desc.color_attachment.width * desc.color_attachment.height;
 
-        render_target.color_texture = dm_metal_create_texture(renderer->device, MTLPixelFormatRGBA8Unorm, desc.color_attachment.width, desc.color_attachment.height, NULL, &color_size);
-        if(!render_target.color_texture) return false;
+        MTLPixelFormat format = MTLPixelFormatRGBA8Unorm;
+
+        MTLTextureDescriptor *texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:width height:height mipmapped:NO];
+        MTLSizeAndAlign size_align = [renderer->device heapTextureSizeAndAlignWithDescriptor:texture_desc];
+        size_align.size += (size_align.size & (size_align.align - 1)) + size_align.align;
+        heap_size = size_align.size;
+
+        render_target.size = heap_size;
     }
 
     //
@@ -597,6 +613,26 @@ bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_re
     return true;
 }
 
+id<MTLTexture> dm_metal_create_rt_texture(id<MTLDevice> device, id<MTLHeap> heap, u16 width, u16 height, MTLTextureUsage usage)
+{
+    id<MTLTexture> texture = NULL;
+
+    MTLTextureDescriptor *texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:width height:height mipmapped:NO];
+    texture_desc.usage = usage;
+    texture_desc.storageMode = MTLStorageModePrivate;
+
+    texture = [heap newTextureWithDescriptor:texture_desc];
+    if(!texture)
+    {
+        LOG_ERROR("newTextureWithDescriptor failed");
+        return NULL;
+    }
+
+    [texture_desc release];
+
+    return texture;
+}
+
 bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *resources[], u32 count)
 {
     dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
@@ -620,6 +656,12 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
                 break;
             case DM_RESOURCE_TYPE_TEXTURE:
                 heap_desc.size += renderer->textures[resource->index].size;
+                break;
+
+            // twice, for target and sampled
+            case DM_RESOURCE_TYPE_RENDER_TARGET:
+                heap_desc.size += renderer->rts[resource->index].size;
+                heap_desc.size += renderer->rts[resource->index].size;
                 break;
 
             case DM_RESOURCE_TYPE_SAMPLER:
@@ -646,7 +688,11 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
 
         dm_metal_buffer *buffer;
         dm_metal_texture *texture;
+        dm_metal_render_target *rt;
+
         MTLTextureDescriptor *texture_desc = NULL;
+        id<MTLTexture> target = NULL;
+        id<MTLTexture> sampled = NULL;
 
         switch(resource->type)
         {
@@ -691,6 +737,16 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
             case DM_RESOURCE_TYPE_SAMPLER:
                 break;
 
+            case DM_RESOURCE_TYPE_RENDER_TARGET:
+                rt = &renderer->rts[resource->index];
+
+                rt->render_texture = dm_metal_create_rt_texture(renderer->device, renderer->resource_heap, rt->width, rt->height, MTLTextureUsageRenderTarget);
+                if(!rt->render_texture) return false;
+                rt->sample_texture = dm_metal_create_rt_texture(renderer->device, renderer->resource_heap, rt->width, rt->height, MTLTextureUsageShaderRead);
+                if(!rt->sample_texture) return false;
+
+                break;
+
             default:
                 LOG_ERROR("Unknown/unsupported resource type");
                 return false;
@@ -722,7 +778,7 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
     dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
     dm_metal_render_target *target = &renderer->rts[handle.index];
 
-    id<MTLTexture> color_texture = target->swapchain ? [renderer->swapchain.drawable texture] : target->color_texture;
+    id<MTLTexture> color_texture = target->swapchain ? [renderer->swapchain.drawable texture] : target->render_texture;
 
     MTLClearColor clear = MTLClearColorMake(r, g, b, a);
 
@@ -799,6 +855,7 @@ void dm_metal_push_raster_data(dm_metal_renderer *renderer, dm_pipeline handle, 
     id<MTLRenderCommandEncoder> encoder = renderer->render_encoder;
     id<MTLBuffer> argument_buffer = pipeline.argument_buffer[renderer->frame_index];
 
+
     id<MTLArgumentEncoder> vertex_encoder = pipeline.vertex_encoder;
     id<MTLArgumentEncoder> fragment_encoder = pipeline.fragment_encoder;
 
@@ -819,6 +876,19 @@ void dm_metal_push_raster_data(dm_metal_renderer *renderer, dm_pipeline handle, 
                 [vertex_encoder setTexture:renderer->textures[resource.index].device atIndex:i];
                 [fragment_encoder setTexture:renderer->textures[resource.index].device atIndex:i];
                 break;
+            case DM_RESOURCE_TYPE_RENDER_TARGET:
+                {
+                    id<MTLCommandBuffer> cmd = [renderer->queue commandBuffer];
+                    id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
+
+                    [blit copyFromTexture:renderer->rts[resource.index].render_texture toTexture:renderer->rts[resource.index].sample_texture];
+
+                    [blit endEncoding];
+                    [cmd commit];
+
+                    [vertex_encoder setTexture:renderer->rts[resource.index].sample_texture atIndex:i];
+                    [fragment_encoder setTexture:renderer->rts[resource.index].sample_texture atIndex:i];
+                } break;
             case DM_RESOURCE_TYPE_SAMPLER:
                 [vertex_encoder setSamplerState:renderer->samplers[resource.index].state atIndex:i];
                 [fragment_encoder setSamplerState:renderer->samplers[resource.index].state atIndex:i];
