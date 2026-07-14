@@ -22,7 +22,7 @@ void dm_arena_detroy(dm_arena *arena)
 
 void* dm_arena_alloc(dm_arena *arena, size_t size, size_t* offset)
 {
-    if(arena->size + size >= arena->capacity) 
+    if(arena->size + size > arena->capacity) 
     {
         LOG_ERROR("Trying to allocate beyond size of arena");
         return NULL;
