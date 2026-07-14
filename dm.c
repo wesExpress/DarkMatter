@@ -34,7 +34,7 @@ void* dm_arena_alloc(dm_arena *arena, size_t size, size_t* offset)
     size = DM_ALIGN(size, 16);
 #endif
 
-    *offset = arena->size;
+    if(offset) *offset = arena->size;
     arena->size += size;
     arena->current += size;
 
