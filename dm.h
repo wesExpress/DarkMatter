@@ -259,8 +259,7 @@ typedef struct dm_arena_t
 typedef struct dm_window_t
 {
     u16 width, height;
-
-    size_t offset;
+    void *internal_window;
 } dm_window;
 
 // renderer
@@ -268,8 +267,7 @@ typedef struct dm_renderer_t
 {
     u16 width, height;
     u8 current_frame;
-
-    size_t offset;
+    void *internal_renderer;
 } dm_renderer;
 
 typedef enum dm_context_flag_t
@@ -293,8 +291,7 @@ typedef struct dm_context_t
 // functions
 void dm_arena_create(dm_arena *arena, size_t size);
 void dm_arena_detroy(dm_arena *arena);
-void* dm_arena_alloc(dm_arena *arena, size_t size, size_t *offset);
-void* dm_arena_get_ptr(dm_arena arena, size_t offset);
+void* dm_arena_alloc(dm_arena *arena, size_t size);
 
 bool dm_init(dm_context *context, u16 width, u16 height, const char *title, dm_context_flag flags);
 void dm_shutdown(dm_context *context);

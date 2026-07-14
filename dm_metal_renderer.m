@@ -103,8 +103,10 @@ bool dm_renderer_init(dm_context* context)
 {
     LOG_INFO("Initializing metal backend...");
 
-    dm_metal_renderer *renderer = dm_arena_alloc(&context->arena, sizeof(dm_metal_renderer), &context->renderer.offset);
-    if(!renderer) return false;
+    context->renderer.internal_renderer = dm_arena_alloc(&context->arena, sizeof(dm_metal_renderer));
+    if(!context->renderer.internal_renderer) return false;
+
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     renderer->device = MTLCreateSystemDefaultDevice();
 
@@ -134,7 +136,7 @@ bool dm_renderer_init(dm_context* context)
 
 void dm_renderer_shutdown(dm_context* context)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     for(u32 i=0; i<renderer->buffer_count; i++)
     {
@@ -179,7 +181,7 @@ void dm_renderer_shutdown(dm_context* context)
 
 bool dm_renderer_begin_frame(dm_context* context)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     renderer->swapchain.drawable = [renderer->swapchain.layer nextDrawable];
     if(!renderer->swapchain.drawable)
@@ -195,7 +197,7 @@ bool dm_renderer_begin_frame(dm_context* context)
 
 bool dm_renderer_end_frame(dm_context* context)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     [renderer->cmd presentDrawable:renderer->swapchain.drawable];
     [renderer->cmd commit];
@@ -212,7 +214,7 @@ bool dm_renderer_end_frame(dm_context* context)
 
 bool dm_renderer_resize(dm_context *context, u16 width, u16 height)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     renderer->swapchain.width = width;
     renderer->swapchain.height = height;
@@ -315,7 +317,7 @@ MTLBlendFactor dm_metal_convert_blend_factor(dm_blend_factor factor)
 
 bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc desc, dm_pipeline *handle)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     dm_metal_raster_pipe pipeline = { 0 };
 
@@ -483,7 +485,7 @@ id<MTLTexture> dm_metal_create_texture(id<MTLDevice> device, MTLPixelFormat form
 
 bool dm_renderer_create_render_target(dm_context *context, dm_render_target_desc desc, dm_resource *handle)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     u16 width = desc.color_attachment.width;
     u16 height = desc.color_attachment.height;
@@ -523,7 +525,7 @@ bool dm_renderer_create_render_target(dm_context *context, dm_render_target_desc
 
 bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_resource *handle)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     dm_metal_buffer buffer = { 0 };
 
@@ -562,7 +564,7 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_reso
 
 bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_resource *handle)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     dm_metal_texture texture = { 0 };
 
@@ -581,7 +583,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 
 bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_resource *handle)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     dm_metal_sampler sampler = { 0 };
 
@@ -635,7 +637,7 @@ id<MTLTexture> dm_metal_create_rt_texture(id<MTLDevice> device, id<MTLHeap> heap
 
 bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *resources[], u32 count)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     id<MTLCommandBuffer> cmd = [renderer->queue commandBuffer];
     id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
@@ -706,6 +708,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
                     return false;
                 }
 
+                if(!buffer->host.contents) LOG_ERROR("No data");
                 [blit copyFromBuffer:buffer->host sourceOffset:0 toBuffer:buffer->device destinationOffset:0 size:buffer->size];
                 break;
             case DM_RESOURCE_TYPE_TEXTURE:
@@ -768,14 +771,14 @@ bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_resource *sampl
 
 bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handle)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
     return true;
 }
 
 // commands
 void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_render_target *target = &renderer->rts[handle.index];
 
     id<MTLTexture> color_texture = target->swapchain ? [renderer->swapchain.drawable texture] : target->render_texture;
@@ -820,14 +823,14 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
 
 void dm_render_command_end_rendering(dm_context *context, dm_resource handle)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     [renderer->render_encoder endEncoding];
 }
 
 void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_raster_pipe pipeline = renderer->rps[handle.index];
 
     id<MTLRenderCommandEncoder> encoder = renderer->render_encoder;
@@ -843,7 +846,7 @@ void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 
 void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     renderer->active_index_buffer = renderer->buffers[handle.index].device;
 }
@@ -905,7 +908,7 @@ void dm_metal_push_raster_data(dm_metal_renderer *renderer, dm_pipeline handle, 
 
 void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     switch(renderer->active_pipeline.type)
     {
@@ -922,7 +925,7 @@ void dm_render_command_push_resources(dm_context *context, dm_resource *resource
 
 void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
     id<MTLRenderCommandEncoder> encoder = renderer->render_encoder;
 
     [encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:index_count indexType:MTLIndexTypeUInt32 indexBuffer:renderer->active_index_buffer indexBufferOffset:0 instanceCount:instance_count];
@@ -930,7 +933,7 @@ void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_c
 
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_buffer buffer = renderer->buffers[handle.index];
 
     id<MTLCommandBuffer> cmd = [renderer->queue commandBuffer];
@@ -946,27 +949,27 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
     return true;
 }
 
 void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_resource dst)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 }
 
 // compute commands
 void dm_compute_command_push_data(dm_context *context, void *data, size_t size)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 }
 
 void dm_compute_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 }
 
 void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
 {
-    dm_metal_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
 }

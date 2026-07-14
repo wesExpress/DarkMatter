@@ -20,7 +20,7 @@ void dm_arena_detroy(dm_arena *arena)
     arena->current = NULL;
 }
 
-void* dm_arena_alloc(dm_arena *arena, size_t size, size_t* offset)
+void* dm_arena_alloc(dm_arena *arena, size_t size)
 {
     if(arena->size + size > arena->capacity) 
     {
@@ -34,16 +34,10 @@ void* dm_arena_alloc(dm_arena *arena, size_t size, size_t* offset)
     size = DM_ALIGN(size, 16);
 #endif
 
-    if(offset) *offset = arena->size;
     arena->size += size;
     arena->current += size;
 
     return arena->current - size;;
-}
-
-void* dm_arena_get_ptr(dm_arena arena, size_t offset)
-{
-    return arena.start + offset;
 }
 
 extern bool dm_window_create(dm_context *context, u16 width, u16 height, const char *title);
@@ -61,9 +55,7 @@ extern size_t dm_renderer_get_internal_size();
 // context
 bool dm_init(dm_context* context, u16 width, u16 height, const char* title, dm_context_flag flags)
 {
-    size_t size = sizeof(dm_context);
-
-    size += dm_window_get_internal_size();
+    size_t size = dm_window_get_internal_size();
     size += dm_renderer_get_internal_size();
 
     dm_arena_create(&context->arena, size);
