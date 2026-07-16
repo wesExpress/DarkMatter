@@ -11,6 +11,10 @@ void dm_arena_create(dm_arena *arena, size_t size)
     arena->capacity = size;
     arena->start = calloc(sizeof(u8), size);
     arena->current = arena->start;
+
+#ifdef DM_DEBUG
+    LOG_INFO("Arena size: %zu", arena->capacity);
+#endif
 }
 
 void dm_arena_detroy(dm_arena *arena)

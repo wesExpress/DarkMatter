@@ -644,7 +644,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
 
     MTLHeapDescriptor *heap_desc = [MTLHeapDescriptor new];
     heap_desc.storageMode = MTLStorageModePrivate;
-    heap_desc.size = 0;
+    heap_desc.size = 100 * DM_MEGABYTE;
 
     // get heap size
     for(u32 i=0; i<count; i++)
@@ -950,6 +950,30 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
+
+    switch(handle.type)
+    {
+        case DM_RESOURCE_TYPE_TEXTURE: 
+            return true;
+
+        case DM_RESOURCE_TYPE_RENDER_TARGET:
+        {
+            dm_metal_render_target *target = &renderer->rts[handle.index];
+
+            [target->render_texture release];
+            [target->sample_texture release];
+
+            target->render_texture = dm_metal_create_rt_texture(renderer->device, renderer->resource_heap, width, height, MTLTextureUsageRenderTarget);
+            if(!target->render_texture) return false;
+            target->sample_texture = dm_metal_create_rt_texture(renderer->device, renderer->resource_heap, width, height, MTLTextureUsageShaderRead);
+            if(!target->sample_texture) return false;
+        } break;
+
+        default:
+            LOG_ERROR("Invalid resource");
+            return false;
+    }
+
     return true;
 }
 
