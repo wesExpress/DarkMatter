@@ -2246,6 +2246,8 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
 // commands
 void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_RENDER_TARGET, "Invalid render target");
+
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
@@ -2364,6 +2366,8 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
 
 void dm_render_command_end_rendering(dm_context *context, dm_resource handle)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_RENDER_TARGET, "Invalid render target");
+
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
@@ -2398,6 +2402,8 @@ void dm_render_command_end_rendering(dm_context *context, dm_resource handle)
 
 void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 {
+    DM_ASSERT(handle.type==DM_PIPELINE_TYPE_RASTER, "Invalid raster pipeline");
+
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
@@ -2431,42 +2437,28 @@ void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 
 void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_BUFFER, "Invalid buffer");
+
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
+    DM_ASSERT(buffer.type==DM_BUFFER_TYPE_INDEX, "Not an index buffer");
+
     vkCmdBindIndexBuffer(frame_data.gfx_cmd, buffer.device, offset, VK_INDEX_TYPE_UINT32);
-}
-
-void dm_render_command_push_data(dm_context* context, void* data, size_t size)
-{
-    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
-    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
-
-    VkPushDataInfoEXT info = {
-        .sType=VK_STRUCTURE_TYPE_PUSH_DATA_INFO_EXT,
-        .data.address=data,
-        .data.size=size
-    };
-
-    vkCmdPushDataEXT(frame_data.gfx_cmd, &info);
 }
 
 void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count)
 {
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
+    DM_ASSERT(renderer->active_pipeline.type!=DM_PIPELINE_TYPE_INVALID, "No active pipeline");
+    
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     if(sizeof(u32) * count >= renderer->gpu.heap_props.maxPushDataSize)
     {
         LOG_ERROR("Trying to push data of size %u when max is size is", sizeof(u32) * count, renderer->gpu.heap_props.maxPushDataSize);
-        return;
-    }
-
-    if(renderer->active_pipeline.type==DM_PIPELINE_TYPE_INVALID)
-    {
-        LOG_ERROR("No valid pipeline bound");
         return;
     }
 
@@ -2516,6 +2508,8 @@ void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_c
 
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_BUFFER, "Invalid buffer");
+
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
@@ -2546,6 +2540,8 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_TEXTURE, "Invalid texture");
+
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_image *image = &renderer->images[handle.index];
@@ -2619,6 +2615,8 @@ bool dm_render_command_update_texture(dm_context *context, dm_resource handle, v
 
 bool dm_render_command_resize_render_target(dm_context *context, dm_resource resource, u16 width, u16 height)
 {
+    DM_ASSERT(resource.type==DM_RESOURCE_TYPE_RENDER_TARGET, "Invalid render target");
+
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_render_target *target = &renderer->rts[resource.index];
 
