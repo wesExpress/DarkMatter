@@ -956,23 +956,26 @@ bool dm_render_command_update_texture(dm_context *context, dm_resource handle, v
         case DM_RESOURCE_TYPE_TEXTURE: 
             return true;
 
-        case DM_RESOURCE_TYPE_RENDER_TARGET:
-        {
-            dm_metal_render_target *target = &renderer->rts[handle.index];
-
-            [target->render_texture release];
-            [target->sample_texture release];
-
-            target->render_texture = dm_metal_create_rt_texture(renderer->device, renderer->resource_heap, width, height, MTLTextureUsageRenderTarget);
-            if(!target->render_texture) return false;
-            target->sample_texture = dm_metal_create_rt_texture(renderer->device, renderer->resource_heap, width, height, MTLTextureUsageShaderRead);
-            if(!target->sample_texture) return false;
-        } break;
-
         default:
             LOG_ERROR("Invalid resource");
             return false;
     }
+
+    return true;
+}
+
+bool dm_render_command_resize_render_target(dm_context *context, dm_resource resource, u16 width, u16 height)
+{
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_render_target *target = &renderer->rts[resource.index];
+
+    [target->render_texture release];
+    [target->sample_texture release];
+
+    target->render_texture = dm_metal_create_rt_texture(renderer->device, renderer->resource_heap, width, height, MTLTextureUsageRenderTarget);
+    if(!target->render_texture) return false;
+    target->sample_texture = dm_metal_create_rt_texture(renderer->device, renderer->resource_heap, width, height, MTLTextureUsageShaderRead);
+    if(!target->sample_texture) return false;
 
     return true;
 }
