@@ -2340,7 +2340,7 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
         .sType=VK_STRUCTURE_TYPE_RENDERING_INFO,
         .colorAttachmentCount=1,
         .pColorAttachments=&color_info,
-        .pDepthAttachment=&depth_info,
+        .pDepthAttachment=target.depth ? &depth_info : NULL,
         .layerCount=1,
         .renderArea.extent.width=width,
         .renderArea.extent.height=height
