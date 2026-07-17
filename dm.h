@@ -9,6 +9,10 @@
 #define DM_DEBUG
 #endif
 
+#ifdef DM_DEBUG
+#include <assert.h>
+#endif
+
 typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -30,6 +34,12 @@ typedef uint64_t u64;
 #define LOG_WARN(...)  WRN(__VA_ARGS__)
 #define LOG_ERROR(...) ERR(__VA_ARGS__)
 #define LOG_FATAL(...) FTL(__VA_ARGS__)
+
+#ifdef DM_DEBUG
+#define DM_ASSERT(VALUE, MSG) assert((MSG, VALUE))
+#else
+#define DM_ASSERT(VALUE, MSG) 
+#endif
 
 //#define DM_RAY_TRACE
 
@@ -93,11 +103,12 @@ typedef struct dm_resource_t
 #define DM_MAX_TEXTURES 10
 #define DM_MAX_BUFFERS  (10 * 2 + DM_MAX_TEXTURES) // CPU,GPU and textures need buffers
 #define DM_MAX_SAMPLERS 10
+#define DM_MAX_RENDER_TARGETS 10
 #ifdef DM_RAY_TRACE
 #define DM_MAX_ACCELS   10
-#define DM_MAX_RESOURCES (DM_MAX_TEXTURES + DM_MAX_BUFFERS + DM_MAX_SAMPLERS + DM_MAX_ACCELS)
+#define DM_MAX_RESOURCES (DM_MAX_RENDER_TARGETS + DM_MAX_TEXTURES + DM_MAX_BUFFERS + DM_MAX_SAMPLERS + DM_MAX_ACCELS)
 #else
-#define DM_MAX_RESOURCES (DM_MAX_TEXTURES + DM_MAX_BUFFERS + DM_MAX_SAMPLERS)
+#define DM_MAX_RESOURCES (DM_MAX_RENDER_TARGETS + DM_MAX_TEXTURES + DM_MAX_BUFFERS + DM_MAX_SAMPLERS)
 #endif
 
 /**************
@@ -333,6 +344,8 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height);
 void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_resource dst);
+
+bool dm_render_command_resize_render_target(dm_context *context, dm_resource resource, u16 width, u16 height);
 
 // compute commands
 void dm_compute_command_push_data(dm_context *context, void *data, size_t size);

@@ -131,8 +131,9 @@ typedef struct dm_vulkan_buffer_t
 
 typedef struct dm_vulkan_render_target_t
 {
-    dm_resource color_target; // ignored if swapchain
-    dm_resource depth_target; // ignored if swapchain
+    VkImage target;
+    VmaAllocation alloc;
+    VkImageView target_view;
 
     VkAttachmentLoadOp  color_load_op;
     VkAttachmentStoreOp color_store_op;
@@ -140,6 +141,10 @@ typedef struct dm_vulkan_render_target_t
     VkAttachmentStoreOp depth_store_op;
 
     bool swapchain, depth;
+
+    u32 heap_index;
+    u16 width, height;
+    void *heap_address; 
 } dm_vulkan_render_target;
 
 typedef struct dm_vulkan_sampler_t
@@ -180,11 +185,11 @@ typedef struct dm_vulkan_renderer_t
     dm_vulkan_image images[DM_MAX_TEXTURES * DM_FRAMES_IN_FLIGHT];
     dm_vulkan_buffer buffers[DM_MAX_BUFFERS * DM_FRAMES_IN_FLIGHT]; 
     dm_vulkan_sampler samplers[DM_MAX_SAMPLERS * DM_FRAMES_IN_FLIGHT];
-    u32 image_count, buffer_count, sampler_count;
+    dm_vulkan_render_target rts[DM_MAX_RENDER_TARGETS * DM_FRAMES_IN_FLIGHT];
+    u32 image_count, buffer_count, sampler_count, rt_count;
 
-    dm_vulkan_pipeline      pipes[DM_MAX_PIPELINES];
-    dm_vulkan_render_target rts[DM_MAX_TEXTURES];
-    u32 pipe_count, rt_count;
+    dm_vulkan_pipeline pipes[DM_MAX_PIPELINES];
+    u32 pipe_count;
 
     dm_pipeline active_pipeline;
 } dm_vulkan_renderer;
@@ -1164,7 +1169,8 @@ bool dm_renderer_init(dm_context* context)
     if(sampler_heap.buffer == VK_NULL_HANDLE) { LOG_ERROR("Could not create sampler descriptor heap"); return false; }
 
     // assign
-    dm_vulkan_renderer* renderer = dm_arena_alloc(&context->arena, sizeof(dm_vulkan_renderer), &context->renderer.offset);
+    context->renderer.internal_renderer = dm_arena_alloc(&context->arena, sizeof(dm_vulkan_renderer));
+    dm_vulkan_renderer* renderer = context->renderer.internal_renderer;
 
     renderer->instance = instance;
     renderer->allocator = allocator;
@@ -1186,7 +1192,7 @@ bool dm_renderer_init(dm_context* context)
 
 void dm_renderer_shutdown(dm_context* context)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_surface surface = renderer->surface;
@@ -1198,16 +1204,19 @@ void dm_renderer_shutdown(dm_context* context)
     {
         vkDestroyPipeline(gpu.device, renderer->pipes[i].pipeline, NULL);
     }
-
     for(u32 i=0; i<renderer->buffer_count; i++)
     {
         vmaDestroyBuffer(renderer->allocator, renderer->buffers[i].host, renderer->buffers[i].host_alloc);
         vmaDestroyBuffer(renderer->allocator, renderer->buffers[i].device, renderer->buffers[i].device_alloc);
     }
-
     for(u32 i=0; i<renderer->image_count; i++)
     {
         vmaDestroyImage(renderer->allocator, renderer->images[i].image, renderer->images[i].allocation);
+    }
+    for(u32 i=0; i<renderer->rt_count; i++)
+    {
+        vmaDestroyImage(renderer->allocator, renderer->rts[i].target, renderer->rts[i].alloc);
+        vkDestroyImageView(renderer->gpu.device, renderer->rts[i].target_view, NULL);
     }
 
     vmaUnmapMemory(renderer->allocator, renderer->resource_heap.allocation);
@@ -1240,7 +1249,7 @@ bool dm_renderer_resize(dm_context *context, u16 width, u16 height)
     LOG_WARN("Renderer resized: %u %u", width, height);
 #endif
 
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
@@ -1277,7 +1286,7 @@ size_t dm_renderer_get_internal_size()
 
 bool dm_renderer_begin_frame(dm_context* context)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_swapchain swapchain = renderer->swapchain;
@@ -1351,7 +1360,7 @@ bool dm_renderer_begin_frame(dm_context* context)
 
 bool dm_renderer_end_frame(dm_context* context)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
@@ -1529,7 +1538,7 @@ VkBlendFactor dm_convert_blend_factor(dm_blend_factor factor)
 
 bool dm_renderer_create_raster_pipeline(dm_context* context, dm_raster_pipe_desc desc, dm_pipeline *handle)
 {
-    dm_vulkan_renderer* renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_pipeline pipe = { 0 };
 
@@ -1715,9 +1724,35 @@ VkAttachmentStoreOp dm_vulkan_store_op_convert(dm_render_attachment_store_op op)
     }
 }
 
+bool dm_vulkan_create_image(VmaAllocator allocator, VkImageUsageFlags usage, VkFormat format, u16 width, u16 height, VkImage *image, VmaAllocation *allocation)
+{
+    VkImageCreateInfo image_info = {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
+        .imageType=VK_IMAGE_TYPE_2D,
+        .format=format,
+        .extent.width=width,
+        .extent.height=height,
+        .extent.depth=1,
+        .mipLevels=1,
+        .arrayLayers=1,
+        .samples=VK_SAMPLE_COUNT_1_BIT,
+        .tiling=VK_IMAGE_TILING_OPTIMAL,
+        .usage=usage,
+        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED
+    };
+    VmaAllocationCreateInfo alloc_info = {
+        .usage=VMA_MEMORY_USAGE_AUTO,
+    };
+
+    if(dm_vulkan_decode_vr(vmaCreateImage(allocator, &image_info, &alloc_info, image, allocation, NULL))) return true;
+
+    LOG_ERROR("vmaCreateImage failed");
+    return false;
+}
+
 bool dm_renderer_create_render_target(dm_context* context, dm_render_target_desc desc, dm_resource *handle)
 {
-    dm_vulkan_renderer* renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_render_target target = { 
         .color_load_op=dm_vulkan_load_op_convert(desc.color_attachment.load_op),
@@ -1725,40 +1760,40 @@ bool dm_renderer_create_render_target(dm_context* context, dm_render_target_desc
         .depth_load_op=dm_vulkan_load_op_convert(desc.depth_attachment.load_op),
         .depth_store_op=dm_vulkan_store_op_convert(desc.depth_attachment.store_op),
         .swapchain=desc.swapchain,
-        .depth=desc.depth
+        .depth=desc.depth,
+        .width=desc.color_attachment.width,
+        .height=desc.color_attachment.height
     };
 
+
+    if(!desc.swapchain)
+    {
+        const u16 width = desc.color_attachment.width;
+        const u16 height = desc.color_attachment.height;
+
+        VkImageUsageFlags usage = 
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+            VK_IMAGE_USAGE_SAMPLED_BIT;
+
+        if(!dm_vulkan_create_image(renderer->allocator, usage, DM_SWAPCHAIN_FORMAT, width, height, &target.target, &target.alloc)) return false;
+
+        VkImageViewCreateInfo view_info = {
+            .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+            .viewType=VK_IMAGE_VIEW_TYPE_2D,
+            .image=target.target,
+            .format=DM_SWAPCHAIN_FORMAT,
+            .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+            .subresourceRange.layerCount=1,
+            .subresourceRange.levelCount=1
+        };
+
+        if(!dm_vulkan_decode_vr(vkCreateImageView(renderer->gpu.device, &view_info, NULL, &target.target_view))) return false;
+    }
+
+    //
     renderer->rts[renderer->rt_count] = target;
     handle->index = renderer->rt_count++;
     handle->type = DM_RESOURCE_TYPE_RENDER_TARGET;
-
-    return true;
-}
-
-bool dm_vulkan_create_descriptor_heap(VmaAllocator allocator, size_t size, VkBuffer *buffer, VmaAllocation *allocation, void** start)
-{
-    VkBufferCreateInfo buffer_info = {
-        .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
-        .usage=VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT | VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
-        .size=size
-    };
-
-    VmaAllocationCreateInfo alloc_info = {
-        .usage=VMA_MEMORY_USAGE_CPU_TO_GPU,
-        .flags=VMA_ALLOCATION_CREATE_MAPPED_BIT
-    };
-
-    if(!dm_vulkan_decode_vr(vmaCreateBuffer(allocator, &buffer_info, &alloc_info, buffer, allocation, NULL)))
-    {
-        LOG_ERROR("vmaCreateBuffer failed");
-        return false;
-    }
-
-    if(!dm_vulkan_decode_vr(vmaMapMemory(allocator, *allocation, start)))
-    {
-        LOG_ERROR("vmaMapMemory failed");
-        return false;
-    }
 
     return true;
 }
@@ -1821,7 +1856,7 @@ bool dm_vulkan_copy_to_buffer(VmaAllocator allocator, dm_vulkan_buffer buffer, v
 
 bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_resource *handle)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     if(renderer->buffer_count >= DM_MAX_BUFFERS)
     {
@@ -1901,37 +1936,11 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_reso
 
 u64 dm_renderer_get_buffer_address(dm_context *context, dm_resource handle)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
     return dm_vulkan_get_buffer_address(renderer->gpu.device, buffer.device);
-}
-
-bool dm_vulkan_create_image(VmaAllocator allocator, VkImageUsageFlags usage, VkFormat format, u16 width, u16 height, VkImage *image, VmaAllocation *allocation)
-{
-    VkImageCreateInfo image_info = {
-        .sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
-        .imageType=VK_IMAGE_TYPE_2D,
-        .format=format,
-        .extent.width=width,
-        .extent.height=height,
-        .extent.depth=1,
-        .mipLevels=1,
-        .arrayLayers=1,
-        .samples=VK_SAMPLE_COUNT_1_BIT,
-        .tiling=VK_IMAGE_TILING_OPTIMAL,
-        .usage=usage,
-        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED
-    };
-    VmaAllocationCreateInfo alloc_info = {
-        .usage=VMA_MEMORY_USAGE_AUTO,
-    };
-
-    if(dm_vulkan_decode_vr(vmaCreateImage(allocator, &image_info, &alloc_info, image, allocation, NULL))) return true;
-
-    LOG_ERROR("vmaCreateImage failed");
-    return false;
 }
 
 void dm_vulkan_copy_buffer_to_image(dm_vulkan_gpu gpu, VkCommandPool pool, VkImage image, VkBuffer buffer, u16 width, u16 height)
@@ -1996,7 +2005,7 @@ void dm_vulkan_copy_buffer_to_image(dm_vulkan_gpu gpu, VkCommandPool pool, VkIma
 
 bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_resource *handle)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     if(renderer->image_count >= DM_MAX_TEXTURES)
     {
@@ -2063,7 +2072,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 
 bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_resource *handle)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     if(renderer->sampler_count >= DM_MAX_SAMPLERS)
     {
@@ -2092,7 +2101,7 @@ bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_re
 
 bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *resources[], u32 count)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_resource_descriptor_heap *resource_heap = &renderer->resource_heap;
     dm_vulkan_sampler_descriptor_heap  *sampler_heap  = &renderer->sampler_heap;
@@ -2100,8 +2109,8 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
     VkResourceDescriptorInfoEXT resource_info[DM_MAX_RESOURCES * DM_FRAMES_IN_FLIGHT] = { 0 };
     VkHostAddressRangeEXT       host_info[DM_MAX_RESOURCES * DM_FRAMES_IN_FLIGHT]     = { 0 };
     VkDeviceAddressRangeKHR     addresses[DM_MAX_BUFFERS * DM_FRAMES_IN_FLIGHT]       = { 0 };
-    VkImageDescriptorInfoEXT    image_info[DM_MAX_TEXTURES * DM_FRAMES_IN_FLIGHT]     = { 0 };
-    VkImageViewCreateInfo       view_info[DM_MAX_TEXTURES * DM_FRAMES_IN_FLIGHT]      = { 0 };
+    VkImageDescriptorInfoEXT    image_info[(DM_MAX_TEXTURES + DM_MAX_RENDER_TARGETS) * DM_FRAMES_IN_FLIGHT] = { 0 };
+    VkImageViewCreateInfo       view_info[(DM_MAX_TEXTURES + DM_MAX_RENDER_TARGETS) * DM_FRAMES_IN_FLIGHT]  = { 0 };
 
     VkSamplerCreateInfo   sampler_infos[DM_MAX_SAMPLERS]      = { 0 };
     VkHostAddressRangeEXT sampler_host_infos[DM_MAX_SAMPLERS] = { 0 };
@@ -2117,8 +2126,9 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
     {
         dm_resource *resource = resources[i];
 
-        dm_vulkan_buffer *buffer;
-        dm_vulkan_image  *image;
+        dm_vulkan_buffer *buffer = NULL;
+        dm_vulkan_image  *image = NULL;
+        dm_vulkan_render_target *target = NULL;
         
         buffer_count = resource_heap->buffer_count;
         image_count  = resource_heap->image_count;
@@ -2176,6 +2186,37 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
                 resource_heap->count++;
                 break;
 
+            case DM_RESOURCE_TYPE_RENDER_TARGET:
+                target = &renderer->rts[resource->index];
+
+                view_info[image_count].sType    = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+                view_info[image_count].viewType = VK_IMAGE_VIEW_TYPE_2D;
+                view_info[image_count].image    = target->target;
+                view_info[image_count].format   = DM_SWAPCHAIN_FORMAT;
+                view_info[image_count].subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+                view_info[image_count].subresourceRange.layerCount = 1;
+                view_info[image_count].subresourceRange.levelCount = 1;
+
+                image_info[image_count].sType  = VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT;
+                image_info[image_count].layout = VK_IMAGE_LAYOUT_GENERAL;
+                image_info[image_count].pView  = &view_info[image_count];
+                
+                resource_info[resource_count].sType = VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT;
+                resource_info[resource_count].type  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+                resource_info[resource_count].data.pImage = &image_info[image_count];
+
+                host_info[resource_count].address = (u8*)resource_heap->start + image_offset;
+                host_info[resource_count].size    = resource_heap->image_size;
+
+                image_offset += resource_heap->image_size;
+
+                target->heap_index  = resource_heap->image_count++;
+                target->heap_index += image_index_offset;
+                target->heap_address = host_info[resource_count].address;
+                resource_heap->count++;
+
+                break;
+
             case DM_RESOURCE_TYPE_SAMPLER:
                 sampler_infos[sampler_count] = renderer->samplers[resource->index].info;
 
@@ -2205,15 +2246,34 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
 // commands
 void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     dm_vulkan_render_target target = renderer->rts[handle.index];
 
-    VkImage     color_image = renderer->swapchain.images[renderer->swapchain.index].image;
-    VkImageView color_view  = renderer->swapchain.images[renderer->swapchain.index].view;
+    VkImage     color_image; 
+    VkImageView color_view;
     VkImage     depth_image = renderer->swapchain.depth_image.image;
     VkImageView depth_view  = renderer->swapchain.depth_image.view;
+
+    u16 width, height;
+
+    if(target.swapchain)
+    {
+        color_image = renderer->swapchain.images[renderer->swapchain.index].image;
+        color_view  = renderer->swapchain.images[renderer->swapchain.index].view;
+
+        width = renderer->swapchain.width;
+        height = renderer->swapchain.height;
+    }
+    else
+    {
+        color_image = target.target;
+        color_view  = target.target_view;
+
+        width = target.width;
+        height = target.height;
+    }
 
     VkImageMemoryBarrier2 color_barrier = {
         .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -2282,37 +2342,63 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
         .pColorAttachments=&color_info,
         .pDepthAttachment=&depth_info,
         .layerCount=1,
-        .renderArea.extent.width=renderer->swapchain.width,
-        .renderArea.extent.height=renderer->swapchain.height
+        .renderArea.extent.width=width,
+        .renderArea.extent.height=height
     };
     vkCmdBeginRendering(frame_data.gfx_cmd, &render_info);
 
     VkViewport viewport = {
-        .width=renderer->swapchain.width,
-        .height=renderer->swapchain.height,
+        .width=width,
+        .height=height,
         .maxDepth=1
     };
 
     VkRect2D scissor = {
-        .extent.width=renderer->swapchain.width,
-        .extent.height=renderer->swapchain.height
+        .extent.width=width,
+        .extent.height=height
     };
 
     vkCmdSetViewport(frame_data.gfx_cmd, 0,1, &viewport);
-    vkCmdSetScissor(frame_data.gfx_cmd, 0, 1, &scissor);
+    vkCmdSetScissor(frame_data.gfx_cmd,  0,1, &scissor);
 }
 
 void dm_render_command_end_rendering(dm_context *context, dm_resource handle)
 {
-    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
+    dm_vulkan_render_target target = renderer->rts[handle.index];
+
     vkCmdEndRendering(frame_data.gfx_cmd);
+
+    // if we aren't swapchain, move image to shader read 
+    if(target.swapchain) return;
+    
+    VkImageMemoryBarrier2 color_barrier = {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask=VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT,
+        .dstAccessMask=VK_ACCESS_2_COLOR_ATTACHMENT_READ_BIT,
+        .oldLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .image=target.target,
+        .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+        .subresourceRange.levelCount=1,
+        .subresourceRange.layerCount=1
+    };
+
+    VkDependencyInfo dep_info = {
+        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount=1,
+        .pImageMemoryBarriers=&color_barrier
+    };
+    vkCmdPipelineBarrier2(frame_data.gfx_cmd, &dep_info);
 }
 
 void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 {
-    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     dm_vulkan_pipeline pipeline = renderer->pipes[handle.index];
@@ -2345,7 +2431,7 @@ void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 
 void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset)
 {
-    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
@@ -2355,7 +2441,7 @@ void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle
 
 void dm_render_command_push_data(dm_context* context, void* data, size_t size)
 {
-    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     VkPushDataInfoEXT info = {
@@ -2369,7 +2455,7 @@ void dm_render_command_push_data(dm_context* context, void* data, size_t size)
 
 void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count)
 {
-    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     if(sizeof(u32) * count >= renderer->gpu.heap_props.maxPushDataSize)
@@ -2398,9 +2484,13 @@ void dm_render_command_push_resources(dm_context *context, dm_resource *resource
             case DM_RESOURCE_TYPE_TEXTURE:
                 pipeline->push_indices[renderer->frame_index][i] = renderer->images[resource.index].heap_index;
                 break;
+            case DM_RESOURCE_TYPE_RENDER_TARGET:
+                pipeline->push_indices[renderer->frame_index][i] = renderer->rts[resource.index].heap_index;
+                break;
             case DM_RESOURCE_TYPE_SAMPLER:
                 pipeline->push_indices[renderer->frame_index][i] = renderer->samplers[resource.index].heap_index;
                 break;
+
             default:
                 LOG_ERROR("Unknown/unsupported resource type");
                 return;
@@ -2418,7 +2508,7 @@ void dm_render_command_push_resources(dm_context *context, dm_resource *resource
 
 void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count)
 {
-    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     vkCmdDrawIndexed(frame_data.gfx_cmd, index_count, instance_count, 0, 0, 0);
@@ -2426,7 +2516,7 @@ void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_c
 
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
@@ -2456,7 +2546,7 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_image *image = &renderer->images[handle.index];
     dm_vulkan_buffer *staging_buffer = &renderer->buffers[image->buffer_index];
@@ -2527,12 +2617,73 @@ bool dm_render_command_update_texture(dm_context *context, dm_resource handle, v
     return true;
 }
 
+bool dm_render_command_resize_render_target(dm_context *context, dm_resource resource, u16 width, u16 height)
+{
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
+    dm_vulkan_render_target *target = &renderer->rts[resource.index];
+
+    vmaDestroyImage(renderer->allocator, target->target, target->alloc);
+    vkDestroyImageView(renderer->gpu.device, target->target_view, NULL);
+
+    VkImageUsageFlags usage = 
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+        VK_IMAGE_USAGE_SAMPLED_BIT;
+
+    if(!dm_vulkan_create_image(renderer->allocator, usage, DM_SWAPCHAIN_FORMAT, width, height, &target->target, &target->alloc)) return false;
+
+    VkImageViewCreateInfo view_info = {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .viewType=VK_IMAGE_VIEW_TYPE_2D,
+        .image=target->target,
+        .format=DM_SWAPCHAIN_FORMAT,
+        .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+        .subresourceRange.layerCount=1,
+        .subresourceRange.levelCount=1
+    };
+
+    if(!dm_vulkan_decode_vr(vkCreateImageView(renderer->gpu.device, &view_info, NULL, &target->target_view))) return false;
+
+    VkImageViewCreateInfo heap_view = {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
+        .image=target->target,
+        .viewType=VK_IMAGE_VIEW_TYPE_2D,
+        .format=DM_SWAPCHAIN_FORMAT,
+        .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+        .subresourceRange.layerCount=1,
+        .subresourceRange.levelCount=1
+    };
+
+    VkImageDescriptorInfoEXT image_descriptor = {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_DESCRIPTOR_INFO_EXT,
+        .layout=VK_IMAGE_LAYOUT_GENERAL,
+        .pView=&heap_view,
+    };
+
+    VkResourceDescriptorInfoEXT resource_descriptor = {
+        .sType=VK_STRUCTURE_TYPE_RESOURCE_DESCRIPTOR_INFO_EXT,
+        .type=VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE,
+        .data.pImage=&image_descriptor
+    };
+
+    VkHostAddressRangeEXT host_range = {
+        .address=target->heap_address,
+        .size=renderer->resource_heap.image_size
+    };
+
+    vkWriteResourceDescriptorsEXT(renderer->gpu.device, 1, &resource_descriptor, &host_range);
+
+    target->width = width;
+    target->height = height;
+
+    return true;
+}
+
 /**********
  * COMPUTE
  ***********/
 bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handle)
 {
-    dm_vulkan_renderer *renderer = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_pipeline pipeline = { 0 };
 
@@ -2574,7 +2725,7 @@ bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handl
 
 void dm_compute_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 {
-    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     dm_vulkan_pipeline pipeline = renderer->pipes[handle.index];
@@ -2584,7 +2735,7 @@ void dm_compute_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 
 void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
 {
-    dm_vulkan_renderer  *renderer   = dm_arena_get_ptr(context->arena, context->renderer.offset);
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     vkCmdDispatch(frame_data.gfx_cmd, x,y,z);
