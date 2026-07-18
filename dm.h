@@ -9,6 +9,12 @@
 #define DM_DEBUG
 #endif
 
+#ifdef __APPLE__
+#define DM_METAL
+#else
+#define DM_VULKAN
+#endif
+
 #ifdef DM_DEBUG
 #include <assert.h>
 #endif
@@ -255,6 +261,21 @@ typedef struct dm_sampler_desc_t
     int d;
 } dm_sampler_desc;
 
+/*******************
+ * COMPUTE PIPELINE
+ ********************/
+typedef struct dm_compute_shader_t
+{
+    const char path[512];
+    const char entry[512];
+} dm_compute_shader;
+
+typedef struct dm_compute_pipeline_desc_t
+{
+    dm_compute_shader shader;
+    u16 grp_x, grp_y, grp_z;
+} dm_compute_pipeline_desc;
+
 /**********
  * CONTEXT
  ***********/
@@ -329,7 +350,7 @@ bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_re
 
 bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *resources[], u32 count);
 
-bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handle);
+bool dm_renderer_create_compute_pipeline(dm_context *context, dm_compute_pipeline_desc desc, dm_pipeline *handle);
 
 // commands
 void dm_render_command_update_begin(dm_context *context);

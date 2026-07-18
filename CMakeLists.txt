@@ -16,14 +16,10 @@ if(APPLE)
 
     enable_language(OBJC)
     set(SOURCES ${SOURCES} dm_metal_renderer.m)
-
-    add_definitions(-DDM_METAL)
 else()
     find_package(Vulkan REQUIRED COMPONENTS volk shaderc_combined)
 
     set(SOURCES ${SOURCES} dm_vulkan_renderer.c vk_mem_alloc.cpp)
-
-    add_definitions(-DDM_VULKAN)
 endif()
 
 add_subdirectory(lib/glfw)

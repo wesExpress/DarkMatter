@@ -35,6 +35,8 @@ typedef struct dm_metal_compute_pipe_t
 
     id<MTLArgumentEncoder> encoder;
     id<MTLBuffer> argument_buffer[DM_FRAMES_IN_FLIGHT];
+
+    u16 grp_x, grp_y, grp_z;
 } dm_metal_compute_pipe;
 
 typedef struct dm_metal_buffer_t
@@ -72,9 +74,10 @@ typedef struct dm_metal_sampler_t
 
 typedef struct dm_metal_frame_data_t
 {
-    id<MTLCommandBuffer> gfx_cmd, compute_cmd;
+    id<MTLCommandBuffer> cmd, padding;
     id<MTLRenderCommandEncoder> gfx_encoder;
     id<MTLComputeCommandEncoder> compute_encoder;
+
     id<MTLCommandBuffer> blit_cmd;
     id<MTLBlitCommandEncoder> blit_encoder;
 } dm_metal_frame_data;
@@ -116,6 +119,9 @@ typedef struct dm_metal_renderer_t
     dm_pipeline active_pipeline;
 } dm_metal_renderer;
 
+#define DM_SWAPCHAIN_FORMAT MTLPixelFormatBGRA8Unorm
+#define DM_DEPTH_FORMAT     MTLPixelFormatDepth32Float
+
 extern void *dm_window_get_native_window(dm_context *context);
 
 bool dm_renderer_init(dm_context* context)
@@ -142,7 +148,7 @@ bool dm_renderer_init(dm_context* context)
     renderer->swapchain.width = context->window.width;
     renderer->swapchain.height = context->window.height;
 
-    MTLTextureDescriptor *depth_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:context->window.width height:context->window.height mipmapped:NO];
+    MTLTextureDescriptor *depth_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:DM_DEPTH_FORMAT width:context->window.width height:context->window.height mipmapped:NO];
     depth_desc.storageMode = MTLStorageModePrivate;
     depth_desc.usage = MTLTextureUsageRenderTarget;
 
@@ -219,8 +225,7 @@ bool dm_renderer_begin_frame(dm_context* context)
         return false;
     }
 
-    frame_data->gfx_cmd      = [renderer->queue commandBuffer];
-    //frame_data->compute_cmd  = [renderer->queue commandBuffer];
+    frame_data->cmd = [renderer->queue commandBuffer];
 
     return true;
 }
@@ -230,8 +235,8 @@ bool dm_renderer_end_frame(dm_context* context)
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
-    [frame_data->gfx_cmd presentDrawable:renderer->swapchain.drawable];
-    [frame_data->gfx_cmd commit];
+    [frame_data->cmd presentDrawable:renderer->swapchain.drawable];
+    [frame_data->cmd commit];
 
     renderer->frame_index++;
     renderer->frame_index %= DM_FRAMES_IN_FLIGHT;
@@ -254,7 +259,7 @@ bool dm_renderer_resize(dm_context *context, u16 width, u16 height)
 
     [renderer->swapchain.depth_texture release];
 
-    MTLTextureDescriptor *depth_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatDepth32Float width:width height:height mipmapped:NO];
+    MTLTextureDescriptor *depth_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:DM_DEPTH_FORMAT width:width height:height mipmapped:NO];
     depth_desc.usage = MTLTextureUsageRenderTarget;
     depth_desc.storageMode = MTLStorageModePrivate;
     renderer->swapchain.depth_texture = [renderer->device newTextureWithDescriptor:depth_desc];
@@ -410,7 +415,7 @@ bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc
     pipe_desc.vertexFunction = vertex_function;
     pipe_desc.fragmentFunction = fragment_function;
 
-    pipe_desc.colorAttachments[0].pixelFormat = MTLPixelFormatBGRA8Unorm;
+    pipe_desc.colorAttachments[0].pixelFormat = DM_SWAPCHAIN_FORMAT;
     pipe_desc.colorAttachments[0].writeMask = MTLColorWriteMaskAll;
 
     pipe_desc.colorAttachments[0].blendingEnabled = desc.blend;
@@ -425,7 +430,7 @@ bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc
         pipe_desc.colorAttachments[0].destinationAlphaBlendFactor = dm_metal_convert_blend_factor(desc.alpha_dst_factor);
     }
 
-    pipe_desc.depthAttachmentPixelFormat = MTLPixelFormatDepth32Float;
+    pipe_desc.depthAttachmentPixelFormat = DM_DEPTH_FORMAT;
 
     MTLDepthStencilDescriptor *depth_desc = [MTLDepthStencilDescriptor new];
 
@@ -536,7 +541,7 @@ bool dm_renderer_create_render_target(dm_context *context, dm_render_target_desc
     {
         size_t heap_size = 4 * desc.color_attachment.width * desc.color_attachment.height;
 
-        MTLPixelFormat format = MTLPixelFormatRGBA8Unorm;
+        MTLPixelFormat format = DM_SWAPCHAIN_FORMAT;
 
         MTLTextureDescriptor *texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:format width:width height:height mipmapped:NO];
         MTLSizeAndAlign size_align = [renderer->device heapTextureSizeAndAlignWithDescriptor:texture_desc];
@@ -599,7 +604,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 
     dm_metal_texture texture = { 0 };
 
-    MTLPixelFormat format = MTLPixelFormatRGBA8Unorm;
+    MTLPixelFormat format = DM_SWAPCHAIN_FORMAT;
     texture.size = desc.size;
     texture.host = dm_metal_create_texture(renderer->device, format, desc.width, desc.height, desc.data, &texture.size);
     if(!texture.host) return false;
@@ -650,7 +655,7 @@ id<MTLTexture> dm_metal_create_rt_texture(id<MTLDevice> device, id<MTLHeap> heap
 {
     id<MTLTexture> texture = NULL;
 
-    MTLTextureDescriptor *texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatBGRA8Unorm width:width height:height mipmapped:NO];
+    MTLTextureDescriptor *texture_desc = [MTLTextureDescriptor texture2DDescriptorWithPixelFormat:DM_SWAPCHAIN_FORMAT width:width height:height mipmapped:NO];
     texture_desc.usage = usage;
     texture_desc.storageMode = MTLStorageModePrivate;
 
@@ -795,9 +800,62 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
     return true;
 }
 
-bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handle)
+bool dm_renderer_create_compute_pipeline(dm_context *context, dm_compute_pipeline_desc desc, dm_pipeline *handle)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
+
+    dm_metal_compute_pipe pipeline = { 0 };
+
+    dm_compute_shader shader = desc.shader;
+
+    char shader_path[512];
+    sprintf(shader_path, "%s.metallib", shader.path);
+
+    id<MTLLibrary> shader_library = dm_metal_create_shader(renderer->device, shader_path);
+    if(!shader_library)
+    {
+        LOG_ERROR("Could not create shader from %s", shader_path);
+        return false;
+    }
+    id<MTLFunction> shader_function = dm_metal_create_shader_function(renderer->device, shader_library, shader.entry);
+    if(!shader_function) return false;
+
+    pipeline.encoder = [shader_function newArgumentEncoderWithBufferIndex:0];
+
+    size_t size = pipeline.encoder.encodedLength;
+
+    for(u8 i=0; i<DM_FRAMES_IN_FLIGHT; i++)
+    {
+        pipeline.argument_buffer[i] = [renderer->device newBufferWithLength:size options:MTLResourceCPUCacheModeDefaultCache];
+        if(!pipeline.argument_buffer[i])
+        {
+            LOG_ERROR("newBufferWithLength failed");
+            return false;
+        }
+    }
+
+    NSError *error = NULL;
+    pipeline.pipeline = [renderer->device newComputePipelineStateWithFunction:shader_function error:&error];
+
+    [shader_function release];
+    [shader_library release];
+    
+    if(!pipeline.pipeline)
+    {
+        LOG_ERROR("newComputePipelineStateWithFunction failed");
+        LOG_ERROR("%s", [error.localizedDescription UTF8String]);
+        return false;
+    }
+
+    pipeline.grp_x = desc.grp_x;
+    pipeline.grp_y = desc.grp_y;
+    pipeline.grp_z = desc.grp_z;
+
+    //
+    renderer->cps[renderer->cp_count] = pipeline;
+    handle->index = renderer->cp_count++;
+    handle->type = DM_PIPELINE_TYPE_COMPUTE;
+
     return true;
 }
 
@@ -846,7 +904,7 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
         desc.depthAttachment.texture     = renderer->swapchain.depth_texture;
     }
 
-    frame_data->gfx_encoder = [frame_data->gfx_cmd renderCommandEncoderWithDescriptor:desc];
+    frame_data->gfx_encoder = [frame_data->cmd renderCommandEncoderWithDescriptor:desc];
 
     MTLRenderStages resource_stages = MTLRenderStageVertex | MTLRenderStageFragment;
     MTLRenderStages sampler_stages  = MTLRenderStageFragment;
@@ -881,7 +939,7 @@ void dm_render_command_end_rendering(dm_context *context, dm_resource handle)
     if(target.swapchain) return;
 
     // copy over to sampled image
-    frame_data->blit_encoder = [frame_data->gfx_cmd blitCommandEncoder];
+    frame_data->blit_encoder = [frame_data->cmd blitCommandEncoder];
 
     [frame_data->blit_encoder copyFromTexture:target.render_texture toTexture:target.sample_texture];
     [frame_data->blit_encoder endEncoding];
@@ -1049,8 +1107,8 @@ void dm_compute_command_begin_recording(dm_context *context)
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
-    frame_data->compute_cmd     = [renderer->queue commandBuffer];
-    frame_data->compute_encoder = [frame_data->compute_cmd computeCommandEncoder];
+    //frame_data->cmd     = [renderer->queue commandBuffer];
+    frame_data->compute_encoder = [frame_data->cmd computeCommandEncoder];
 }
 
 void dm_compute_command_end_recording(dm_context *context)
@@ -1059,7 +1117,7 @@ void dm_compute_command_end_recording(dm_context *context)
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
     [frame_data->compute_encoder endEncoding];
-    [frame_data->compute_cmd     commit];
+    //[frame_data->compute_cmd     commit];
 }
 
 void dm_compute_command_push_resources(dm_context *context, dm_resource *resources, u32 count)
@@ -1089,15 +1147,8 @@ void dm_compute_command_push_resources(dm_context *context, dm_resource *resourc
                 [argument_encoder setTexture:renderer->textures[resource.index].device atIndex:i];
                 break;
             case DM_RESOURCE_TYPE_RENDER_TARGET:
-                {
-                    id<MTLBlitCommandEncoder> blit = [frame_data->compute_cmd blitCommandEncoder];
-
-                    [blit copyFromTexture:renderer->rts[resource.index].render_texture toTexture:renderer->rts[resource.index].sample_texture];
-
-                    [blit endEncoding];
-
-                    [argument_encoder setTexture:renderer->rts[resource.index].sample_texture atIndex:i];
-                } break;
+                [argument_encoder setTexture:renderer->rts[resource.index].sample_texture atIndex:i];
+                break;
 
             default:
                 LOG_WARN("Unknown/unsupported resource type");
@@ -1117,15 +1168,19 @@ void dm_compute_command_bind_pipeline(dm_context *context, dm_pipeline handle)
     dm_metal_compute_pipe pipeline = renderer->cps[handle.index];
 
     [frame_data->compute_encoder setComputePipelineState:pipeline.pipeline];
+
+    renderer->active_pipeline = handle;
 }
 
 void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    DM_ASSERT(renderer->active_pipeline.type==DM_PIPELINE_TYPE_COMPUTE, "Active pipeline is not compute");
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    dm_metal_compute_pipe pipeline = renderer->cps[renderer->active_pipeline.index];
 
     MTLSize thread_size = MTLSizeMake(x, y, z);
-    MTLSize group_size = MTLSizeMake(1, 1, 1);
+    MTLSize group_size = MTLSizeMake(pipeline.grp_x, pipeline.grp_y, pipeline.grp_z);
 
     [frame_data->compute_encoder dispatchThreads:thread_size threadsPerThreadgroup:group_size];
 }
