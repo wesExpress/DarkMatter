@@ -24,24 +24,24 @@ void dm_arena_detroy(dm_arena *arena)
     arena->current = NULL;
 }
 
-void* dm_arena_alloc(dm_arena *arena, size_t size)
+void* dm_arena_alloc(dm_arena *arena, size_t bytes)
 {
-    if(arena->size + size > arena->capacity) 
+    if(arena->size + bytes > arena->capacity) 
     {
         LOG_ERROR("Trying to allocate beyond size of arena");
         return NULL;
     }
 
 #ifdef __AVX__
-    size = DM_ALIGN(size, 32);
+    bytes = DM_ALIGN(bytes, 32);
 #else
-    size = DM_ALIGN(size, 16);
+    bytes = DM_ALIGN(bytes, 16);
 #endif
 
-    arena->size += size;
-    arena->current += size;
+    arena->size += bytes;
+    arena->current += bytes;
 
-    return arena->current - size;;
+    return arena->current - bytes;
 }
 
 extern bool dm_window_create(dm_context *context, u16 width, u16 height, const char *title);
@@ -59,10 +59,7 @@ extern size_t dm_renderer_get_internal_size();
 // context
 bool dm_init(dm_context* context, u16 width, u16 height, const char* title, dm_context_flag flags)
 {
-    size_t size = dm_window_get_internal_size();
-    size += dm_renderer_get_internal_size();
-
-    dm_arena_create(&context->arena, size);
+    dm_arena_create(&context->arena, DM_MEGABYTE);
 
     if(!dm_window_create(context, width, height, title)) return false;
     if(!dm_renderer_init(context))

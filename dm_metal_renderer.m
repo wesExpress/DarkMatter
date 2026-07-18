@@ -117,6 +117,9 @@ typedef struct dm_metal_renderer_t
 
     id<MTLBuffer> active_index_buffer;
     dm_pipeline active_pipeline;
+
+    id<MTLFence> fences[DM_MAX_SYNCHRONIZATIONS];
+    u32 fence_count;
 } dm_metal_renderer;
 
 #define DM_SWAPCHAIN_FORMAT MTLPixelFormatBGRA8Unorm
@@ -203,6 +206,11 @@ void dm_renderer_shutdown(dm_context* context)
 
         [renderer->rts[i].render_texture release];
         [renderer->rts[i].sample_texture release];
+    }
+
+    for(u8 i=0; i<renderer->fence_count; i++)
+    {
+        [renderer->fences[i] release];
     }
 
     if(renderer->resource_heap) [renderer->resource_heap release];
@@ -859,6 +867,16 @@ bool dm_renderer_create_compute_pipeline(dm_context *context, dm_compute_pipelin
     return true;
 }
 
+bool dm_renderer_create_synchronization(dm_context *context, dm_synchronization_desc desc, dm_synchronization *handle)
+{
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+
+    renderer->fences[renderer->fence_count] = [renderer->device newFence];
+    *handle = renderer->fence_count++;
+
+    return true;
+}
+
 // commands
 void dm_render_command_update_begin(dm_context *context)
 {
@@ -1101,6 +1119,24 @@ void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_res
     [frame_data->blit_encoder copyFromTexture:src_texture toTexture:dst_texture];
 }
 
+void dm_render_command_update_synchronization(dm_context *context, dm_synchronization synchronization)
+{
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    id<MTLFence> fence = renderer->fences[synchronization];
+
+    [frame_data->gfx_encoder updateFence:fence afterStages:MTLRenderStageFragment];
+}
+
+void dm_render_command_wait_synchronization(dm_context *context, dm_synchronization synchronization)
+{
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    id<MTLFence> fence = renderer->fences[synchronization];
+
+    [frame_data->gfx_encoder waitForFence:fence beforeStages:MTLRenderStageVertex];
+}
+
 // compute commands
 void dm_compute_command_begin_recording(dm_context *context)
 {
@@ -1182,5 +1218,23 @@ void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
     MTLSize thread_size = MTLSizeMake(x, y, z);
     MTLSize group_size = MTLSizeMake(pipeline.grp_x, pipeline.grp_y, pipeline.grp_z);
 
-    [frame_data->compute_encoder dispatchThreads:thread_size threadsPerThreadgroup:group_size];
+    [frame_data->compute_encoder dispatchThreadgroups:thread_size threadsPerThreadgroup:group_size];
+}
+
+void dm_compute_command_update_synchronization(dm_context *context, dm_synchronization synchronization)
+{
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    id<MTLFence> fence = renderer->fences[synchronization];
+
+    [frame_data->compute_encoder updateFence:fence];
+}
+
+void dm_compute_command_wait_synchronization(dm_context *context, dm_synchronization synchronization)
+{
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    id<MTLFence> fence = renderer->fences[synchronization];
+
+    [frame_data->compute_encoder waitForFence:fence];
 }
