@@ -29,6 +29,14 @@ typedef struct dm_metal_raster_pipe_t
     MTLWinding winding;
 } dm_metal_raster_pipe;
 
+typedef struct dm_metal_compute_pipe_t
+{
+    id<MTLComputePipelineState> pipeline;
+
+    id<MTLArgumentEncoder> encoder;
+    id<MTLBuffer> argument_buffer[DM_FRAMES_IN_FLIGHT];
+} dm_metal_compute_pipe;
+
 typedef struct dm_metal_buffer_t
 {
     id<MTLBuffer> host;
@@ -62,6 +70,15 @@ typedef struct dm_metal_sampler_t
     id<MTLSamplerState> state;
 } dm_metal_sampler;
 
+typedef struct dm_metal_frame_data_t
+{
+    id<MTLCommandBuffer> gfx_cmd, compute_cmd;
+    id<MTLRenderCommandEncoder> gfx_encoder;
+    id<MTLComputeCommandEncoder> compute_encoder;
+    id<MTLCommandBuffer> blit_cmd;
+    id<MTLBlitCommandEncoder> blit_encoder;
+} dm_metal_frame_data;
+
 typedef struct dm_metal_renderer_t
 {
     id<MTLDevice> device;
@@ -69,20 +86,22 @@ typedef struct dm_metal_renderer_t
     dm_metal_swapchain swapchain;
 
     id<MTLCommandQueue> queue;
-    id<MTLCommandBuffer> cmd;
-    id<MTLRenderCommandEncoder> render_encoder;
-    id<MTLComputeCommandEncoder> compute_encoder;
+    dm_metal_frame_data frame_data[DM_FRAMES_IN_FLIGHT];
 
     id<MTLHeap> resource_heap;
 
     u32 frame_index;
 
+    // pipelines
+    dm_metal_raster_pipe rps[DM_MAX_PIPES];
+    u32 rp_count;
+
+    dm_metal_compute_pipe cps[DM_MAX_PIPES];
+    u32 cp_count;
+
     // resources
     dm_metal_render_target rts[DM_MAX_TEXTURES];
     u32 rt_count;
-
-    dm_metal_raster_pipe rps[DM_MAX_PIPES];
-    u32 rp_count;
 
     dm_metal_buffer buffers[DM_MAX_BUFFERS];
     u32 buffer_count;
@@ -163,6 +182,15 @@ void dm_renderer_shutdown(dm_context* context)
         [renderer->rps[i].pipeline release];
         [renderer->rps[i].depth_state release];
     }
+    for(u32 i=0; i<renderer->cp_count; i++)
+    {
+        [renderer->cps[i].encoder release];
+        for(u8 j=0; j<DM_FRAMES_IN_FLIGHT; j++)
+        {
+            [renderer->cps[i].argument_buffer[j] release];
+        }
+        [renderer->cps[i].pipeline release];
+    }
     for(u32 i=0; i<renderer->rt_count; i++)
     {
         if(renderer->rts[i].swapchain) continue;
@@ -182,6 +210,7 @@ void dm_renderer_shutdown(dm_context* context)
 bool dm_renderer_begin_frame(dm_context* context)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
     renderer->swapchain.drawable = [renderer->swapchain.layer nextDrawable];
     if(!renderer->swapchain.drawable)
@@ -190,7 +219,8 @@ bool dm_renderer_begin_frame(dm_context* context)
         return false;
     }
 
-    renderer->cmd = [renderer->queue commandBuffer];
+    frame_data->gfx_cmd      = [renderer->queue commandBuffer];
+    //frame_data->compute_cmd  = [renderer->queue commandBuffer];
 
     return true;
 }
@@ -198,9 +228,10 @@ bool dm_renderer_begin_frame(dm_context* context)
 bool dm_renderer_end_frame(dm_context* context)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
-    [renderer->cmd presentDrawable:renderer->swapchain.drawable];
-    [renderer->cmd commit];
+    [frame_data->gfx_cmd presentDrawable:renderer->swapchain.drawable];
+    [frame_data->gfx_cmd commit];
 
     renderer->frame_index++;
     renderer->frame_index %= DM_FRAMES_IN_FLIGHT;
@@ -639,7 +670,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
-    id<MTLCommandBuffer> cmd = [renderer->queue commandBuffer];
+    id<MTLCommandBuffer> cmd       = [renderer->queue commandBuffer];
     id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
 
     MTLHeapDescriptor *heap_desc = [MTLHeapDescriptor new];
@@ -764,11 +795,6 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
     return true;
 }
 
-bool dm_renderer_upload_samplers_to_heap(dm_context *context, dm_resource *samplers[], u32 count)
-{
-    return true;
-}
-
 bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handle)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
@@ -776,9 +802,30 @@ bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handl
 }
 
 // commands
-void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d)
+void dm_render_command_update_begin(dm_context *context)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+
+    frame_data->blit_cmd     = [renderer->queue commandBuffer];
+    frame_data->blit_encoder = [frame_data->blit_cmd blitCommandEncoder];
+}
+
+void dm_render_command_update_end(dm_context *context)
+{
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+
+    [frame_data->blit_encoder endEncoding];
+    [frame_data->blit_cmd     commit];
+}
+
+void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d)
+{
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_RENDER_TARGET, "Not a render target");
+
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
     dm_metal_render_target *target = &renderer->rts[handle.index];
 
     id<MTLTexture> color_texture = target->swapchain ? [renderer->swapchain.drawable texture] : target->render_texture;
@@ -799,12 +846,12 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
         desc.depthAttachment.texture     = renderer->swapchain.depth_texture;
     }
 
-    renderer->render_encoder = [renderer->cmd renderCommandEncoderWithDescriptor:desc];
+    frame_data->gfx_encoder = [frame_data->gfx_cmd renderCommandEncoderWithDescriptor:desc];
 
     MTLRenderStages resource_stages = MTLRenderStageVertex | MTLRenderStageFragment;
     MTLRenderStages sampler_stages  = MTLRenderStageFragment;
 
-    if(renderer->resource_heap) [renderer->render_encoder useHeap:renderer->resource_heap stages:resource_stages];
+    if(renderer->resource_heap) [frame_data->gfx_encoder useHeap:renderer->resource_heap stages:resource_stages];
 
     MTLViewport viewport = {
         .width=renderer->swapchain.width,
@@ -817,35 +864,50 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
         .height=renderer->swapchain.height
     };
 
-    [renderer->render_encoder setViewport:viewport];
-    [renderer->render_encoder setScissorRect:scissor];
+    [frame_data->gfx_encoder setViewport:viewport];
+    [frame_data->gfx_encoder setScissorRect:scissor];
 }
 
 void dm_render_command_end_rendering(dm_context *context, dm_resource handle)
 {
-    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_RENDER_TARGET, "Not a render target");
 
-    [renderer->render_encoder endEncoding];
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    dm_metal_render_target target = renderer->rts[handle.index];
+
+    [frame_data->gfx_encoder endEncoding];
+
+    if(target.swapchain) return;
+
+    // copy over to sampled image
+    frame_data->blit_encoder = [frame_data->gfx_cmd blitCommandEncoder];
+
+    [frame_data->blit_encoder copyFromTexture:target.render_texture toTexture:target.sample_texture];
+    [frame_data->blit_encoder endEncoding];
 }
 
 void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 {
+    DM_ASSERT(handle.type==DM_PIPELINE_TYPE_RASTER, "Not a raster pipeline");
+
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
     dm_metal_raster_pipe pipeline = renderer->rps[handle.index];
 
-    id<MTLRenderCommandEncoder> encoder = renderer->render_encoder;
-
-    [encoder setRenderPipelineState:pipeline.pipeline];
-    [encoder setDepthStencilState:pipeline.depth_state];
-    [encoder setCullMode:MTLCullModeBack];
-    [encoder setFrontFacingWinding:MTLWindingClockwise];
-    [encoder setTriangleFillMode:MTLTriangleFillModeFill];
+    [frame_data->gfx_encoder setRenderPipelineState:pipeline.pipeline];
+    [frame_data->gfx_encoder setDepthStencilState:pipeline.depth_state];
+    [frame_data->gfx_encoder setCullMode:MTLCullModeBack];
+    [frame_data->gfx_encoder setFrontFacingWinding:MTLWindingClockwise];
+    [frame_data->gfx_encoder setTriangleFillMode:MTLTriangleFillModeFill];
 
     renderer->active_pipeline = handle;
 }
 
 void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_BUFFER, "Not a buffer");
+
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     renderer->active_index_buffer = renderer->buffers[handle.index].device;
@@ -854,10 +916,9 @@ void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle
 void dm_metal_push_raster_data(dm_metal_renderer *renderer, dm_pipeline handle, dm_resource *resources, u32 count)
 {
     dm_metal_raster_pipe pipeline = renderer->rps[handle.index];
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
-    id<MTLRenderCommandEncoder> encoder = renderer->render_encoder;
     id<MTLBuffer> argument_buffer = pipeline.argument_buffer[renderer->frame_index];
-
 
     id<MTLArgumentEncoder> vertex_encoder = pipeline.vertex_encoder;
     id<MTLArgumentEncoder> fragment_encoder = pipeline.fragment_encoder;
@@ -880,30 +941,21 @@ void dm_metal_push_raster_data(dm_metal_renderer *renderer, dm_pipeline handle, 
                 [fragment_encoder setTexture:renderer->textures[resource.index].device atIndex:i];
                 break;
             case DM_RESOURCE_TYPE_RENDER_TARGET:
-                {
-                    id<MTLCommandBuffer> cmd = [renderer->queue commandBuffer];
-                    id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
-
-                    [blit copyFromTexture:renderer->rts[resource.index].render_texture toTexture:renderer->rts[resource.index].sample_texture];
-
-                    [blit endEncoding];
-                    [cmd commit];
-
-                    [vertex_encoder setTexture:renderer->rts[resource.index].sample_texture atIndex:i];
-                    [fragment_encoder setTexture:renderer->rts[resource.index].sample_texture atIndex:i];
-                } break;
+                [vertex_encoder setTexture:renderer->rts[resource.index].sample_texture atIndex:i];
+                [fragment_encoder setTexture:renderer->rts[resource.index].sample_texture atIndex:i];
+                break;
             case DM_RESOURCE_TYPE_SAMPLER:
                 [vertex_encoder setSamplerState:renderer->samplers[resource.index].state atIndex:i];
                 [fragment_encoder setSamplerState:renderer->samplers[resource.index].state atIndex:i];
                 break;
             default:
-                LOG_WARN("Unknown/unsupported resource type");
-                continue;
+                LOG_FATAL("Unknown/unsupported resource type");
+                return;
         }
     }
 
-    [encoder setVertexBuffer:argument_buffer offset:0 atIndex:0];
-    [encoder setFragmentBuffer:argument_buffer offset:0 atIndex:0];
+    [frame_data->gfx_encoder setVertexBuffer:argument_buffer offset:0 atIndex:0];
+    [frame_data->gfx_encoder setFragmentBuffer:argument_buffer offset:0 atIndex:0];
 }
 
 void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count)
@@ -915,10 +967,9 @@ void dm_render_command_push_resources(dm_context *context, dm_resource *resource
         case DM_PIPELINE_TYPE_RASTER:
             dm_metal_push_raster_data(renderer, renderer->active_pipeline, resources, count);
             break;
-        case DM_PIPELINE_TYPE_COMPUTE:
-            break;
+
         default:
-            LOG_ERROR("No active pipeline");
+            LOG_ERROR("Invalid graphics pipeline");
             return;
     }
 }
@@ -926,29 +977,29 @@ void dm_render_command_push_resources(dm_context *context, dm_resource *resource
 void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
-    id<MTLRenderCommandEncoder> encoder = renderer->render_encoder;
+    DM_ASSERT(renderer->active_index_buffer, "No active index buffer");
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
-    [encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:index_count indexType:MTLIndexTypeUInt32 indexBuffer:renderer->active_index_buffer indexBufferOffset:0 instanceCount:instance_count];
+    [frame_data->gfx_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:index_count indexType:MTLIndexTypeUInt32 indexBuffer:renderer->active_index_buffer indexBufferOffset:0 instanceCount:instance_count];
 }
 
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size)
 {
-    dm_metal_renderer *renderer = context->renderer.internal_renderer;
-    dm_metal_buffer buffer = renderer->buffers[handle.index];
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_BUFFER, "Not a buffer");
 
-    id<MTLCommandBuffer> cmd = [renderer->queue commandBuffer];
-    id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    dm_metal_buffer buffer = renderer->buffers[handle.index];
 
     memcpy(buffer.host.contents, data, size);
 
-    [blit copyFromBuffer:buffer.host sourceOffset:0 toBuffer:buffer.device destinationOffset:0 size:size];
-
-    [blit endEncoding];
-    [cmd commit];
+    [frame_data->blit_encoder copyFromBuffer:buffer.host sourceOffset:0 toBuffer:buffer.device destinationOffset:0 size:size];
 }
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_TEXTURE, "Not a texture");
+
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     switch(handle.type)
@@ -966,6 +1017,8 @@ bool dm_render_command_update_texture(dm_context *context, dm_resource handle, v
 
 bool dm_render_command_resize_render_target(dm_context *context, dm_resource resource, u16 width, u16 height)
 {
+    DM_ASSERT(resource.type==DM_RESOURCE_TYPE_RENDER_TARGET, "Not a render target");
+
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_render_target *target = &renderer->rts[resource.index];
 
@@ -983,20 +1036,96 @@ bool dm_render_command_resize_render_target(dm_context *context, dm_resource res
 void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_resource dst)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    id<MTLTexture> src_texture = renderer->textures[src.index].device;
+    id<MTLTexture> dst_texture = renderer->textures[dst.index].device;
+
+    [frame_data->blit_encoder copyFromTexture:src_texture toTexture:dst_texture];
 }
 
 // compute commands
-void dm_compute_command_push_data(dm_context *context, void *data, size_t size)
+void dm_compute_command_begin_recording(dm_context *context)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+
+    frame_data->compute_cmd     = [renderer->queue commandBuffer];
+    frame_data->compute_encoder = [frame_data->compute_cmd computeCommandEncoder];
+}
+
+void dm_compute_command_end_recording(dm_context *context)
+{
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+
+    [frame_data->compute_encoder endEncoding];
+    [frame_data->compute_cmd     commit];
+}
+
+void dm_compute_command_push_resources(dm_context *context, dm_resource *resources, u32 count)
+{
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    DM_ASSERT(renderer->active_pipeline.type==DM_PIPELINE_TYPE_COMPUTE, "Active pipeline is not compute");
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+
+    dm_metal_compute_pipe pipeline = renderer->cps[renderer->active_pipeline.index];
+
+    id<MTLBuffer> argument_buffer = pipeline.argument_buffer[renderer->frame_index];
+
+    id<MTLArgumentEncoder> argument_encoder = pipeline.encoder;
+
+    [argument_encoder setArgumentBuffer:argument_buffer offset:0];
+
+    for(u32 i=0; i<count; i++)
+    {
+        dm_resource resource = resources[i];
+
+        switch(resource.type)
+        {
+            case DM_RESOURCE_TYPE_BUFFER:
+                [argument_encoder setBuffer:renderer->buffers[resource.index].device offset:0 atIndex:i];
+                break;
+            case DM_RESOURCE_TYPE_TEXTURE:
+                [argument_encoder setTexture:renderer->textures[resource.index].device atIndex:i];
+                break;
+            case DM_RESOURCE_TYPE_RENDER_TARGET:
+                {
+                    id<MTLBlitCommandEncoder> blit = [frame_data->compute_cmd blitCommandEncoder];
+
+                    [blit copyFromTexture:renderer->rts[resource.index].render_texture toTexture:renderer->rts[resource.index].sample_texture];
+
+                    [blit endEncoding];
+
+                    [argument_encoder setTexture:renderer->rts[resource.index].sample_texture atIndex:i];
+                } break;
+
+            default:
+                LOG_WARN("Unknown/unsupported resource type");
+                continue;
+        }
+    }
+
+    [frame_data->compute_encoder setBuffer:argument_buffer offset:0 atIndex:0];
 }
 
 void dm_compute_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 {
+    DM_ASSERT(handle.type==DM_PIPELINE_TYPE_COMPUTE, "Not a compute pipeline");
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+
+    dm_metal_compute_pipe pipeline = renderer->cps[handle.index];
+
+    [frame_data->compute_encoder setComputePipelineState:pipeline.pipeline];
 }
 
 void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+
+    MTLSize thread_size = MTLSizeMake(x, y, z);
+    MTLSize group_size = MTLSizeMake(1, 1, 1);
+
+    [frame_data->compute_encoder dispatchThreads:thread_size threadsPerThreadgroup:group_size];
 }

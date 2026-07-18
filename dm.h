@@ -36,7 +36,7 @@ typedef uint64_t u64;
 #define LOG_FATAL(...) FTL(__VA_ARGS__)
 
 #ifdef DM_DEBUG
-#define DM_ASSERT(VALUE, MSG) assert((MSG, VALUE))
+#define DM_ASSERT(VALUE, MSG) assert((MSG && VALUE))
 #else
 #define DM_ASSERT(VALUE, MSG) 
 #endif
@@ -332,24 +332,27 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
 bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handle);
 
 // commands
-void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d);
-void dm_render_command_end_rendering(dm_context *context, dm_resource handle);
-void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle);
-void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset);
-void dm_render_command_push_constants(dm_context *context, dm_resource handle);
-void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
-void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count);
-
+void dm_render_command_update_begin(dm_context *context);
+void dm_render_command_update_end(dm_context *context);
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size);
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height);
 void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_resource dst);
 
+void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d);
+void dm_render_command_end_rendering(dm_context *context, dm_resource handle);
+void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle);
+void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset);
+void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
+void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count);
+
 bool dm_render_command_resize_render_target(dm_context *context, dm_resource resource, u16 width, u16 height);
 
 // compute commands
-void dm_compute_command_push_data(dm_context *context, void *data, size_t size);
+void dm_compute_command_begin_recording(dm_context *context);
+void dm_compute_command_end_recording(dm_context *context);
 void dm_compute_command_bind_pipeline(dm_context *context, dm_pipeline handle);
+void dm_compute_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
 void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z);
 
 // macros
