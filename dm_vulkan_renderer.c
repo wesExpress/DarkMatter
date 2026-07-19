@@ -161,11 +161,11 @@ typedef struct dm_vulkan_pipeline_t
     u32 push_indices[DM_FRAMES_IN_FLIGHT][DM_VULKAN_MAX_RESOURCES];
 } dm_vulkan_pipeline;
 
-typedef struct dm_vulkan_synchronization_t
+typedef struct dm_vulkan_semaphore_t
 {
     VkSemaphore semaphore;
     u64 value;
-} dm_vulkan_synchronization;
+} dm_vulkan_semaphore;
 
 typedef struct dm_vulkan_renderer_t
 {
@@ -194,14 +194,13 @@ typedef struct dm_vulkan_renderer_t
     dm_vulkan_pipeline pipes[DM_MAX_PIPELINES];
     u32 pipe_count;
 
-    dm_vulkan_synchronization synchronization[2 + DM_MAX_SYNCHRONIZATIONS * DM_FRAMES_IN_FLIGHT]; // 2 for queues
-    u32 synchronization_count;
+    dm_vulkan_semaphore semaphores[1 + DM_MAX_SYNCHRONIZATIONS * DM_FRAMES_IN_FLIGHT]; // 
+    u32 semaphore_count;
 
     dm_pipeline active_pipeline;
 } dm_vulkan_renderer;
 
-#define DM_GFX_SYNC     0
-#define DM_COMPUTE_SYNC 1
+#define DM_TIMELINE_SEMAPHORE 0
 
 #ifdef DM_DEBUG
 VKAPI_ATTR VkBool32 VKAPI_CALL dm_vk_debug_callback(
@@ -1015,9 +1014,9 @@ VkCommandPool dm_vulkan_create_single_use_pool(dm_vulkan_gpu gpu)
     return pool;
 }
 
-dm_vulkan_synchronization dm_vulkan_create_synchronization(dm_vulkan_gpu gpu, u64 value)
+dm_vulkan_semaphore dm_vulkan_create_semaphore(dm_vulkan_gpu gpu, u64 value)
 {
-    dm_vulkan_synchronization sync = { 0 };
+    dm_vulkan_semaphore sync = { 0 };
 
     VkSemaphore semaphore = VK_NULL_HANDLE;
 
@@ -1149,8 +1148,8 @@ bool dm_renderer_init(dm_context* context)
     dm_vulkan_frame_data frame_data[DM_FRAMES_IN_FLIGHT] = { 0 };
     dm_vulkan_resource_descriptor_heap resource_heap = { 0 };
     dm_vulkan_sampler_descriptor_heap  sampler_heap = { 0 };
-    dm_vulkan_synchronization gfx_sync = { 0 };
-    dm_vulkan_synchronization compute_sync = { 0 };
+    dm_vulkan_semaphore gfx_sync = { 0 };
+    dm_vulkan_semaphore compute_sync = { 0 };
 
     VkCommandPool single_use_pool    = VK_NULL_HANDLE;
     
@@ -1192,10 +1191,10 @@ bool dm_renderer_init(dm_context* context)
     if(single_use_pool == VK_NULL_HANDLE) { LOG_ERROR("Could not create single use pool."); return false; }
 
     // timeline semaphore
-    gfx_sync = dm_vulkan_create_synchronization(gpu, DM_FRAMES_IN_FLIGHT-1);
+    gfx_sync = dm_vulkan_create_semaphore(gpu, DM_FRAMES_IN_FLIGHT-1);
     if(gfx_sync.semaphore == VK_NULL_HANDLE) { LOG_ERROR("Could not create gfx semaphore."); return false; }
 
-    compute_sync = dm_vulkan_create_synchronization(gpu, DM_FRAMES_IN_FLIGHT-1);
+    compute_sync = dm_vulkan_create_semaphore(gpu, DM_FRAMES_IN_FLIGHT-1);
     if(compute_sync.semaphore == VK_NULL_HANDLE) { LOG_ERROR("Could not create compute semaphore"); return false; }
 
     // resource and smapler heaps
@@ -1218,8 +1217,8 @@ bool dm_renderer_init(dm_context* context)
         renderer->frame_data[i] = frame_data[i];
     }
     renderer->single_use_pool = single_use_pool;
-    renderer->synchronization[renderer->synchronization_count++] = gfx_sync;
-    renderer->synchronization[renderer->synchronization_count++] = compute_sync;
+    renderer->semaphores[renderer->semaphore_count++] = gfx_sync;
+    renderer->semaphores[renderer->semaphore_count++] = compute_sync;
     renderer->resource_heap = resource_heap;
     renderer->sampler_heap = sampler_heap;
 
@@ -1254,9 +1253,9 @@ void dm_renderer_shutdown(dm_context* context)
         vmaDestroyImage(renderer->allocator, renderer->rts[i].target, renderer->rts[i].alloc);
         vkDestroyImageView(renderer->gpu.device, renderer->rts[i].target_view, NULL);
     }
-    for(u32 i=0; i<renderer->synchronization_count; i++)
+    for(u32 i=0; i<renderer->semaphore_count; i++)
     {
-        vkDestroySemaphore(renderer->gpu.device, renderer->synchronization[i].semaphore, NULL);
+        vkDestroySemaphore(renderer->gpu.device, renderer->semaphores[i].semaphore, NULL);
     }
 
     vmaUnmapMemory(renderer->allocator, renderer->resource_heap.allocation);
@@ -1330,7 +1329,7 @@ bool dm_renderer_begin_frame(dm_context* context)
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_swapchain swapchain = renderer->swapchain;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
-    dm_vulkan_synchronization *gfx_sync = &renderer->synchronization[DM_GFX_SYNC];
+    dm_vulkan_semaphore *gfx_sync = &renderer->semaphores[DM_TIMELINE_SEMAPHORE];
 
     u64 wait_value = ++gfx_sync->value;
     wait_value -= DM_FRAMES_IN_FLIGHT;
@@ -1343,6 +1342,7 @@ bool dm_renderer_begin_frame(dm_context* context)
     vkWaitSemaphores(gpu.device, &wait_info, UINT64_MAX);
 
     vkResetCommandPool(gpu.device, frame_data.gfx_pool, 0);
+    vkResetCommandPool(gpu.device, frame_data.compute_pool, 0);
 
     VkResult vr = vkAcquireNextImageKHR(gpu.device, swapchain.swapchain, UINT64_MAX, frame_data.semaphore, VK_NULL_HANDLE, &swapchain.index);
 
@@ -1405,7 +1405,7 @@ bool dm_renderer_end_frame(dm_context* context)
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
     dm_vulkan_swapchain_image image = renderer->swapchain.images[renderer->swapchain.index];
-    dm_vulkan_synchronization *gfx_sync = &renderer->synchronization[0];
+    dm_vulkan_semaphore *gfx_sync = &renderer->semaphores[DM_TIMELINE_SEMAPHORE];
 
     VkImageMemoryBarrier2 present_barrier = {
         .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -2140,15 +2140,16 @@ bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_re
     return true;
 }
 
-bool dm_renderer_create_synchronization(dm_context *context, dm_synchronization_desc desc, dm_synchronization *handle)
+bool dm_renderer_create_synchronization(dm_context *context, dm_synchronization_desc desc, dm_resource *handle)
 {
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
-    dm_vulkan_synchronization synchronization = dm_vulkan_create_synchronization(renderer->gpu, 0);
-    if(synchronization.semaphore == VK_NULL_HANDLE) return false;
+    dm_vulkan_semaphore semaphore = dm_vulkan_create_semaphore(renderer->gpu, desc.value);
+    if(semaphore.semaphore == VK_NULL_HANDLE) return false;
 
-    renderer->synchronization[renderer->synchronization_count] = synchronization;
-    *handle = renderer->synchronization_count++;
+    renderer->semaphores[renderer->semaphore_count] = semaphore;
+    handle->index = renderer->semaphore_count++;
+    handle->type  = DM_RESOURCE_TYPE_SYNCHRONIZATION;
 
     return true;
 }
@@ -2730,34 +2731,34 @@ bool dm_render_command_resize_render_target(dm_context *context, dm_resource res
     return true;
 }
 
-void dm_render_command_update_synchronization(dm_context *context, dm_synchronization synchronization)
+void dm_render_command_signal(dm_context *context, dm_resource handle)
 {
-    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
-    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
 
-    dm_vulkan_synchronization *sync = &renderer->synchronization[synchronization];
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
+    dm_vulkan_semaphore *semaphore= &renderer->semaphores[handle.index];
 
     VkSemaphoreSignalInfo info = {
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
-        .semaphore=sync->semaphore,
-        .value=sync->value+1
+        .semaphore=semaphore->semaphore,
+        .value=++semaphore->value
     };
     vkSignalSemaphore(renderer->gpu.device, &info);
 }
 
-void dm_render_command_wait_synchronization(dm_context *context, dm_synchronization synchronization)
+void dm_render_command_wait(dm_context *context, dm_resource handle)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
+
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
-    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+    dm_vulkan_semaphore *semaphore = &renderer->semaphores[handle.index];
 
-    dm_vulkan_synchronization *sync = &renderer->synchronization[synchronization];
-
-    u64 wait_value = sync->value++;
+    u64 wait_value = semaphore->value;
 
     VkSemaphoreWaitInfo wait_info = {
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
         .semaphoreCount=1,
-        .pSemaphores=&sync->semaphore,
+        .pSemaphores=&semaphore->semaphore,
         .pValues=&wait_value
     };
     vkWaitSemaphores(renderer->gpu.device, &wait_info, UINT64_MAX);
@@ -2829,20 +2830,6 @@ void dm_compute_command_begin_recording(dm_context *context)
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
-    dm_vulkan_synchronization *compute_sync = &renderer->synchronization[DM_COMPUTE_SYNC];
-
-    u64 wait_value = ++compute_sync->value;
-    wait_value -= DM_FRAMES_IN_FLIGHT;
-    VkSemaphoreWaitInfo wait_info = {
-        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .semaphoreCount=1,
-        .pSemaphores=&compute_sync->semaphore,
-        .pValues=&wait_value
-    };
-    vkWaitSemaphores(renderer->gpu.device, &wait_info, UINT64_MAX);
-
-    vkResetCommandPool(renderer->gpu.device, frame_data->compute_pool, 0);
-
     VkCommandBufferBeginInfo cmd_begin = {
         .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
@@ -2864,7 +2851,7 @@ void dm_compute_command_end_recording(dm_context *context)
 {
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
-    dm_vulkan_synchronization *compute_sync = &renderer->synchronization[DM_COMPUTE_SYNC];
+    dm_vulkan_semaphore *semaphore = &renderer->semaphores[DM_TIMELINE_SEMAPHORE];
 
     vkEndCommandBuffer(frame_data->compute_cmd);
 
@@ -2875,9 +2862,9 @@ void dm_compute_command_end_recording(dm_context *context)
 
     VkSemaphoreSubmitInfo signal_semaphore = {
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-        .semaphore=compute_sync->semaphore,
+        .semaphore=semaphore->semaphore,
         .stageMask=VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .value=compute_sync->value
+        .value=semaphore->value
     };
 
     VkSubmitInfo2 submit = {
@@ -2949,34 +2936,34 @@ void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
     vkCmdDispatch(frame_data.compute_cmd, x,y,z);
 }
 
-void dm_compute_command_update_synchronization(dm_context *context, dm_synchronization synchronization)
+void dm_compute_command_signal(dm_context *context, dm_resource handle)
 {
-    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
-    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
 
-    dm_vulkan_synchronization *sync = &renderer->synchronization[synchronization];
+    dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
+    dm_vulkan_semaphore *semaphore = &renderer->semaphores[handle.index];
 
     VkSemaphoreSignalInfo info = {
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
-        .semaphore=sync->semaphore,
-        .value=sync->value+1
+        .semaphore=semaphore->semaphore,
+        .value=++semaphore->value
     };
     vkSignalSemaphore(renderer->gpu.device, &info);
 }
 
-void dm_compute_command_wait_synchronization(dm_context *context, dm_synchronization synchronization)
+void dm_compute_command_wait(dm_context *context, dm_resource handle)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
+
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
-    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+    dm_vulkan_semaphore semaphore = renderer->semaphores[handle.index];
 
-    dm_vulkan_synchronization *sync = &renderer->synchronization[synchronization];
-
-    u64 wait_value = sync->value++;
+    u64 wait_value = semaphore.value;
 
     VkSemaphoreWaitInfo wait_info = {
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
         .semaphoreCount=1,
-        .pSemaphores=&sync->semaphore,
+        .pSemaphores=&semaphore.semaphore,
         .pValues=&wait_value
     };
     vkWaitSemaphores(renderer->gpu.device, &wait_info, UINT64_MAX);
