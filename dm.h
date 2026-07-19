@@ -377,8 +377,8 @@ void dm_render_command_end_rendering(dm_context *context, dm_resource handle);
 void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle);
 void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset);
 void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
-void dm_render_command_update_synchronization(dm_context *context, dm_synchronization synchronization);
-void dm_render_command_wait_synchronization(dm_context *context, dm_synchronization synchronization);
+void dm_render_command_signal(dm_context *context, dm_synchronization synchronization, u64 value);
+void dm_render_command_wait(dm_context *context, dm_synchronization synchronization, u64 value);
 void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count);
 
 bool dm_render_command_resize_render_target(dm_context *context, dm_resource resource, u16 width, u16 height);
@@ -388,8 +388,8 @@ void dm_compute_command_begin_recording(dm_context *context);
 void dm_compute_command_end_recording(dm_context *context);
 void dm_compute_command_bind_pipeline(dm_context *context, dm_pipeline handle);
 void dm_compute_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
-void dm_compute_command_update_synchronization(dm_context *context, dm_synchronization synchronization);
-void dm_compute_command_wait_synchronization(dm_context *context, dm_synchronization synchronization);
+void dm_compute_command_signal(dm_context *context, dm_synchronization synchronization, u64 value);
+void dm_compute_command_wait(dm_context *context, dm_synchronization synchronization, u64 value);
 void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z);
 
 // macros

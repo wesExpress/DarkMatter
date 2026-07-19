@@ -74,7 +74,7 @@ typedef struct dm_metal_sampler_t
 
 typedef struct dm_metal_frame_data_t
 {
-    id<MTLCommandBuffer> cmd, padding;
+    id<MTLCommandBuffer> gfx_cmd, compute_cmd;
     id<MTLRenderCommandEncoder> gfx_encoder;
     id<MTLComputeCommandEncoder> compute_encoder;
 
@@ -88,7 +88,8 @@ typedef struct dm_metal_renderer_t
     
     dm_metal_swapchain swapchain;
 
-    id<MTLCommandQueue> queue;
+    id<MTLCommandQueue> gfx_queue;
+    id<MTLCommandQueue> compute_queue;
     dm_metal_frame_data frame_data[DM_FRAMES_IN_FLIGHT];
 
     id<MTLHeap> resource_heap;
@@ -118,8 +119,8 @@ typedef struct dm_metal_renderer_t
     id<MTLBuffer> active_index_buffer;
     dm_pipeline active_pipeline;
 
-    id<MTLFence> fences[DM_MAX_SYNCHRONIZATIONS];
-    u32 fence_count;
+    id<MTLEvent> events[DM_MAX_SYNCHRONIZATIONS * DM_FRAMES_IN_FLIGHT];
+    u32 event_count;
 } dm_metal_renderer;
 
 #define DM_SWAPCHAIN_FORMAT MTLPixelFormatBGRA8Unorm
@@ -146,7 +147,8 @@ bool dm_renderer_init(dm_context* context)
     window.contentView.layer = renderer->swapchain.layer;
     window.contentView.wantsLayer = YES;
 
-    renderer->queue = [renderer->device newCommandQueue];
+    renderer->gfx_queue     = [renderer->device newCommandQueue];
+    renderer->compute_queue = [renderer->device newCommandQueue];
 
     renderer->swapchain.width = context->window.width;
     renderer->swapchain.height = context->window.height;
@@ -208,14 +210,15 @@ void dm_renderer_shutdown(dm_context* context)
         [renderer->rts[i].sample_texture release];
     }
 
-    for(u8 i=0; i<renderer->fence_count; i++)
+    for(u8 i=0; i<renderer->event_count; i++)
     {
-        [renderer->fences[i] release];
+        [renderer->events[i] release];
     }
 
     if(renderer->resource_heap) [renderer->resource_heap release];
 
-    [renderer->queue release];
+    [renderer->compute_queue release];
+    [renderer->gfx_queue release];
     [renderer->swapchain.depth_texture release];
     [renderer->swapchain.layer release];
     [renderer->device release];
@@ -233,7 +236,8 @@ bool dm_renderer_begin_frame(dm_context* context)
         return false;
     }
 
-    frame_data->cmd = [renderer->queue commandBuffer];
+    frame_data->gfx_cmd     = [renderer->gfx_queue commandBuffer];
+    frame_data->compute_cmd = [renderer->compute_queue commandBuffer];
 
     return true;
 }
@@ -243,8 +247,10 @@ bool dm_renderer_end_frame(dm_context* context)
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
-    [frame_data->cmd presentDrawable:renderer->swapchain.drawable];
-    [frame_data->cmd commit];
+    [frame_data->gfx_cmd presentDrawable:renderer->swapchain.drawable];
+    [frame_data->gfx_cmd commit];
+
+    [frame_data->compute_cmd commit];
 
     renderer->frame_index++;
     renderer->frame_index %= DM_FRAMES_IN_FLIGHT;
@@ -683,7 +689,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
-    id<MTLCommandBuffer> cmd       = [renderer->queue commandBuffer];
+    id<MTLCommandBuffer> cmd       = [renderer->gfx_queue commandBuffer];
     id<MTLBlitCommandEncoder> blit = [cmd blitCommandEncoder];
 
     MTLHeapDescriptor *heap_desc = [MTLHeapDescriptor new];
@@ -871,8 +877,8 @@ bool dm_renderer_create_synchronization(dm_context *context, dm_synchronization_
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
-    renderer->fences[renderer->fence_count] = [renderer->device newFence];
-    *handle = renderer->fence_count++;
+    renderer->events[renderer->event_count] = [renderer->device newEvent];
+    *handle = renderer->event_count++;
 
     return true;
 }
@@ -883,7 +889,7 @@ void dm_render_command_update_begin(dm_context *context)
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
-    frame_data->blit_cmd     = [renderer->queue commandBuffer];
+    frame_data->blit_cmd     = [renderer->gfx_queue commandBuffer];
     frame_data->blit_encoder = [frame_data->blit_cmd blitCommandEncoder];
 }
 
@@ -922,12 +928,11 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
         desc.depthAttachment.texture     = renderer->swapchain.depth_texture;
     }
 
-    frame_data->gfx_encoder = [frame_data->cmd renderCommandEncoderWithDescriptor:desc];
+    frame_data->gfx_encoder = [frame_data->gfx_cmd renderCommandEncoderWithDescriptor:desc];
 
     MTLRenderStages resource_stages = MTLRenderStageVertex | MTLRenderStageFragment;
-    MTLRenderStages sampler_stages  = MTLRenderStageFragment;
 
-    if(renderer->resource_heap) [frame_data->gfx_encoder useHeap:renderer->resource_heap stages:resource_stages];
+    [frame_data->gfx_encoder useHeap:renderer->resource_heap stages:resource_stages];
 
     MTLViewport viewport = {
         .width=renderer->swapchain.width,
@@ -957,7 +962,7 @@ void dm_render_command_end_rendering(dm_context *context, dm_resource handle)
     if(target.swapchain) return;
 
     // copy over to sampled image
-    frame_data->blit_encoder = [frame_data->cmd blitCommandEncoder];
+    frame_data->blit_encoder = [frame_data->gfx_cmd blitCommandEncoder];
 
     [frame_data->blit_encoder copyFromTexture:target.render_texture toTexture:target.sample_texture];
     [frame_data->blit_encoder endEncoding];
@@ -1119,22 +1124,20 @@ void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_res
     [frame_data->blit_encoder copyFromTexture:src_texture toTexture:dst_texture];
 }
 
-void dm_render_command_update_synchronization(dm_context *context, dm_synchronization synchronization)
+void dm_render_command_signal(dm_context *context, dm_synchronization handle, u64 value)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
-    id<MTLFence> fence = renderer->fences[synchronization];
 
-    [frame_data->gfx_encoder updateFence:fence afterStages:MTLRenderStageFragment];
+    [frame_data->gfx_cmd encodeSignalEvent:renderer->events[handle] value:value];
 }
 
-void dm_render_command_wait_synchronization(dm_context *context, dm_synchronization synchronization)
+void dm_render_command_wait(dm_context *context, dm_synchronization handle, u64 value)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
-    id<MTLFence> fence = renderer->fences[synchronization];
 
-    [frame_data->gfx_encoder waitForFence:fence beforeStages:MTLRenderStageVertex];
+    [frame_data->gfx_cmd encodeWaitForEvent:renderer->events[handle] value:value];
 }
 
 // compute commands
@@ -1143,8 +1146,9 @@ void dm_compute_command_begin_recording(dm_context *context)
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
-    //frame_data->cmd     = [renderer->queue commandBuffer];
-    frame_data->compute_encoder = [frame_data->cmd computeCommandEncoder];
+    frame_data->compute_encoder = [frame_data->compute_cmd computeCommandEncoder];
+
+    [frame_data->compute_encoder useHeap:renderer->resource_heap];
 }
 
 void dm_compute_command_end_recording(dm_context *context)
@@ -1153,7 +1157,6 @@ void dm_compute_command_end_recording(dm_context *context)
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
     [frame_data->compute_encoder endEncoding];
-    //[frame_data->compute_cmd     commit];
 }
 
 void dm_compute_command_push_resources(dm_context *context, dm_resource *resources, u32 count)
@@ -1221,20 +1224,18 @@ void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
     [frame_data->compute_encoder dispatchThreadgroups:thread_size threadsPerThreadgroup:group_size];
 }
 
-void dm_compute_command_update_synchronization(dm_context *context, dm_synchronization synchronization)
+void dm_compute_command_signal(dm_context *context, dm_synchronization handle, u64 value)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
-    id<MTLFence> fence = renderer->fences[synchronization];
 
-    [frame_data->compute_encoder updateFence:fence];
+    [frame_data->compute_cmd encodeSignalEvent:renderer->events[handle] value:value];
 }
 
-void dm_compute_command_wait_synchronization(dm_context *context, dm_synchronization synchronization)
+void dm_compute_command_wait(dm_context *context, dm_synchronization handle, u64 value)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
-    id<MTLFence> fence = renderer->fences[synchronization];
 
-    [frame_data->compute_encoder waitForFence:fence];
+    [frame_data->compute_cmd encodeWaitForEvent:renderer->events[handle] value:value];
 }
