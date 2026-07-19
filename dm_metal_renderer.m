@@ -82,6 +82,12 @@ typedef struct dm_metal_frame_data_t
     id<MTLBlitCommandEncoder> blit_encoder;
 } dm_metal_frame_data;
 
+typedef struct dm_metal_event_t
+{
+    id<MTLEvent> event;
+    u64 value;
+} dm_metal_event;
+
 typedef struct dm_metal_renderer_t
 {
     id<MTLDevice> device;
@@ -119,7 +125,7 @@ typedef struct dm_metal_renderer_t
     id<MTLBuffer> active_index_buffer;
     dm_pipeline active_pipeline;
 
-    id<MTLEvent> events[DM_MAX_SYNCHRONIZATIONS * DM_FRAMES_IN_FLIGHT];
+    dm_metal_event events[DM_MAX_SYNCHRONIZATIONS * DM_FRAMES_IN_FLIGHT];
     u32 event_count;
 } dm_metal_renderer;
 
@@ -212,7 +218,7 @@ void dm_renderer_shutdown(dm_context* context)
 
     for(u8 i=0; i<renderer->event_count; i++)
     {
-        [renderer->events[i] release];
+        [renderer->events[i].event release];
     }
 
     if(renderer->resource_heap) [renderer->resource_heap release];
@@ -873,12 +879,17 @@ bool dm_renderer_create_compute_pipeline(dm_context *context, dm_compute_pipelin
     return true;
 }
 
-bool dm_renderer_create_synchronization(dm_context *context, dm_synchronization_desc desc, dm_synchronization *handle)
+bool dm_renderer_create_synchronization(dm_context *context, dm_synchronization_desc desc, dm_resource *handle)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
-    renderer->events[renderer->event_count] = [renderer->device newEvent];
-    *handle = renderer->event_count++;
+    dm_metal_event event = { 0 };
+
+    event.event = [renderer->device newEvent];
+
+    renderer->events[renderer->event_count] = event;
+    handle->index = renderer->event_count++;
+    handle->type = DM_RESOURCE_TYPE_SYNCHRONIZATION;
 
     return true;
 }
@@ -1124,20 +1135,24 @@ void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_res
     [frame_data->blit_encoder copyFromTexture:src_texture toTexture:dst_texture];
 }
 
-void dm_render_command_signal(dm_context *context, dm_synchronization handle, u64 value)
+void dm_render_command_signal(dm_context *context, dm_resource handle)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
+
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    dm_metal_event *event = &renderer->events[handle.index];
 
-    [frame_data->gfx_cmd encodeSignalEvent:renderer->events[handle] value:value];
+    [frame_data->gfx_cmd encodeSignalEvent:event->event value:++event->value];
 }
 
-void dm_render_command_wait(dm_context *context, dm_synchronization handle, u64 value)
+void dm_render_command_wait(dm_context *context, dm_resource handle)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    dm_metal_event event = renderer->events[handle.index];
 
-    [frame_data->gfx_cmd encodeWaitForEvent:renderer->events[handle] value:value];
+    [frame_data->gfx_cmd encodeWaitForEvent:event.event value:event.value];
 }
 
 // compute commands
@@ -1224,18 +1239,24 @@ void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
     [frame_data->compute_encoder dispatchThreadgroups:thread_size threadsPerThreadgroup:group_size];
 }
 
-void dm_compute_command_signal(dm_context *context, dm_synchronization handle, u64 value)
+void dm_compute_command_signal(dm_context *context, dm_resource handle)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
+
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    dm_metal_event *event = &renderer->events[handle.index];
 
-    [frame_data->compute_cmd encodeSignalEvent:renderer->events[handle] value:value];
+    [frame_data->compute_cmd encodeSignalEvent:event->event value:++event->value];
 }
 
-void dm_compute_command_wait(dm_context *context, dm_synchronization handle, u64 value)
+void dm_compute_command_wait(dm_context *context, dm_resource handle)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
+
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    dm_metal_event event = renderer->events[handle.index];
 
-    [frame_data->compute_cmd encodeWaitForEvent:renderer->events[handle] value:value];
+    [frame_data->compute_cmd encodeWaitForEvent:event.event value:event.value];
 }
