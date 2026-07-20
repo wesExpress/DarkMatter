@@ -590,6 +590,7 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_4_FEATURES,
         .pNext=&heap_features,
         .pushDescriptor=1,
+        .dynamicRenderingLocalRead=1
     };
 
     VkPhysicalDeviceVulkan13Features v13_features = {
