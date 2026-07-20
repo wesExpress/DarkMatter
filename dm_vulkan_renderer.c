@@ -197,10 +197,10 @@ typedef struct dm_vulkan_renderer_t
     dm_vulkan_semaphore semaphores[1 + DM_MAX_SYNCHRONIZATIONS * DM_FRAMES_IN_FLIGHT]; // 
     u32 semaphore_count;
 
+    dm_resource gfx_semaphore, compute_semaphore;
+
     dm_pipeline active_pipeline;
 } dm_vulkan_renderer;
-
-#define DM_TIMELINE_SEMAPHORE 0
 
 #ifdef DM_DEBUG
 VKAPI_ATTR VkBool32 VKAPI_CALL dm_vk_debug_callback(
@@ -229,12 +229,50 @@ VKAPI_ATTR VkBool32 VKAPI_CALL dm_vk_debug_callback(
 }
 #endif
 
-bool dm_vulkan_create_buffer(VmaAllocator allocator, VkBufferUsageFlags usage, VmaAllocationCreateFlagBits alloc_flags, VmaMemoryUsage alloc_usage, VkBuffer *buffer, VmaAllocation *allocation, size_t size)
+void dm_vulkan_wait_semaphore(dm_vulkan_renderer *renderer, dm_resource handle)
 {
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
+
+    dm_vulkan_semaphore *semaphore = &renderer->semaphores[handle.index];
+
+    u64 wait_value = semaphore->value;
+
+    VkSemaphoreWaitInfo wait_info = {
+        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
+        .semaphoreCount=1,
+        .pSemaphores=&semaphore->semaphore,
+        .pValues=&wait_value
+    };
+    vkWaitSemaphores(renderer->gpu.device, &wait_info, UINT64_MAX);
+}
+
+void dm_vulkan_signal_semaphore(dm_vulkan_renderer *renderer, dm_resource handle)
+{
+    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
+
+    dm_vulkan_semaphore *semaphore= &renderer->semaphores[handle.index];
+
+    VkSemaphoreSignalInfo info = {
+        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
+        .semaphore=semaphore->semaphore,
+        .value=++semaphore->value
+    };
+    vkSignalSemaphore(renderer->gpu.device, &info);
+}
+
+bool dm_vulkan_create_buffer(VmaAllocator allocator, dm_vulkan_gpu gpu, VkBufferUsageFlags usage, VmaAllocationCreateFlagBits alloc_flags, VmaMemoryUsage alloc_usage, VkBuffer *buffer, VmaAllocation *allocation, size_t size)
+{
+    u32 queue_indices[] = {
+        gpu.gfx_index,
+        gpu.compute_index
+    };
+
     VkBufferCreateInfo buffer_info = {
         .sType=VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
         .size=size,
-        .sharingMode=VK_SHARING_MODE_EXCLUSIVE,
+        .sharingMode=VK_SHARING_MODE_CONCURRENT,
+        .queueFamilyIndexCount=2,
+        .pQueueFamilyIndices=queue_indices,
         .usage=usage
     };
 
@@ -672,9 +710,11 @@ dm_vulkan_gpu dm_vulkan_create_gpu(VkInstance instance, dm_vulkan_surface surfac
 
     u32 gfx_index = dm_vulkan_find_graphics_queue(physical, surface.surface, props, queue_count);
     if(gfx_index == UINT32_MAX) { LOG_ERROR("Could not find graphics queue."); return gpu; }
+    LOG_DEBUG("Graphics queue index: %u", gfx_index);
 
     u32 compute_index = dm_vulkan_find_compute_queue(physical, props, queue_count);
     if(compute_index == UINT32_MAX) { LOG_ERROR("Could not find compute queue."); return gpu; }
+    LOG_DEBUG("Compute queue index: %u", compute_index);
 
     VkDevice device = dm_vulkan_create_device(instance, physical, surface.surface, gfx_index, compute_index);
     if(device == VK_NULL_HANDLE) { LOG_ERROR("Could not create device."); return gpu; }
@@ -1041,7 +1081,7 @@ dm_vulkan_semaphore dm_vulkan_create_semaphore(dm_vulkan_gpu gpu, u64 value)
     return sync;
 }
 
-dm_vulkan_resource_descriptor_heap dm_vulkan_create_resource_heap(VkDevice device, VmaAllocator allocator, VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props)
+dm_vulkan_resource_descriptor_heap dm_vulkan_create_resource_heap(VkDevice device, VmaAllocator allocator, dm_vulkan_gpu gpu)
 {
     dm_vulkan_resource_descriptor_heap heap = { 0 };
 
@@ -1052,26 +1092,26 @@ dm_vulkan_resource_descriptor_heap dm_vulkan_create_resource_heap(VkDevice devic
     size_t size = 0;
     size_t buffer_size, image_offset, image_size;
 
-    buffer_size = DM_ALIGN(heap_props.bufferDescriptorSize, heap_props.bufferDescriptorAlignment);
-    image_offset = DM_ALIGN((buffer_size * DM_MAX_BUFFERS), heap_props.imageDescriptorSize);
-    image_size = DM_ALIGN(heap_props.imageDescriptorSize, heap_props.imageDescriptorAlignment);
+    buffer_size = DM_ALIGN(gpu.heap_props.bufferDescriptorSize, gpu.heap_props.bufferDescriptorAlignment);
+    image_offset = DM_ALIGN((buffer_size * DM_MAX_BUFFERS), gpu.heap_props.imageDescriptorSize);
+    image_size = DM_ALIGN(gpu.heap_props.imageDescriptorSize, gpu.heap_props.imageDescriptorAlignment);
     LOG_DEBUG("Buffer descriptor size: %zu", buffer_size);
-    LOG_DEBUG("Buffer descriptor heap alignment: %zu", heap_props.bufferDescriptorAlignment);
+    LOG_DEBUG("Buffer descriptor heap alignment: %zu", gpu.heap_props.bufferDescriptorAlignment);
     LOG_DEBUG("Image descriptor size: %zu", image_size);
-    LOG_DEBUG("Image descriptor heap alignment: %zu", heap_props.imageDescriptorAlignment);
+    LOG_DEBUG("Image descriptor heap alignment: %zu", gpu.heap_props.imageDescriptorAlignment);
     LOG_DEBUG("Image offset: %zu", image_offset);
-    LOG_DEBUG("Heap max push data size: %zu", heap_props.maxPushDataSize);
+    LOG_DEBUG("Heap max push data size: %zu", gpu.heap_props.maxPushDataSize);
 
     size += image_offset;
     size += DM_MAX_TEXTURES * image_size;
-    size += heap_props.minResourceHeapReservedRange;
-    size = DM_ALIGN(size, heap_props.resourceHeapAlignment);
+    size += gpu.heap_props.minResourceHeapReservedRange;
+    size = DM_ALIGN(size, gpu.heap_props.resourceHeapAlignment);
 
     VkBufferUsageFlags usage = VK_BUFFER_USAGE_DESCRIPTOR_HEAP_BIT_EXT;
     usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
-    if(!dm_vulkan_create_buffer(allocator, usage, VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, &buffer, &allocation, size)) return heap;
+    if(!dm_vulkan_create_buffer(allocator, gpu, usage, VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, &buffer, &allocation, size)) return heap;
 
     if(!dm_vulkan_decode_vr(vmaMapMemory(allocator, allocation, &start)))
     {
@@ -1091,7 +1131,7 @@ dm_vulkan_resource_descriptor_heap dm_vulkan_create_resource_heap(VkDevice devic
     return heap;
 }
 
-dm_vulkan_sampler_descriptor_heap dm_vulkan_create_sampler_descriptor_heap(VkDevice device, VmaAllocator allocator, VkPhysicalDeviceDescriptorHeapPropertiesEXT heap_props)
+dm_vulkan_sampler_descriptor_heap dm_vulkan_create_sampler_descriptor_heap(VkDevice device, VmaAllocator allocator, dm_vulkan_gpu gpu)
 {
     dm_vulkan_sampler_descriptor_heap heap = { 0 };
 
@@ -1102,13 +1142,13 @@ dm_vulkan_sampler_descriptor_heap dm_vulkan_create_sampler_descriptor_heap(VkDev
     size_t size = 0;
     size_t sampler_size;
 
-    sampler_size = DM_ALIGN(heap_props.samplerDescriptorSize, heap_props.samplerDescriptorAlignment);
+    sampler_size = DM_ALIGN(gpu.heap_props.samplerDescriptorSize, gpu.heap_props.samplerDescriptorAlignment);
 
     size += sampler_size * DM_MAX_SAMPLERS;
-    size += heap_props.minSamplerHeapReservedRange;
-    size = DM_ALIGN(size, heap_props.samplerHeapAlignment);
+    size += gpu.heap_props.minSamplerHeapReservedRange;
+    size = DM_ALIGN(size, gpu.heap_props.samplerHeapAlignment);
     LOG_DEBUG("Sampler descriptor size: %u", sampler_size);
-    LOG_DEBUG("Sampler descriptor heap alignment: %u", heap_props.samplerHeapAlignment);
+    LOG_DEBUG("Sampler descriptor heap alignment: %u", gpu.heap_props.samplerHeapAlignment);
 
     assert(size);
 
@@ -1116,7 +1156,7 @@ dm_vulkan_sampler_descriptor_heap dm_vulkan_create_sampler_descriptor_heap(VkDev
     usage |= VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT;
     usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
 
-    if(!dm_vulkan_create_buffer(allocator, usage, VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, &buffer, &allocation, size)) return heap;
+    if(!dm_vulkan_create_buffer(allocator, gpu, usage, VMA_ALLOCATION_CREATE_MAPPED_BIT, VMA_MEMORY_USAGE_CPU_TO_GPU, &buffer, &allocation, size)) return heap;
 
     if(!dm_vulkan_decode_vr(vmaMapMemory(allocator, allocation, &start)))
     {
@@ -1148,8 +1188,8 @@ bool dm_renderer_init(dm_context* context)
     dm_vulkan_frame_data frame_data[DM_FRAMES_IN_FLIGHT] = { 0 };
     dm_vulkan_resource_descriptor_heap resource_heap = { 0 };
     dm_vulkan_sampler_descriptor_heap  sampler_heap = { 0 };
-    dm_vulkan_semaphore gfx_sync = { 0 };
-    dm_vulkan_semaphore compute_sync = { 0 };
+    dm_vulkan_semaphore gfx_semapore = { 0 };
+    dm_vulkan_semaphore compute_semaphore = { 0 };
 
     VkCommandPool single_use_pool    = VK_NULL_HANDLE;
     
@@ -1171,6 +1211,9 @@ bool dm_renderer_init(dm_context* context)
     vkGetDeviceQueue(gpu.device, gpu.gfx_index, 0, &gpu.gfx_queue);
     vkGetDeviceQueue(gpu.device, gpu.compute_index, 0, &gpu.compute_queue);
 
+    if(!gpu.gfx_queue)     return false;
+    if(!gpu.compute_queue) return false;
+
     allocator = create_vma_allocator(instance, gpu.physical, gpu.device);
     if(allocator == VK_NULL_HANDLE) return false; 
 
@@ -1180,7 +1223,7 @@ bool dm_renderer_init(dm_context* context)
     for(u32 i=0; i<DM_FRAMES_IN_FLIGHT; i++)
     {
         frame_data[i] = dm_vulkan_create_frame_data(gpu);
-        if(frame_data[i].gfx_pool == VK_NULL_HANDLE)
+        if(frame_data[i].gfx_pool==VK_NULL_HANDLE || frame_data[i].compute_pool==VK_NULL_HANDLE)
         {
             LOG_ERROR("Could not create frame data for frame %u", i);
             return false;
@@ -1191,16 +1234,15 @@ bool dm_renderer_init(dm_context* context)
     if(single_use_pool == VK_NULL_HANDLE) { LOG_ERROR("Could not create single use pool."); return false; }
 
     // timeline semaphore
-    gfx_sync = dm_vulkan_create_semaphore(gpu, DM_FRAMES_IN_FLIGHT-1);
-    if(gfx_sync.semaphore == VK_NULL_HANDLE) { LOG_ERROR("Could not create gfx semaphore."); return false; }
-
-    compute_sync = dm_vulkan_create_semaphore(gpu, DM_FRAMES_IN_FLIGHT-1);
-    if(compute_sync.semaphore == VK_NULL_HANDLE) { LOG_ERROR("Could not create compute semaphore"); return false; }
+    gfx_semapore = dm_vulkan_create_semaphore(gpu, DM_FRAMES_IN_FLIGHT-1);
+    if(gfx_semapore.semaphore == VK_NULL_HANDLE) { LOG_ERROR("Could not create gfx semaphore."); return false; }
+    compute_semaphore = dm_vulkan_create_semaphore(gpu, DM_FRAMES_IN_FLIGHT-1);
+    if(compute_semaphore.semaphore==VK_NULL_HANDLE) { LOG_ERROR("Could not create compute semaphore"); return false; }
 
     // resource and smapler heaps
-    resource_heap = dm_vulkan_create_resource_heap(gpu.device, allocator, gpu.heap_props);
+    resource_heap = dm_vulkan_create_resource_heap(gpu.device, allocator, gpu);
     if(resource_heap.buffer == VK_NULL_HANDLE) { LOG_ERROR("Could not create resource descriptor heap"); return false; }
-    sampler_heap = dm_vulkan_create_sampler_descriptor_heap(gpu.device, allocator, gpu.heap_props);
+    sampler_heap = dm_vulkan_create_sampler_descriptor_heap(gpu.device, allocator, gpu);
     if(sampler_heap.buffer == VK_NULL_HANDLE) { LOG_ERROR("Could not create sampler descriptor heap"); return false; }
 
     // assign
@@ -1217,8 +1259,12 @@ bool dm_renderer_init(dm_context* context)
         renderer->frame_data[i] = frame_data[i];
     }
     renderer->single_use_pool = single_use_pool;
-    renderer->semaphores[renderer->semaphore_count++] = gfx_sync;
-    renderer->semaphores[renderer->semaphore_count++] = compute_sync;
+    renderer->semaphores[renderer->semaphore_count++] = gfx_semapore;
+    renderer->semaphores[renderer->semaphore_count++] = compute_semaphore;
+    renderer->gfx_semaphore.index = 0;
+    renderer->gfx_semaphore.type = DM_RESOURCE_TYPE_SYNCHRONIZATION;
+    renderer->compute_semaphore.index = 1;
+    renderer->compute_semaphore.type = DM_RESOURCE_TYPE_SYNCHRONIZATION;
     renderer->resource_heap = resource_heap;
     renderer->sampler_heap = sampler_heap;
 
@@ -1329,20 +1375,10 @@ bool dm_renderer_begin_frame(dm_context* context)
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_swapchain swapchain = renderer->swapchain;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
-    dm_vulkan_semaphore *gfx_sync = &renderer->semaphores[DM_TIMELINE_SEMAPHORE];
 
-    u64 wait_value = ++gfx_sync->value;
-    wait_value -= DM_FRAMES_IN_FLIGHT;
-    VkSemaphoreWaitInfo wait_info = {
-        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .semaphoreCount=1,
-        .pSemaphores=&gfx_sync->semaphore,
-        .pValues=&wait_value
-    };
-    vkWaitSemaphores(gpu.device, &wait_info, UINT64_MAX);
+    dm_vulkan_wait_semaphore(renderer, renderer->gfx_semaphore);
 
     vkResetCommandPool(gpu.device, frame_data.gfx_pool, 0);
-    vkResetCommandPool(gpu.device, frame_data.compute_pool, 0);
 
     VkResult vr = vkAcquireNextImageKHR(gpu.device, swapchain.swapchain, UINT64_MAX, frame_data.semaphore, VK_NULL_HANDLE, &swapchain.index);
 
@@ -1405,7 +1441,8 @@ bool dm_renderer_end_frame(dm_context* context)
     dm_vulkan_gpu gpu = renderer->gpu;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
     dm_vulkan_swapchain_image image = renderer->swapchain.images[renderer->swapchain.index];
-    dm_vulkan_semaphore *gfx_sync = &renderer->semaphores[DM_TIMELINE_SEMAPHORE];
+
+    dm_vulkan_semaphore *timeline_semaphore = &renderer->semaphores[renderer->gfx_semaphore.index];
 
     VkImageMemoryBarrier2 present_barrier = {
         .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
@@ -1443,9 +1480,9 @@ bool dm_renderer_end_frame(dm_context* context)
         },
         {
             .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
-            .semaphore=gfx_sync->semaphore,
+            .semaphore=timeline_semaphore->semaphore,
             .stageMask=VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-            .value=gfx_sync->value
+            .value=++timeline_semaphore->value
         },
     };
 
@@ -1765,8 +1802,12 @@ VkAttachmentStoreOp dm_vulkan_store_op_convert(dm_render_attachment_store_op op)
     }
 }
 
-bool dm_vulkan_create_image(VmaAllocator allocator, VkImageUsageFlags usage, VkFormat format, u16 width, u16 height, VkImage *image, VmaAllocation *allocation)
+bool dm_vulkan_create_image(VmaAllocator allocator, dm_vulkan_gpu gpu, VkImageUsageFlags usage, VkFormat format, u16 width, u16 height, VkImage *image, VmaAllocation *allocation)
 {
+    u32 queue_indices[] = {
+        gpu.gfx_index, gpu.compute_index
+    };
+
     VkImageCreateInfo image_info = {
         .sType=VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,
         .imageType=VK_IMAGE_TYPE_2D,
@@ -1779,7 +1820,10 @@ bool dm_vulkan_create_image(VmaAllocator allocator, VkImageUsageFlags usage, VkF
         .samples=VK_SAMPLE_COUNT_1_BIT,
         .tiling=VK_IMAGE_TILING_OPTIMAL,
         .usage=usage,
-        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED
+        .initialLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+        .sharingMode=VK_SHARING_MODE_CONCURRENT,
+        .queueFamilyIndexCount=2,
+        .pQueueFamilyIndices=queue_indices
     };
     VmaAllocationCreateInfo alloc_info = {
         .usage=VMA_MEMORY_USAGE_AUTO,
@@ -1816,7 +1860,7 @@ bool dm_renderer_create_render_target(dm_context* context, dm_render_target_desc
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT;
 
-        if(!dm_vulkan_create_image(renderer->allocator, usage, DM_SWAPCHAIN_FORMAT, width, height, &target.target, &target.alloc)) return false;
+        if(!dm_vulkan_create_image(renderer->allocator, renderer->gpu, usage, DM_SWAPCHAIN_FORMAT, width, height, &target.target, &target.alloc)) return false;
 
         VkImageViewCreateInfo view_info = {
             .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -1937,8 +1981,8 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_reso
             return false;
     }
 
-    if(!dm_vulkan_create_buffer(renderer->allocator, host_usage, host_flags, host_mem_usage, &buffer.host, &buffer.host_alloc, desc.size)) return false;
-    if(!dm_vulkan_create_buffer(renderer->allocator, device_usage, device_flags, device_mem_usage, &buffer.device, &buffer.device_alloc, desc.size)) return false;
+    if(!dm_vulkan_create_buffer(renderer->allocator, renderer->gpu, host_usage, host_flags, host_mem_usage, &buffer.host, &buffer.host_alloc, desc.size)) return false;
+    if(!dm_vulkan_create_buffer(renderer->allocator, renderer->gpu, device_usage, device_flags, device_mem_usage, &buffer.device, &buffer.device_alloc, desc.size)) return false;
 
     // copy over data if needed
     if(desc.data)
@@ -2032,7 +2076,7 @@ void dm_vulkan_copy_buffer_to_image(dm_vulkan_gpu gpu, VkCommandPool pool, VkIma
         .image=image,
         .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
         .subresourceRange.layerCount=1,
-        .subresourceRange.levelCount=1
+        .subresourceRange.levelCount=1,
     };
     VkDependencyInfo post_dep = {
         .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
@@ -2058,7 +2102,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
     dm_vulkan_image image = { 0 };
 
     VkImageUsageFlags usage       = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    VmaMemoryUsage    alloc_usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
+    VmaMemoryUsage    alloc_usage = VMA_MEMORY_USAGE_AUTO;
 
     switch(desc.type)
     {
@@ -2080,7 +2124,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 
     image.format = VK_FORMAT_R8G8B8A8_SRGB;
 
-    if(!dm_vulkan_create_image(renderer->allocator, usage, image.format, desc.width, desc.height, &image.image, &image.allocation)) return false;
+    if(!dm_vulkan_create_image(renderer->allocator, renderer->gpu, usage, image.format, desc.width, desc.height, &image.image, &image.allocation)) return false;
 
     image.usage  = usage;
 
@@ -2088,7 +2132,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 
     VkBufferUsageFlags buffer_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
-    if(!dm_vulkan_create_buffer(renderer->allocator, buffer_usage, 0, VMA_MEMORY_USAGE_CPU_TO_GPU, &staging_buffer.host, &staging_buffer.host_alloc, desc.size)) return false;
+    if(!dm_vulkan_create_buffer(renderer->allocator, renderer->gpu, buffer_usage, 0, VMA_MEMORY_USAGE_CPU_TO_GPU, &staging_buffer.host, &staging_buffer.host_alloc, desc.size)) return false;
 
     renderer->buffers[renderer->buffer_count]= staging_buffer;
     image.buffer_index = renderer->buffer_count++;
@@ -2615,8 +2659,8 @@ bool dm_render_command_update_texture(dm_context *context, dm_resource handle, v
         VkBufferUsageFlags buffer_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
         VmaMemoryUsage buffer_alloc_usage = VMA_MEMORY_USAGE_CPU_TO_GPU;
 
-        if(!dm_vulkan_create_buffer(renderer->allocator, buffer_usage, 0, buffer_alloc_usage, &new_buffer, &new_buffer_allocation, size)) return false;
-        if(!dm_vulkan_create_image(renderer->allocator, image->usage, image->format, width, height, &new_image, &new_image_allocation)) return false;
+        if(!dm_vulkan_create_buffer(renderer->allocator, renderer->gpu, buffer_usage, 0, buffer_alloc_usage, &new_buffer, &new_buffer_allocation, size)) return false;
+        if(!dm_vulkan_create_image(renderer->allocator, renderer->gpu, image->usage, image->format, width, height, &new_image, &new_image_allocation)) return false;
 
         // update descriptor
         VkImageViewCreateInfo view_info = {
@@ -2682,7 +2726,7 @@ bool dm_render_command_resize_render_target(dm_context *context, dm_resource res
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
         VK_IMAGE_USAGE_SAMPLED_BIT;
 
-    if(!dm_vulkan_create_image(renderer->allocator, usage, DM_SWAPCHAIN_FORMAT, width, height, &target->target, &target->alloc)) return false;
+    if(!dm_vulkan_create_image(renderer->allocator, renderer->gpu, usage, DM_SWAPCHAIN_FORMAT, width, height, &target->target, &target->alloc)) return false;
 
     VkImageViewCreateInfo view_info = {
         .sType=VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -2733,35 +2777,14 @@ bool dm_render_command_resize_render_target(dm_context *context, dm_resource res
 
 void dm_render_command_signal(dm_context *context, dm_resource handle)
 {
-    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
-
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
-    dm_vulkan_semaphore *semaphore= &renderer->semaphores[handle.index];
-
-    VkSemaphoreSignalInfo info = {
-        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
-        .semaphore=semaphore->semaphore,
-        .value=++semaphore->value
-    };
-    vkSignalSemaphore(renderer->gpu.device, &info);
+    dm_vulkan_signal_semaphore(renderer, handle);
 }
 
 void dm_render_command_wait(dm_context *context, dm_resource handle)
 {
-    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
-
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
-    dm_vulkan_semaphore *semaphore = &renderer->semaphores[handle.index];
-
-    u64 wait_value = semaphore->value;
-
-    VkSemaphoreWaitInfo wait_info = {
-        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .semaphoreCount=1,
-        .pSemaphores=&semaphore->semaphore,
-        .pValues=&wait_value
-    };
-    vkWaitSemaphores(renderer->gpu.device, &wait_info, UINT64_MAX);
+    dm_vulkan_wait_semaphore(renderer, handle);
 }
 
 void dm_render_command_update_begin(dm_context *context)
@@ -2830,6 +2853,9 @@ void dm_compute_command_begin_recording(dm_context *context)
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
+    dm_vulkan_wait_semaphore(renderer, renderer->compute_semaphore);
+    vkResetCommandPool(renderer->gpu.device, frame_data->compute_pool, 0);
+
     VkCommandBufferBeginInfo cmd_begin = {
         .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
         .flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
@@ -2851,7 +2877,7 @@ void dm_compute_command_end_recording(dm_context *context)
 {
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
-    dm_vulkan_semaphore *semaphore = &renderer->semaphores[DM_TIMELINE_SEMAPHORE];
+    dm_vulkan_semaphore *semaphore = &renderer->semaphores[renderer->compute_semaphore.index];
 
     vkEndCommandBuffer(frame_data->compute_cmd);
 
@@ -2864,7 +2890,7 @@ void dm_compute_command_end_recording(dm_context *context)
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SUBMIT_INFO,
         .semaphore=semaphore->semaphore,
         .stageMask=VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-        .value=semaphore->value
+        .value=++semaphore->value
     };
 
     VkSubmitInfo2 submit = {
@@ -2938,35 +2964,14 @@ void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
 
 void dm_compute_command_signal(dm_context *context, dm_resource handle)
 {
-    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
-
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
-    dm_vulkan_semaphore *semaphore = &renderer->semaphores[handle.index];
-
-    VkSemaphoreSignalInfo info = {
-        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_SIGNAL_INFO,
-        .semaphore=semaphore->semaphore,
-        .value=++semaphore->value
-    };
-    vkSignalSemaphore(renderer->gpu.device, &info);
+    dm_vulkan_signal_semaphore(renderer, handle);
 }
 
 void dm_compute_command_wait(dm_context *context, dm_resource handle)
 {
-    DM_ASSERT(handle.type==DM_RESOURCE_TYPE_SYNCHRONIZATION, "Not a sync resource");
-
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
-    dm_vulkan_semaphore semaphore = renderer->semaphores[handle.index];
-
-    u64 wait_value = semaphore.value;
-
-    VkSemaphoreWaitInfo wait_info = {
-        .sType=VK_STRUCTURE_TYPE_SEMAPHORE_WAIT_INFO,
-        .semaphoreCount=1,
-        .pSemaphores=&semaphore.semaphore,
-        .pValues=&wait_value
-    };
-    vkWaitSemaphores(renderer->gpu.device, &wait_info, UINT64_MAX);
+    dm_vulkan_wait_semaphore(renderer, handle);
 }
 
 /************
