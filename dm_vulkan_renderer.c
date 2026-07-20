@@ -2854,6 +2854,7 @@ void dm_compute_command_begin_recording(dm_context *context)
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
 
+    return;
     dm_vulkan_wait_semaphore(renderer, renderer->compute_semaphore);
     vkResetCommandPool(renderer->gpu.device, frame_data->compute_pool, 0);
 
@@ -2880,6 +2881,7 @@ void dm_compute_command_end_recording(dm_context *context)
     dm_vulkan_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
     dm_vulkan_semaphore *semaphore = &renderer->semaphores[renderer->compute_semaphore.index];
 
+    return;
     vkEndCommandBuffer(frame_data->compute_cmd);
 
     VkCommandBufferSubmitInfo compute_cmd_submit = {
@@ -2911,7 +2913,7 @@ void dm_compute_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 
     dm_vulkan_pipeline pipeline = renderer->pipes[handle.index];
 
-    vkCmdBindPipeline(frame_data.compute_cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
+    vkCmdBindPipeline(frame_data.gfx_cmd, VK_PIPELINE_BIND_POINT_COMPUTE, pipeline.pipeline);
 
     renderer->active_pipeline = handle;
 }
@@ -2952,7 +2954,7 @@ void dm_compute_command_push_resources(dm_context *context, dm_resource *resourc
         .data.size=sizeof(u32) * count
     };
 
-    vkCmdPushDataEXT(frame_data.compute_cmd, &info);
+    vkCmdPushDataEXT(frame_data.gfx_cmd, &info);
 }
 
 void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
@@ -2960,7 +2962,7 @@ void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
-    vkCmdDispatch(frame_data.compute_cmd, x,y,z);
+    vkCmdDispatch(frame_data.gfx_cmd, x,y,z);
 }
 
 void dm_compute_command_signal(dm_context *context, dm_resource handle)
