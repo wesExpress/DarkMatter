@@ -449,6 +449,8 @@ bool dm_render_end(dm_context *context);
 
 bool dm_is_running(dm_context *context);
 bool dm_window_resized(dm_context *context);
+void dm_window_clipboard_copy(dm_context *context, const char *text, int len);
+const char *dm_window_clipboard_paste(dm_context *context);
 double dm_window_get_time();
 
 void* dm_read_bytes(const char *path, size_t *size);

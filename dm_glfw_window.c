@@ -164,17 +164,33 @@ void dm_window_poll_events(dm_context* context)
     glfwPollEvents();
 }
 
-size_t dm_window_get_internal_size()
-{
-    return sizeof(dm_glfw_window);
-
-}
-
 double dm_window_get_time()
 {
     return glfwGetTime();
 }
 
+void dm_window_clipboard_copy(dm_context *context, const char *text, int len)
+{
+    dm_glfw_window *window = context->window.internal_window;
+
+    char *str = 0;
+    if (!len) return;
+    str = (char *)malloc((size_t)len + 1);
+    if (!str) return;
+    memcpy(str, text, (size_t)len);
+    str[len] = '\0';
+    glfwSetClipboardString(window->window, str);
+    free(str);
+}
+
+const char *dm_window_clipboard_paste(dm_context *context)
+{
+    dm_glfw_window *window = context->window.internal_window;
+
+    return glfwGetClipboardString(window->window);
+}
+
+/////////////////////////////////////////////
 dm_key_code dm_glfw_convert_key(int key)
 {
     switch(key)
