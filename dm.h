@@ -248,7 +248,7 @@ typedef enum dm_buffer_type_t
 
 typedef struct dm_buffer_desc_t
 {
-    size_t size;
+    size_t size, stride;
     dm_buffer_type type;
     void* data; // must be long-lasting so it does not decay before creating buffer
 } dm_buffer_desc;

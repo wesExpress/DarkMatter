@@ -43,7 +43,7 @@ typedef struct dm_metal_buffer_t
 {
     id<MTLBuffer> host;
     id<MTLBuffer> device;
-    size_t size;
+    size_t size, stride;
 } dm_metal_buffer;
 
 typedef struct dm_metal_texture_t
@@ -122,7 +122,8 @@ typedef struct dm_metal_renderer_t
     dm_metal_sampler samplers[DM_MAX_SAMPLERS];
     u32 sampler_count;
 
-    id<MTLBuffer> active_index_buffer;
+    //
+    dm_metal_buffer active_index_buffer;
     dm_pipeline active_pipeline;
 
     dm_metal_event events[DM_MAX_SYNCHRONIZATIONS * DM_FRAMES_IN_FLIGHT];
@@ -263,7 +264,7 @@ bool dm_renderer_end_frame(dm_context* context)
     context->renderer.current_frame = renderer->frame_index;
 
     renderer->active_pipeline.type = DM_PIPELINE_TYPE_INVALID;
-    renderer->active_index_buffer  = NULL;
+    renderer->active_index_buffer.device = NULL;
     
     return true;
 }
@@ -477,6 +478,12 @@ bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc
         return false;
     }
 
+    // TODO: needs to be configurable
+    pipeline.cull_mode      = MTLCullModeBack;
+    pipeline.fill_mode      = MTLTriangleFillModeFill;
+    pipeline.winding        = MTLWindingClockwise;
+    pipeline.primitive_type = MTLPrimitiveTypeTriangle;
+
     //
     renderer->rps[renderer->rp_count] = pipeline;
     handle->type = DM_PIPELINE_TYPE_RASTER;
@@ -584,6 +591,8 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_reso
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     dm_metal_buffer buffer = { 0 };
+
+    buffer.stride = desc.stride;
 
     size_t heap_size = desc.size;
     MTLSizeAndAlign size_align = [renderer->device heapBufferSizeAndAlignWithLength:heap_size options:MTLResourceStorageModePrivate];
@@ -989,9 +998,9 @@ void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle)
 
     [frame_data->gfx_encoder setRenderPipelineState:pipeline.pipeline];
     [frame_data->gfx_encoder setDepthStencilState:pipeline.depth_state];
-    [frame_data->gfx_encoder setCullMode:MTLCullModeBack];
-    [frame_data->gfx_encoder setFrontFacingWinding:MTLWindingClockwise];
-    [frame_data->gfx_encoder setTriangleFillMode:MTLTriangleFillModeFill];
+    [frame_data->gfx_encoder setCullMode:pipeline.cull_mode];
+    [frame_data->gfx_encoder setFrontFacingWinding:pipeline.winding];
+    [frame_data->gfx_encoder setTriangleFillMode:pipeline.fill_mode];
 
     renderer->active_pipeline = handle;
 }
@@ -1002,7 +1011,7 @@ void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle
 
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
-    renderer->active_index_buffer = renderer->buffers[handle.index].device;
+    renderer->active_index_buffer = renderer->buffers[handle.index];
 }
 
 void dm_metal_push_raster_data(dm_metal_renderer *renderer, dm_pipeline handle, dm_resource *resources, u32 count)
@@ -1069,10 +1078,27 @@ void dm_render_command_push_resources(dm_context *context, dm_resource *resource
 void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
-    DM_ASSERT(renderer->active_index_buffer, "No active index buffer");
-    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    DM_ASSERT(renderer->active_index_buffer.device, "No active index buffer");
+    DM_ASSERT(renderer->active_pipeline.type==DM_PIPELINE_TYPE_RASTER, "Not a valid raster pipeline");
 
-    [frame_data->gfx_encoder drawIndexedPrimitives:MTLPrimitiveTypeTriangle indexCount:index_count indexType:MTLIndexTypeUInt32 indexBuffer:renderer->active_index_buffer indexBufferOffset:0 instanceCount:instance_count];
+    dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    dm_metal_buffer index_buffer = renderer->active_index_buffer;
+    dm_metal_raster_pipe pipeline = renderer->rps[renderer->active_pipeline.index];
+
+    MTLIndexType index_type;
+    switch(index_buffer.stride)
+    {
+        default:
+            LOG_WARN("Index size is not 16 or 32, just using 16");
+        case sizeof(u16):
+            index_type = MTLIndexTypeUInt16;
+            break;
+        case sizeof(u32):
+            index_type = MTLIndexTypeUInt32;
+            break;
+    }
+
+    [frame_data->gfx_encoder drawIndexedPrimitives:pipeline.primitive_type indexCount:index_count indexType:index_type indexBuffer:index_buffer.device indexBufferOffset:0 instanceCount:instance_count];
 }
 
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size)
@@ -1090,6 +1116,9 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height)
 {
+    LOG_FATAL("Not supported right now");
+    return false;
+
     DM_ASSERT(handle.type==DM_RESOURCE_TYPE_TEXTURE, "Not a texture");
 
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
@@ -1129,6 +1158,9 @@ void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_res
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
+    DM_ASSERT(src.type==DM_RESOURCE_TYPE_TEXTURE, "Src is not a texture");
+    DM_ASSERT(dst.type==DM_RESOURCE_TYPE_TEXTURE, "Dst is not a texture");
+
     id<MTLTexture> src_texture = renderer->textures[src.index].device;
     id<MTLTexture> dst_texture = renderer->textures[dst.index].device;
 
@@ -1234,7 +1266,7 @@ void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z)
     dm_metal_compute_pipe pipeline = renderer->cps[renderer->active_pipeline.index];
 
     MTLSize thread_size = MTLSizeMake(x, y, z);
-    MTLSize group_size = MTLSizeMake(pipeline.grp_x, pipeline.grp_y, pipeline.grp_z);
+    MTLSize group_size  = MTLSizeMake(pipeline.grp_x, pipeline.grp_y, pipeline.grp_z);
 
     [frame_data->compute_encoder dispatchThreadgroups:thread_size threadsPerThreadgroup:group_size];
 }
