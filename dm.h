@@ -284,6 +284,111 @@ typedef struct dm_synchronization_desc_t
     int value;
 } dm_synchronization_desc;
 
+/********
+ * INPUT 
+ *********/
+typedef enum dm_key_code_t
+{
+    DM_KEY_A,
+    DM_KEY_B,
+    DM_KEY_C,
+    DM_KEY_D,
+    DM_KEY_E,
+    DM_KEY_F,
+    DM_KEY_G,
+    DM_KEY_H,
+    DM_KEY_I,
+    DM_KEY_J,
+    DM_KEY_K,
+    DM_KEY_L,
+    DM_KEY_M,
+    DM_KEY_N,
+    DM_KEY_O,
+    DM_KEY_P,
+    DM_KEY_Q,
+    DM_KEY_R,
+    DM_KEY_S,
+    DM_KEY_T,
+    DM_KEY_U,
+    DM_KEY_V,
+    DM_KEY_W,
+    DM_KEY_X,
+    DM_KEY_Y,
+    DM_KEY_Z,
+
+    DM_KEY_0,
+    DM_KEY_1,
+    DM_KEY_2,
+    DM_KEY_3,
+    DM_KEY_4,
+    DM_KEY_5,
+    DM_KEY_6,
+    DM_KEY_7,
+    DM_KEY_8,
+    DM_KEY_9,
+
+    DM_KEY_F1,
+    DM_KEY_F2,
+    DM_KEY_F3,
+    DM_KEY_F4,
+    DM_KEY_F5,
+    DM_KEY_F6,
+    DM_KEY_F7,
+    DM_KEY_F8,
+    DM_KEY_F9,
+    DM_KEY_F10,
+    DM_KEY_F11,
+    DM_KEY_F12,
+
+    DM_KEY_LEFT,
+    DM_KEY_RIGHT,
+    DM_KEY_UP,
+    DM_KEY_DOWN,
+
+    DM_KEY_ESC,
+    DM_KEY_ENTER,
+    DM_KEY_SPACE,
+    DM_KEY_LSHIFT,
+    DM_KEY_RSHIFT,
+    DM_KEY_LALT,
+    DM_KEY_RALT,
+    DM_KEY_LCTRL,
+    DM_KEY_RCTRL,
+    DM_KEY_SUPER,
+    DM_KEY_TAB,
+    DM_KEY_CAPS,
+    DM_KEY_BACKSPACE,
+
+    DM_KEY_PERIOD,
+    DM_KEY_COMMA,
+    DM_KEY_SEMICOLON,
+    DM_KEY_APOSTROPHE,
+    DM_KEY_DASH,
+    DM_KEY_EQUALS,
+    DM_KEY_BSLASH,
+    DM_KEY_FSLASH,
+    DM_KEY_LBRACKET,
+    DM_KEY_RBRACKET,
+
+    DM_KEY_MAX
+} dm_key_code;
+
+typedef enum dm_mouse_button_t
+{
+    DM_MOUSE_LEFT,
+    DM_MOUSE_RIGHT,
+    DM_MOUSE_MIDDLE,
+    DM_MOUSE_MAX
+} dm_mouse_button;
+
+typedef struct dm_input_state_t
+{
+    bool keys[DM_KEY_MAX];
+    bool buttons[DM_MOUSE_MAX];
+    double mouse_x, mouse_y;
+    double scroll_x, scroll_y;
+} dm_input_state;
+
 /**********
  * CONTEXT
  ***********/
@@ -299,6 +404,8 @@ typedef struct dm_arena_t
 typedef struct dm_window_t
 {
     u16 width, height;
+    dm_input_state input_states[2];
+
     void *internal_window;
 } dm_window;
 
@@ -346,7 +453,10 @@ double dm_window_get_time();
 
 void* dm_read_bytes(const char *path, size_t *size);
 
-bool dm_is_key_pressed(dm_context *context, int key);
+bool dm_key_is_pressed(dm_context *context, dm_key_code key);
+bool dm_key_just_released(dm_context *context, dm_key_code key);
+bool dm_mouse_button_is_pressed(dm_context *context, dm_mouse_button button);
+bool dm_mouse_button_just_released(dm_context *context, dm_mouse_button button);
 
 // resources
 bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc desc, dm_pipeline *handle);
