@@ -46,7 +46,7 @@ void dm_glfw_window_resize_callback(GLFWwindow* window, int width, int height)
 #ifdef DM_VULKAN
 VkSurfaceKHR dm_window_create_vulkan_surface(dm_context* context, VkInstance instance)
 {
-    dm_glfw_window* window = dm_arena_get_ptr(context->arena, context->window.offset);
+    dm_glfw_window* window = context->window.internal_window;
 
     VkSurfaceKHR surface = VK_NULL_HANDLE;
 
@@ -58,7 +58,7 @@ VkSurfaceKHR dm_window_create_vulkan_surface(dm_context* context, VkInstance ins
 #elif defined(DM_METAL)
 void *dm_window_get_native_window(dm_context *context)
 {
-    dm_glfw_window* window = dm_arena_get_ptr(context->arena, context->window.offset);
+    dm_glfw_window* window = context->window.internal_window;
 
     return glfwGetCocoaWindow(window->window);
 }
@@ -73,7 +73,7 @@ const char** dm_window_get_vulkan_extensions(u32* glfw_ext_count)
 
 bool dm_is_key_pressed(dm_context *context, int key)
 {
-    dm_glfw_window* window = dm_arena_get_ptr(context->arena, context->window.offset);
+    dm_glfw_window* window = context->window.internal_window;
 
     return glfwGetKey(window->window, key)==GLFW_PRESS;
 }
@@ -82,8 +82,10 @@ bool dm_window_create(dm_context* context, u16 width, u16 height, const char* ti
 {
     LOG_INFO("Creating glfw window...");
 
-    dm_glfw_window* window = dm_arena_alloc(&context->arena, sizeof(dm_glfw_window), &context->window.offset);
-    if(!window) return false;
+    context->window.internal_window = dm_arena_alloc(&context->arena, sizeof(dm_glfw_window));
+    if(!context->window.internal_window) return false;
+
+    dm_glfw_window *window = context->window.internal_window;
 
     if(!glfwInit()) 
     { 
@@ -118,7 +120,7 @@ bool dm_window_create(dm_context* context, u16 width, u16 height, const char* ti
 
 void dm_window_destroy(dm_context* context)
 {
-    dm_glfw_window* window = dm_arena_get_ptr(context->arena, context->window.offset);
+    dm_glfw_window* window = context->window.internal_window;
 
     glfwDestroyWindow(window->window);
 }

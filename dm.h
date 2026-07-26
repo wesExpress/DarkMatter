@@ -9,6 +9,16 @@
 #define DM_DEBUG
 #endif
 
+#ifdef __APPLE__
+#define DM_METAL
+#else
+#define DM_VULKAN
+#endif
+
+#ifdef DM_DEBUG
+#include <assert.h>
+#endif
+
 typedef uint8_t  u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
@@ -31,6 +41,12 @@ typedef uint64_t u64;
 #define LOG_ERROR(...) ERR(__VA_ARGS__)
 #define LOG_FATAL(...) FTL(__VA_ARGS__)
 
+#ifdef DM_DEBUG
+#define DM_ASSERT(VALUE, MSG) assert((MSG && VALUE))
+#else
+#define DM_ASSERT(VALUE, MSG) 
+#endif
+
 //#define DM_RAY_TRACE
 
 /********************
@@ -49,6 +65,7 @@ typedef enum dm_pipeline_type_t
 typedef enum dm_resource_type_t
 {
     DM_RESOURCE_TYPE_INVALID,
+    DM_RESOURCE_TYPE_SYNCHRONIZATION,
     DM_RESOURCE_TYPE_RENDER_TARGET,
     DM_RESOURCE_TYPE_RESOURCE_DESCRIPTOR_HEAP,
     DM_RESOURCE_TYPE_SAMPLER_DESCRIPTOR_HEAP,
@@ -87,18 +104,18 @@ typedef struct dm_resource_t
 #define DM_MAX_PIPELINES (DM_MAX_RASTER_PIPES + DM_MAX_COMPUTE_PIPES)
 #endif
 
-#define DM_MAX_DESCRIPTOR_HEAPS (DM_MAX_PIPES * 3)
-
 // these are defined PER FRAME
 #define DM_MAX_TEXTURES 10
 #define DM_MAX_BUFFERS  (10 * 2 + DM_MAX_TEXTURES) // CPU,GPU and textures need buffers
 #define DM_MAX_SAMPLERS 10
+#define DM_MAX_RENDER_TARGETS 10
 #ifdef DM_RAY_TRACE
 #define DM_MAX_ACCELS   10
-#define DM_MAX_RESOURCES (DM_MAX_TEXTURES + DM_MAX_BUFFERS + DM_MAX_SAMPLERS + DM_MAX_ACCELS)
+#define DM_MAX_RESOURCES (DM_MAX_RENDER_TARGETS + DM_MAX_TEXTURES + DM_MAX_BUFFERS + DM_MAX_SAMPLERS + DM_MAX_ACCELS)
 #else
-#define DM_MAX_RESOURCES (DM_MAX_TEXTURES + DM_MAX_BUFFERS + DM_MAX_SAMPLERS)
+#define DM_MAX_RESOURCES (DM_MAX_RENDER_TARGETS + DM_MAX_TEXTURES + DM_MAX_BUFFERS + DM_MAX_SAMPLERS)
 #endif
+#define DM_MAX_SYNCHRONIZATIONS 10
 
 /**************
  * RASTER PIPE
@@ -231,7 +248,7 @@ typedef enum dm_buffer_type_t
 
 typedef struct dm_buffer_desc_t
 {
-    size_t size;
+    size_t size, stride;
     dm_buffer_type type;
     void* data; // must be long-lasting so it does not decay before creating buffer
 } dm_buffer_desc;
@@ -243,6 +260,29 @@ typedef struct dm_sampler_desc_t
 {
     int d;
 } dm_sampler_desc;
+
+/*******************
+ * COMPUTE PIPELINE
+ ********************/
+typedef struct dm_compute_shader_t
+{
+    const char path[512];
+    const char entry[512];
+} dm_compute_shader;
+
+typedef struct dm_compute_pipeline_desc_t
+{
+    dm_compute_shader shader;
+    u16 grp_x, grp_y, grp_z;
+} dm_compute_pipeline_desc;
+
+/******************
+ * SYNCHRONIZATION
+ *******************/
+typedef struct dm_synchronization_desc_t
+{
+    int value;
+} dm_synchronization_desc;
 
 /**********
  * CONTEXT
@@ -259,8 +299,7 @@ typedef struct dm_arena_t
 typedef struct dm_window_t
 {
     u16 width, height;
-
-    size_t offset;
+    void *internal_window;
 } dm_window;
 
 // renderer
@@ -268,8 +307,7 @@ typedef struct dm_renderer_t
 {
     u16 width, height;
     u8 current_frame;
-
-    size_t offset;
+    void *internal_renderer;
 } dm_renderer;
 
 typedef enum dm_context_flag_t
@@ -293,8 +331,7 @@ typedef struct dm_context_t
 // functions
 void dm_arena_create(dm_arena *arena, size_t size);
 void dm_arena_detroy(dm_arena *arena);
-void* dm_arena_alloc(dm_arena *arena, size_t size, size_t *offset);
-void* dm_arena_get_ptr(dm_arena arena, size_t offset);
+void* dm_arena_alloc(dm_arena *arena, size_t size);
 
 bool dm_init(dm_context *context, u16 width, u16 height, const char *title, dm_context_flag flags);
 void dm_shutdown(dm_context *context);
@@ -321,25 +358,36 @@ bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_re
 
 bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *resources[], u32 count);
 
-bool dm_renderer_create_compute_pipeline(dm_context *context, dm_pipeline *handle);
+bool dm_renderer_create_compute_pipeline(dm_context *context, dm_compute_pipeline_desc desc, dm_pipeline *handle);
+
+bool dm_renderer_create_synchronization(dm_context *context, dm_synchronization_desc desc, dm_resource *handle);
 
 // commands
-void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d);
-void dm_render_command_end_rendering(dm_context *context, dm_resource handle);
-void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle);
-void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset);
-void dm_render_command_push_constants(dm_context *context, dm_resource handle);
-void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
-void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count);
-
+void dm_render_command_update_begin(dm_context *context);
+void dm_render_command_update_end(dm_context *context);
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size);
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height);
 void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_resource dst);
 
+void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d);
+void dm_render_command_end_rendering(dm_context *context, dm_resource handle);
+void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle);
+void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset);
+void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
+void dm_render_command_signal(dm_context *context, dm_resource handle);
+void dm_render_command_wait(dm_context *context, dm_resource handle);
+void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count);
+
+bool dm_render_command_resize_render_target(dm_context *context, dm_resource resource, u16 width, u16 height);
+
 // compute commands
-void dm_compute_command_push_data(dm_context *context, void *data, size_t size);
+void dm_compute_command_begin_recording(dm_context *context);
+void dm_compute_command_end_recording(dm_context *context);
 void dm_compute_command_bind_pipeline(dm_context *context, dm_pipeline handle);
+void dm_compute_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
+void dm_compute_command_signal(dm_context *context, dm_resource handle);
+void dm_compute_command_wait(dm_context *context, dm_resource handle);
 void dm_compute_command_dispatch(dm_context *context, u16 x, u16 y, u16 z);
 
 // macros
