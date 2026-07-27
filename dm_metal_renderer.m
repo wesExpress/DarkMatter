@@ -343,14 +343,10 @@ MTLBlendOperation dm_metal_convert_blend_op(dm_blend_op op)
         default:
             LOG_WARN("Unknown/unsupported blend operation");
             LOG_WARN("Returning MTLBlendOperationAdd");
-        case DM_BLEND_OP_ADD:
-            return MTLBlendOperationAdd;
-        case DM_BLEND_OP_SUBTRACT:
-            return MTLBlendOperationSubtract;
-        case DM_BLEND_OP_MIN:
-            return MTLBlendOperationMin;
-        case DM_BLEND_OP_MAX:
-            return MTLBlendOperationMax;
+        case DM_BLEND_OP_ADD:      return MTLBlendOperationAdd;
+        case DM_BLEND_OP_SUBTRACT: return MTLBlendOperationSubtract;
+        case DM_BLEND_OP_MIN:      return MTLBlendOperationMin;
+        case DM_BLEND_OP_MAX:      return MTLBlendOperationMax;
     }
 }
 
@@ -361,14 +357,60 @@ MTLBlendFactor dm_metal_convert_blend_factor(dm_blend_factor factor)
         default:
             LOG_WARN("Unknown/unsupported blend factor");
             LOG_WARN("Returning MTLBlendFactorOne");
-        case DM_BLEND_FACTOR_ONE:
-            return MTLBlendFactorOne;
-        case DM_BLEND_FACTOR_ZERO:
-            return MTLBlendFactorZero;
-        case DM_BLEND_FACTOR_SRC_ALPHA:
-            return MTLBlendFactorSourceAlpha;
-        case DM_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
-            return MTLBlendFactorOneMinusSourceAlpha;
+        case DM_BLEND_FACTOR_ONE:                 return MTLBlendFactorOne;
+        case DM_BLEND_FACTOR_ZERO:                return MTLBlendFactorZero;
+        case DM_BLEND_FACTOR_SRC_ALPHA:           return MTLBlendFactorSourceAlpha;
+        case DM_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA: return MTLBlendFactorOneMinusSourceAlpha;
+    }
+}
+
+MTLWinding dm_metal_convert_winding(dm_winding_order winding)
+{
+    switch(winding)
+    {
+        default:
+            LOG_WARN("Unknown/unsupported winding order");
+            LOG_WARN("Returning MTLWindingCounterClockwise");
+        case DM_WINDING_COUNTERCLOCKWISE: return MTLWindingCounterClockwise;
+        case DM_WINDING_CLOCKWISE:        return MTLWindingClockwise;
+    }
+}
+
+MTLCullMode dm_metal_convert_cull(dm_cull_mode culling)
+{
+    switch(culling)
+    {
+        default:
+            LOG_WARN("Unknown/unsupported cull mode");
+            LOG_WARN("Returning MTLCullModeNone");
+        case DM_CULL_NONE:  return MTLCullModeNone;
+        case DM_CULL_FRONT: return MTLCullModeFront;
+        case DM_CULL_BACK:  return MTLCullModeBack;
+    }
+}
+
+MTLTriangleFillMode dm_metal_convert_fill(dm_fill_mode fill)
+{
+    switch(fill)
+    {
+        default:
+            LOG_WARN("Unknown/unsupported fill mode");
+            LOG_WARN("Returning MTLTriangleFillModeFill");
+        case DM_FILL_FULL:  return MTLTriangleFillModeFill;
+        case DM_FILL_LINES: return MTLTriangleFillModeLines;
+    }
+}
+
+MTLPrimitiveType dm_metal_convert_primitive(dm_primitive_type primitive)
+{
+    switch(primitive)
+    {
+        default:
+            LOG_WARN("Unknown/unsupported primitive type");
+            LOG_WARN("Returning MTLPrimitiveTypeTriangle");
+        case DM_PRIMITIVE_TRIANGLE_LIST: return MTLPrimitiveTypeTriangle;
+        case DM_PRIMITIVE_POINT_LIST:    return MTLPrimitiveTypePoint;
+        case DM_PRIMITIVE_LINE_LIST:     return MTLPrimitiveTypeLine;
     }
 }
 
@@ -455,8 +497,8 @@ bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc
 
     MTLDepthStencilDescriptor *depth_desc = [MTLDepthStencilDescriptor new];
 
-    depth_desc.depthWriteEnabled = YES;
-    depth_desc.depthCompareFunction = MTLCompareFunctionLessEqual;
+    depth_desc.depthWriteEnabled    = desc.depth ? YES : NO;
+    depth_desc.depthCompareFunction = desc.depth ? MTLCompareFunctionLessEqual : MTLCompareFunctionAlways;
 
     pipeline.depth_state = [renderer->device newDepthStencilStateWithDescriptor:depth_desc];
 
@@ -479,10 +521,10 @@ bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc
     }
 
     // TODO: needs to be configurable
-    pipeline.cull_mode      = MTLCullModeBack;
-    pipeline.fill_mode      = MTLTriangleFillModeFill;
-    pipeline.winding        = MTLWindingClockwise;
-    pipeline.primitive_type = MTLPrimitiveTypeTriangle;
+    pipeline.cull_mode      = dm_metal_convert_cull(desc.culling);
+    pipeline.winding        = dm_metal_convert_winding(desc.winding);
+    pipeline.fill_mode      = dm_metal_convert_fill(desc.fill);
+    pipeline.primitive_type = dm_metal_convert_primitive(desc.primitive_type);
 
     //
     renderer->rps[renderer->rp_count] = pipeline;
@@ -492,35 +534,31 @@ bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc
     return true;
 }
 
-MTLLoadAction dm_metal_convert_load(dm_render_attachment_load_op op)
+MTLLoadAction dm_metal_convert_load(dm_render_load_op op)
 {
     switch(op)
     {
         default:
             LOG_WARN("Unknown/unsupported load action");
             LOG_WARN("Returning MTLLoadActionLoad");
-        case DM_RENDER_ATTACHMENT_LOAD_OP_LOAD:
-            return MTLLoadActionLoad;
-        case DM_RENDER_ATTACHMENT_LOAD_OP_CLEAR:
-            return MTLLoadActionClear;
-        case DM_RENDER_ATTACHMENT_LOAD_OP_DONT_CARE:
-            return MTLLoadActionDontCare;
+        case DM_RENDER_LOAD_OP_LOAD:      return MTLLoadActionLoad;
+        case DM_RENDER_LOAD_OP_CLEAR:     return MTLLoadActionClear;
+        case DM_RENDER_LOAD_OP_DONT_CARE: return MTLLoadActionDontCare;
     }
 }
 
-MTLStoreAction dm_metal_convert_store(dm_render_attachment_store_op op)
+MTLStoreAction dm_metal_convert_store(dm_render_store_op op)
 {
     switch(op)
     {
         default:
             LOG_WARN("Unknown/unsupported store action");
             LOG_WARN("Returning MTLStoreActionStore");
-        case DM_RENDER_ATTACHMENT_STORE_OP_STORE:
-            return MTLStoreActionStore;
-        case DM_RENDER_ATTACHMENT_STORE_OP_DONT_CARE:
-            return MTLStoreActionDontCare;
+        case DM_RENDER_STORE_OP_STORE:     return MTLStoreActionStore;
+        case DM_RENDER_STORE_OP_DONT_CARE: return MTLStoreActionDontCare;
     }
 }
+
 
 id<MTLTexture> dm_metal_create_texture(id<MTLDevice> device, MTLPixelFormat format, u16 width, u16 height, void *data, size_t *size)
 {
@@ -1075,7 +1113,7 @@ void dm_render_command_push_resources(dm_context *context, dm_resource *resource
     }
 }
 
-void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count)
+void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offset, u32 instance_count)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     DM_ASSERT(renderer->active_index_buffer.device, "No active index buffer");
@@ -1098,7 +1136,7 @@ void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_c
             break;
     }
 
-    [frame_data->gfx_encoder drawIndexedPrimitives:pipeline.primitive_type indexCount:index_count indexType:index_type indexBuffer:index_buffer.device indexBufferOffset:0 instanceCount:instance_count];
+    [frame_data->gfx_encoder drawIndexedPrimitives:pipeline.primitive_type indexCount:index_count indexType:index_type indexBuffer:index_buffer.device indexBufferOffset:index_offset instanceCount:instance_count];
 }
 
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size)

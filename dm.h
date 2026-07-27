@@ -151,6 +151,36 @@ typedef enum dm_blend_factor_t
     DM_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
 } dm_blend_factor;
 
+typedef enum dm_winding_order_t
+{
+    DM_WINDING_INVALID,
+    DM_WINDING_CLOCKWISE,
+    DM_WINDING_COUNTERCLOCKWISE
+} dm_winding_order;
+
+typedef enum dm_cull_mode_t
+{
+    DM_CULL_INVALID,
+    DM_CULL_NONE,
+    DM_CULL_FRONT,
+    DM_CULL_BACK
+} dm_cull_mode;
+ 
+typedef enum dm_fill_mode_t
+{
+    DM_FILL_INVALID,
+    DM_FILL_FULL,
+    DM_FILL_LINES
+} dm_fill_mode;
+
+typedef enum dm_primitive_type_t
+{
+    DM_PRIMITIVE_INVALID,
+    DM_PRIMITIVE_POINT_LIST,
+    DM_PRIMITIVE_LINE_LIST,
+    DM_PRIMITIVE_TRIANGLE_LIST
+} dm_primitive_type;
+
 typedef struct dm_raster_pipe_desc_t
 {
     dm_raster_shader shaders[DM_RASTER_SHADER_STAGE_MAX];
@@ -159,30 +189,37 @@ typedef struct dm_raster_pipe_desc_t
     dm_blend_op color_blend_op, alpha_blend_op;
     dm_blend_factor color_src_factor, color_dst_factor;
     dm_blend_factor alpha_src_factor, alpha_dst_factor;
+
+    dm_winding_order winding;
+    dm_cull_mode     culling;
+    dm_fill_mode     fill;
+    dm_primitive_type primitive_type;
+
+    bool depth, stencil;
 } dm_raster_pipe_desc;
 
 /****************
  * RENDER TARGET
  *****************/
-typedef enum dm_renderattachment_load_op_t
+typedef enum dm_render_load_op_t
 {
-    DM_RENDER_ATTACHMENT_LOAD_OP_INVALID,
-    DM_RENDER_ATTACHMENT_LOAD_OP_LOAD,
-    DM_RENDER_ATTACHMENT_LOAD_OP_CLEAR,
-    DM_RENDER_ATTACHMENT_LOAD_OP_DONT_CARE
-} dm_render_attachment_load_op;
+    DM_RENDER_LOAD_OP_INVALID,
+    DM_RENDER_LOAD_OP_LOAD,
+    DM_RENDER_LOAD_OP_CLEAR,
+    DM_RENDER_LOAD_OP_DONT_CARE
+} dm_render_load_op;
 
-typedef enum dm_render_attachment_store_op_t
+typedef enum dm_render_store_op_t
 {
-    DM_RENDER_ATTACHMENT_STORE_OP_INVALID,
-    DM_RENDER_ATTACHMENT_STORE_OP_STORE,
-    DM_RENDER_ATTACHMENT_STORE_OP_DONT_CARE
-} dm_render_attachment_store_op;
+    DM_RENDER_STORE_OP_INVALID,
+    DM_RENDER_STORE_OP_STORE,
+    DM_RENDER_STORE_OP_DONT_CARE
+} dm_render_store_op;
 
 typedef struct dm_render_attachment_desc_t
 {
-    dm_render_attachment_load_op  load_op;
-    dm_render_attachment_store_op store_op;
+    dm_render_load_op  load_op;
+    dm_render_store_op store_op;
 
     u16 width, height;
 } dm_render_attachment_desc;
@@ -460,6 +497,9 @@ bool dm_key_just_released(dm_context *context, dm_key_code key);
 bool dm_mouse_button_is_pressed(dm_context *context, dm_mouse_button button);
 bool dm_mouse_button_just_released(dm_context *context, dm_mouse_button button);
 
+int dm_get_mouse_x(dm_context *context);
+int dm_get_mouse_y(dm_context *context);
+
 // resources
 bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc desc, dm_pipeline *handle);
 
@@ -489,7 +529,7 @@ void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle
 void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
 void dm_render_command_signal(dm_context *context, dm_resource handle);
 void dm_render_command_wait(dm_context *context, dm_resource handle);
-void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count);
+void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offset, u32 instance_count);
 
 bool dm_render_command_resize_render_target(dm_context *context, dm_resource resource, u16 width, u16 height);
 

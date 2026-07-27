@@ -179,3 +179,13 @@ bool dm_mouse_button_just_released(dm_context *context, dm_mouse_button button)
 {
     return (context->window.input_states[0].buttons[button]==0 && context->window.input_states[1].buttons[button]==1);
 }
+
+int dm_get_mouse_x(dm_context *context)
+{
+    return context->window.input_states[0].mouse_x;
+}
+
+int dm_get_mouse_y(dm_context *context)
+{
+    return context->window.input_states[0].mouse_y;
+}
