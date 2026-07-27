@@ -481,7 +481,7 @@ bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc
     pipe_desc.colorAttachments[0].pixelFormat = DM_SWAPCHAIN_FORMAT;
     pipe_desc.colorAttachments[0].writeMask = MTLColorWriteMaskAll;
 
-    pipe_desc.colorAttachments[0].blendingEnabled = desc.blend;
+    pipe_desc.colorAttachments[0].blendingEnabled = desc.blend ? YES : NO;
     if(desc.blend)
     {
         pipe_desc.colorAttachments[0].rgbBlendOperation    = dm_metal_convert_blend_op(desc.color_blend_op);
