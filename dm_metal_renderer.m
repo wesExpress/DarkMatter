@@ -960,7 +960,7 @@ void dm_render_command_update_end(dm_context *context)
     [frame_data->blit_cmd     commit];
 }
 
-void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d)
+void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d, dm_render_load_op color_load, dm_render_store_op color_store, dm_render_load_op depth_load, dm_render_store_op depth_store)
 {
     DM_ASSERT(handle.type==DM_RESOURCE_TYPE_RENDER_TARGET, "Not a render target");
 
@@ -974,15 +974,15 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
 
     MTLRenderPassDescriptor *desc = [MTLRenderPassDescriptor renderPassDescriptor];
     desc.colorAttachments[0].clearColor  = clear;
-    desc.colorAttachments[0].loadAction  = target->color_load_op;
-    desc.colorAttachments[0].storeAction = target->color_store_op;
+    desc.colorAttachments[0].loadAction  = dm_metal_convert_load(color_load);
+    desc.colorAttachments[0].storeAction = dm_metal_convert_store(color_store);
     desc.colorAttachments[0].texture     = color_texture;
 
     if(target->depth)
     {
         desc.depthAttachment.clearDepth  = d;
-        desc.depthAttachment.loadAction  = target->depth_load_op;
-        desc.depthAttachment.storeAction = target->depth_store_op;
+        desc.depthAttachment.loadAction  = dm_metal_convert_load(depth_load);
+        desc.depthAttachment.storeAction = dm_metal_convert_store(depth_store);
         desc.depthAttachment.texture     = renderer->swapchain.depth_texture;
     }
 
