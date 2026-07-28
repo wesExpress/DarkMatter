@@ -218,9 +218,6 @@ typedef enum dm_render_store_op_t
 
 typedef struct dm_render_attachment_desc_t
 {
-    dm_render_load_op  load_op;
-    dm_render_store_op store_op;
-
     u16 width, height;
 } dm_render_attachment_desc;
 

@@ -123,7 +123,7 @@ typedef struct dm_vulkan_buffer_t
     VkBuffer      host, device;
     VmaAllocation host_alloc, device_alloc;
 
-    size_t size;
+    size_t size, stride;
     u32    heap_index;
 
     dm_buffer_type type;
@@ -134,11 +134,6 @@ typedef struct dm_vulkan_render_target_t
     VkImage target;
     VmaAllocation alloc;
     VkImageView target_view;
-
-    VkAttachmentLoadOp  color_load_op;
-    VkAttachmentStoreOp color_store_op;
-    VkAttachmentLoadOp  depth_load_op;
-    VkAttachmentStoreOp depth_store_op;
 
     bool swapchain, depth;
 
@@ -1586,14 +1581,10 @@ VkBlendOp dm_convert_blend_op(dm_blend_op op)
         default:
             LOG_WARN("Unknown/unsupported blend op");
             LOG_WARN("Returning VK_BLEND_OP_ADD");
-        case DM_BLEND_OP_ADD:
-            return VK_BLEND_OP_ADD;
-        case DM_BLEND_OP_SUBTRACT:
-            return VK_BLEND_OP_SUBTRACT;
-        case DM_BLEND_OP_MIN:
-            return VK_BLEND_OP_MIN;
-        case DM_BLEND_OP_MAX:
-            return VK_BLEND_OP_MAX;
+        case DM_BLEND_OP_ADD: return VK_BLEND_OP_ADD;
+        case DM_BLEND_OP_SUBTRACT: return VK_BLEND_OP_SUBTRACT;
+        case DM_BLEND_OP_MIN: return VK_BLEND_OP_MIN;
+        case DM_BLEND_OP_MAX: return VK_BLEND_OP_MAX;
     }
 }
 
@@ -1604,14 +1595,47 @@ VkBlendFactor dm_convert_blend_factor(dm_blend_factor factor)
         default:
             LOG_WARN("Unknown/unsupported blend factor");
             LOG_WARN("Returning VK_BLEND_FACTOR_ZERO");
-        case DM_BLEND_FACTOR_ZERO:
-            return VK_BLEND_FACTOR_ZERO;
-        case DM_BLEND_FACTOR_ONE:
-            return VK_BLEND_FACTOR_ONE;
-        case DM_BLEND_FACTOR_SRC_ALPHA:
-            return VK_BLEND_FACTOR_SRC_ALPHA;
-        case DM_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA:
-            return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+        case DM_BLEND_FACTOR_ZERO:      return VK_BLEND_FACTOR_ZERO;
+        case DM_BLEND_FACTOR_ONE:       return VK_BLEND_FACTOR_ONE;
+        case DM_BLEND_FACTOR_SRC_ALPHA: return VK_BLEND_FACTOR_SRC_ALPHA;
+        case DM_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA: return VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    }
+}
+
+VkFrontFace dm_vulkan_convert_winding(dm_winding_order winding)
+{
+    switch(winding)
+    {
+        default:
+            LOG_WARN("Unknown/unsupported winding order");
+            LOG_WARN("Returning VK_FRONT_FACE_COUNTER_CLOCKWISE");
+        case DM_WINDING_COUNTERCLOCKWISE: return VK_FRONT_FACE_COUNTER_CLOCKWISE;
+        case DM_WINDING_CLOCKWISE:        return VK_FRONT_FACE_CLOCKWISE;
+    }
+}
+
+VkPolygonMode dm_vulkan_convert_fill_mode(dm_fill_mode fill)
+{
+    switch(fill)
+    {
+        default:
+            LOG_WARN("Unknown/unsupported fill mode");
+            LOG_WARN("Returning VK_POLYGON_MODE_FILL");
+        case DM_FILL_FULL: return VK_POLYGON_MODE_FILL;
+        case DM_FILL_LINES: return VK_POLYGON_MODE_LINE;
+    }
+}
+
+VkCullModeFlagBits dm_vulkan_convert_culling(dm_cull_mode culling)
+{
+    switch(culling)
+    {
+        default:
+            LOG_WARN("Unknown/unsupported culling");
+            LOG_WARN("Returning VK_CULL_MODE_NONE_BIT");
+        case DM_CULL_NONE: return VK_CULL_MODE_NONE;
+        case DM_CULL_FRONT: return VK_CULL_MODE_FRONT_BIT;
+        case DM_CULL_BACK:  return VK_CULL_MODE_BACK_BIT;
     }
 }
 
@@ -1684,9 +1708,9 @@ bool dm_renderer_create_raster_pipeline(dm_context* context, dm_raster_pipe_desc
 
     VkPipelineRasterizationStateCreateInfo raster_info = {
         .sType=VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,
-        .polygonMode=VK_POLYGON_MODE_FILL,
-        .cullMode=VK_CULL_MODE_BACK_BIT,
-        .frontFace=VK_FRONT_FACE_COUNTER_CLOCKWISE,
+        .polygonMode=dm_vulkan_convert_fill_mode(desc.fill),
+        .cullMode=dm_vulkan_convert_culling(desc.culling),
+        .frontFace=dm_vulkan_convert_winding(desc.winding),
         .lineWidth=1.f
     };
 
@@ -1771,15 +1795,15 @@ bool dm_renderer_create_raster_pipeline(dm_context* context, dm_raster_pipe_desc
     return true;
 }
 
-VkAttachmentLoadOp dm_vulkan_load_op_convert(dm_render_attachment_load_op op)
+VkAttachmentLoadOp dm_vulkan_load_op_convert(dm_render_load_op op)
 {
     switch(op)
     {
-        case DM_RENDER_ATTACHMENT_LOAD_OP_LOAD:
+        case DM_RENDER_LOAD_OP_LOAD:
             return VK_ATTACHMENT_LOAD_OP_LOAD;
-        case DM_RENDER_ATTACHMENT_LOAD_OP_CLEAR: 
+        case DM_RENDER_LOAD_OP_CLEAR: 
             return VK_ATTACHMENT_LOAD_OP_CLEAR;
-        case DM_RENDER_ATTACHMENT_LOAD_OP_DONT_CARE: 
+        case DM_RENDER_LOAD_OP_DONT_CARE: 
             return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 
         default:
@@ -1788,13 +1812,13 @@ VkAttachmentLoadOp dm_vulkan_load_op_convert(dm_render_attachment_load_op op)
     }
 }
 
-VkAttachmentStoreOp dm_vulkan_store_op_convert(dm_render_attachment_store_op op)
+VkAttachmentStoreOp dm_vulkan_store_op_convert(dm_render_store_op op)
 {
     switch(op)
     {
-        case DM_RENDER_ATTACHMENT_STORE_OP_STORE:
+        case DM_RENDER_STORE_OP_STORE:
             return VK_ATTACHMENT_STORE_OP_STORE;
-        case DM_RENDER_ATTACHMENT_STORE_OP_DONT_CARE:
+        case DM_RENDER_STORE_OP_DONT_CARE:
             return VK_ATTACHMENT_STORE_OP_DONT_CARE;
 
         default:
@@ -1841,10 +1865,6 @@ bool dm_renderer_create_render_target(dm_context* context, dm_render_target_desc
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
 
     dm_vulkan_render_target target = { 
-        .color_load_op=dm_vulkan_load_op_convert(desc.color_attachment.load_op),
-        .color_store_op=dm_vulkan_store_op_convert(desc.color_attachment.store_op),
-        .depth_load_op=dm_vulkan_load_op_convert(desc.depth_attachment.load_op),
-        .depth_store_op=dm_vulkan_store_op_convert(desc.depth_attachment.store_op),
         .swapchain=desc.swapchain,
         .depth=desc.depth,
         .width=desc.color_attachment.width,
@@ -1951,7 +1971,7 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_reso
         return false;
     }
 
-    dm_vulkan_buffer buffer = { .type=desc.type };
+    dm_vulkan_buffer buffer = { .type=desc.type, .stride=desc.stride };
 
     VkBufferUsageFlags host_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
     VmaAllocationCreateFlags host_flags = 
@@ -2344,7 +2364,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
 }
 
 // commands
-void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d)
+void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d, dm_render_load_op color_load, dm_render_store_op color_store, dm_render_load_op depth_load, dm_render_store_op depth_store)
 {
     DM_ASSERT(handle.type==DM_RESOURCE_TYPE_RENDER_TARGET, "Invalid render target");
 
@@ -2422,8 +2442,8 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
         .sType=VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageLayout=VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .imageView=color_view,
-        .loadOp=target.color_load_op,
-        .storeOp=target.color_store_op,
+        .loadOp=dm_vulkan_load_op_convert(color_load),
+        .storeOp=dm_vulkan_store_op_convert(color_store),
         .clearValue.color.float32[0]=r,
         .clearValue.color.float32[1]=g,
         .clearValue.color.float32[2]=b,
@@ -2434,8 +2454,8 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
         .sType=VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO,
         .imageLayout=VK_IMAGE_LAYOUT_DEPTH_ATTACHMENT_OPTIMAL,
         .imageView=depth_view,
-        .loadOp=target.depth_load_op,
-        .storeOp=target.depth_store_op,
+        .loadOp=dm_vulkan_load_op_convert(depth_load),
+        .storeOp=dm_vulkan_store_op_convert(depth_store),
         .clearValue.depthStencil.depth=d
     };
     VkRenderingInfo render_info = {
@@ -2546,7 +2566,14 @@ void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle
 
     DM_ASSERT(buffer.type==DM_BUFFER_TYPE_INDEX, "Not an index buffer");
 
-    vkCmdBindIndexBuffer(frame_data.gfx_cmd, buffer.device, offset, VK_INDEX_TYPE_UINT32);
+    VkIndexType index_type;
+
+    if(buffer.stride==sizeof(u32))      index_type = VK_INDEX_TYPE_UINT32;
+    else if(buffer.stride==sizeof(u16)) index_type = VK_INDEX_TYPE_UINT16;
+    else if(buffer.stride==sizeof(u8))  index_type = VK_INDEX_TYPE_UINT8;
+    else                                index_type = VK_INDEX_TYPE_UINT32;
+
+    vkCmdBindIndexBuffer(frame_data.gfx_cmd, buffer.device, offset, index_type);
 }
 
 void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count)
@@ -2598,12 +2625,12 @@ void dm_render_command_push_resources(dm_context *context, dm_resource *resource
     vkCmdPushDataEXT(frame_data.gfx_cmd, &info);
 }
 
-void dm_render_command_draw(dm_context *context, u32 index_count, u32 instance_count)
+void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offset, u32 instance_count)
 {
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
     dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
-    vkCmdDrawIndexed(frame_data.gfx_cmd, index_count, instance_count, 0, 0, 0);
+    vkCmdDrawIndexed(frame_data.gfx_cmd, index_count, instance_count, index_offset, 0, 0);
 }
 
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size)
