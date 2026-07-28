@@ -592,10 +592,6 @@ bool dm_renderer_create_render_target(dm_context *context, dm_render_target_desc
     u16 height = desc.color_attachment.height;
 
     dm_metal_render_target render_target = { 
-        .color_load_op=dm_metal_convert_load(desc.color_attachment.load_op),
-        .color_store_op=dm_metal_convert_store(desc.color_attachment.store_op),
-        .depth_load_op=dm_metal_convert_load(desc.depth_attachment.load_op),
-        .depth_store_op=dm_metal_convert_store(desc.depth_attachment.store_op),
         .depth=desc.depth,
         .swapchain=desc.swapchain,
         .width=width,
@@ -672,6 +668,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
     dm_metal_texture texture = { 0 };
 
     MTLPixelFormat format = DM_SWAPCHAIN_FORMAT;
+    format = MTLPixelFormatRGBA8Unorm;
     texture.size = desc.size;
     texture.host = dm_metal_create_texture(renderer->device, format, desc.width, desc.height, desc.data, &texture.size);
     if(!texture.host) return false;
