@@ -2470,7 +2470,8 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
 
     VkViewport viewport = {
         .width=width,
-        .height=height,
+        .height=-height,
+        .y=height,
         .maxDepth=1
     };
 
