@@ -1871,7 +1871,6 @@ bool dm_renderer_create_render_target(dm_context* context, dm_render_target_desc
         .height=desc.color_attachment.height
     };
 
-
     if(!desc.swapchain)
     {
         const u16 width = desc.color_attachment.width;
