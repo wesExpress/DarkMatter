@@ -667,8 +667,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 
     dm_metal_texture texture = { 0 };
 
-    MTLPixelFormat format = DM_SWAPCHAIN_FORMAT;
-    format = MTLPixelFormatRGBA8Unorm;
+    MTLPixelFormat format = MTLPixelFormatRGBA8Unorm;
     texture.size = desc.size;
     texture.host = dm_metal_create_texture(renderer->device, format, desc.width, desc.height, desc.data, &texture.size);
     if(!texture.host) return false;

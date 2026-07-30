@@ -2142,7 +2142,7 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
             return false;
     }
 
-    image.format = VK_FORMAT_R8G8B8A8_SRGB;
+    image.format = VK_FORMAT_R8G8B8A8_UNORM;
 
     if(!dm_vulkan_create_image(renderer->allocator, renderer->gpu, usage, image.format, desc.width, desc.height, &image.image, &image.allocation)) return false;
 
@@ -2241,6 +2241,8 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
     size_t image_offset   = resource_heap->image_offset;
     size_t sampler_offset = 0;
 
+    u8* heap_start = resource_heap->start;
+
     for(u32 i=0; i<count; i++)
     {
         dm_resource *resource = resources[i];
@@ -2267,7 +2269,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
                 resource_info[resource_count].type               = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
                 resource_info[resource_count].data.pAddressRange = &addresses[buffer_count];
 
-                host_info[resource_count].address = (u8*)resource_heap->start + buffer_offset;
+                host_info[resource_count].address = heap_start + buffer_offset;
                 host_info[resource_count].size    = resource_heap->buffer_size;
 
                 buffer->heap_index = resource_heap->buffer_count++;
@@ -2294,7 +2296,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
                 resource_info[resource_count].type  = image->type;
                 resource_info[resource_count].data.pImage = &image_info[image_count];
 
-                host_info[resource_count].address = (u8*)resource_heap->start + image_offset;
+                host_info[resource_count].address = heap_start + image_offset;
                 host_info[resource_count].size    = resource_heap->image_size;
 
                 image_offset += resource_heap->image_size;
@@ -2324,7 +2326,8 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
                 resource_info[resource_count].type  = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
                 resource_info[resource_count].data.pImage = &image_info[image_count];
 
-                host_info[resource_count].address = (u8*)resource_heap->start + image_offset;
+                host_info[resource_count].address = heap_start + image_offset;
+
                 host_info[resource_count].size    = resource_heap->image_size;
 
                 image_offset += resource_heap->image_size;
