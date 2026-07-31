@@ -1039,19 +1039,6 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
 
     [frame_data->gfx_encoder useHeap:renderer->resource_heap stages:resource_stages];
 
-    MTLViewport viewport = {
-        .width=renderer->swapchain.width,
-        .height=renderer->swapchain.height,
-        .zfar=1.f
-    };
-
-    MTLScissorRect scissor = {
-        .width=renderer->swapchain.width,
-        .height=renderer->swapchain.height
-    };
-
-    [frame_data->gfx_encoder setViewport:viewport];
-    [frame_data->gfx_encoder setScissorRect:scissor];
 }
 
 void dm_render_command_end_rendering(dm_context *context, dm_resource handle)
@@ -1088,6 +1075,34 @@ void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle)
     [frame_data->gfx_encoder setTriangleFillMode:pipeline.fill_mode];
 
     renderer->active_pipeline = handle;
+}
+
+void dm_render_command_set_viewport(dm_context *context, int x, int y, int w, int h, float d_min, float d_max)
+{
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+
+    MTLViewport viewport = {
+        .originX=x, .originY=y,
+        .width=w,. height=h,
+        .znear=d_min, .zfar=d_max,
+    };
+
+
+    [frame_data.gfx_encoder setViewport:viewport];
+}
+
+void dm_render_command_set_scissor(dm_context *context, int x, int y, int w, int h)
+{
+    dm_metal_renderer *renderer = context->renderer.internal_renderer;
+    dm_metal_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+
+    MTLScissorRect scissor = {
+        .width=renderer->swapchain.width,
+        .height=renderer->swapchain.height
+    };
+
+    [frame_data.gfx_encoder setScissorRect:scissor];
 }
 
 void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset)

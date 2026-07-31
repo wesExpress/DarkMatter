@@ -539,6 +539,8 @@ void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_res
 void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d, dm_render_load_op color_load, dm_render_store_op color_store, dm_render_load_op depth_laod, dm_render_store_op depth_store);
 void dm_render_command_end_rendering(dm_context *context, dm_resource handle);
 void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle);
+void dm_render_command_set_viewport(dm_context *context, int x, int y, int w, int h, float d_min, float d_max);
+void dm_render_command_set_scissor(dm_context *context, int x, int y, int w, int h);
 void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset);
 void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
 void dm_render_command_signal(dm_context *context, dm_resource handle);
