@@ -566,6 +566,19 @@ id<MTLTexture> dm_metal_create_texture(id<MTLDevice> device, MTLPixelFormat form
 
     id<MTLTexture> texture = [device newTextureWithDescriptor:texture_desc];
     texture_desc.storageMode = MTLStorageModeShared;
+
+    size_t bytes_per_row = width;
+    switch(format)
+    {
+        case MTLPixelFormatA8Unorm:
+            bytes_per_row *= 1;
+            break;
+        case MTLPixelFormatRGBA8Unorm:
+            bytes_per_row *= 4;
+            break;
+        default: break;
+    }
+
     if(data)
     {
         MTLRegion region = MTLRegionMake2D(0, 0, width, height);
@@ -661,13 +674,25 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_reso
     return true;
 }
 
+MTLPixelFormat dm_metal_convert_format(dm_texture2d_format format)
+{
+    switch(format)
+    {
+        default:
+            LOG_WARN("No texture format specified, or unsupported");
+            LOG_WARN("Returning MTLPixelFormatRGBA8Unorm");
+        case DM_TEXTURE2D_FORMAT_R8G8B8A8_UNORM: return MTLPixelFormatRGBA8Unorm;
+        case DM_TEXTURE2D_FORMAT_A8_UNORM:       return MTLPixelFormatA8Unorm;
+    }
+}
+
 bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_resource *handle)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
     dm_metal_texture texture = { 0 };
 
-    MTLPixelFormat format = MTLPixelFormatRGBA8Unorm;
+    MTLPixelFormat format = dm_metal_convert_format(desc.format);
     texture.size = desc.size;
     texture.host = dm_metal_create_texture(renderer->device, format, desc.width, desc.height, desc.data, &texture.size);
     if(!texture.host) return false;

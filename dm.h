@@ -256,6 +256,9 @@ typedef enum dm_texture2d_type_t
 typedef enum dm_texture2d_format_t
 {
     DM_TEXTURE2D_FORMAT_INVALID,
+    DM_TEXTURE2D_FORMAT_R8G8B8A8_UNORM,
+    DM_TEXTURE2D_FORMAT_B8G8R8A8_UNORM,
+    DM_TEXTURE2D_FORMAT_A8_UNORM,
 } dm_texture2d_format;
 
 typedef struct dm_texture2d_desc_t
