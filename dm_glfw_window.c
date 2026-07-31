@@ -1,5 +1,7 @@
 #include "dm.h"
 
+//#include "imgui/dcimgui.h"
+
 #ifdef DM_VULKAN
 #define GLFW_INCLUDE_VULKAN
 #else
@@ -10,6 +12,7 @@
 #ifdef DM_METAL
 #include <GLFW/glfw3native.h>
 #endif
+#include "imgui/dcimgui_impl_glfw.h"
 
 typedef struct dm_glfw_window_t
 {
@@ -167,6 +170,27 @@ void dm_window_poll_events(dm_context* context)
 double dm_window_get_time()
 {
     return glfwGetTime();
+}
+
+void dm_platform_imgui_init(dm_context *context)
+{
+    dm_glfw_window* window = context->window.internal_window;
+
+#ifdef DM_METAL
+    cImGui_ImplGlfw_InitForOther(window->window, true);
+#else
+    cImGui_ImplGlfw_InitForVulkan(window->window, true);
+#endif
+}
+
+void dm_platform_imgui_shutdown(dm_context *context)
+{
+    cImGui_ImplGlfw_Shutdown();
+}
+
+void dm_platform_imgui_new_frame(dm_context *context)
+{
+    cImGui_ImplGlfw_NewFrame();
 }
 
 void dm_window_clipboard_copy(dm_context *context, const char *text, int len)

@@ -5,7 +5,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(DarkMatter)
 
-set(IMGUI_SOURCES lib/imgui/imgui.cpp lib/imgui/imgui_draw.cpp lib/imgui/imgui_tables.cpp lib/imgui/imgui_widgets.cpp lib/imgui/dcimgui.cpp lib/imgui/dcimgui_internal.cpp)
+set(IMGUI_SOURCES lib/imgui/imgui.cpp lib/imgui/imgui_draw.cpp lib/imgui/imgui_tables.cpp lib/imgui/imgui_widgets.cpp lib/imgui/dcimgui.cpp lib/imgui/dcimgui_internal.cpp lib/imgui/dcimgui_impl_glfw.cpp lib/imgui/imgui_impl_glfw.cpp lib/imgui/imgui_demo.cpp)
 
 set(SOURCES dm.c dm_glfw_window.c ${IMGUI_SOURCES})
 

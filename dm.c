@@ -56,6 +56,10 @@ extern bool dm_renderer_end_frame(dm_context* context);
 extern bool dm_renderer_resize(dm_context *context, u16 width, u16 height);
 extern size_t dm_renderer_get_internal_size();
 
+extern void dm_platform_imgui_init(dm_context *context);
+extern void dm_platform_imgui_shutdown(dm_context *context);
+extern void dm_platform_imgui_new_frame(dm_context *context);
+
 // context
 bool dm_init(dm_context* context, u16 width, u16 height, const char* title, dm_context_flag flags)
 {
@@ -68,6 +72,22 @@ bool dm_init(dm_context* context, u16 width, u16 height, const char* title, dm_c
         return false;
     }
 
+    // imgui
+    CIMGUI_CHECKVERSION();
+
+    context->imgui.context = ImGui_CreateContext(NULL);
+    if(!context->imgui.context) return false;
+
+    dm_platform_imgui_init(context);
+
+    ImGuiIO *io = ImGui_GetIO();
+    io->ConfigFlags  |= ImGuiConfigFlags_NavEnableKeyboard;
+    io->BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+    io->BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
+
+    ImGui_StyleColorsDark(NULL);
+
+    //
     context->window.width = width;
     context->window.height = height;
     context->flags |= DM_CONTEXT_FLAG_IS_RUNNING;
@@ -77,6 +97,8 @@ bool dm_init(dm_context* context, u16 width, u16 height, const char* title, dm_c
 
 void dm_shutdown(dm_context* context)
 {
+    dm_platform_imgui_shutdown(context);
+
     dm_renderer_shutdown(context);
     dm_window_destroy(context);
 
@@ -106,7 +128,11 @@ bool dm_update_begin(dm_context* context)
     }
 
     if(context->flags & DM_CONTEXT_FLAG_WINDOW_RESIZED) 
-        return dm_renderer_resize(context, context->window.width, context->window.height);
+    {
+        if(!dm_renderer_resize(context, context->window.width, context->window.height)) return false;
+    }
+
+    dm_platform_imgui_new_frame(context);
 
     return true;
 }

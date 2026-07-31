@@ -693,7 +693,6 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
     dm_metal_texture texture = { 0 };
 
     MTLPixelFormat format = dm_metal_convert_format(desc.format);
-    texture.size = desc.size;
     texture.host = dm_metal_create_texture(renderer->device, format, desc.width, desc.height, desc.data, &texture.size);
     if(!texture.host) return false;
 
@@ -703,6 +702,30 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
     handle->index = renderer->texture_count++;
 
     return true;
+}
+
+MTLSamplerMinMagFilter dm_metal_convert_min_mag_filter(dm_sampler_filter filter)
+{
+    switch(filter)
+    {
+        default:
+            LOG_WARN("Unknown/unsupported filter");
+            LOG_WARN("Returning MTLSamplerMinMagFilterLinear");
+        case DM_SAMPLER_FILTER_LINEAR:  return MTLSamplerMinMagFilterLinear;
+        case DM_SAMPLER_FILTER_NEAREST: return MTLSamplerMinMagFilterNearest;
+    }
+}
+
+MTLSamplerMipFilter dm_metal_convert_mip_filter(dm_sampler_filter filter)
+{
+    switch(filter)
+    {
+        default:
+            LOG_WARN("Unknown/unsupported filter");
+            LOG_WARN("Returning MTLSamplerMinMagFilterLinear");
+        case DM_SAMPLER_FILTER_LINEAR:  return MTLSamplerMipFilterLinear;
+        case DM_SAMPLER_FILTER_NEAREST: return MTLSamplerMipFilterNearest;
+    }
 }
 
 bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_resource *handle)
@@ -717,8 +740,9 @@ bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_re
     sampler_desc.sAddressMode = MTLSamplerAddressModeRepeat;
     sampler_desc.tAddressMode = MTLSamplerAddressModeRepeat;
 
-    sampler_desc.minFilter = MTLSamplerMinMagFilterLinear;
-    sampler_desc.magFilter = MTLSamplerMinMagFilterLinear;
+    sampler_desc.minFilter = dm_metal_convert_min_mag_filter(desc.min);
+    sampler_desc.magFilter = dm_metal_convert_min_mag_filter(desc.mag);
+    sampler_desc.mipFilter = dm_metal_convert_mip_filter(desc.mip);
 
     sampler_desc.supportArgumentBuffers = YES;
 
@@ -800,7 +824,9 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
     }
     LOG_INFO("Heap size: %zu", heap_desc.size);
 
-    renderer->resource_heap = [renderer->device newHeapWithDescriptor:heap_desc];
+    if(!renderer->resource_heap) {
+        renderer->resource_heap = [renderer->device newHeapWithDescriptor:heap_desc];
+    }
     if(!renderer->resource_heap)
     {
         LOG_ERROR("newHeapWithDescriptor failed");
@@ -1160,7 +1186,7 @@ void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offs
     [frame_data->gfx_encoder drawIndexedPrimitives:pipeline.primitive_type indexCount:index_count indexType:index_type indexBuffer:index_buffer.device indexBufferOffset:index_offset instanceCount:instance_count];
 }
 
-void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size)
+void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size, size_t offset)
 {
     DM_ASSERT(handle.type==DM_RESOURCE_TYPE_BUFFER, "Not a buffer");
 
@@ -1170,27 +1196,18 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
 
     memcpy(buffer.host.contents, data, size);
 
-    [frame_data->blit_encoder copyFromBuffer:buffer.host sourceOffset:0 toBuffer:buffer.device destinationOffset:0 size:size];
+    [frame_data->blit_encoder copyFromBuffer:buffer.host sourceOffset:offset toBuffer:buffer.device destinationOffset:0 size:size];
 }
 
-bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height)
+bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, u16 x, u16 y, u16 w, u16 h)
 {
-    LOG_FATAL("Not supported right now");
-    return false;
-
     DM_ASSERT(handle.type==DM_RESOURCE_TYPE_TEXTURE, "Not a texture");
 
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
 
-    switch(handle.type)
-    {
-        case DM_RESOURCE_TYPE_TEXTURE: 
-            return true;
+    dm_metal_texture *texture = &renderer->textures[handle.index];
 
-        default:
-            LOG_ERROR("Invalid resource");
-            return false;
-    }
+    [texture->host replaceRegion:MTLRegionMake2D(x,y,w,h) mipmapLevel:0 withBytes:data bytesPerRow:4 * w];
 
     return true;
 }

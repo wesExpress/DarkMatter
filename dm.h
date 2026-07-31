@@ -1,6 +1,7 @@
 #ifndef __DM_H__
 #define __DM_H__
 
+#include "imgui/dcimgui.h"
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -29,6 +30,7 @@ typedef uint64_t u64;
 #define DM_GIGABYTE (DM_MEGABYTE * 1024)
 
 #include "clog/clog.h"
+
 
 #ifdef DM_DEBUG
 #define LOG_DEBUG(...) DBG(__VA_ARGS__)
@@ -266,7 +268,6 @@ typedef struct dm_texture2d_desc_t
     u32 width, height;
 
     void* data;
-    size_t size;
 
     dm_texture2d_type   type;
     dm_texture2d_format format;
@@ -293,9 +294,16 @@ typedef struct dm_buffer_desc_t
 /**********
  * SAMPLER
  ***********/
+typedef enum dm_sampler_filter_t
+{
+    DM_SAMPLER_FILTER_INVALID,
+    DM_SAMPLER_FILTER_LINEAR,
+    DM_SAMPLER_FILTER_NEAREST
+} dm_sampler_filter;
+
 typedef struct dm_sampler_desc_t
 {
-    int d;
+    dm_sampler_filter min, mag, mip;
 } dm_sampler_desc;
 
 /*******************
@@ -462,10 +470,16 @@ typedef enum dm_context_flag_t
     DM_CONTEXT_FLAG_WINDOW_RESIZED   = 8,
 } dm_context_flag;
 
+typedef struct dm_imgui_context_t
+{
+    ImGuiContext *context;
+} dm_imgui_context;
+
 typedef struct dm_context_t
 {
     dm_window window;
     dm_renderer renderer;
+    dm_imgui_context imgui;
 
     dm_context_flag flags;
 
@@ -517,9 +531,9 @@ bool dm_renderer_create_synchronization(dm_context *context, dm_synchronization_
 // commands
 void dm_render_command_update_begin(dm_context *context);
 void dm_render_command_update_end(dm_context *context);
-void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size);
+void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size, size_t offset);
 
-bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height);
+bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, u16 x, u16 y, u16 width, u16 height);
 void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_resource dst);
 
 void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d, dm_render_load_op color_load, dm_render_store_op color_store, dm_render_load_op depth_laod, dm_render_store_op depth_store);
