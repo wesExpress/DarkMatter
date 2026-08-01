@@ -1175,7 +1175,7 @@ void dm_render_command_push_resources(dm_context *context, dm_resource *resource
     }
 }
 
-void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offset, u32 instance_count)
+void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offset, u32 instance_count, u32 vertex_offset)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     DM_ASSERT(renderer->active_index_buffer.device, "No active index buffer");
@@ -1198,7 +1198,7 @@ void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offs
             break;
     }
 
-    [frame_data->gfx_encoder drawIndexedPrimitives:pipeline.primitive_type indexCount:index_count indexType:index_type indexBuffer:index_buffer.device indexBufferOffset:index_offset instanceCount:instance_count];
+    [frame_data->gfx_encoder drawIndexedPrimitives:pipeline.primitive_type indexCount:index_count indexType:index_type indexBuffer:index_buffer.device indexBufferOffset:index_offset instanceCount:instance_count baseVertex:vertex_offset baseInstance:0];
 }
 
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size, size_t offset)
@@ -1209,9 +1209,9 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
     dm_metal_buffer buffer = renderer->buffers[handle.index];
 
-    memcpy(buffer.host.contents, data, size);
+    memcpy(buffer.host.contents + offset, data, size);
 
-    [frame_data->blit_encoder copyFromBuffer:buffer.host sourceOffset:offset toBuffer:buffer.device destinationOffset:0 size:size];
+    [frame_data->blit_encoder copyFromBuffer:buffer.host sourceOffset:offset toBuffer:buffer.device destinationOffset:offset size:size];
 }
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, u16 x, u16 y, u16 w, u16 h)

@@ -545,7 +545,7 @@ void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle
 void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
 void dm_render_command_signal(dm_context *context, dm_resource handle);
 void dm_render_command_wait(dm_context *context, dm_resource handle);
-void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offset, u32 instance_count);
+void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offset, u32 instance_count, u32 vertex_offset);
 
 bool dm_render_command_resize_render_target(dm_context *context, dm_resource resource, u16 width, u16 height);
 
