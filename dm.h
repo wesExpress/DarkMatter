@@ -31,7 +31,6 @@ typedef uint64_t u64;
 
 #include "clog/clog.h"
 
-
 #ifdef DM_DEBUG
 #define LOG_DEBUG(...) DBG(__VA_ARGS__)
 #else
@@ -449,6 +448,7 @@ typedef struct dm_arena_t
 typedef struct dm_window_t
 {
     u16 width, height;
+    float scale_w, scale_h;
     dm_input_state input_states[2];
 
     void *internal_window;

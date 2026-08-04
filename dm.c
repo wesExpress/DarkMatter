@@ -82,7 +82,7 @@ bool dm_init(dm_context* context, u16 width, u16 height, const char* title, dm_c
 
     ImGuiIO *io = ImGui_GetIO();
     io->ConfigFlags  |= ImGuiConfigFlags_NavEnableKeyboard;
-    //io->BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+    io->BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
     io->BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
 
     ImGui_StyleColorsDark(NULL);
@@ -133,6 +133,7 @@ bool dm_update_begin(dm_context* context)
     }
 
     dm_platform_imgui_new_frame(context);
+
 
     return true;
 }
