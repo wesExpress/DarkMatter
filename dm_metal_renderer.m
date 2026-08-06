@@ -1202,11 +1202,12 @@ bool dm_render_command_update_texture(dm_context *context, dm_resource handle, v
 
     dm_metal_texture *texture = &renderer->textures[handle.index];
 
-    MTLRegion region = MTLRegionMake2D(x, y, w, h);
-    MTLRegion region2 = MTLRegionMake2D((NSUInteger)x, (NSUInteger)y, (NSUInteger)w, (NSUInteger)h);
-    [texture->host replaceRegion:region2 mipmapLevel:0 withBytes:data bytesPerRow:(4 * (NSUInteger)w)];
+    MTLRegion region = MTLRegionMake2D((NSUInteger)x, (NSUInteger)y, (NSUInteger)w, (NSUInteger)h);
+    size_t bytes_per_row = texture->host.width;
+    if(texture->host.pixelFormat == MTLPixelFormatRGBA8Unorm) bytes_per_row *= 4;
+
+    [texture->host replaceRegion:region mipmapLevel:0 withBytes:data bytesPerRow:bytes_per_row];
     [frame_data->blit_encoder copyFromTexture:texture->host toTexture:texture->device];
-    LOG_INFO("UPDATE");
 
     return true;
 }
