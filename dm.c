@@ -134,7 +134,6 @@ bool dm_update_begin(dm_context* context)
 
     dm_platform_imgui_new_frame(context);
 
-
     return true;
 }
 

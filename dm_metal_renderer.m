@@ -741,6 +741,7 @@ bool dm_renderer_create_sampler(dm_context *context, dm_sampler_desc desc, dm_re
 
     MTLSamplerDescriptor *sampler_desc = [MTLSamplerDescriptor new];
 
+    // TODO: configurable
     sampler_desc.rAddressMode = MTLSamplerAddressModeRepeat;
     sampler_desc.sAddressMode = MTLSamplerAddressModeRepeat;
     sampler_desc.tAddressMode = MTLSamplerAddressModeRepeat;

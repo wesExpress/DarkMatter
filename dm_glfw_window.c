@@ -134,8 +134,10 @@ bool dm_window_create(dm_context* context, u16 width, u16 height, const char* ti
     }
 #endif
 
+    float main_scale = cImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
+
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    window->window = glfwCreateWindow(width, height, title, NULL, NULL);
+    window->window = glfwCreateWindow(width * main_scale, height * main_scale, title, NULL, NULL);
     if(!window->window) return false;
 
     glfwSetKeyCallback(window->window, glfw_key_callback);
@@ -193,8 +195,14 @@ void dm_platform_imgui_init(dm_context *context)
 {
     dm_glfw_window* window = context->window.internal_window;
 
+    float main_scale = cImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
+
+    ImGuiStyle *style = ImGui_GetStyle();
+    ImGuiStyle_ScaleAllSizes(style, main_scale);
+    style->FontScaleDpi = main_scale;
+
 #ifdef DM_METAL
-    cImGui_ImplGlfw_InitForOther(window->window, true);
+    cImGui_ImplGlfw_InitForOpenGL(window->window, true);
 #else
     cImGui_ImplGlfw_InitForVulkan(window->window, true);
 #endif
