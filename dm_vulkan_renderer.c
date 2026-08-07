@@ -3,8 +3,11 @@
 #include <stdlib.h>
 
 #define VOLK_IMPLEMENTATION
-#define VK_NO_PROTOTYPES
+//#define VK_NO_PROTOTYPES
 #include <volk.h>
+
+#define VMA_STATIC_VULKAN_FUNCTIONS  0
+#define VMA_DYNAMIC_VULKAN_FUNCTIONS 1
 #include "vk_mem_alloc.h"
 
 #include <shaderc/shaderc.h>
@@ -72,8 +75,8 @@ typedef struct dm_vulkan_swapchain_t
 
 typedef struct dm_vulkan_frame_data_t
 {
-    VkCommandPool   gfx_pool, compute_pool;
-    VkCommandBuffer gfx_cmd,  compute_cmd;
+    VkCommandPool   gfx_pool, compute_pool, blit_pool;
+    VkCommandBuffer gfx_cmd,  compute_cmd,  blit_cmd;
     VkSemaphore     semaphore;
 } dm_vulkan_frame_data;
 
@@ -748,6 +751,7 @@ VmaAllocator create_vma_allocator(VkInstance instance, VkPhysicalDevice physical
     };
 
     if(!dm_vulkan_decode_vr(vmaImportVulkanFunctionsFromVolk(&info, &functions))) { LOG_ERROR("vmaImportVulkanFunctionsFromVolk failed"); return VK_NULL_HANDLE; }
+    LOG_DEBUG("HERE");
 
     if(dm_vulkan_decode_vr(vmaCreateAllocator(&info, &allocator))) return allocator;
 
@@ -968,18 +972,25 @@ dm_vulkan_frame_data dm_vulkan_create_frame_data(dm_vulkan_gpu gpu)
 {
     dm_vulkan_frame_data data = { 0 };
 
-    VkCommandPool gfx_pool    = VK_NULL_HANDLE;
-    VkCommandPool cpte_pool   = VK_NULL_HANDLE;
-    VkCommandBuffer gfx_cmd   = VK_NULL_HANDLE;
-    VkCommandBuffer cp_cmd    = VK_NULL_HANDLE;
-    VkSemaphore semaphore = VK_NULL_HANDLE;
+    VkCommandPool gfx_pool   = VK_NULL_HANDLE;
+    VkCommandPool cpte_pool  = VK_NULL_HANDLE;
+    VkCommandPool blit_pool  = VK_NULL_HANDLE;
+    VkCommandBuffer gfx_cmd  = VK_NULL_HANDLE;
+    VkCommandBuffer cp_cmd   = VK_NULL_HANDLE;
+    VkCommandBuffer blit_cmd = VK_NULL_HANDLE;
+    VkSemaphore semaphore    = VK_NULL_HANDLE;
 
     VkCommandPoolCreateInfo pool_info = {
         .sType=VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO,
         .queueFamilyIndex=gpu.gfx_index
     };
 
-    if(vkCreateCommandPool(gpu.device, &pool_info, NULL, &gfx_pool) != VK_SUCCESS)
+    if(!dm_vulkan_decode_vr(vkCreateCommandPool(gpu.device, &pool_info, NULL, &gfx_pool)))
+    {
+        LOG_ERROR("vkCreateCommandPool");
+        return data;
+    }
+    if(!dm_vulkan_decode_vr(vkCreateCommandPool(gpu.device, &pool_info, NULL, &blit_pool)))
     {
         LOG_ERROR("vkCreateCommandPool");
         return data;
@@ -997,10 +1008,16 @@ dm_vulkan_frame_data dm_vulkan_create_frame_data(dm_vulkan_gpu gpu)
         LOG_ERROR("vkAllocateCommandBuffers failed");
         return data;
     }
+    cmd_info.commandPool=blit_pool;
+    if(!dm_vulkan_decode_vr(vkAllocateCommandBuffers(gpu.device, &cmd_info, &blit_cmd)))
+    {
+        LOG_ERROR("vkAllocateCommandBuffers failed");
+        return data;
+    }
 
     pool_info.queueFamilyIndex = gpu.compute_index;
 
-    if(vkCreateCommandPool(gpu.device, &pool_info, NULL, &cpte_pool) != VK_SUCCESS)
+    if(!dm_vulkan_decode_vr(vkCreateCommandPool(gpu.device, &pool_info, NULL, &cpte_pool)))
     {
         LOG_ERROR("vkCreateCommandPool");
         return data;
@@ -1013,6 +1030,7 @@ dm_vulkan_frame_data dm_vulkan_create_frame_data(dm_vulkan_gpu gpu)
         return data;
     }
 
+    //
     VkSemaphoreCreateInfo semaphore_info = { 
         .sType=VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO
     };
@@ -1024,11 +1042,13 @@ dm_vulkan_frame_data dm_vulkan_create_frame_data(dm_vulkan_gpu gpu)
     }
 
     // assign
-    data.gfx_pool  = gfx_pool;
+    data.gfx_pool     = gfx_pool;
     data.compute_pool = cpte_pool;
-    data.gfx_cmd   = gfx_cmd;
-    data.compute_cmd = cp_cmd;
-    data.semaphore = semaphore;
+    data.blit_pool    = blit_pool;
+    data.gfx_cmd      = gfx_cmd;
+    data.compute_cmd  = cp_cmd;
+    data.blit_cmd     = blit_cmd;
+    data.semaphore    = semaphore;
 
     return data;
 }
@@ -1313,6 +1333,7 @@ void dm_renderer_shutdown(dm_context* context)
     {
         vkDestroyCommandPool(gpu.device, renderer->frame_data[i].gfx_pool, NULL);
         vkDestroyCommandPool(gpu.device, renderer->frame_data[i].compute_pool, NULL);
+        vkDestroyCommandPool(gpu.device, renderer->frame_data[i].blit_pool, NULL);
         vkDestroySemaphore(gpu.device, renderer->frame_data[i].semaphore, NULL);
     }
 
@@ -2713,12 +2734,13 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
     DM_ASSERT(handle.type==DM_RESOURCE_TYPE_BUFFER, "Invalid buffer");
 
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
+    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
     dm_vulkan_copy_to_buffer(renderer->allocator, buffer, data, size, offset);
 
-    VkCommandBuffer cmd = dm_vulkan_one_time_cmd(renderer->gpu.device, renderer->single_use_pool);
+    //VkCommandBuffer cmd = dm_vulkan_one_time_cmd(renderer->gpu.device, renderer->single_use_pool);
 
     VkBufferCopy2 region_info = {
         .sType=VK_STRUCTURE_TYPE_BUFFER_COPY_2,
@@ -2735,9 +2757,9 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
         .pRegions=&region_info,
     };
 
-    vkCmdCopyBuffer2(cmd, &copy_info);
+    vkCmdCopyBuffer2(frame_data.blit_cmd, &copy_info);
 
-    dm_vulkan_submit_one_time_cmd(renderer->gpu.device, renderer->gpu.gfx_queue, renderer->single_use_pool, cmd);
+    //dm_vulkan_submit_one_time_cmd(renderer->gpu.device, renderer->gpu.gfx_queue, renderer->single_use_pool, cmd);
 }
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, u16 x, u16 y, u16 width, u16 height)
@@ -2856,11 +2878,31 @@ void dm_render_command_wait(dm_context *context, dm_resource handle)
 void dm_render_command_update_begin(dm_context *context)
 {
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
+    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+
+    vkResetCommandPool(renderer->gpu.device, frame_data.blit_pool, 0);
+
+    VkCommandBufferBeginInfo cmd_begin = {
+        .sType=VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags=VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
+    vkBeginCommandBuffer(frame_data.blit_cmd, &cmd_begin);
 }
 
 void dm_render_command_update_end(dm_context *context)
 {
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
+    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
+
+    VkSubmitInfo submit_info = {
+        .sType=VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount=1,
+        .pCommandBuffers=&frame_data.blit_cmd
+    };
+
+    vkEndCommandBuffer(frame_data.blit_cmd);
+    vkQueueSubmit(renderer->gpu.gfx_queue, 1, &submit_info, NULL);
+    vkQueueWaitIdle(renderer->gpu.gfx_queue);
 }
 
 /**********
