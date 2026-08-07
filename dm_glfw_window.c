@@ -10,6 +10,7 @@
 #ifdef DM_METAL
 #include <GLFW/glfw3native.h>
 #endif
+#include "imgui/dcimgui_impl_glfw.h"
 
 typedef struct dm_glfw_window_t
 {
@@ -133,8 +134,10 @@ bool dm_window_create(dm_context* context, u16 width, u16 height, const char* ti
     }
 #endif
 
+    float main_scale = cImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
+
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    window->window = glfwCreateWindow(width, height, title, NULL, NULL);
+    window->window = glfwCreateWindow(width * main_scale, height * main_scale, title, NULL, NULL);
     if(!window->window) return false;
 
     glfwSetKeyCallback(window->window, glfw_key_callback);
@@ -146,8 +149,15 @@ bool dm_window_create(dm_context* context, u16 width, u16 height, const char* ti
 
     glfwSetWindowUserPointer(window->window, context);
 
-    context->window.width = width;
-    context->window.height = height;
+    int w,h,display_w,display_h;
+    glfwGetWindowSize(window->window, &w, &h);
+    glfwGetFramebufferSize(window->window, &display_w, &display_h);
+
+    context->window.width  = w;
+    context->window.height = h;
+
+    context->window.scale_w = (w > 0) ? (float)display_w / (float)w : 1.f;
+    context->window.scale_h = (h > 0) ? (float)display_h / (float)h : 1.f;
 
     return true;
 }
@@ -161,12 +171,51 @@ void dm_window_destroy(dm_context* context)
 
 void dm_window_poll_events(dm_context* context)
 {
+    dm_glfw_window* window = context->window.internal_window;
+
+    int w,h,display_w,display_h;
     glfwPollEvents();
+
+    glfwGetWindowSize(window->window, &w, &h);
+    glfwGetFramebufferSize(window->window, &display_w, &display_h);
+
+    context->window.width  = w;
+    context->window.height = h;
+
+    context->window.scale_w = (w > 0) ? (float)display_w / (float)w : 1.f;
+    context->window.scale_h = (h > 0) ? (float)display_h / (float)h : 1.f;
 }
 
 double dm_window_get_time()
 {
     return glfwGetTime();
+}
+
+void dm_platform_imgui_init(dm_context *context)
+{
+    dm_glfw_window* window = context->window.internal_window;
+
+    float main_scale = cImGui_ImplGlfw_GetContentScaleForMonitor(glfwGetPrimaryMonitor());
+
+    ImGuiStyle *style = ImGui_GetStyle();
+    ImGuiStyle_ScaleAllSizes(style, main_scale);
+    style->FontScaleDpi = main_scale;
+
+#ifdef DM_METAL
+    cImGui_ImplGlfw_InitForOpenGL(window->window, true);
+#else
+    cImGui_ImplGlfw_InitForVulkan(window->window, true);
+#endif
+}
+
+void dm_platform_imgui_shutdown(dm_context *context)
+{
+    cImGui_ImplGlfw_Shutdown();
+}
+
+void dm_platform_imgui_new_frame(dm_context *context)
+{
+    cImGui_ImplGlfw_NewFrame();
 }
 
 void dm_window_clipboard_copy(dm_context *context, const char *text, int len)
