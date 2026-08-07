@@ -428,6 +428,7 @@ bool dm_vulkan_check_physical_device(VkPhysicalDevice physical)
 
     if(!untyped_supported.shaderUntypedPointers) { LOG_ERROR("Untyped shader ptrs not supported"); return false; }
     if(!heap_supported.descriptorHeap)           { LOG_ERROR("Descriptor heaps not supported"); return false; }
+    if(!heap_supported.descriptorHeapCaptureReplay) { LOG_ERROR("Descriptor heap replay not supported"); return false; }
     if(!v14_supported.pushDescriptor)    { LOG_ERROR("Push descriptor not supported");     return false; }
     if(!v13_supported.dynamicRendering)  { LOG_ERROR("Dynamic rendering not supported");   return false; }
     if(!v13_supported.synchronization2)  { LOG_ERROR("Synchronization2 not supported");    return false; }
@@ -579,6 +580,7 @@ VkDevice dm_vulkan_create_device(VkInstance instance, VkPhysicalDevice physical_
         .sType=VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DESCRIPTOR_HEAP_FEATURES_EXT,
         .pNext=&untyped_ptr,
         .descriptorHeap=1,
+        .descriptorHeapCaptureReplay=1
     };
        //
     VkPhysicalDeviceVulkan14Features v14_features = {
