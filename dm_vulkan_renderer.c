@@ -1945,14 +1945,15 @@ void dm_vulkan_submit_one_time_cmd(VkDevice device, VkQueue queue, VkCommandPool
 
 bool dm_vulkan_copy_to_buffer(VmaAllocator allocator, dm_vulkan_buffer buffer, void *data, size_t size, size_t offset)
 {
-    void* buffer_ptr = NULL;
-    if(!dm_vulkan_decode_vr(vmaMapMemory(allocator, buffer.host_alloc, &buffer_ptr)))
+    char* buffer_ptr = NULL;
+    if(!dm_vulkan_decode_vr(vmaMapMemory(allocator, buffer.host_alloc, (void**)&buffer_ptr)))
     {
         LOG_ERROR("vmaMapMemory failed");
         buffer_ptr = NULL;
         return false;
     }
-    memcpy((u8*)buffer_ptr + offset, data, size);
+    buffer_ptr += offset;
+    memcpy(buffer_ptr, data, size);
     vmaUnmapMemory(allocator, buffer.host_alloc);
 
     buffer_ptr = NULL;
@@ -2637,10 +2638,13 @@ void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle
 
     VkIndexType index_type;
 
-    if(buffer.stride==sizeof(u32))      index_type = VK_INDEX_TYPE_UINT32;
-    else if(buffer.stride==sizeof(u16)) index_type = VK_INDEX_TYPE_UINT16;
-    else if(buffer.stride==sizeof(u8))  index_type = VK_INDEX_TYPE_UINT8;
-    else                                index_type = VK_INDEX_TYPE_UINT32;
+    switch(buffer.stride)
+    {
+        default:
+        case sizeof(u32): index_type = VK_INDEX_TYPE_UINT32; break;
+        case sizeof(u16): index_type = VK_INDEX_TYPE_UINT16; break;
+        case sizeof(u8):  index_type = VK_INDEX_TYPE_UINT8;  break;
+    }
 
     vkCmdBindIndexBuffer(frame_data.gfx_cmd, buffer.device, offset, index_type);
 }
@@ -2710,15 +2714,15 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
-    // TODO: need to check if size is different
-    // if so, destroy and recreate and update descriptor
     dm_vulkan_copy_to_buffer(renderer->allocator, buffer, data, size, offset);
 
     VkCommandBuffer cmd = dm_vulkan_one_time_cmd(renderer->gpu.device, renderer->single_use_pool);
 
     VkBufferCopy2 region_info = {
         .sType=VK_STRUCTURE_TYPE_BUFFER_COPY_2,
-        .size=size
+        .size=size,
+        .srcOffset=offset,
+        .dstOffset=offset,
     };
 
     VkCopyBufferInfo2 copy_info = {
@@ -2726,7 +2730,7 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
         .srcBuffer=buffer.host,
         .dstBuffer=buffer.device,
         .regionCount=1,
-        .pRegions=&region_info
+        .pRegions=&region_info,
     };
 
     vkCmdCopyBuffer2(cmd, &copy_info);
