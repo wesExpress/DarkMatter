@@ -108,6 +108,8 @@ typedef struct dm_vulkan_image_t
 {
     VkImage       image;
     VmaAllocation allocation;
+    VkBuffer      staging_buffer;
+    VmaAllocation staging_alloc;
 
     VkFormat format;
     VkDescriptorType type;
@@ -1312,6 +1314,7 @@ void dm_renderer_shutdown(dm_context* context)
     }
     for(u32 i=0; i<renderer->image_count; i++)
     {
+        vmaDestroyBuffer(renderer->allocator, renderer->images[i].staging_buffer, renderer->images[i].staging_alloc);
         vmaDestroyImage(renderer->allocator, renderer->images[i].image, renderer->images[i].allocation);
     }
     for(u32 i=0; i<renderer->rt_count; i++)
@@ -1967,10 +1970,10 @@ void dm_vulkan_submit_one_time_cmd(VkDevice device, VkQueue queue, VkCommandPool
     vkFreeCommandBuffers(device, pool, 1, &cmd);
 }
 
-bool dm_vulkan_copy_to_buffer(VmaAllocator allocator, dm_vulkan_buffer buffer, void *data, size_t size, size_t offset)
+bool dm_vulkan_copy_to_buffer(VmaAllocator allocator, VmaAllocation allocation, void *data, size_t size, size_t offset)
 {
     char* buffer_ptr = NULL;
-    if(!dm_vulkan_decode_vr(vmaMapMemory(allocator, buffer.host_alloc, (void**)&buffer_ptr)))
+    if(!dm_vulkan_decode_vr(vmaMapMemory(allocator, allocation, (void**)&buffer_ptr)))
     {
         LOG_ERROR("vmaMapMemory failed");
         buffer_ptr = NULL;
@@ -1978,7 +1981,7 @@ bool dm_vulkan_copy_to_buffer(VmaAllocator allocator, dm_vulkan_buffer buffer, v
     }
     buffer_ptr += offset;
     memcpy(buffer_ptr, data, size);
-    vmaUnmapMemory(allocator, buffer.host_alloc);
+    vmaUnmapMemory(allocator, allocation);
 
     buffer_ptr = NULL;
 
@@ -2033,7 +2036,7 @@ bool dm_renderer_create_buffer(dm_context* context, dm_buffer_desc desc, dm_reso
     // copy over data if needed
     if(desc.data)
     {
-        if(!dm_vulkan_copy_to_buffer(renderer->allocator, buffer, desc.data, desc.size, 0)) return false;
+        if(!dm_vulkan_copy_to_buffer(renderer->allocator, buffer.host_alloc, desc.data, desc.size, 0)) return false;
 
         VkCommandBuffer cmd = dm_vulkan_one_time_cmd(renderer->gpu.device, renderer->single_use_pool);
 
@@ -2202,17 +2205,13 @@ bool dm_renderer_create_texture(dm_context *context, dm_texture2d_desc desc, dm_
 
     if(desc.data)
     {
-        dm_vulkan_buffer staging_buffer = { .size=size };
-
         VkBufferUsageFlags buffer_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
-        if(!dm_vulkan_create_buffer(renderer->allocator, renderer->gpu, buffer_usage, 0, VMA_MEMORY_USAGE_CPU_TO_GPU, &staging_buffer.host, &staging_buffer.host_alloc, size)) return false;
+        if(!dm_vulkan_create_buffer(renderer->allocator, renderer->gpu, buffer_usage, 0, VMA_MEMORY_USAGE_CPU_TO_GPU, &image.staging_buffer, &image.staging_alloc, size)) return false;
 
-        if(!dm_vulkan_copy_to_buffer(renderer->allocator, staging_buffer, desc.data, size, 0)) return false;
+        if(!dm_vulkan_copy_to_buffer(renderer->allocator, image.staging_alloc, desc.data, size, 0)) return false;
 
-        dm_vulkan_copy_buffer_to_image(renderer->gpu, renderer->single_use_pool, image.image, staging_buffer.host, 0,0, desc.width, desc.height);
-
-        vmaDestroyBuffer(renderer->allocator, staging_buffer.host, staging_buffer.host_alloc);
+        dm_vulkan_copy_buffer_to_image(renderer->gpu, renderer->single_use_pool, image.image, image.staging_buffer, 0,0, desc.width, desc.height);
     }
 
     image.width  = desc.width;
@@ -2739,9 +2738,7 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
 
     dm_vulkan_buffer buffer = renderer->buffers[handle.index];
 
-    dm_vulkan_copy_to_buffer(renderer->allocator, buffer, data, size, offset);
-
-    //VkCommandBuffer cmd = dm_vulkan_one_time_cmd(renderer->gpu.device, renderer->single_use_pool);
+    dm_vulkan_copy_to_buffer(renderer->allocator, buffer.host_alloc, data, size, offset);
 
     VkBufferCopy2 region_info = {
         .sType=VK_STRUCTURE_TYPE_BUFFER_COPY_2,
@@ -2759,44 +2756,73 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
     };
 
     vkCmdCopyBuffer2(frame_data.blit_cmd, &copy_info);
-
-    //dm_vulkan_submit_one_time_cmd(renderer->gpu.device, renderer->gpu.gfx_queue, renderer->single_use_pool, cmd);
 }
 
-bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, u16 x, u16 y, u16 width, u16 height)
+bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size)
 {
     DM_ASSERT(handle.type==DM_RESOURCE_TYPE_TEXTURE, "Invalid texture");
 
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
+    dm_vulkan_frame_data frame_data = renderer->frame_data[renderer->frame_index];
 
     dm_vulkan_image *image = &renderer->images[handle.index];
 
-    VkDeviceSize bytes_per_pixel;
-    switch(image->format)
-    {
-        case VK_FORMAT_R8G8B8A8_UNORM:
-        case VK_FORMAT_B8G8R8A8_UNORM:
-            bytes_per_pixel = 4;
-            break;
-        case VK_FORMAT_A8_UNORM:
-            bytes_per_pixel = 1;
-            break;
-        default: return false;
-    }
-    VkDeviceSize row_size = width * bytes_per_pixel;
-    VkDeviceSize upload_size = height * row_size;
+    if(!dm_vulkan_copy_to_buffer(renderer->allocator, image->staging_alloc, data, size, 0)) return false;
 
-    dm_vulkan_buffer staging_buffer = { .size=upload_size};
+    // transition image to transfer dst
+    VkImageMemoryBarrier2 dst_barrier = {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask=VK_PIPELINE_STAGE_2_NONE,
+        .srcAccessMask=VK_ACCESS_2_NONE,
+        .dstStageMask=VK_PIPELINE_STAGE_2_COPY_BIT,
+        .dstAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .oldLayout=VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .image=image->image,
+        .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+        .subresourceRange.layerCount=1,
+        .subresourceRange.levelCount=1
+    };
+    VkDependencyInfo dst_dep = {
+        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount=1,
+        .pImageMemoryBarriers=&dst_barrier
+    };
+    vkCmdPipelineBarrier2(frame_data.blit_cmd, &dst_dep);
 
-    VkBufferUsageFlags buffer_usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    // copy from buffer to texture
+    VkBufferImageCopy image_copy = {
+        .imageSubresource.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+        .imageSubresource.layerCount=1,
+        .imageExtent.width=image->width,
+        .imageExtent.height=image->height,
+        .imageExtent.depth=1,
+        .imageOffset.x=0,
+        .imageOffset.y=0,
+    };
 
-    if(!dm_vulkan_create_buffer(renderer->allocator, renderer->gpu, buffer_usage, 0, VMA_MEMORY_USAGE_CPU_TO_GPU, &staging_buffer.host, &staging_buffer.host_alloc, upload_size)) return false;
+    vkCmdCopyBufferToImage(frame_data.blit_cmd, image->staging_buffer, image->image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &image_copy);
 
-    if(!dm_vulkan_copy_to_buffer(renderer->allocator, staging_buffer, data, upload_size, 0)) return false;
-
-    dm_vulkan_copy_buffer_to_image(renderer->gpu, renderer->single_use_pool, image->image, staging_buffer.host, x,y, width, height);
-
-    vmaDestroyBuffer(renderer->allocator, staging_buffer.host, staging_buffer.host_alloc);
+    // transition to read/sample
+    VkImageMemoryBarrier2 post_barrier = {
+        .sType=VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+        .srcStageMask=VK_PIPELINE_STAGE_2_COPY_BIT,
+        .srcAccessMask=VK_ACCESS_2_TRANSFER_WRITE_BIT,
+        .dstStageMask=VK_PIPELINE_STAGE_2_ALL_GRAPHICS_BIT,
+        .dstAccessMask=VK_ACCESS_2_SHADER_READ_BIT,
+        .oldLayout=VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .newLayout=VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .image=image->image,
+        .subresourceRange.aspectMask=VK_IMAGE_ASPECT_COLOR_BIT,
+        .subresourceRange.layerCount=1,
+        .subresourceRange.levelCount=1,
+    };
+    VkDependencyInfo post_dep = {
+        .sType=VK_STRUCTURE_TYPE_DEPENDENCY_INFO,
+        .imageMemoryBarrierCount=1,
+        .pImageMemoryBarriers=&post_barrier
+    };
+    vkCmdPipelineBarrier2(frame_data.blit_cmd, &post_dep);
 
     return true;
 }

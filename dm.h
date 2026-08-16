@@ -533,7 +533,7 @@ void dm_render_command_update_begin(dm_context *context);
 void dm_render_command_update_end(dm_context *context);
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size, size_t offset);
 
-bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, u16 x, u16 y, u16 width, u16 height);
+bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size);
 void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_resource dst);
 
 void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d, dm_render_load_op color_load, dm_render_store_op color_store, dm_render_load_op depth_laod, dm_render_store_op depth_store);
