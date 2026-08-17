@@ -1173,8 +1173,14 @@ void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offs
         default:
             LOG_WARN("Index size is not 16 or 32");
             LOG_WARN("Using MTLIndexTypeUInt16");
-        case sizeof(u16): index_type = MTLIndexTypeUInt16; break;
-        case sizeof(u32): index_type = MTLIndexTypeUInt32; break;
+        case sizeof(u16): 
+            index_type = MTLIndexTypeUInt16; 
+            index_offset *= sizeof(u16);
+            break;
+        case sizeof(u32): 
+            index_type = MTLIndexTypeUInt32; 
+            index_offset *= sizeof(u32);
+            break;
     }
 
     [frame_data->gfx_encoder drawIndexedPrimitives:pipeline.primitive_type indexCount:index_count indexType:index_type indexBuffer:index_buffer.device indexBufferOffset:index_offset instanceCount:instance_count baseVertex:vertex_offset baseInstance:0];
@@ -1193,7 +1199,7 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
     [frame_data->blit_encoder copyFromBuffer:buffer.host sourceOffset:offset toBuffer:buffer.device destinationOffset:offset size:size];
 }
 
-bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, u16 x, u16 y, u16 w, u16 h)
+bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size)
 {
     DM_ASSERT(handle.type==DM_RESOURCE_TYPE_TEXTURE, "Not a texture");
 
@@ -1202,7 +1208,7 @@ bool dm_render_command_update_texture(dm_context *context, dm_resource handle, v
 
     dm_metal_texture *texture = &renderer->textures[handle.index];
 
-    MTLRegion region = MTLRegionMake2D((NSUInteger)x, (NSUInteger)y, (NSUInteger)w, (NSUInteger)h);
+    MTLRegion region = MTLRegionMake2D(0, 0, texture->host.width, texture->host.height);
     size_t bytes_per_row = texture->host.width;
     if(texture->host.pixelFormat == MTLPixelFormatRGBA8Unorm) bytes_per_row *= 4;
 
