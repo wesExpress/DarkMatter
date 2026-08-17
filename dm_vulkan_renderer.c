@@ -2930,7 +2930,7 @@ void dm_render_command_update_end(dm_context *context)
 
     vkEndCommandBuffer(frame_data.blit_cmd);
     vkQueueSubmit(renderer->gpu.gfx_queue, 1, &submit_info, NULL);
-    vkQueueWaitIdle(renderer->gpu.gfx_queue);
+    //vkQueueWaitIdle(renderer->gpu.gfx_queue);
 }
 
 /**********
