@@ -4,8 +4,8 @@ Cross platform and rendering framework.
 
 Supports:
 
--Vulkan
--Metal
+- Vulkan
+- Metal
 
 ## Resources
 DarkMatter uses the following resource types:
@@ -19,3 +19,6 @@ As DarkMatter uses bindless, it is the user's responsibility to determine how ea
 
 ## Commands
 Basic commands are abstracted away. Combined with compute pipelines and render targets, modern rendering techniques should be quite simple to implement.
+
+## Dependencies
+DarkMatter uses GLFW for platform handling. It also comes with DearImgui bundled, specifically with the dear_bindings C bindings. Due to the bindless nature of DarkMatter, we DO NOT USE the render backends provided by DearImgui, only the GLFW backend. As of now, the user is responsible for creating and handling the imgui rendering using the render API. 
