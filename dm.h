@@ -1,6 +1,7 @@
 #ifndef __DM_H__
 #define __DM_H__
 
+#include "imgui/dcimgui.h"
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -256,6 +257,9 @@ typedef enum dm_texture2d_type_t
 typedef enum dm_texture2d_format_t
 {
     DM_TEXTURE2D_FORMAT_INVALID,
+    DM_TEXTURE2D_FORMAT_R8G8B8A8_UNORM,
+    DM_TEXTURE2D_FORMAT_B8G8R8A8_UNORM,
+    DM_TEXTURE2D_FORMAT_A8_UNORM,
 } dm_texture2d_format;
 
 typedef struct dm_texture2d_desc_t
@@ -263,7 +267,6 @@ typedef struct dm_texture2d_desc_t
     u32 width, height;
 
     void* data;
-    size_t size;
 
     dm_texture2d_type   type;
     dm_texture2d_format format;
@@ -290,9 +293,16 @@ typedef struct dm_buffer_desc_t
 /**********
  * SAMPLER
  ***********/
+typedef enum dm_sampler_filter_t
+{
+    DM_SAMPLER_FILTER_INVALID,
+    DM_SAMPLER_FILTER_LINEAR,
+    DM_SAMPLER_FILTER_NEAREST
+} dm_sampler_filter;
+
 typedef struct dm_sampler_desc_t
 {
-    int d;
+    dm_sampler_filter min, mag, mip;
 } dm_sampler_desc;
 
 /*******************
@@ -438,6 +448,7 @@ typedef struct dm_arena_t
 typedef struct dm_window_t
 {
     u16 width, height;
+    float scale_w, scale_h;
     dm_input_state input_states[2];
 
     void *internal_window;
@@ -459,10 +470,16 @@ typedef enum dm_context_flag_t
     DM_CONTEXT_FLAG_WINDOW_RESIZED   = 8,
 } dm_context_flag;
 
+typedef struct dm_imgui_context_t
+{
+    ImGuiContext *context;
+} dm_imgui_context;
+
 typedef struct dm_context_t
 {
     dm_window window;
     dm_renderer renderer;
+    dm_imgui_context imgui;
 
     dm_context_flag flags;
 
@@ -514,19 +531,21 @@ bool dm_renderer_create_synchronization(dm_context *context, dm_synchronization_
 // commands
 void dm_render_command_update_begin(dm_context *context);
 void dm_render_command_update_end(dm_context *context);
-void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size);
+void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size, size_t offset);
 
-bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size, u16 width, u16 height);
+bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size);
 void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_resource dst);
 
 void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d, dm_render_load_op color_load, dm_render_store_op color_store, dm_render_load_op depth_laod, dm_render_store_op depth_store);
 void dm_render_command_end_rendering(dm_context *context, dm_resource handle);
 void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle);
+void dm_render_command_set_viewport(dm_context *context, int x, int y, int w, int h, float d_min, float d_max);
+void dm_render_command_set_scissor(dm_context *context, int x, int y, int w, int h);
 void dm_render_command_bind_index_buffer(dm_context *context, dm_resource handle, size_t offset);
 void dm_render_command_push_resources(dm_context *context, dm_resource *resources, u32 count);
 void dm_render_command_signal(dm_context *context, dm_resource handle);
 void dm_render_command_wait(dm_context *context, dm_resource handle);
-void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offset, u32 instance_count);
+void dm_render_command_draw(dm_context *context, u32 index_count, u32 index_offset, u32 instance_count, u32 vertex_offset);
 
 bool dm_render_command_resize_render_target(dm_context *context, dm_resource resource, u16 width, u16 height);
 

@@ -5,7 +5,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 project(DarkMatter)
 
-set(SOURCES dm.c dm_glfw_window.c)
+set(IMGUI_SOURCES lib/imgui/imgui.cpp lib/imgui/imgui_draw.cpp lib/imgui/imgui_tables.cpp lib/imgui/imgui_widgets.cpp lib/imgui/dcimgui.cpp lib/imgui/dcimgui_internal.cpp lib/imgui/dcimgui_impl_glfw.cpp lib/imgui/imgui_impl_glfw.cpp lib/imgui/imgui_demo.cpp)
+
+set(SOURCES dm.c dm_glfw_window.c ${IMGUI_SOURCES})
 
 if(APPLE)
     find_library(APPLE_FWK_COCOA Cocoa REQUIRED)
@@ -26,7 +28,7 @@ add_subdirectory(lib/glfw)
 
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
 
-target_include_directories(${PROJECT_NAME} PUBLIC lib lib/glfw/include)
+target_include_directories(${PROJECT_NAME} PUBLIC lib lib/glfw/include lib/imgui/)
 target_link_libraries(${PROJECT_NAME} PUBLIC glfw)
 
 if(APPLE)
