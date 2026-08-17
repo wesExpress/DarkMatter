@@ -2391,7 +2391,7 @@ bool dm_renderer_upload_resources_to_heap(dm_context *context, dm_resource *reso
     dm_vulkan_resource_descriptor_heap *resource_heap = &renderer->resource_heap;
     dm_vulkan_sampler_descriptor_heap  *sampler_heap  = &renderer->sampler_heap;
 
-    const size_t image_offset   = resource_heap->image_offset + resource_heap->image_count * resource_heap->image_size;
+    const size_t image_offset       = resource_heap->image_offset; 
     const size_t image_index_offset = image_offset / gpu.heap_props.imageDescriptorSize;
 
     for(u32 i=0; i<count; i++)
@@ -2760,6 +2760,7 @@ void dm_render_command_update_buffer(dm_context *context, dm_resource handle, vo
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size)
 {
+    LOG_DEBUG("HERE");
     DM_ASSERT(handle.type==DM_RESOURCE_TYPE_TEXTURE, "Invalid texture");
 
     dm_vulkan_renderer *renderer = context->renderer.internal_renderer;
