@@ -30,6 +30,7 @@ add_library(${PROJECT_NAME} STATIC ${SOURCES})
 
 target_include_directories(${PROJECT_NAME} PUBLIC lib lib/glfw/include lib/imgui/)
 target_link_libraries(${PROJECT_NAME} PUBLIC glfw)
+target_compile_options(${PROJECT_NAME} PRIVATE -march=native)
 
 if(APPLE)
     target_link_libraries(${PROJECT_NAME} PUBLIC ${APPLE_FWK_COCOA} ${APPLE_FWK_METAL} ${APPLE_FWK_QUARTZ_CORE} ${APPLE_FWK_FOUNDATION} ${APPLE_FWK_APP_KIT})
