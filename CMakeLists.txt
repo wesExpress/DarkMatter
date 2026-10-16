@@ -20,20 +20,21 @@ if(APPLE)
     set(SOURCES ${SOURCES} dm_metal_renderer.m)
 else()
     find_package(Vulkan REQUIRED COMPONENTS volk shaderc_combined)
+    #find_package(VulkanMemoryAllocator CONFIG REQUIRED)
 
     set(SOURCES ${SOURCES} dm_vulkan_renderer.c vk_mem_alloc.cpp)
 endif()
 
-add_subdirectory(lib/glfw)
+find_package(glfw3 REQUIRED)
 
 add_library(${PROJECT_NAME} STATIC ${SOURCES})
 
-target_include_directories(${PROJECT_NAME} PUBLIC lib lib/glfw/include lib/imgui/)
+target_include_directories(${PROJECT_NAME} PUBLIC lib lib/imgui/)
 target_link_libraries(${PROJECT_NAME} PUBLIC glfw)
 target_compile_options(${PROJECT_NAME} PRIVATE -march=native)
 
 if(APPLE)
     target_link_libraries(${PROJECT_NAME} PUBLIC ${APPLE_FWK_COCOA} ${APPLE_FWK_METAL} ${APPLE_FWK_QUARTZ_CORE} ${APPLE_FWK_FOUNDATION} ${APPLE_FWK_APP_KIT})
 else()
-    target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::Vulkan Vulkan::volk shaderc_combined SPIRV-Tools SPIRV-Tools-opt glslang)
+    target_link_libraries(${PROJECT_NAME} PUBLIC Vulkan::Vulkan Vulkan::volk shaderc_combined SPIRV-Tools SPIRV-Tools-opt glslang) 
 endif()
