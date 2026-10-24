@@ -22,7 +22,7 @@ Basic commands are abstracted away. Combined with compute pipelines and render t
 
 Example instanced rendering of a scene:
 
-'''
+```c
 dm_resource resources[] = {
     vb_buffer,
     inst_buffer,
@@ -39,7 +39,7 @@ dm_render_command_begin_rendering(context, render_target, clear[0],clear[1],clea
     dm_render_command_bind_index_buffer(context, buffer, ib_offset);
     dm_render_command_draw(context, index_count, index_offset, instance_count, vertex_count);
 dm_render_command_end_rendering(context, render_target)
-'''
+```
 
 For rasterized rendering, we begin by setting the render target (could be custom or the default swapchain), and specifying the clear values and loading and storing options. Next we bind the raster pipeline, set our viewport and scissor, bind our index buffer, push our resources and draw. We must also end rendering on our render target.
 
