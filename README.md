@@ -51,10 +51,10 @@ float depth = 1.f;
 
 dm_render_load_op rt_load      = DM_RENDER_LOAD_OP_CLEAR;
 dm_render_store_op rt_store    = DM_RENDER_STORE_OP_STORE;
-dm_render_load_op depth_load   = DM_RENDER_LOAD_OP_LOAD;
+dm_render_load_op depth_load   = DM_RENDER_LOAD_OP_CLEAR;
 dm_render_store_op depth_store = DM_RENDER_STORE_OP_DONT_CARE;
 
-dm_render_command_begin_rendering(context, render_target, clear[0],clear[1],clear[2],clear[3],depth, rt_load,rt_store,depth_load,depth_store);
+dm_render_command_begin_rendering(context, render_target, clear,depth, rt_load,rt_store,depth_load,depth_store);
     dm_render_command_bind_pipeline(context, pipeline);
     dm_render_command_set_viewport(context, x,y,w,h,zmin,zmax);
     dm_render_command_set_scissor(context, x,y,w,h);

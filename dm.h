@@ -230,19 +230,6 @@ typedef struct dm_render_target_desc_t
     bool swapchain, depth;
 } dm_render_target_desc;
 
-/******************
- * DESCRIPTOR HEAP
- *******************/
-typedef struct dm_resource_descriptor_heap_desc_t
-{
-    u32 buffer_count, texture_count; 
-} dm_resource_descriptor_heap_desc;
-
-typedef struct dm_sampler_descriptor_heap_desc_t
-{
-    u32 sampler_count;
-} dm_sampler_descriptor_heap_desc;
-
 /************
  * TEXTURE2D
  *************/
@@ -506,13 +493,13 @@ double dm_window_get_time();
 
 void* dm_read_bytes(const char *path, size_t *size);
 
-bool dm_key_is_pressed(dm_context *context, dm_key_code key);
-bool dm_key_just_released(dm_context *context, dm_key_code key);
-bool dm_mouse_button_is_pressed(dm_context *context, dm_mouse_button button);
-bool dm_mouse_button_just_released(dm_context *context, dm_mouse_button button);
-
-int dm_get_mouse_x(dm_context *context);
-int dm_get_mouse_y(dm_context *context);
+// input
+bool dm_input_key_is_pressed(dm_context *context, dm_key_code key);
+bool dm_input_key_just_released(dm_context *context, dm_key_code key);
+bool dm_input_mouse_button_is_pressed(dm_context *context, dm_mouse_button button);
+bool dm_input_mouse_button_just_released(dm_context *context, dm_mouse_button button);
+int dm_input_get_mouse_x(dm_context *context);
+int dm_input_get_mouse_y(dm_context *context);
 
 // resources
 bool dm_renderer_create_raster_pipeline(dm_context *context, dm_raster_pipe_desc desc, dm_pipeline *handle);
@@ -529,14 +516,14 @@ bool dm_renderer_create_compute_pipeline(dm_context *context, dm_compute_pipelin
 bool dm_renderer_create_synchronization(dm_context *context, dm_synchronization_desc desc, dm_resource *handle);
 
 // commands
-void dm_render_command_update_begin(dm_context *context);
-void dm_render_command_update_end(dm_context *context);
+//void dm_render_command_update_begin(dm_context *context);
+//void dm_render_command_update_end(dm_context *context);
 void dm_render_command_update_buffer(dm_context *context, dm_resource handle, void *data, size_t size, size_t offset);
 
 bool dm_render_command_update_texture(dm_context *context, dm_resource handle, void* data, size_t size);
 void dm_render_command_copy_texture(dm_context *context, dm_resource src, dm_resource dst);
 
-void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d, dm_render_load_op color_load, dm_render_store_op color_store, dm_render_load_op depth_laod, dm_render_store_op depth_store);
+void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float *clear_color, float d, dm_render_load_op color_load, dm_render_store_op color_store, dm_render_load_op depth_laod, dm_render_store_op depth_store);
 void dm_render_command_end_rendering(dm_context *context, dm_resource handle);
 void dm_render_command_bind_pipeline(dm_context *context, dm_pipeline handle);
 void dm_render_command_set_viewport(dm_context *context, int x, int y, int w, int h, float d_min, float d_max);

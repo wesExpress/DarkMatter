@@ -977,7 +977,7 @@ bool dm_renderer_create_synchronization(dm_context *context, dm_synchronization_
 }
 
 // commands
-void dm_render_command_update_begin(dm_context *context)
+void dm_renderer_update_begin(dm_context *context)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
@@ -986,7 +986,7 @@ void dm_render_command_update_begin(dm_context *context)
     frame_data->blit_encoder = [frame_data->blit_cmd blitCommandEncoder];
 }
 
-void dm_render_command_update_end(dm_context *context)
+void dm_renderer_update_end(dm_context *context)
 {
     dm_metal_renderer *renderer = context->renderer.internal_renderer;
     dm_metal_frame_data *frame_data = &renderer->frame_data[renderer->frame_index];
@@ -995,7 +995,7 @@ void dm_render_command_update_end(dm_context *context)
     [frame_data->blit_cmd     commit];
 }
 
-void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float r, float g, float b, float a, float d, dm_render_load_op color_load, dm_render_store_op color_store, dm_render_load_op depth_load, dm_render_store_op depth_store)
+void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, float* color , float d, dm_render_load_op color_load, dm_render_store_op color_store, dm_render_load_op depth_load, dm_render_store_op depth_store)
 {
     DM_ASSERT(handle.type==DM_RESOURCE_TYPE_RENDER_TARGET, "Not a render target");
 
@@ -1005,7 +1005,7 @@ void dm_render_command_begin_rendering(dm_context *context, dm_resource handle, 
 
     id<MTLTexture> color_texture = target->swapchain ? [renderer->swapchain.drawable texture] : target->texture;
 
-    MTLClearColor clear = MTLClearColorMake(r, g, b, a);
+    MTLClearColor clear = MTLClearColorMake(color[0], color[1], color[2], color[3]);
 
     MTLRenderPassDescriptor *desc = [MTLRenderPassDescriptor renderPassDescriptor];
     desc.colorAttachments[0].clearColor  = clear;

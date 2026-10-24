@@ -51,6 +51,8 @@ extern size_t dm_window_get_internal_size();
 
 extern bool dm_renderer_init(dm_context* context);
 extern void dm_renderer_shutdown(dm_context* context);
+extern void dm_renderer_update_begin(dm_context *context);
+extern void dm_renderer_update_end(dm_context *context);
 extern bool dm_renderer_begin_frame(dm_context* context);
 extern bool dm_renderer_end_frame(dm_context* context);
 extern bool dm_renderer_resize(dm_context *context, u16 width, u16 height);
@@ -134,6 +136,9 @@ bool dm_update_begin(dm_context* context)
 
     dm_platform_imgui_new_frame(context);
 
+    //
+    dm_renderer_update_begin(context);
+
     return true;
 }
 
@@ -141,6 +146,9 @@ void dm_update_end(dm_context *context)
 {
     context->flags &= ~DM_CONTEXT_FLAG_WINDOW_RESIZED;
     context->flags &= ~DM_CONTEXT_FLAG_RENDERER_RESIZED;
+
+    //
+    dm_renderer_update_end(context);
 }
 
 bool dm_render_begin(dm_context* context)
@@ -186,32 +194,3 @@ void* dm_read_bytes(const char *path, size_t *size)
     return data;
 }
 
-bool dm_key_is_pressed(dm_context *context, dm_key_code key)
-{
-    return context->window.input_states[0].keys[key]==1;
-}
-
-bool dm_key_just_released(dm_context *context, dm_key_code key)
-{
-    return (context->window.input_states[0].keys[key]==0 && context->window.input_states[1].keys[key]==1);
-}
-
-bool dm_mouse_button_is_pressed(dm_context *context, dm_mouse_button button)
-{
-    return context->window.input_states[0].buttons[button]==1;
-}
-
-bool dm_mouse_button_just_released(dm_context *context, dm_mouse_button button)
-{
-    return (context->window.input_states[0].buttons[button]==0 && context->window.input_states[1].buttons[button]==1);
-}
-
-int dm_get_mouse_x(dm_context *context)
-{
-    return context->window.input_states[0].mouse_x;
-}
-
-int dm_get_mouse_y(dm_context *context)
-{
-    return context->window.input_states[0].mouse_y;
-}
